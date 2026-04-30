@@ -1,0 +1,316 @@
+using System;
+using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
+using System.Linq;
+using System.Text;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
+
+namespace ValleyTalk;
+
+public class DialogueFile
+{
+    public DialogueFile()
+    {}
+
+    public DialogueFile(List<string> changeNames)
+    {
+        foreach (var changeName in changeNames)
+        {
+            Changes.Add(new Change { LogName = changeName, Entries = new Dictionary<DialogueContext, IDialogueValue>() });
+        }
+    }
+
+    public List<Change> Changes { get; set; } = new List<Change>();
+    public Dictionary<DialogueContext,IDialogueValue> AllEntries => 
+        Changes.SelectMany(c => c.Entries).ToDictionary(e => e.Key, e => e.Value);
+    
+    public void Add(string change, DialogueContext context, IDialogueValue value)
+    {
+        var changeEntry = Changes.FirstOrDefault(c => c.LogName == change);
+        if (changeEntry == null)
+        {
+            changeEntry = new Change { LogName = change, Entries = new Dictionary<DialogueContext, IDialogueValue>() };
+            Changes.Add(changeEntry);
+        }
+        changeEntry.Entries[context] = value;
+    }
+}
+
+public class Change
+{
+    public string LogName { get; set; }
+    public string Action { get; set; }
+    public string Target { get; set; }
+    public Dictionary<DialogueContext,IDialogueValue> Entries { get; set; }
+}
+
+public class DialogueValue : IDialogueValue
+{
+    public DialogueValue(string value)
+    {
+        Value = value;
+        var elements = value.Split('#');
+        Elements = new List<IDialogueElement>();
+        // Get the index of all elements containing ^
+        var genderIndex = elements.Select((e, i) => (e, i)).Where(e => e.e.Contains('^')).Select(e => e.i).ToList();
+
+        if(genderIndex.Count == 1 && genderIndex[0] == (elements.Length - 1) / 2 )
+        {
+            // recreate elements with the gendered item split
+            elements = elements.Take(genderIndex[0]).Concat(elements[genderIndex[0]].Split('^')).Concat(elements.Skip(genderIndex[0] + 1)).ToArray();
+            
+            var halfLength = elements.Length / 2;
+            for (int i = 0; i < halfLength; i++)
+            {
+                if (elements[i] == elements[i + halfLength])
+                {
+                    if (elements[i].StartsWith('$') && elements[i].Length == 2)
+                    {
+                        Elements.Add(new DialogueCommand(elements[i].Substring(1)));
+                    }
+                    else
+                    {
+                        Elements.Add(new DialogueLine(elements[i]));
+                    }
+                    
+                }
+                else
+                {
+                    Elements.Add(new DialogueLineGender(elements[i], elements[i + halfLength]));
+                }
+            }
+
+            Value = string.Join("#", Elements.Select(e => e switch
+            {
+                DialogueLine line => line.Value,
+                DialogueLineGender line => $"{line.Male.Value}^{line.Female.Value}",
+                DialogueCommand command => $"${command.Value}",
+                _ => string.Empty
+            }));
+        }
+        else 
+        {
+            foreach (var element in elements)
+            {
+                if (element.Contains('^'))
+                {
+                    var genderElements = element.Split('^');
+                    if (genderElements.Length == 2)
+                    {
+                        Elements.Add(new DialogueLineGender(genderElements[0], genderElements[1]));
+                    }
+                }
+                else if (element.Contains("$c"))
+                {
+                    // No op - skip choice element.
+                }
+                else
+                {
+                    if (element.StartsWith('$') && element.Length == 2)
+                    {
+                        Elements.Add(new DialogueCommand(element.Substring(1)));
+                    }
+                    else
+                    {
+                        Elements.Add(new DialogueLine(element));
+                    }
+                }
+            }
+        }
+    }
+    public string Value { get; set; }
+    public List<IDialogueElement> Elements { get; }
+    public IEnumerable<DialogueValue> AllValues => new List<DialogueValue> { this };
+}
+
+public interface IDialogueValue
+{
+    IEnumerable<DialogueValue> AllValues { get; }
+}
+
+public interface IDialogueElement
+{
+    IEnumerable<string> GiftOptions { get; }
+}
+
+public class RandomisedDialogue : IDialogueValue
+{
+    public RandomisedDialogue(IEnumerable<DialogueValue> dialogue)
+    {
+        Dialogue = dialogue;
+    }
+
+    public IEnumerable<DialogueValue> Dialogue { get; }
+
+    public IEnumerable<DialogueValue> AllValues => Dialogue;
+
+    public string Value
+    {
+        get 
+        {
+            if (Dialogue.Count() <= 1)
+            {
+                return Dialogue.FirstOrDefault()?.Value ?? string.Empty;
+            }
+            var builder = new StringBuilder();
+            builder.Append("{{Random: ");
+            builder.Append(Dialogue.First().Value);
+            foreach (var dialogue in Dialogue.Skip(1))
+            {
+                builder.Append(" ++ ");
+                builder.Append(dialogue.Value);
+            }
+            builder.Append(" |inputSeparator=++}}");
+
+            return builder.ToString();
+        }
+    }
+}
+
+public class DialogueLine : IDialogueElement
+{
+    public IEnumerable<string> GiftOptions { get; private set; } = new List<string>();
+    public DialogueLine(string element)
+    {
+        if (element.Contains('$'))
+        {
+            var index = element.IndexOf('$') + 1;
+            if (index == element.Length)
+            {
+                Value = element;
+                Command = string.Empty;
+                return;
+            }
+            var command = element.Substring(index, 1);
+            var remainderOfElement = element.Substring(0, index - 1) + element.Substring(index + 1);
+            Value = remainderOfElement;
+            Command = command;
+        }
+        else
+        {
+            Value = element;
+            Command = string.Empty;
+        }
+        GetGifts();
+    }
+
+    private void GetGifts()
+    {
+        // Check for any gift options (denoted in square brackets split by spaces)
+        var giftIndex = Value.IndexOf('[');
+        if (giftIndex != -1)
+        {
+            var endGiftIndex = Value.IndexOf(']');
+            if (endGiftIndex != -1)
+            {
+                var giftOptions = Value.Substring(giftIndex + 1, endGiftIndex - giftIndex - 1).Split(' ');
+                GiftOptions = giftOptions;
+                Value = Value.Substring(0, giftIndex) + Value.Substring(endGiftIndex + 1);
+            }
+        }
+    }
+
+    public DialogueLine(string command, string value)
+    {
+        Command = command;
+        Value = value;
+        GetGifts();
+    }
+
+    public string Command { get; set; }
+    public string Value { get; set; }
+}
+
+public class DialogueLineGender : IDialogueElement
+{
+    public DialogueLineGender(string male, string female)
+    {
+        Male = new DialogueLine(male);
+        Female = new DialogueLine(female);
+    }
+
+    public IEnumerable<string> GiftOptions => Male.GiftOptions.Concat(Female.GiftOptions).Distinct();
+    public DialogueLine Male { get; }
+    public DialogueLine Female { get; }
+}
+
+public class DialogueCommand : IDialogueElement
+{
+    public DialogueCommand(string value)
+    {
+        Value = value;
+    }
+
+    public string Value { get; set; }
+
+    public IEnumerable<string> GiftOptions => new List<string>();
+}
+
+public sealed class DialogueValueJsonConverter : JsonConverter<DialogueValue>
+{
+    public override DialogueValue ReadJson(JsonReader reader, Type objectType, DialogueValue existingValue, bool hasExistingValue, JsonSerializer serializer)
+    {
+        return new DialogueValue(reader.Value?.ToString() ?? string.Empty);
+    }
+
+    public override void WriteJson(JsonWriter writer, DialogueValue value, JsonSerializer serializer)
+    {
+        writer.WriteValue(value.Value);
+    }
+}
+
+public sealed class RandomisedDialogueJsonConverter : JsonConverter<RandomisedDialogue>
+{
+    public override RandomisedDialogue ReadJson(JsonReader reader, Type objectType, RandomisedDialogue existingValue, bool hasExistingValue, JsonSerializer serializer)
+    {
+        var dialogue = serializer.Deserialize<List<DialogueValue>>(reader);
+        return new RandomisedDialogue(dialogue);
+    }
+
+    public override void WriteJson(JsonWriter writer, RandomisedDialogue value, JsonSerializer serializer)
+    {
+        if (value.Dialogue.Count() <= 1)
+        {
+            serializer.Serialize(writer, value.Dialogue.FirstOrDefault()?.Value);
+            return;
+        }
+        var builder = new StringBuilder();
+        builder.Append("Random{{");
+        builder.Append(JsonConvert.SerializeObject(value.Dialogue.First()));
+        foreach (var dialogue in value.Dialogue.Skip(1))
+        {
+            builder.Append("++");
+            builder.Append(JsonConvert.SerializeObject(dialogue));
+        }
+        builder.Append("|inputSeparator=++}}");
+
+        serializer.Serialize(writer, builder.ToString());
+    }
+}
+
+public sealed class IDialogueValueJsonConverter : JsonConverter<IDialogueValue>
+{
+    public override IDialogueValue ReadJson(JsonReader reader, Type objectType, IDialogueValue existingValue, bool hasExistingValue, JsonSerializer serializer)
+    {
+        return serializer.Deserialize<DialogueValue>(reader);
+    }
+
+    public override void WriteJson(JsonWriter writer, IDialogueValue value, JsonSerializer serializer)
+    {
+        serializer.Serialize(writer, value);
+    }
+}
+
+public sealed class DialogueContextJsonConverter : JsonConverter<DialogueContext>
+{
+    public override DialogueContext ReadJson(JsonReader reader, Type objectType, DialogueContext existingValue, bool hasExistingValue, JsonSerializer serializer)
+    {
+        return new DialogueContext(reader.Value?.ToString() ?? string.Empty);
+    }
+
+    public override void WriteJson(JsonWriter writer, DialogueContext value, JsonSerializer serializer)
+    {
+        writer.WriteValue(value.Value);
+    }
+}

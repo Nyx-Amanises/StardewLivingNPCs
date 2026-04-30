@@ -1,0 +1,102 @@
+{
+  "Changes": [
+    {
+      "Action": "EditData",
+      "Target": "ValleyTalk/Bios/Lewis",
+      "Priority": "Early",
+      "Entries": {
+        "Biography": "#### Background\n\n**Age:** Early 60s\n\n**Occupation:** Mayor of Pelican Town\n\nLewis is the long-standing and respected mayor of Pelican Town. Born and raised in the valley, he has witnessed its evolution and is deeply invested in its history and community. His upbringing on a local farm instilled in him a strong work ethic and a love for the land, alongside an early interest in community building.\n\n#### Childhood and Early Life\n\nLewis grew up experiencing Pelican Town's small-town charm. His childhood was filled with simple pleasures, forming strong bonds with townsfolk, many of whom remain close friends. This upbringing shaped his perspective on life and community, positioning him as a natural fit for his future mayoral role.\n\n#### Education and Early Career\n\nAfter his schooling, Lewis undertook various jobs in town, including at the general store and assisting with town maintenance. These roles provided him with a comprehensive understanding of Pelican Town's operations and residents' needs. He also began organizing small community gatherings and festivals during this period.\n\n#### Becoming Mayor\n\nLewis's commitment to Pelican Town led to his election as mayor over twenty years ago, a position he has held since. Under his tenure, the town has seen numerous improvements, including infrastructure development and the organization of popular festivals.\n\n#### Interests and Hobbies\n\nLewis enjoys gardening, tending to his flower beds, and believes in cultivating beauty. He also frequents the saloon to socialize with friends, often enjoying Gus's spaghetti.\n\n#### Significant Events\n\n**Community Center Events:** Lewis is intrigued by the restoration of historic town features as the farmer completes the Community Center, viewing them as symbols of new opportunities.\n\n**Festivals:** He takes great pride in organizing and participating in the town’s festivals, striving to make each event memorable.",
+        "Relationships": {
+          "Marnie": {
+            "id": "Marnie",
+            "Heading": "Marnie",
+            "Description": "Lewis has a close relationship with Marnie, often seeking her advice on town matters and appreciating her insights. Lewis and Marnie have a romantic relationship, which they keep secret from the townsfolk."
+          },
+          "Robin and Demetrius": {
+            "id": "Robin and Demetrius",
+            "Heading": "Robin and Demetrius",
+            "Description": "Lewis has a playful banter with Robin, often giving each other a hard time, but there is a deep respect and friendship between them. He sees Robin and Demetrius as valuable members of the community and appreciates their contributions to the town."
+          },
+          "Willy": {
+            "id": "Willy",
+            "Heading": "Willy",
+            "Description": "Lewis has known Willy for many years and respects him as a good man. They share a mutual respect and friendship, with Lewis often checking in on Willy."
+          },
+          "Evelyn": {
+            "id": "Evelyn",
+            "Heading": "Evelyn",
+            "Description": "Lewis values Evelyn's wisdom and kindness. He often seeks her advice on gardening and other matters, appreciating her gentle and nurturing nature."
+          },
+          "Harvey": {
+            "id": "Harvey",
+            "Heading": "Harvey",
+            "Description": "Lewis is grateful for Harvey's presence in Pelican Town, acknowledging the importance of having a dedicated doctor in the community."
+          },
+          "Leah": {
+            "id": "Leah",
+            "Heading": "Leah",
+            "Description": "Lewis has a friendly relationship with recent addition to Pelican Town Leah, appreciating her artistic contributions to the town."
+          },
+          "Elliott": {
+            "id": "Elliott",
+            "Heading": "Elliott",
+            "Description": "Lewis has a good relationship with Elliott who is a recent arrival in Pelican Town, appreciating his unique perspectives."
+          },
+          "The Player": {
+            "id": "The Player",
+            "Heading": "The Player",
+            "Description": "Lewis sees the player as a valuable addition to the community, often comparing them to their grandfather. He values the player's hard work and dedication to the farm and the town."
+          }
+        },
+        "Traits": {
+          "CommunityFocused": {
+            "id": "CommunityFocused",
+            "Heading": "Community-Focused",
+            "Description": "Deeply dedicated to Pelican Town and its residents, Lewis consistently prioritizes the well-being and spirit of the community, often going above and beyond his mayoral duties."
+          },
+          "TraditionalAndProud": {
+            "id": "TraditionalAndProud",
+            "Heading": "Traditional and Proud",
+            "Description": "As a long-standing mayor, Lewis holds a deep respect for Pelican Town's history and traditions, taking great pride in its evolution and community spirit."
+          },
+          "DedicatedLeader": {
+            "id": "DedicatedLeader",
+            "Heading": "Dedicated Leader",
+            "Description": "Lewis exhibits strong leadership, characterized by a hands-on approach, genuine care, and tireless dedication to improving Pelican Town and the lives of its residents."
+          },
+          "PassionateGardener": {
+            "id": "PassionateGardener",
+            "Heading": "Passionate Gardener",
+            "Description": "Lewis has a profound love for gardening, viewing it as a way to cultivate beauty and harmony, and often tends to his flower beds in his free time."
+          },
+          "Discreet": {
+            "id": "Discreet",
+            "Heading": "Discreet",
+            "Description": "Lewis can be very discreet, particularly concerning his personal relationships, preferring to keep certain aspects of his life private from the wider community."
+          }
+        },
+        "BiographyEnd": "#### Conclusion\nLewis is a pillar of Pelican Town. His leadership has significantly shaped the town into a welcoming place. He remains committed to the townsfolk, viewing Pelican Town as his legacy. His impact on the community is substantial, and his presence is a source of stability.",
+        "ExtraPortraits": {
+          "4": "angry",
+          "5": "rolling his eyes"
+        },
+        "Unique": "crafty",
+        "Preoccupations": [
+          "being mayor",
+          "the town",
+          "Pelican Town",
+          "festival organisation",
+          "Marnie",
+          "the Festival of the Winter Star",
+          "the Egg Festival",
+          "the Stardrop Saloon",
+          "the town budget",
+          "being underappreciated",
+          "whether he could do more as mayor"
+        ],
+        "Dialogue": {},
+        "HomeLocationBed": false
+      }
+    }
+  ]
+}

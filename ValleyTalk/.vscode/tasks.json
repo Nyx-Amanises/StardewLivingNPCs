@@ -1,0 +1,27 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "dotnet",
+			"task": "build",
+			"group": "build",
+            "options": {
+                "cwd": "${workspaceFolder}/src"
+            },
+			"problemMatcher": "$msCompile",
+            "label": "dotnet: build ValleyTalk"
+		},			
+		{
+			"type": "shell",
+			"command": "dotnet",
+			"args": ["build", "--configuration", "Release"],
+			"group": "build",
+			"options": {
+				"cwd": "${workspaceFolder}/src"
+			},
+			"problemMatcher": "$msCompile",
+			"label": "dotnet: build ValleyTalk Prod",
+			"detail": "Release configuration build"
+		}
+	]
+}

@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <AssemblyName>ValleyTalk</AssemblyName>
+    <RootNamespace>ValleyTalk</RootNamespace>
+    <Version>1.4.0</Version>
+    <TargetFrameworks>net6.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <GamePath>/home/david/snap/steam/common/.local/share/Steam/steamapps/common/Stardew Valley</GamePath>
+    <EnableHarmony>true</EnableHarmony>
+    <Platforms>AnyCPU;x64</Platforms>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <ModFolderName>ValleyTalk</ModFolderName>
+    <BundleExtraAssemblies>ThirdParty, System</BundleExtraAssemblies>
+    <!-- Android compatibility settings -->
+    <AndroidUseAapt2>true</AndroidUseAapt2>
+    <AndroidEnableMultiDx>true</AndroidEnableMultiDx>
+    <AndroidSupportedAbis>arm64-v8a;armeabi-v7a</AndroidSupportedAbis>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="newtonsoft.json" Version="13.0.3" />
+    <PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="manifest.json">
+      <Link>%(Filename)%(Extension)</Link> 
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="config.json">
+      <Link>%(Filename)%(Extension)</Link> 
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ContentPacks Include="../ContentPack" FolderName="[CP] ValleyTalk Base" Version="$(Version)" />
+  </ItemGroup>
+</Project>

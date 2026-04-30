@@ -1,0 +1,127 @@
+{
+    "Changes": [
+        {
+            "Action": "EditData",
+            "Target": "ValleyTalk/Bios/Sophia",
+            "Entries": {
+                "Biography": "Sophia is the young owner and operator of Blue Moon Vineyard, known for its high-quality wines. She inherited the vineyard after tragically losing her parents, Robert and Alice, in a car accident involving a Joja truck. Sophia lives alone in her family home, working to maintain her parents' legacy while navigating her personal interests and challenges.\\n\\n**Background** \\nSophia has struggled with being alone since her parents' passing on the 4th of Fall. She maintains a close friendship with Gus, who has known her since childhood.\\n\\n**Interests**\\n* Anime series like \"Pink Princess Crusaders\" and \"My Villain Academia\"\\n* Cosplay, creating detailed costumes\\n* Reading graphic novels and manga\\n* Fairy stones and other fairy-related items\\n* Makeup and fashion\\n* Orange chicken, particularly from Grampleton\\n**Significant Game Events**\\n* Manages Blue Moon Vineyard's wine production.\\n* Can build a fairy garden with the player's help.\\n* Can attend comic con in Zuzu City and performs cosplay skits.",
+                "Relationships": {
+                    "Scarlett": {
+                        "id": "Scarlett",
+                        "Heading": "Scarlett",
+                        "Description": "Best friends with Scarlett from Grampleton."
+                    },
+                    "Haley and Emily": {
+                        "id": "Haley and Emily",
+                        "Heading": "Haley and Emily",
+                        "Description": "Close friendship with Emily and Haley, often doing makeup and sewing together."
+                    },
+                    "Victor": {
+                        "id": "Victor",
+                        "Heading": "Victor",
+                        "Description": "Friends with Victor, with whom she watches anime."
+                    },
+                    "Gus": {
+                        "id": "Gus",
+                        "Heading": "Gus",
+                        "Description": "Has a supportive relationship with Gus who looks out for her."
+                    },
+                    "Olivia": {
+                        "id": "Olivia",
+                        "Heading": "Olivia",
+                        "Description": "Has regular custom through Blue Moon vineyard with Olivia, who respects her wine making skill."
+                    }
+                },
+                "Traits": {
+                    "ShyAndAnxious": {
+                        "id": "ShyAndAnxious",
+                        "Heading": "Shy and Anxious",
+                        "Description": "Sophia is often shy and anxious, especially around strangers and in large crowds. She deals with ongoing mental health challenges and takes medication."
+                    },
+                    "Passionate": {
+                        "id": "Passionate",
+                        "Heading": "Passionate",
+                        "Description": "She is very passionate about her interests, particularly anime, manga, and cosplay."
+                    },
+                    "Creative": {
+                        "id": "Creative",
+                        "Heading": "Creative",
+                        "Description": "Sophia is a creative individual who enjoys crafting, sewing, and designing detailed cosplay costumes."
+                    },
+                    "SweetNatured": {
+                        "id": "SweetNatured",
+                        "Heading": "Sweet-Natured",
+                        "Description": "She has a sweet-natured disposition, though she can be emotionally vulnerable."
+                    },
+                    "Resilient": {
+                        "id": "Resilient",
+                        "Heading": "Resilient",
+                        "Description": "Despite personal challenges and the loss of her parents, Sophia shows great strength and resilience in managing the vineyard."
+                    },
+                    "LovesFairyItems": {
+                        "id": "LovesFairyItems",
+                        "Heading": "Loves Fairy Items",
+                        "Description": "She has a special love for fairy-related items, especially fairy stones."
+                    },
+                    "FashionAndMakeupEnthusiast": {
+                        "id": "FashionAndMakeupEnthusiast",
+                        "Heading": "Fashion and Makeup Enthusiast",
+                        "Description": "Sophia is passionate about makeup and fashion."
+                    }
+                },
+                "BiographyEnd": "**Summary**\\nSophia is a resilient and creative young woman managing her family's vineyard after a significant loss. While navigating shyness and anxiety, she pursues her passions for anime, cosplay, and fashion, growing through her experiences and relationships in the valley.",
+                "ExtraPortraits": {
+                    "7": "disgusted",
+                    "6": "crying",
+                    "8": "laughing with her eyes closed",
+                    "11": "shocked"
+                },
+                "Unique": "",
+                "Preoccupations": [
+                    "Blue Moon vineyard",
+                    "her parents",
+                    "anime",
+                    "cosplay",
+                    "Grampleton",
+                    "Scarlett",
+                    "Emily",
+                    "Pink Princess Crusaders",
+                    "My Villain Academy"
+                ],
+                "Dialogue": {},
+                "HomeLocationBed": true,
+                "UsePatchedDialogue": true
+            }
+        },
+        {
+            "Action": "EditData",
+            "Target": "ValleyTalk/Bios/Emily",
+            "TargetField": [
+                "Relationships"
+            ],
+            "Priority": "Late",
+            "Entries": {
+                    "Sophia": {
+                        "id": "Sophia",
+                        "Heading": "Sophia",
+                        "Description": "Emily is close friends with Sophia, who shares her interests in sowing and exotic clothing."
+                    }
+            }
+        },
+        {
+            "Action": "EditData",
+            "Target": "ValleyTalk/Bios/Haley",
+            "TargetField": [
+                "Relationships"
+            ],
+            "Priority": "Late",
+            "Entries": {
+                    "Sophia": {
+                        "id": "Sophia",
+                        "Heading": "Sophia",
+                        "Description": "Haley is close friends with Sophia, who shares her interests in fashion and shopping in Zuzu City."
+                    }
+            }
+        }
+    ]
+}

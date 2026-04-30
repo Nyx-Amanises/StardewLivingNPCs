@@ -1,0 +1,31 @@
+{
+    // Use IntelliSense to learn about possible attributes.
+    // Hover to view descriptions of existing attributes.
+    // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+    "version": "0.2.0",
+    "configurations": [
+
+
+        {
+            "name": "Run Stardew",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "dotnet: build ValleyTalk",
+            "program": "/home/david/snap/steam/common/.local/share/Steam/steamapps/common/Stardew Valley/StardewModdingAPI.dll",
+            "args": [],
+            "cwd": "/home/david/snap/steam/common/.local/share/Steam/steamapps/common/Stardew Valley/",
+            "stopAtEntry": false,
+        },
+        {
+            "name": "Run Stardew Prod",
+            "type": "coreclr",
+            "request": "launch",
+            "preLaunchTask": "dotnet: build ValleyTalk Prod",
+            "program": "/home/david/snap/steam/common/.local/share/Steam/steamapps/common/Stardew Valley/StardewModdingAPI.dll",
+            "args": [],
+            "cwd": "/home/david/snap/steam/common/.local/share/Steam/steamapps/common/Stardew Valley/",
+            "stopAtEntry": false
+        }
+
+    ]
+}

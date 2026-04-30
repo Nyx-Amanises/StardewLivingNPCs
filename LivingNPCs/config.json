@@ -1,0 +1,21 @@
+{
+  "EnableMod": true,
+  "Debug": false,
+  "BehaviorHotkey": "LeftShift + H",
+  "ManualBehaviorMode": "Auto",
+  "ManualEmoteId": 16,
+  "EnablePassiveBehaviors": true,
+  "PassiveBehaviorChancePercent": 6,
+  "MaxBehaviorsPerNpcPerDay": 2,
+  "MaxInteractionDistanceTiles": 6,
+  "AllowFacePlayer": true,
+  "AllowEmotes": true,
+  "AllowApproachPlayer": true,
+  "EnableAiPlanner": false,
+  "AiPlannerEndpoint": "http://localhost:11434/v1/chat/completions",
+  "AiPlannerApiKey": "",
+  "AiPlannerModel": "",
+  "AiPlannerTimeoutSeconds": 8,
+  "EnableValleyTalkPromptBridge": true,
+  "ShowHudMessages": true
+}

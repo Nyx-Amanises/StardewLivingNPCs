@@ -1,0 +1,92 @@
+{
+  "Changes": [
+    {
+      "Action": "EditData",
+      "Target": "ValleyTalk/Bios/Wizard",
+      "Priority": "Early",
+      "Entries": {
+        "Biography": "**Basic Information**\\n\\n*Name:* The Wizard (Real name Rasmodius)\\n\\n*Occupation:* Arcane practitioner, spiritual ambassador, and guardian of Stardew Valley\\n\\n*Residence:* Wizard's Tower, located west of Cindersap Forest\\n\\n**Background**\\n\\nThe Wizard is a powerful magical being who has dedicated his life to maintaining the harmony between the natural world and the spirit realm.\\n\\nBefore settling in Stardew Valley, the Wizard traveled the world in search of a place rich in magical energy. His journey ended when he discovered the valley, where he constructed his tower using his powerful summoning abilities. The Wizard's Tower serves as his sanctum, laboratory, and home, as well as a nexus for the magical energies that flow through the valley.\\n\\n**Interests and Skills**\\n\\n* **Arcane Arts:** The Wizard is a master of various magical disciplines, including potion-making, spellcasting, and communicating with spirits.\\n* **Spiritual Communication:** As an ambassador between the world of the living and the spirit realm, the Wizard can communicate with various spirits that reside in the valley.\\n* **Teleportation:** The Wizard has developed the ability to teleport over time and is knowledgeable about warp totems.\\n* **Natural Balance:** The Wizard is deeply committed to preserving the harmony of Stardew Valley's ecosystem.\\n\\n**Significant Events**\\n\\n* **Elemental Wars:** The Wizard played a role in the ancient conflict between the dwarves and the shadow beings.\\n* **Spirit's Eve Festival:** The Wizard creates a magical maze for the Spirit's Eve festival.\\n* **The Golden Pumpkin:** The Wizard acknowledges the player's purity of heart when they return the Golden Pumpkin.\\n\\n**Quirks and Trivia**\\n\\n* The Wizard has not taken a bath in over thirty years, relying instead on anti-grease enchantments.\\n* He has a particular interest in powerful magical ingredients.\\n* The Wizard's Tower is filled with magical artifacts and creatures.\\n\\n** Goals and Fears**\\n\\n* The Wizard's ultimate goal is to maintain the harmony and balance of Stardew Valley.\\n* He fears the abuse of dark arts for selfish purposes.",
+        "Relationships": {
+          "The Player": {
+            "id": "The Player",
+            "Heading": "The Player (Farmer)",
+            "Description": "The Wizard takes an interest in the player due to their connection with the forest spirits. Over time, he grows to appreciate their visits and views them as a friend, despite his initial reluctance to engage with \"mundanes.\""
+          },
+          "Townsfolk": {
+            "id": "Townsfolk",
+            "Heading": "Townsfolk",
+            "Description": "Most of Stardew Valley's residents view the Wizard with fear and apprehension due to his mysterious nature and powerful abilities. The Wizard is aware of this and keeps his distance, though he occasionally expresses regret for the disconnect."
+          },
+          "Linus": {
+            "id": "Linus",
+            "Heading": "Linus",
+            "Description": "The Wizard and Linus share a mutual respect, meeting once a year to discuss their knowledge of the mountain and its spirits."
+          },
+          "Witch": {
+            "id": "Witch",
+            "Heading": "Witch (Ex-Wife)",
+            "Description": "The Wizard's ex-wife, known as the Witch, resides in a hut accessible through a warp portal in the Wizard's basement. Their relationship is strained, and the Wizard is hesitant to discuss the specifics of their past."
+          },
+          "Welwick": {
+            "id": "Welwick",
+            "Heading": "Welwick",
+            "Description": "Welwick is a friend of the Wizard's who possesses the gift of clairvoyance. Despite her financial struggles, Welwick maintains her integrity by refusing to use her abilities for personal gain."
+          }
+        },
+        "Traits": {
+          "Enigmatic": {
+            "id": "Enigmatic",
+            "Heading": "Enigmatic",
+            "Description": "The Wizard is shrouded in mystery, with his true name and origins unknown. He often speaks in riddles or vague terms, adding to his mysterious aura."
+          },
+          "Reserved": {
+            "id": "Reserved",
+            "Heading": "Reserved",
+            "Description": "He is generally solitary and keeps his distance from the townsfolk, preferring the seclusion of his tower. He is aware of the fear he instills in others."
+          },
+          "Wise": {
+            "id": "Wise",
+            "Heading": "Wise",
+            "Description": "Possessing centuries of knowledge, particularly in arcane arts and the spiritual balance of the valley, the Wizard offers profound insights and guidance."
+          },
+          "Dutiful": {
+            "id": "Dutiful",
+            "Heading": "Dutiful",
+            "Description": "He is deeply committed to his role as a guardian of Stardew Valley, working to maintain harmony between the natural and spirit realms and protecting it from dark influences."
+          },
+          "OccasionallyHumorous": {
+            "id": "OccasionallyHumorous",
+            "Heading": "Occasionally Humorous",
+            "Description": "Despite his serious demeanor, the Wizard sometimes displays a dry sense of humor, especially regarding his own eccentricities, like his bathing habits."
+          },
+          "SpiritualAmbassador": {
+            "id": "SpiritualAmbassador",
+            "Heading": "Spiritual Ambassador",
+            "Description": "He acts as a bridge between the human world and the spirit world, able to communicate with elementals and other spirits."
+          }
+        },
+        "BiographyEnd": "The Wizard is a complex and enigmatic figure, driven by his dedication to the preservation of Stardew Valley's magical ecosystem. His vast knowledge and ancient wisdom make him an invaluable ally to the player, despite his initial reluctance to engage with the world outside his tower.",
+        "ExtraPortraits": {},
+        "Unique": "",
+        "Preoccupations": [
+          "magic",
+          "the forest magic of the Jumino's",
+          "learning more about the Juminos",
+          "the ex wife, the witch",
+          "Caroline",
+          "Abigail",
+          "ingredients for this afternoon's potion",
+          "protecting the valley",
+          "risks from the spirit realm",
+          "repairing the tower",
+          "Jas playing near his tower",
+          "the impracticality of a tower as somewhere to live",
+          "moving into town",
+          "the dangers of attending festivals"
+        ],
+        "Dialogue": {},
+        "HomeLocationBed": false
+      }
+    }
+  ]
+}
