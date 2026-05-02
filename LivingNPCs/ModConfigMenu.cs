@@ -132,6 +132,14 @@ internal static class ModConfigMenu
             interval: 1
         );
 
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "记录对话启动",
+            tooltip: () => "点击 NPC 开始聊天时，记录一条轻量互动记忆，并提前发送上下文给 ValleyTalk。",
+            getValue: () => config.EnableConversationMemory,
+            setValue: value => config.EnableConversationMemory = value
+        );
+
         configMenu.AddSectionTitle(
             mod: manifest,
             text: () => "行为设置"

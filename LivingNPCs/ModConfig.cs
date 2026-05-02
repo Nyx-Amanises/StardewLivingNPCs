@@ -13,6 +13,7 @@ internal sealed class ModConfig
     public int ManualEmoteId { get; set; } = 16;
     public int MaxMemoryEntriesPerNpc { get; set; } = 20;
     public int PromptMemoryEntries { get; set; } = 4;
+    public bool EnableConversationMemory { get; set; } = true;
     public bool EnablePassiveBehaviors { get; set; } = true;
     public int PassiveBehaviorChancePercent { get; set; } = 6;
     public int MaxBehaviorsPerNpcPerDay { get; set; } = 2;
@@ -51,6 +52,7 @@ internal sealed class ModConfig
         this.ManualEmoteId = defaults.ManualEmoteId;
         this.MaxMemoryEntriesPerNpc = defaults.MaxMemoryEntriesPerNpc;
         this.PromptMemoryEntries = defaults.PromptMemoryEntries;
+        this.EnableConversationMemory = defaults.EnableConversationMemory;
         this.EnablePassiveBehaviors = defaults.EnablePassiveBehaviors;
         this.PassiveBehaviorChancePercent = defaults.PassiveBehaviorChancePercent;
         this.MaxBehaviorsPerNpcPerDay = defaults.MaxBehaviorsPerNpcPerDay;

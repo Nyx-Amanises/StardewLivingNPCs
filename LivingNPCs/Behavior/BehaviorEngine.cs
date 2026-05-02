@@ -23,6 +23,7 @@ internal sealed class BehaviorEngine
     private readonly IBehaviorPlanner planner;
     private readonly AiBehaviorClient aiBehaviorClient;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
+    private readonly Dictionary<string, int> lastConversationMemoryTimeByNpc = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
 
     public BehaviorEngine(IModHelper helper, IMonitor monitor, ModConfig config)
@@ -50,6 +51,7 @@ internal sealed class BehaviorEngine
     {
         var saveData = this.helper.Data.ReadSaveData<BehaviorMemorySaveData>(SaveDataKey);
         this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
+        this.lastConversationMemoryTimeByNpc.Clear();
         this.valleyTalkBridge.TryInitialize();
 
         if (this.config.Debug)
@@ -72,6 +74,7 @@ internal sealed class BehaviorEngine
         this.memory.ResetDaily();
         this.valleyTalkBridge.ClearAll();
         this.pendingRequests.Clear();
+        this.lastConversationMemoryTimeByNpc.Clear();
     }
 
     private void OnReturnedToTitle(object? sender, ReturnedToTitleEventArgs e)
@@ -79,6 +82,7 @@ internal sealed class BehaviorEngine
         this.memory.ResetDaily();
         this.valleyTalkBridge.ClearAll();
         this.pendingRequests.Clear();
+        this.lastConversationMemoryTimeByNpc.Clear();
     }
 
     private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
@@ -97,6 +101,7 @@ internal sealed class BehaviorEngine
 
         if (!this.config.BehaviorHotkey.JustPressed())
         {
+            this.TryRecordConversationStart(e);
             return;
         }
 
@@ -231,6 +236,79 @@ internal sealed class BehaviorEngine
     private bool TryFindNpcInCurrentLocation(string npcName, out NPC? npc)
     {
         npc = Game1.currentLocation?.characters.FirstOrDefault(candidate => candidate.Name == npcName);
+        return npc != null;
+    }
+
+    private void TryRecordConversationStart(ButtonPressedEventArgs e)
+    {
+        if (!this.config.EnableConversationMemory || Game1.eventUp || !e.Button.IsActionButton())
+        {
+            return;
+        }
+
+        if (!this.TryFindNpcForInteraction(e.Cursor, out NPC? npc) || npc == null)
+        {
+            return;
+        }
+
+        int timeMarker = (Game1.Date.TotalDays * 10000) + Game1.timeOfDay;
+        if (this.lastConversationMemoryTimeByNpc.TryGetValue(npc.Name, out int lastTimeMarker) && lastTimeMarker == timeMarker)
+        {
+            return;
+        }
+
+        this.lastConversationMemoryTimeByNpc[npc.Name] = timeMarker;
+        this.memory.RecordConversationStart(npc, this.config.MaxMemoryEntriesPerNpc);
+
+        string promptContext = this.memory.BuildPromptContext(npc, this.config.PromptMemoryEntries);
+        bool pushedToValleyTalk = this.valleyTalkBridge.PushBehaviorContext(npc, promptContext);
+
+        if (this.config.Debug)
+        {
+            this.monitor.Log(
+                pushedToValleyTalk
+                    ? $"Recorded conversation start and primed ValleyTalk context for {npc.Name}:\n{promptContext}"
+                    : $"Recorded conversation start for {npc.Name}; ValleyTalk context was not pushed.",
+                LogLevel.Debug
+            );
+        }
+    }
+
+    private bool TryFindNpcForInteraction(ICursorPosition cursor, out NPC? npc)
+    {
+        npc = null;
+        if (Game1.currentLocation == null || Game1.player == null)
+        {
+            return false;
+        }
+
+        var facingTile = this.GetPlayerFacingTile();
+        var targetTiles = new[]
+        {
+            cursor.GrabTile,
+            new Vector2(facingTile.X, facingTile.Y)
+        };
+
+        const float maxConversationDistanceToPlayer = 2.5f;
+        npc = Game1.currentLocation.characters
+            .Where(candidate =>
+                candidate.currentLocation == Game1.currentLocation
+                && !string.IsNullOrWhiteSpace(candidate.Name)
+                && !candidate.IsInvisible
+                && !candidate.isSleeping.Value
+            )
+            .Select(candidate => new
+            {
+                Npc = candidate,
+                DistanceToTarget = targetTiles.Min(tile => Vector2.Distance(candidate.Tile, tile)),
+                DistanceToPlayer = Vector2.Distance(candidate.Tile, Game1.player.Tile)
+            })
+            .Where(pair => pair.DistanceToTarget <= 1.5f && pair.DistanceToPlayer <= maxConversationDistanceToPlayer)
+            .OrderBy(pair => pair.DistanceToTarget)
+            .ThenBy(pair => pair.DistanceToPlayer)
+            .Select(pair => pair.Npc)
+            .FirstOrDefault();
+
         return npc != null;
     }
 
@@ -401,6 +479,19 @@ internal sealed class BehaviorEngine
         }
 
         return delta.Y > 0 ? 2 : 0;
+    }
+
+    private Point GetPlayerFacingTile()
+    {
+        var tile = Game1.player.TilePoint;
+        return Game1.player.FacingDirection switch
+        {
+            0 => new Point(tile.X, tile.Y - 1),
+            1 => new Point(tile.X + 1, tile.Y),
+            2 => new Point(tile.X, tile.Y + 1),
+            3 => new Point(tile.X - 1, tile.Y),
+            _ => tile
+        };
     }
 
     private bool TryFindApproachTile(NPC npc, out Point targetTile)
