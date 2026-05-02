@@ -10,6 +10,7 @@
     <Platforms>AnyCPU;x64</Platforms>
     <PlatformTarget>AnyCPU</PlatformTarget>
     <ModFolderName>LivingNPCs</ModFolderName>
+    <IgnoreModFilePaths>config.json</IgnoreModFilePaths>
   </PropertyGroup>
 
   <ItemGroup>
@@ -23,7 +24,12 @@
     </None>
     <None Update="config.json">
       <Link>%(Filename)%(Extension)</Link>
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
     </None>
   </ItemGroup>
+
+  <Target Name="RemoveConfigFromBuildOutput" AfterTargets="CopyFilesToOutputDirectory">
+    <Delete Files="$(TargetDir)config.json" />
+  </Target>
 </Project>
