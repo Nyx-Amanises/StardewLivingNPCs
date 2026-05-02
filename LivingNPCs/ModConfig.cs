@@ -8,8 +8,11 @@ internal sealed class ModConfig
     public bool EnableMod { get; set; } = true;
     public bool Debug { get; set; } = false;
     public KeybindList BehaviorHotkey { get; set; } = KeybindList.Parse("LeftShift + H");
+    public KeybindList InspectMemoryHotkey { get; set; } = KeybindList.Parse("LeftShift + J");
     public string ManualBehaviorMode { get; set; } = "Auto";
     public int ManualEmoteId { get; set; } = 16;
+    public int MaxMemoryEntriesPerNpc { get; set; } = 20;
+    public int PromptMemoryEntries { get; set; } = 4;
     public bool EnablePassiveBehaviors { get; set; } = true;
     public int PassiveBehaviorChancePercent { get; set; } = 6;
     public int MaxBehaviorsPerNpcPerDay { get; set; } = 2;
@@ -43,8 +46,11 @@ internal sealed class ModConfig
         this.EnableMod = defaults.EnableMod;
         this.Debug = defaults.Debug;
         this.BehaviorHotkey = defaults.BehaviorHotkey;
+        this.InspectMemoryHotkey = defaults.InspectMemoryHotkey;
         this.ManualBehaviorMode = defaults.ManualBehaviorMode;
         this.ManualEmoteId = defaults.ManualEmoteId;
+        this.MaxMemoryEntriesPerNpc = defaults.MaxMemoryEntriesPerNpc;
+        this.PromptMemoryEntries = defaults.PromptMemoryEntries;
         this.EnablePassiveBehaviors = defaults.EnablePassiveBehaviors;
         this.PassiveBehaviorChancePercent = defaults.PassiveBehaviorChancePercent;
         this.MaxBehaviorsPerNpcPerDay = defaults.MaxBehaviorsPerNpcPerDay;

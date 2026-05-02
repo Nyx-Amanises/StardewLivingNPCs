@@ -55,6 +55,14 @@ internal static class ModConfigMenu
             setValue: value => config.BehaviorHotkey = value
         );
 
+        configMenu.AddKeybindList(
+            mod: manifest,
+            name: () => "查看记忆快捷键",
+            tooltip: () => "靠近 NPC 时按下这个键，会把该 NPC 的 LivingNPCs 行为记忆输出到 SMAPI 控制台。",
+            getValue: () => config.InspectMemoryHotkey,
+            setValue: value => config.InspectMemoryHotkey = value
+        );
+
         configMenu.AddBoolOption(
             mod: manifest,
             name: () => "调试日志",
@@ -94,6 +102,33 @@ internal static class ModConfigMenu
             setValue: value => config.ManualEmoteId = value,
             min: 0,
             max: 40,
+            interval: 1
+        );
+
+        configMenu.AddSectionTitle(
+            mod: manifest,
+            text: () => "记忆设置"
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "每个 NPC 保留记忆数",
+            tooltip: () => "每个 NPC 最多保存多少条 LivingNPCs 行为记忆到存档。",
+            getValue: () => config.MaxMemoryEntriesPerNpc,
+            setValue: value => config.MaxMemoryEntriesPerNpc = value,
+            min: 1,
+            max: 100,
+            interval: 1
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "发送给 ValleyTalk 的记忆数",
+            tooltip: () => "每次生成上下文时，最多把最近多少条行为记忆发送给 ValleyTalk。",
+            getValue: () => config.PromptMemoryEntries,
+            setValue: value => config.PromptMemoryEntries = value,
+            min: 1,
+            max: 20,
             interval: 1
         );
 

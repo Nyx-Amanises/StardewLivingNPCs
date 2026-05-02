@@ -48,15 +48,20 @@ LivingNPCs is loaded. If you can see this page, the mod is running.
 - `Emote`：NPC 转向玩家，并显示一个小表情。
 - `ApproachPlayer`：NPC 尝试寻路走到玩家旁边的安全格子。默认只会在手动按快捷键时选择。
 
-默认快捷键是 `LeftShift + H`。靠近 NPC 后按住左 Shift 再按 `H`，NPC 会尝试触发一次小行为。
+默认行为快捷键是 `LeftShift + H`。靠近 NPC 后按住左 Shift 再按 `H`，NPC 会尝试触发一次小行为。
+
+默认查看记忆快捷键是 `LeftShift + J`。靠近 NPC 后按住左 Shift 再按 `J`，会把该 NPC 的 LivingNPCs 行为记忆输出到 SMAPI 控制台。
 
 ## 配置项
 
 主要配置在 `config.json`，也可以在游戏内通过 Generic Mod Config Menu 修改：
 
 - `BehaviorHotkey`：触发 NPC 行为的快捷键。
+- `InspectMemoryHotkey`：查看附近 NPC 行为记忆的快捷键。
 - `ManualBehaviorMode`：手动触发时固定测试哪种行为，可选自动、转向玩家、显示表情、走近玩家。
 - `ManualEmoteId`：手动表情测试使用的表情编号，`16` 通常是感叹号。
+- `MaxMemoryEntriesPerNpc`：每个 NPC 最多保存多少条行为记忆到存档。
+- `PromptMemoryEntries`：每次最多把多少条最近行为记忆发送给 ValleyTalk。
 - `EnablePassiveBehaviors`：是否允许 NPC 偶尔自动反应。
 - `PassiveBehaviorChancePercent`：每 10 分钟触发被动行为的概率。
 - `MaxBehaviorsPerNpcPerDay`：每个 NPC 每天最多触发多少次行为。

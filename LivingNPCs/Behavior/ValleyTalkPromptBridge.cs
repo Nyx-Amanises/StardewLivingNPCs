@@ -38,14 +38,15 @@ internal sealed class ValleyTalkPromptBridge
         this.monitor.Log("Connected to ValleyTalk prompt API.", LogLevel.Info);
     }
 
-    public void PushBehaviorContext(NPC npc, string promptText)
+    public bool PushBehaviorContext(NPC npc, string promptText)
     {
         if (this.api == null || string.IsNullOrWhiteSpace(promptText))
         {
-            return;
+            return false;
         }
 
         this.api.RegisterPromptOverride(npc.Name, PromptElement, promptText);
+        return true;
     }
 
     public void ClearAll()

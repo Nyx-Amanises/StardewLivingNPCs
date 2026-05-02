@@ -12,6 +12,8 @@ namespace LivingNPCs.Behavior;
 
 internal sealed class BehaviorEngine
 {
+    private const string SaveDataKey = "behavior-memory";
+
     private readonly IModHelper helper;
     private readonly IMonitor monitor;
     private readonly ModConfig config;
@@ -36,6 +38,7 @@ internal sealed class BehaviorEngine
     public void RegisterEvents()
     {
         this.helper.Events.GameLoop.SaveLoaded += this.OnSaveLoaded;
+        this.helper.Events.GameLoop.Saving += this.OnSaving;
         this.helper.Events.GameLoop.DayStarted += this.OnDayStarted;
         this.helper.Events.GameLoop.ReturnedToTitle += this.OnReturnedToTitle;
         this.helper.Events.GameLoop.TimeChanged += this.OnTimeChanged;
@@ -45,8 +48,23 @@ internal sealed class BehaviorEngine
 
     private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
     {
-        this.memory.ResetDaily();
+        var saveData = this.helper.Data.ReadSaveData<BehaviorMemorySaveData>(SaveDataKey);
+        this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
         this.valleyTalkBridge.TryInitialize();
+
+        if (this.config.Debug)
+        {
+            this.monitor.Log("Loaded LivingNPCs behavior memory from the current save.", LogLevel.Debug);
+        }
+    }
+
+    private void OnSaving(object? sender, SavingEventArgs e)
+    {
+        this.helper.Data.WriteSaveData(SaveDataKey, this.memory.ToSaveData());
+        if (this.config.Debug)
+        {
+            this.monitor.Log("Saved LivingNPCs behavior memory to the current save.", LogLevel.Debug);
+        }
     }
 
     private void OnDayStarted(object? sender, DayStartedEventArgs e)
@@ -65,7 +83,19 @@ internal sealed class BehaviorEngine
 
     private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
     {
-        if (!Context.IsWorldReady || !this.config.BehaviorHotkey.JustPressed() || Game1.activeClickableMenu != null)
+        if (!Context.IsWorldReady || Game1.activeClickableMenu != null)
+        {
+            return;
+        }
+
+        if (this.config.InspectMemoryHotkey.JustPressed())
+        {
+            this.helper.Input.Suppress(e.Button);
+            this.ShowNearestNpcMemory();
+            return;
+        }
+
+        if (!this.config.BehaviorHotkey.JustPressed())
         {
             return;
         }
@@ -239,17 +269,25 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        this.memory.Record(npc, intent);
-        this.valleyTalkBridge.PushBehaviorContext(npc, this.memory.BuildPromptContext(npc));
+        this.memory.Record(npc, intent, this.config.MaxMemoryEntriesPerNpc);
+        string promptContext = this.memory.BuildPromptContext(npc, this.config.PromptMemoryEntries);
+        bool pushedToValleyTalk = this.valleyTalkBridge.PushBehaviorContext(npc, promptContext);
 
         if (this.config.Debug)
         {
             this.monitor.Log($"Executed {intent.Type} for {npc.Name} from {source}.", LogLevel.Debug);
+            this.monitor.Log(
+                pushedToValleyTalk
+                    ? $"Pushed behavior context to ValleyTalk for {npc.Name}:\n{promptContext}"
+                    : $"ValleyTalk context was not pushed for {npc.Name}. ValleyTalk may be missing or bridge disabled.",
+                LogLevel.Debug
+            );
         }
 
         if (source == "hotkey")
         {
-            this.ShowFeedback($"LivingNPCs：{npc.displayName} 已执行 {this.DescribeIntent(intent.Type)}。");
+            string bridge = pushedToValleyTalk ? "已推送 ValleyTalk 上下文" : "未推送 ValleyTalk 上下文";
+            this.ShowFeedback($"LivingNPCs：{npc.displayName} 已执行 {this.DescribeIntent(intent.Type)}，{bridge}。");
         }
 
         return true;
@@ -409,6 +447,43 @@ internal sealed class BehaviorEngine
         }
 
         return !Game1.currentLocation.characters.Any(npc => npc.TilePoint == tile);
+    }
+
+    private void ShowNearestNpcMemory()
+    {
+        if (!this.TryFindNearestNpcIgnoringDailyBudget(out NPC? npc) || npc == null)
+        {
+            this.ShowFeedback("LivingNPCs：附近没有可查看记忆的 NPC。");
+            return;
+        }
+
+        string summary = this.memory.BuildDebugSummary(npc, this.config.PromptMemoryEntries);
+        this.monitor.Log(summary, LogLevel.Info);
+        this.ShowFeedback($"LivingNPCs：已在 SMAPI 控制台输出 {npc.displayName} 的行为记忆。");
+    }
+
+    private bool TryFindNearestNpcIgnoringDailyBudget(out NPC? nearest)
+    {
+        nearest = null;
+        if (Game1.currentLocation == null || Game1.player == null)
+        {
+            return false;
+        }
+
+        float maxDistance = this.config.MaxInteractionDistanceTiles;
+        nearest = Game1.currentLocation.characters
+            .Where(npc => npc.currentLocation == Game1.currentLocation && !string.IsNullOrWhiteSpace(npc.Name))
+            .Select(npc => new
+            {
+                Npc = npc,
+                Distance = Vector2.Distance(npc.Tile, Game1.player.Tile)
+            })
+            .Where(pair => pair.Distance <= maxDistance)
+            .OrderBy(pair => pair.Distance)
+            .Select(pair => pair.Npc)
+            .FirstOrDefault();
+
+        return nearest != null;
     }
 
     private void ShowFeedback(string message)
