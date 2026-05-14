@@ -683,6 +683,10 @@ internal sealed class BehaviorMemory
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
         var disposition = NpcDisposition.For(npc);
         var world = WorldContext.For(npc);
+        int safeMaxEntries = System.Math.Max(maxEntries, 0);
+        var recentEntries = entries is { Count: > 0 }
+            ? entries.TakeLast(safeMaxEntries).ToList()
+            : new List<BehaviorMemoryEntry>();
         LivingNpcState? state = null;
         if (includeState)
         {
@@ -690,17 +694,24 @@ internal sealed class BehaviorMemory
         }
 
         var prompt = new StringBuilder();
-        prompt.AppendLine("## LivingNPCs behavior and interaction context");
-        prompt.AppendLine($"{npc.displayName} has recent small in-world actions and player interaction moments tracked by LivingNPCs.");
-        prompt.AppendLine("Use these as quiet scene context for the next reply. Do not mention LivingNPCs, prompts, mods, JSON, or AI systems.");
-        prompt.AppendLine("If an entry is relevant, the character may naturally acknowledge it as something that just happened or affected the mood of the scene.");
-        prompt.AppendLine($"Behavior disposition: {disposition.PromptLabel}.");
-        prompt.AppendLine($"Current scene: {world.PromptLabel}; location: {world.LocationDisplayName}; date: {world.Season} {world.DayOfMonth}; time: {world.TimeOfDay}.");
+        prompt.AppendLine($"## LivingNPCs Context: {npc.displayName}");
+        prompt.AppendLine("Purpose: hidden continuity for ValleyTalk's next in-character reply.");
+        prompt.AppendLine("Rules:");
+        prompt.AppendLine("- Treat this as current body language, relationship memory, and scene pressure, not text to quote.");
+        prompt.AppendLine("- Stay in character; do not mention LivingNPCs, mods, prompts, AI, JSON, or context notes.");
+        prompt.AppendLine("- Use at most one or two relevant details naturally. If none fit, let this only shape tone and pacing.");
+        prompt.AppendLine("- The next reply should be a normal Stardew Valley NPC line, not a status report.");
 
+        prompt.AppendLine();
+        prompt.AppendLine("Conversation stance:");
+        prompt.AppendLine($"- {this.BuildConversationStance(npc, state, disposition, world)}");
+
+        prompt.AppendLine();
+        prompt.AppendLine("Current state:");
+        prompt.AppendLine($"- Disposition: {disposition.PromptLabel}.");
+        prompt.AppendLine($"- Scene: {world.PromptLabel}; location: {world.LocationDisplayName}; date: {world.Season} {world.DayOfMonth}; time: {world.TimeOfDay}.");
         if (state != null)
         {
-            prompt.AppendLine();
-            prompt.AppendLine("Current lightweight NPC state:");
             prompt.AppendLine($"- Mood: {state.Mood}; attention to farmer: {state.Attention}/100; response inclination: {state.CurrentInclination}.");
             prompt.AppendLine($"- Long-term familiarity with the farmer: {state.Familiarity}/100 ({state.FamiliarityPromptLabel}).");
             prompt.AppendLine($"- Relationship-aware interaction rhythm: {state.InteractionRhythmPromptLabel}; comfort tier: {state.InteractionComfortTierPromptLabel}.");
@@ -709,19 +720,198 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Scene influence on mood: {state.LastSceneInfluenceReason}.");
             prompt.AppendLine($"- Last interaction: {state.LastInteraction}.");
         }
+        else
+        {
+            prompt.AppendLine("- No persistent LivingNPCs state exists yet; use disposition and scene context conservatively.");
+        }
 
-        if (entries is { Count: > 0 })
+        var priorityContext = this.BuildPriorityPromptContext(state, world, recentEntries).ToList();
+        if (priorityContext.Count > 0)
         {
             prompt.AppendLine();
-            prompt.AppendLine("Recent tracked moments:");
-            foreach (var entry in entries.TakeLast(maxEntries))
+            prompt.AppendLine("High-priority continuity:");
+            foreach (string item in priorityContext)
+            {
+                prompt.AppendLine($"- {item}");
+            }
+        }
+
+        if (recentEntries.Count > 0)
+        {
+            prompt.AppendLine();
+            prompt.AppendLine("Recent tracked moments, oldest to newest:");
+            foreach (var entry in recentEntries)
             {
                 prompt.AppendLine($"- {this.FormatPromptEntry(entry)}");
             }
         }
 
-        prompt.AppendLine("Keep the next line in character and consistent with the current Stardew Valley scene.");
+        prompt.AppendLine();
+        prompt.AppendLine("Next reply guidance:");
+        foreach (string guidance in this.BuildReplyGuidance(state, world))
+        {
+            prompt.AppendLine($"- {guidance}");
+        }
+
         return prompt.ToString();
+    }
+
+    private string BuildConversationStance(
+        NPC npc,
+        LivingNpcState? state,
+        NpcDispositionProfile disposition,
+        WorldContextSnapshot world)
+    {
+        if (state == null)
+        {
+            return $"{npc.displayName} should sound {disposition.PromptLabel}, shaped by the current scene: {world.PromptLabel}.";
+        }
+
+        string tone = this.BuildToneCue(state);
+        string rhythm = this.BuildRhythmCue(state);
+        string scenePressure = world.StateInfluence.HasMood
+            ? $"scene pressure suggests {world.StateInfluence.Mood}/{world.StateInfluence.Inclination}"
+            : "scene pressure is mild";
+
+        return $"{npc.displayName} should sound {tone}; temperament is {disposition.PromptLabel}; relationship is {state.FamiliarityPromptLabel}; {rhythm}; {scenePressure}.";
+    }
+
+    private IEnumerable<string> BuildPriorityPromptContext(
+        LivingNpcState? state,
+        WorldContextSnapshot world,
+        IReadOnlyList<BehaviorMemoryEntry> recentEntries)
+    {
+        if (state != null)
+        {
+            int giftAge = GetMemoryAge(state.LastGiftTotalDays);
+            if (!string.IsNullOrWhiteSpace(state.LastGiftName) && giftAge <= 7)
+            {
+                string freshness = FormatMemoryAge(state.LastGiftTotalDays);
+                yield return $"Gift memory: the farmer offered {state.LastGiftName} {freshness}; taste was {state.LastGiftTaste}; let this affect warmth, surprise, or distance only if relevant.";
+            }
+
+            int eventAge = GetMemoryAge(state.LastEventTotalDays);
+            if (!string.IsNullOrWhiteSpace(state.LastEventContext) && eventAge <= 3)
+            {
+                string freshness = FormatMemoryAge(state.LastEventTotalDays);
+                yield return $"Event memory: {state.LastEventContext} ({freshness}); acknowledge only if the conversation naturally continues it.";
+            }
+
+            if (!string.IsNullOrWhiteSpace(state.InteractionRhythm)
+                && state.InteractionRhythm is not "New" and not "NoConversationToday")
+            {
+                yield return $"Interaction rhythm: {state.InteractionRhythmPromptLabel}; do not make every repeated talk sound equally eager.";
+            }
+
+            if (state.RepeatedConversationPressure >= 20)
+            {
+                yield return $"Boundary cue: repeated conversation pressure is {state.RepeatedConversationPressure}/100; a short or gently bounded reply may fit.";
+            }
+
+            if (state.Familiarity >= 18 || state.LastFriendshipHearts > 0)
+            {
+                yield return $"Relationship cue: familiarity {state.Familiarity}/100 and {state.LastFriendshipHearts} hearts; match warmth to this instead of defaulting to stranger-level politeness.";
+            }
+        }
+
+        if (world.StateInfluence.HasMood && world.StateInfluence.Priority >= 35)
+        {
+            yield return $"Scene cue: {world.StateInfluence.Reason}; this can tint mood toward {world.StateInfluence.Mood} and reply style toward {world.StateInfluence.Inclination}.";
+        }
+
+        if (world.NearbyNpcNames.Count > 0)
+        {
+            yield return $"Social cue: nearby NPCs include {string.Join(", ", world.NearbyNpcNames)}; keep the reply aware of public company.";
+        }
+
+        var latestNonConversation = recentEntries
+            .LastOrDefault(entry => !string.Equals(entry.Kind, "Conversation", System.StringComparison.OrdinalIgnoreCase));
+        if (latestNonConversation != null)
+        {
+            yield return $"Most recent non-conversation moment: {latestNonConversation.Action}; {latestNonConversation.Reason}.";
+        }
+    }
+
+    private IEnumerable<string> BuildReplyGuidance(LivingNpcState? state, WorldContextSnapshot world)
+    {
+        if (state == null)
+        {
+            yield return "Let the reply be scene-aware and modest because there is no persistent state yet.";
+            yield return "Keep continuity subtle; do not invent strong feelings from weak context.";
+            yield break;
+        }
+
+        yield return $"Tone target: {this.BuildToneCue(state)}.";
+        yield return $"Relationship pacing: {state.InteractionComfortTierPromptLabel}.";
+
+        if (!string.IsNullOrWhiteSpace(state.LastGiftName) && state.LastGiftTotalDays == Game1.Date.TotalDays)
+        {
+            yield return "If the gift is conversationally relevant, a brief natural acknowledgement is allowed; avoid turning the whole reply into gift analysis.";
+        }
+
+        if (state.RepeatedConversationPressure >= 20)
+        {
+            yield return "Because the farmer has been checking in repeatedly, it is okay to sound brief, amused, busy, or gently boundary-setting.";
+        }
+
+        if (world.StateInfluence.HasMood)
+        {
+            yield return $"Let the scene nudge tone through {world.StateInfluence.Reason}, without explicitly explaining the scene mechanics.";
+        }
+    }
+
+    private string BuildToneCue(LivingNpcState state)
+    {
+        string attention = state.Attention switch
+        {
+            >= 75 => "attentive",
+            >= 45 => "aware",
+            _ => "lightly distracted"
+        };
+
+        string openness = state.Openness switch
+        {
+            >= 75 => "open",
+            >= 45 => "measured",
+            _ => "reserved"
+        };
+
+        return $"{state.Mood.ToLowerInvariant()}, {attention}, and {openness}";
+    }
+
+    private string BuildRhythmCue(LivingNpcState state)
+    {
+        return state.InteractionRhythm switch
+        {
+            "CrowdedToday" => "the farmer's attention is starting to feel repetitive today",
+            "AtComfortLimit" => "the farmer is near today's comfortable conversation limit",
+            "ComfortableRepeat" => "repeated conversation still feels natural because the relationship is close",
+            "PoliteRepeat" => "repeated conversation should stay polite rather than overly warm",
+            "DailyRoutine" or "BuildingRoutine" => "the farmer checking in has become part of a familiar routine",
+            "LongQuietGap" or "AfterLongGap" => "there is a noticeable gap since the last recorded conversation",
+            "FreshToday" => "this is the first recorded conversation today",
+            "FirstConversation" => "this is the first recorded LivingNPCs conversation",
+            _ => state.InteractionRhythmPromptLabel
+        };
+    }
+
+    private static int GetMemoryAge(int totalDays)
+    {
+        return totalDays < 0
+            ? int.MaxValue
+            : System.Math.Max(0, Game1.Date.TotalDays - totalDays);
+    }
+
+    private static string FormatMemoryAge(int totalDays)
+    {
+        int age = GetMemoryAge(totalDays);
+        return age switch
+        {
+            0 => "today",
+            1 => "yesterday",
+            int.MaxValue => "at an unknown time",
+            _ => $"{age} days ago"
+        };
     }
 
     public string BuildDebugSummary(NPC npc, int maxEntries, bool includeState)
@@ -1080,7 +1270,7 @@ internal sealed class LivingNpcState
 
     public string LastGiftPromptLabel => string.IsNullOrWhiteSpace(this.LastGiftName)
         ? "no recent LivingNPCs gift memory"
-        : $"the farmer recently offered {this.LastGiftName}; gift taste: {this.LastGiftTaste}; gifts recorded today: {this.GiftsToday}";
+        : $"last recorded gift: the farmer offered {this.LastGiftName}; gift taste: {this.LastGiftTaste}; gifts recorded today: {this.GiftsToday}";
 
     public string LastEventLabel => string.IsNullOrWhiteSpace(this.LastEventContext)
         ? "暂无"
@@ -1088,7 +1278,7 @@ internal sealed class LivingNpcState
 
     public string LastEventPromptLabel => string.IsNullOrWhiteSpace(this.LastEventContext)
         ? "no recent LivingNPCs event memory"
-        : this.LastEventContext;
+        : $"last recorded event context: {this.LastEventContext}";
 
     public string LastInteractionLabel => this.LastInteraction switch
     {
