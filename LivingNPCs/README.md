@@ -58,6 +58,8 @@ LivingNPCs is loaded. If you can see this page, the mod is running.
 
 LivingNPCs 还会维护一个轻量 NPC 状态层。行为、被动反应、玩家主动聊天都会改变 NPC 的当前状态；每天开始时状态会向普通状态回落，避免状态永久堆积。
 
+当手动行为模式设为 `Auto` 时，NPC 状态会反过来影响行为选择。注意度和回应倾向越高，NPC 越可能走近或明显回应；心情更外露时，更容易显示表情。固定测试模式仍然按你选择的行为执行，方便验证单个动作。
+
 ## 配置项
 
 主要配置在 `config.json`，也可以在游戏内通过 Generic Mod Config Menu 修改：

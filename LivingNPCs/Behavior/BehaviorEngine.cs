@@ -32,7 +32,7 @@ internal sealed class BehaviorEngine
         this.monitor = monitor;
         this.config = config;
         this.valleyTalkBridge = new ValleyTalkPromptBridge(helper, monitor, config);
-        this.planner = new AiBehaviorPlanner(new RuleBasedBehaviorPlanner(config, this.random));
+        this.planner = new AiBehaviorPlanner(new RuleBasedBehaviorPlanner(config, this.random, this.memory));
         this.aiBehaviorClient = new AiBehaviorClient(config, monitor);
     }
 

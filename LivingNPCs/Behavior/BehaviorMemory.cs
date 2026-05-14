@@ -82,6 +82,13 @@ internal sealed class BehaviorMemory
         return !this.dailyCountsByNpc.TryGetValue(npc.Name, out int count) || count < maxPerDay;
     }
 
+    public LivingNpcState? GetState(NPC npc)
+    {
+        return this.statesByNpc.TryGetValue(npc.Name, out var state)
+            ? state
+            : null;
+    }
+
     public BehaviorMemoryEntry Record(NPC npc, BehaviorIntent intent, int maxEntriesPerNpc)
     {
         var entry = this.CreateEntry(npc, "Behavior", intent.Type.ToString(), intent.Reason);
