@@ -154,8 +154,9 @@ internal sealed class BehaviorMemory
     {
         var state = this.GetOrCreateState(npc);
         var world = WorldContext.For(npc);
-        this.UpdateConversationRhythm(state);
-        int familiarityGain = state.ConversationsToday == 1 ? 3 : state.ConversationsToday <= 3 ? 1 : 0;
+        this.UpdateConversationRhythm(state, world.FriendshipHearts);
+        int repeatFamiliarityLimit = System.Math.Min(3, state.DailyConversationComfortLimit);
+        int familiarityGain = state.ConversationsToday == 1 ? 3 : state.ConversationsToday <= repeatFamiliarityLimit ? 1 : 0;
         if (state.ConversationsToday == 1 && state.ConsecutiveConversationDays >= 3)
         {
             familiarityGain += 1;
@@ -254,10 +255,11 @@ internal sealed class BehaviorMemory
         }
     }
 
-    private void UpdateConversationRhythm(LivingNpcState state)
+    private void UpdateConversationRhythm(LivingNpcState state, int friendshipHearts)
     {
         int today = Game1.Date.TotalDays;
         int previousConversationDay = state.LastConversationTotalDays;
+        state.LastFriendshipHearts = friendshipHearts;
 
         if (previousConversationDay == today)
         {
@@ -281,19 +283,32 @@ internal sealed class BehaviorMemory
 
         state.LastConversationTotalDays = today;
         state.LastConversationTimeOfDay = Game1.timeOfDay;
+        state.InteractionComfortTier = this.DetermineInteractionComfortTier(state);
+        state.DailyConversationComfortLimit = this.DetermineDailyConversationComfortLimit(state.InteractionComfortTier);
+        state.RepeatedConversationPressure = this.CalculateRepeatedConversationPressure(state);
         state.InteractionRhythm = this.DetermineInteractionRhythm(state);
     }
 
     private string DetermineInteractionRhythm(LivingNpcState state)
     {
-        if (state.ConversationsToday >= 4)
+        if (state.ConversationsToday > state.DailyConversationComfortLimit + 1)
         {
             return "CrowdedToday";
         }
 
+        if (state.ConversationsToday > state.DailyConversationComfortLimit)
+        {
+            return "AtComfortLimit";
+        }
+
         if (state.ConversationsToday >= 2)
         {
-            return "CheckedInAgain";
+            return state.InteractionComfortTier switch
+            {
+                "Distant" => "PoliteRepeat",
+                "Trusted" or "Intimate" => "ComfortableRepeat",
+                _ => "CheckedInAgain"
+            };
         }
 
         if (state.LastConversationGapDays >= 7)
@@ -314,21 +329,90 @@ internal sealed class BehaviorMemory
         return state.LastConversationGapDays < 0 ? "FirstConversation" : "FreshToday";
     }
 
+    private string DetermineInteractionComfortTier(LivingNpcState state)
+    {
+        if (state.LastFriendshipHearts >= 10 || state.Familiarity >= 85)
+        {
+            return "Intimate";
+        }
+
+        if (state.LastFriendshipHearts >= 8 || state.Familiarity >= 70)
+        {
+            return "Trusted";
+        }
+
+        if (state.LastFriendshipHearts >= 4 || state.Familiarity >= 45)
+        {
+            return "Friendly";
+        }
+
+        if (state.LastFriendshipHearts >= 2 || state.Familiarity >= 18)
+        {
+            return "Familiar";
+        }
+
+        return "Distant";
+    }
+
+    private int DetermineDailyConversationComfortLimit(string comfortTier)
+    {
+        return comfortTier switch
+        {
+            "Intimate" => 6,
+            "Trusted" => 5,
+            "Friendly" => 4,
+            "Familiar" => 3,
+            _ => 2
+        };
+    }
+
+    private int CalculateRepeatedConversationPressure(LivingNpcState state)
+    {
+        int overLimit = System.Math.Max(0, state.ConversationsToday - state.DailyConversationComfortLimit);
+        int tierWeight = state.InteractionComfortTier switch
+        {
+            "Intimate" => 8,
+            "Trusted" => 12,
+            "Friendly" => 18,
+            "Familiar" => 24,
+            _ => 32
+        };
+
+        return System.Math.Clamp(overLimit * tierWeight, 0, 100);
+    }
+
     private void ApplyConversationRhythmInfluence(LivingNpcState state)
     {
         switch (state.InteractionRhythm)
         {
             case "CrowdedToday":
-                state.Mood = "Overloaded";
-                state.CurrentInclination = "NeedsSpace";
-                state.Attention = LivingNpcState.ClampScore(state.Attention - 3);
-                state.Openness = LivingNpcState.ClampScore(state.Openness - 12);
+                this.ApplyCrowdedConversationInfluence(state);
+                break;
+
+            case "AtComfortLimit":
+                this.ApplyComfortLimitInfluence(state);
+                break;
+
+            case "PoliteRepeat":
+                state.Mood = "Polite";
+                state.CurrentInclination = "Measured";
+                state.Attention = LivingNpcState.ClampScore(state.Attention + 1);
+                state.Openness = LivingNpcState.ClampScore(state.Openness - 5);
+                break;
+
+            case "ComfortableRepeat":
+                state.Mood = "Comfortable";
+                state.CurrentInclination = "OpenToTalk";
+                state.Attention = LivingNpcState.ClampScore(state.Attention + 4);
+                state.Openness = LivingNpcState.ClampScore(state.Openness + 3);
                 break;
 
             case "CheckedInAgain":
-                state.Mood = state.Openness >= 65 ? "Familiar" : "Aware";
+                state.Mood = state.Openness >= 65 || state.InteractionComfortTier is "Friendly" or "Trusted" or "Intimate"
+                    ? "Familiar"
+                    : "Aware";
                 state.Attention = LivingNpcState.ClampScore(state.Attention + 2);
-                state.Openness = LivingNpcState.ClampScore(state.Openness - 3);
+                state.Openness = LivingNpcState.ClampScore(state.Openness + (state.InteractionComfortTier == "Friendly" ? 1 : -2));
                 break;
 
             case "AfterLongGap":
@@ -351,6 +435,44 @@ internal sealed class BehaviorMemory
                 state.Openness = LivingNpcState.ClampScore(state.Openness + 2);
                 break;
         }
+    }
+
+    private void ApplyCrowdedConversationInfluence(LivingNpcState state)
+    {
+        int opennessPenalty = state.InteractionComfortTier switch
+        {
+            "Intimate" => 3,
+            "Trusted" => 5,
+            "Friendly" => 7,
+            "Familiar" => 10,
+            _ => 14
+        };
+
+        state.Mood = state.InteractionComfortTier is "Intimate" or "Trusted"
+            ? "CrowdedButWarm"
+            : "Overloaded";
+        state.CurrentInclination = state.InteractionComfortTier is "Intimate" or "Trusted"
+            ? "GentleBoundary"
+            : "NeedsSpace";
+        state.Attention = LivingNpcState.ClampScore(state.Attention + (state.InteractionComfortTier == "Distant" ? -3 : 1));
+        state.Openness = LivingNpcState.ClampScore(state.Openness - opennessPenalty);
+    }
+
+    private void ApplyComfortLimitInfluence(LivingNpcState state)
+    {
+        if (state.InteractionComfortTier is "Intimate" or "Trusted")
+        {
+            state.Mood = "Comfortable";
+            state.CurrentInclination = "OpenToTalk";
+            state.Attention = LivingNpcState.ClampScore(state.Attention + 2);
+            state.Openness = LivingNpcState.ClampScore(state.Openness + 1);
+            return;
+        }
+
+        state.Mood = state.InteractionComfortTier == "Friendly" ? "Familiar" : "Polite";
+        state.CurrentInclination = state.InteractionComfortTier == "Distant" ? "Measured" : "Acknowledging";
+        state.Attention = LivingNpcState.ClampScore(state.Attention + 1);
+        state.Openness = LivingNpcState.ClampScore(state.Openness - (state.InteractionComfortTier == "Distant" ? 6 : 3));
     }
 
     private void ApplyWorldStateInfluence(LivingNpcState state, WorldContextSnapshot world)
@@ -452,7 +574,7 @@ internal sealed class BehaviorMemory
             prompt.AppendLine("Current lightweight NPC state:");
             prompt.AppendLine($"- Mood: {state.Mood}; attention to farmer: {state.Attention}/100; response inclination: {state.CurrentInclination}.");
             prompt.AppendLine($"- Long-term familiarity with the farmer: {state.Familiarity}/100 ({state.FamiliarityPromptLabel}).");
-            prompt.AppendLine($"- Interaction rhythm: {state.InteractionRhythmPromptLabel}.");
+            prompt.AppendLine($"- Relationship-aware interaction rhythm: {state.InteractionRhythmPromptLabel}; comfort tier: {state.InteractionComfortTierPromptLabel}.");
             prompt.AppendLine($"- Scene influence on mood: {state.LastSceneInfluenceReason}.");
             prompt.AppendLine($"- Last interaction: {state.LastInteraction}.");
         }
@@ -495,6 +617,7 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 对玩家注意度：{state.AttentionLabel} ({state.Attention})");
             summary.AppendLine($"- 对玩家熟悉度：{state.FamiliarityLabel} ({state.Familiarity})");
             summary.AppendLine($"- 互动节奏：{state.InteractionRhythmLabel}");
+            summary.AppendLine($"- 互动舒适度：{state.InteractionComfortTierLabel}");
             summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
             summary.AppendLine($"- 当前场景：{world.DebugLabel}");
             summary.AppendLine($"- 情境影响：{state.LastSceneInfluenceLabel}");
@@ -546,6 +669,10 @@ internal sealed class BehaviorMemory
                 LastConversationTimeOfDay = 0,
                 LastConversationGapDays = -1,
                 InteractionRhythm = "New",
+                InteractionComfortTier = "Distant",
+                DailyConversationComfortLimit = 2,
+                RepeatedConversationPressure = 0,
+                LastFriendshipHearts = 0,
                 LastSceneContext = "none",
                 LastSceneInfluence = "none",
                 LastSceneInfluenceReason = "none",
@@ -632,6 +759,10 @@ internal sealed class LivingNpcState
     public int LastConversationTimeOfDay { get; set; }
     public int LastConversationGapDays { get; set; } = -1;
     public string InteractionRhythm { get; set; } = "New";
+    public string InteractionComfortTier { get; set; } = "Distant";
+    public int DailyConversationComfortLimit { get; set; } = 2;
+    public int RepeatedConversationPressure { get; set; }
+    public int LastFriendshipHearts { get; set; }
     public string LastSceneContext { get; set; } = "none";
     public string LastSceneInfluence { get; set; } = "none";
     public string LastSceneInfluenceReason { get; set; } = "none";
@@ -647,6 +778,7 @@ internal sealed class LivingNpcState
         "Calm" => "放松",
         "Chilly" => "有些怕冷",
         "Comfortable" => "自在",
+        "CrowdedButWarm" => "亲近但有点频繁",
         "Curious" => "好奇",
         "Engaged" => "投入",
         "Expressive" => "情绪外露",
@@ -656,6 +788,7 @@ internal sealed class LivingNpcState
         "Guarded" => "警觉",
         "Hurried" => "匆忙",
         "Overloaded" => "有点应接不暇",
+        "Polite" => "礼貌克制",
         "Public" => "留意公共场合",
         "Quiet" => "安静",
         "Sociable" => "有社交兴致",
@@ -695,6 +828,8 @@ internal sealed class LivingNpcState
         "Careful" => "谨慎回应",
         "Comfortable" => "自在回应",
         "Focused" => "保持专注",
+        "GentleBoundary" => "温和地保留空间",
+        "Measured" => "礼貌但有分寸",
         "NeedsSpace" => "需要一点空间",
         "OpenToTalk" => "愿意继续回应",
         "Public" => "顾及周围的人",
@@ -709,8 +844,10 @@ internal sealed class LivingNpcState
     public string InteractionRhythmLabel => this.InteractionRhythm switch
     {
         "AfterLongGap" => $"隔了 {this.LastConversationGapDays} 天才再次聊天",
+        "AtComfortLimit" => $"今天第 {this.ConversationsToday} 次聊天，接近日常舒适上限",
         "BuildingRoutine" => $"连续 {this.ConsecutiveConversationDays} 天打招呼",
         "CheckedInAgain" => $"今天第 {this.ConversationsToday} 次聊天",
+        "ComfortableRepeat" => $"今天第 {this.ConversationsToday} 次聊天，关系足够熟所以仍然自然",
         "CrowdedToday" => $"今天已经聊了 {this.ConversationsToday} 次，有点频繁",
         "DailyRoutine" => $"连续 {this.ConsecutiveConversationDays} 天聊天，像日常习惯",
         "FirstConversation" => "第一次记录到对话",
@@ -719,14 +856,35 @@ internal sealed class LivingNpcState
         "NoConversationToday" => this.LastConversationGapDays <= 1
             ? "今天还没聊天，昨天聊过"
             : $"今天还没聊天，上次聊天在 {this.LastConversationGapDays} 天前",
+        "PoliteRepeat" => $"今天第 {this.ConversationsToday} 次聊天，关系还不深所以会更客气",
         _ => "暂无稳定节奏"
+    };
+
+    public string InteractionComfortTierLabel => this.InteractionComfortTier switch
+    {
+        "Intimate" => $"非常亲近（{this.LastFriendshipHearts} 心，日常舒适上限 {this.DailyConversationComfortLimit} 次）",
+        "Trusted" => $"亲近（{this.LastFriendshipHearts} 心，日常舒适上限 {this.DailyConversationComfortLimit} 次）",
+        "Friendly" => $"友好（{this.LastFriendshipHearts} 心，日常舒适上限 {this.DailyConversationComfortLimit} 次）",
+        "Familiar" => $"熟悉（{this.LastFriendshipHearts} 心，日常舒适上限 {this.DailyConversationComfortLimit} 次）",
+        _ => $"不熟（{this.LastFriendshipHearts} 心，日常舒适上限 {this.DailyConversationComfortLimit} 次）"
+    };
+
+    public string InteractionComfortTierPromptLabel => this.InteractionComfortTier switch
+    {
+        "Intimate" => $"very close; {this.LastFriendshipHearts} hearts; up to {this.DailyConversationComfortLimit} short conversations today can feel normal",
+        "Trusted" => $"trusted; {this.LastFriendshipHearts} hearts; up to {this.DailyConversationComfortLimit} short conversations today can still feel natural",
+        "Friendly" => $"friendly; {this.LastFriendshipHearts} hearts; repeated conversations are acceptable but should not feel endlessly eager",
+        "Familiar" => $"familiar; {this.LastFriendshipHearts} hearts; repeated conversations should stay polite and modest",
+        _ => $"distant; {this.LastFriendshipHearts} hearts; repeated conversations should feel more cautious or formal"
     };
 
     public string InteractionRhythmPromptLabel => this.InteractionRhythm switch
     {
         "AfterLongGap" => $"they are speaking again after {this.LastConversationGapDays} days without a recorded conversation",
+        "AtComfortLimit" => $"this is conversation {this.ConversationsToday} today, around the normal comfort limit for this relationship",
         "BuildingRoutine" => $"the farmer has checked in for {this.ConsecutiveConversationDays} consecutive days",
         "CheckedInAgain" => $"this is conversation {this.ConversationsToday} with the farmer today",
+        "ComfortableRepeat" => $"this is conversation {this.ConversationsToday} today, but the relationship is close enough that it can still feel natural",
         "CrowdedToday" => $"the farmer has already spoken with them {this.ConversationsToday} times today, so the attention may feel repetitive",
         "DailyRoutine" => $"the farmer has spoken with them for {this.ConsecutiveConversationDays} consecutive days, forming a familiar daily rhythm",
         "FirstConversation" => "this is the first recorded LivingNPCs conversation with the farmer",
@@ -735,6 +893,7 @@ internal sealed class LivingNpcState
         "NoConversationToday" => this.LastConversationGapDays <= 1
             ? "there has been no recorded conversation with the farmer today, but they spoke yesterday"
             : $"there has been no recorded conversation with the farmer today; the last one was {this.LastConversationGapDays} days ago",
+        "PoliteRepeat" => $"this is conversation {this.ConversationsToday} today, and the relationship is not close enough for repeated chats to feel fully casual",
         _ => "no stable interaction rhythm yet"
     };
 
@@ -780,6 +939,9 @@ internal sealed class LivingNpcState
         this.ConversationsToday = System.Math.Max(0, this.ConversationsToday);
         this.ConsecutiveConversationDays = System.Math.Max(0, this.ConsecutiveConversationDays);
         this.LastConversationGapDays = this.LastConversationGapDays < -1 ? -1 : this.LastConversationGapDays;
+        this.DailyConversationComfortLimit = System.Math.Clamp(this.DailyConversationComfortLimit <= 0 ? 2 : this.DailyConversationComfortLimit, 1, 8);
+        this.RepeatedConversationPressure = System.Math.Clamp(this.RepeatedConversationPressure, 0, 100);
+        this.LastFriendshipHearts = System.Math.Clamp(this.LastFriendshipHearts, 0, 14);
         if (string.IsNullOrWhiteSpace(this.Mood))
         {
             this.Mood = "Neutral";
@@ -814,6 +976,11 @@ internal sealed class LivingNpcState
         {
             this.InteractionRhythm = "New";
         }
+
+        if (string.IsNullOrWhiteSpace(this.InteractionComfortTier))
+        {
+            this.InteractionComfortTier = "Distant";
+        }
     }
 
     public LivingNpcState Clone()
@@ -833,6 +1000,10 @@ internal sealed class LivingNpcState
             LastConversationTimeOfDay = this.LastConversationTimeOfDay,
             LastConversationGapDays = this.LastConversationGapDays,
             InteractionRhythm = this.InteractionRhythm,
+            InteractionComfortTier = this.InteractionComfortTier,
+            DailyConversationComfortLimit = this.DailyConversationComfortLimit,
+            RepeatedConversationPressure = this.RepeatedConversationPressure,
+            LastFriendshipHearts = this.LastFriendshipHearts,
             LastSceneContext = this.LastSceneContext,
             LastSceneInfluence = this.LastSceneInfluence,
             LastSceneInfluenceReason = this.LastSceneInfluenceReason,

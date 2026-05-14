@@ -161,17 +161,50 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
                 reasons.Add("recognizes the farmer");
             }
 
-            if (state?.ConversationsToday >= 4)
+            if (state != null)
             {
-                approachBonus -= 0.18;
-                emoteBonus -= 0.04;
-                reasons.Add("many conversations today");
-            }
-            else if (state?.ConversationsToday >= 2)
-            {
-                approachBonus -= 0.05;
-                emoteBonus += 0.02;
-                reasons.Add("already checked in today");
+                switch (state.InteractionRhythm)
+                {
+                    case "CrowdedToday":
+                        double pressure = Math.Clamp((state.RepeatedConversationPressure + 20) / 100d, 0.05, 1);
+                        approachBonus -= 0.08 + (0.14 * pressure);
+                        emoteBonus -= 0.02 + (0.04 * pressure);
+                        reasons.Add($"{state.InteractionComfortTier.ToLowerInvariant()} relationship repeat pressure");
+                        break;
+
+                    case "AtComfortLimit":
+                        if (state.InteractionComfortTier is "Intimate" or "Trusted")
+                        {
+                            approachBonus += 0.02;
+                            emoteBonus += 0.01;
+                            reasons.Add("close relationship can handle another short check-in");
+                        }
+                        else
+                        {
+                            approachBonus -= 0.04;
+                            reasons.Add("near today's comfort limit");
+                        }
+
+                        break;
+
+                    case "PoliteRepeat":
+                        approachBonus -= 0.07;
+                        emoteBonus += 0.01;
+                        reasons.Add("repeated chat with low relationship");
+                        break;
+
+                    case "CheckedInAgain":
+                        approachBonus += state.InteractionComfortTier == "Friendly" ? 0.01 : -0.02;
+                        emoteBonus += 0.02;
+                        reasons.Add("already checked in today");
+                        break;
+
+                    case "ComfortableRepeat":
+                        approachBonus += 0.06;
+                        emoteBonus += 0.03;
+                        reasons.Add("comfortable repeated chat");
+                        break;
+                }
             }
 
             if (state?.ConsecutiveConversationDays >= 5)
@@ -219,6 +252,17 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
                     approachBonus -= 0.16;
                     emoteBonus -= 0.05;
                     reasons.Add("needs a little space");
+                    break;
+
+                case "CrowdedButWarm":
+                    approachBonus -= 0.04;
+                    emoteBonus += 0.01;
+                    reasons.Add("close but repeated attention");
+                    break;
+
+                case "Polite":
+                    approachBonus -= 0.04;
+                    reasons.Add("polite reserve");
                     break;
             }
 
