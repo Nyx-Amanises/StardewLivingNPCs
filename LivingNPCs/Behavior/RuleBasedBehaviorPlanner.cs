@@ -33,7 +33,8 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
 
         float distance = Vector2.Distance(npc.Tile, Game1.player.Tile);
         LivingNpcState? state = this.config.EnableNpcState ? this.memory.GetState(npc) : null;
-        var influence = StateInfluence.From(state);
+        var disposition = NpcDisposition.For(npc);
+        var influence = StateInfluence.From(state, disposition);
 
         if (trigger == BehaviorTrigger.Manual && this.config.AllowApproachPlayer && distance > 2.25f && distance <= this.config.MaxInteractionDistanceTiles)
         {
@@ -48,8 +49,8 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
                 return new BehaviorIntent(
                     BehaviorIntentType.ApproachPlayer,
                     npc.Name,
-                    influence.HasState
-                        ? $"their current state made them more willing to step closer ({influence.Reason})"
+                    influence.HasContext
+                        ? $"their current context made them more willing to step closer ({influence.Reason})"
                         : "they chose to step closer to the farmer before talking"
                 );
             }
@@ -61,19 +62,19 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
             return new BehaviorIntent(
                 BehaviorIntentType.Emote,
                 npc.Name,
-                influence.HasState
-                    ? $"they reacted through their current mood ({influence.Reason})"
+                influence.HasContext
+                    ? $"they reacted through their current context ({influence.Reason})"
                     : trigger == BehaviorTrigger.Manual
                         ? "they noticed the farmer nearby and reacted naturally"
                         : "something about the moment caught their attention",
-                this.ChooseEmoteId(trigger, state)
+                this.ChooseEmoteId(trigger, state, disposition)
             );
         }
 
         return new BehaviorIntent(
             BehaviorIntentType.FacePlayer,
             npc.Name,
-            influence.HasState
+            influence.HasContext
                 ? $"their attention shifted toward the farmer ({influence.Reason})"
                 : trigger == BehaviorTrigger.Manual
                     ? "they noticed the farmer nearby and turned toward them"
@@ -81,7 +82,7 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
         );
     }
 
-    private int ChooseEmoteId(BehaviorTrigger trigger, LivingNpcState? state)
+    private int ChooseEmoteId(BehaviorTrigger trigger, LivingNpcState? state, NpcDispositionProfile disposition)
     {
         if (trigger == BehaviorTrigger.Manual)
         {
@@ -90,7 +91,7 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
 
         if (state == null)
         {
-            return 16;
+            return disposition.PassiveEmoteId;
         }
 
         return state.Mood switch
@@ -99,54 +100,67 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
             "Engaged" => 32,
             "Expressive" => this.config.ManualEmoteId,
             "Warm" => 20,
-            _ => 16
+            _ => disposition.PassiveEmoteId
         };
     }
 
-    private sealed record StateInfluence(bool HasState, double ApproachBonus, double EmoteBonus, string Reason)
+    private sealed record StateInfluence(bool HasContext, double ApproachBonus, double EmoteBonus, string Reason)
     {
-        public static StateInfluence From(LivingNpcState? state)
+        public static StateInfluence From(LivingNpcState? state, NpcDispositionProfile disposition)
         {
-            if (state == null)
-            {
-                return new StateInfluence(false, 0, 0, string.Empty);
-            }
+            double approachBonus = disposition.ApproachModifier;
+            double emoteBonus = disposition.EmoteModifier;
+            var reasons = new List<string> { disposition.Reason };
 
-            double approachBonus = 0;
-            double emoteBonus = 0;
-            var reasons = new List<string>();
-
-            if (state.Attention >= 75)
+            if (state?.Attention >= 75)
             {
                 approachBonus += 0.18;
                 emoteBonus += 0.12;
                 reasons.Add("high attention");
             }
-            else if (state.Attention >= 50)
+            else if (state?.Attention >= 50)
             {
                 approachBonus += 0.08;
                 emoteBonus += 0.05;
                 reasons.Add("moderate attention");
             }
-            else if (state.Attention <= 20)
+            else if (state?.Attention <= 20)
             {
                 approachBonus -= 0.12;
                 emoteBonus -= 0.08;
                 reasons.Add("low attention");
             }
 
-            if (state.Openness >= 70)
+            if (state?.Openness >= 70)
             {
                 approachBonus += 0.2;
                 reasons.Add("open to talking");
             }
-            else if (state.Openness <= 30)
+            else if (state?.Openness <= 30)
             {
                 approachBonus -= 0.18;
                 reasons.Add("reserved mood");
             }
 
-            switch (state.Mood)
+            if (state?.Familiarity >= 75)
+            {
+                approachBonus += 0.14;
+                emoteBonus += 0.07;
+                reasons.Add("close long-term familiarity");
+            }
+            else if (state?.Familiarity >= 45)
+            {
+                approachBonus += 0.09;
+                emoteBonus += 0.04;
+                reasons.Add("familiar with the farmer");
+            }
+            else if (state?.Familiarity >= 18)
+            {
+                approachBonus += 0.04;
+                reasons.Add("recognizes the farmer");
+            }
+
+            switch (state?.Mood)
             {
                 case "Engaged":
                 case "Warm":

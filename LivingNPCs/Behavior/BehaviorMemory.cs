@@ -115,6 +115,7 @@ internal sealed class BehaviorMemory
         var state = this.GetOrCreateState(npc);
         int attentionDelta = source == "passive" ? 6 : 12;
         int opennessDelta = source == "passive" ? 2 : 4;
+        int familiarityGain = source == "passive" ? 0 : 1;
 
         switch (intent.Type)
         {
@@ -134,9 +135,11 @@ internal sealed class BehaviorMemory
                 state.CurrentInclination = "OpenToTalk";
                 attentionDelta += 8;
                 opennessDelta += 6;
+                familiarityGain += 1;
                 break;
         }
 
+        this.AddFamiliarity(state, familiarityGain, dailyCap: 6);
         state.Attention = LivingNpcState.ClampScore(state.Attention + attentionDelta);
         state.Openness = LivingNpcState.ClampScore(state.Openness + opennessDelta);
         state.LastInteraction = source == "passive" ? "passive nearby reaction" : "small behavior near the farmer";
@@ -148,10 +151,11 @@ internal sealed class BehaviorMemory
     public LivingNpcState UpdateStateForConversationStart(NPC npc)
     {
         var state = this.GetOrCreateState(npc);
-        state.Mood = state.Openness >= 60 ? "Warm" : "Attentive";
+        this.AddFamiliarity(state, amount: 3, dailyCap: 6);
+        state.Mood = state.Openness >= 60 || state.Familiarity >= 40 ? "Warm" : "Attentive";
         state.CurrentInclination = "OpenToTalk";
         state.Attention = LivingNpcState.ClampScore(state.Attention + 18);
-        state.Openness = LivingNpcState.ClampScore(state.Openness + 6);
+        state.Openness = LivingNpcState.ClampScore(state.Openness + (state.Familiarity >= 40 ? 8 : 6));
         state.LastInteraction = "the farmer started a conversation";
         state.LastUpdatedTotalDays = Game1.Date.TotalDays;
         state.LastUpdatedTimeOfDay = Game1.timeOfDay;
@@ -168,6 +172,12 @@ internal sealed class BehaviorMemory
         this.lastStateDecayTotalDays = Game1.Date.TotalDays;
         foreach (var state in this.statesByNpc.Values)
         {
+            state.Familiarity = LivingNpcState.ClampScore(state.Familiarity);
+            if (state.LastFamiliarityGainTotalDays != Game1.Date.TotalDays)
+            {
+                state.FamiliarityGainedToday = 0;
+            }
+
             state.Attention = LivingNpcState.MoveToward(state.Attention, 35, dailyDecay);
             state.Openness = LivingNpcState.MoveToward(state.Openness, 50, dailyDecay / 2);
             state.CurrentInclination = state.Attention >= 55 ? "Aware" : "Neutral";
@@ -176,6 +186,30 @@ internal sealed class BehaviorMemory
             state.LastUpdatedTotalDays = Game1.Date.TotalDays;
             state.LastUpdatedTimeOfDay = Game1.timeOfDay;
         }
+    }
+
+    private void AddFamiliarity(LivingNpcState state, int amount, int dailyCap)
+    {
+        if (amount <= 0 || dailyCap <= 0)
+        {
+            return;
+        }
+
+        if (state.LastFamiliarityGainTotalDays != Game1.Date.TotalDays)
+        {
+            state.LastFamiliarityGainTotalDays = Game1.Date.TotalDays;
+            state.FamiliarityGainedToday = 0;
+        }
+
+        int remainingToday = System.Math.Max(0, dailyCap - state.FamiliarityGainedToday);
+        int gained = System.Math.Min(amount, remainingToday);
+        if (gained <= 0)
+        {
+            return;
+        }
+
+        state.Familiarity = LivingNpcState.ClampScore(state.Familiarity + gained);
+        state.FamiliarityGainedToday += gained;
     }
 
     private BehaviorMemoryEntry CreateEntry(NPC npc, string kind, string action, string reason)
@@ -214,6 +248,7 @@ internal sealed class BehaviorMemory
     public string BuildPromptContext(NPC npc, int maxEntries, bool includeState)
     {
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
+        var disposition = NpcDisposition.For(npc);
         LivingNpcState? state = null;
         if (includeState)
         {
@@ -230,12 +265,14 @@ internal sealed class BehaviorMemory
         prompt.AppendLine($"{npc.displayName} has recent small in-world actions and player interaction moments tracked by LivingNPCs.");
         prompt.AppendLine("Use these as quiet scene context for the next reply. Do not mention LivingNPCs, prompts, mods, JSON, or AI systems.");
         prompt.AppendLine("If an entry is relevant, the character may naturally acknowledge it as something that just happened or affected the mood of the scene.");
+        prompt.AppendLine($"Behavior disposition: {disposition.PromptLabel}.");
 
         if (state != null)
         {
             prompt.AppendLine();
             prompt.AppendLine("Current lightweight NPC state:");
             prompt.AppendLine($"- Mood: {state.Mood}; attention to farmer: {state.Attention}/100; response inclination: {state.CurrentInclination}.");
+            prompt.AppendLine($"- Long-term familiarity with the farmer: {state.Familiarity}/100 ({state.FamiliarityPromptLabel}).");
             prompt.AppendLine($"- Last interaction: {state.LastInteraction}.");
         }
 
@@ -256,6 +293,7 @@ internal sealed class BehaviorMemory
     public string BuildDebugSummary(NPC npc, int maxEntries, bool includeState)
     {
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
+        var disposition = NpcDisposition.For(npc);
         LivingNpcState? state = null;
         if (includeState)
         {
@@ -273,8 +311,15 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"{npc.displayName} 当前 LivingNPCs 状态：");
             summary.AppendLine($"- 心情：{state.MoodLabel}");
             summary.AppendLine($"- 对玩家注意度：{state.AttentionLabel} ({state.Attention})");
+            summary.AppendLine($"- 对玩家熟悉度：{state.FamiliarityLabel} ({state.Familiarity})");
+            summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
             summary.AppendLine($"- 回应倾向：{state.InclinationLabel}");
             summary.AppendLine($"- 最近互动：{state.LastInteractionLabel}");
+        }
+        else
+        {
+            summary.AppendLine($"{npc.displayName} 当前 LivingNPCs 倾向：");
+            summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
         }
 
         if (entries is { Count: > 0 })
@@ -306,6 +351,9 @@ internal sealed class BehaviorMemory
                 Mood = "Neutral",
                 Attention = 35,
                 Openness = 50,
+                Familiarity = 0,
+                FamiliarityGainedToday = 0,
+                LastFamiliarityGainTotalDays = Game1.Date.TotalDays,
                 CurrentInclination = "Neutral",
                 LastInteraction = "none yet",
                 LastUpdatedTotalDays = Game1.Date.TotalDays,
@@ -380,6 +428,9 @@ internal sealed class LivingNpcState
     public string Mood { get; set; } = "Neutral";
     public int Attention { get; set; } = 35;
     public int Openness { get; set; } = 50;
+    public int Familiarity { get; set; }
+    public int FamiliarityGainedToday { get; set; }
+    public int LastFamiliarityGainTotalDays { get; set; } = -1;
     public string CurrentInclination { get; set; } = "Neutral";
     public string LastInteraction { get; set; } = "none yet";
     public int LastUpdatedTotalDays { get; set; }
@@ -395,6 +446,22 @@ internal sealed class LivingNpcState
         "Expressive" => "情绪外露",
         "Warm" => "温和",
         _ => "普通"
+    };
+
+    public string FamiliarityLabel => this.Familiarity switch
+    {
+        >= 75 => "亲近",
+        >= 45 => "熟悉",
+        >= 18 => "眼熟",
+        _ => "刚认识"
+    };
+
+    public string FamiliarityPromptLabel => this.Familiarity switch
+    {
+        >= 75 => "close and comfortable",
+        >= 45 => "familiar",
+        >= 18 => "recognizes the farmer",
+        _ => "new or barely familiar"
     };
 
     public string AttentionLabel => this.Attention switch
@@ -444,6 +511,8 @@ internal sealed class LivingNpcState
     {
         this.Attention = ClampScore(this.Attention);
         this.Openness = ClampScore(this.Openness);
+        this.Familiarity = ClampScore(this.Familiarity);
+        this.FamiliarityGainedToday = System.Math.Clamp(this.FamiliarityGainedToday, 0, 100);
         if (string.IsNullOrWhiteSpace(this.Mood))
         {
             this.Mood = "Neutral";
@@ -468,6 +537,9 @@ internal sealed class LivingNpcState
             Mood = this.Mood,
             Attention = this.Attention,
             Openness = this.Openness,
+            Familiarity = this.Familiarity,
+            FamiliarityGainedToday = this.FamiliarityGainedToday,
+            LastFamiliarityGainTotalDays = this.LastFamiliarityGainTotalDays,
             CurrentInclination = this.CurrentInclination,
             LastInteraction = this.LastInteraction,
             LastUpdatedTotalDays = this.LastUpdatedTotalDays,
