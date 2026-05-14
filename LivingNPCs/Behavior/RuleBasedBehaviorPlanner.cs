@@ -27,6 +27,9 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
                 "FacePlayer" => new BehaviorIntent(BehaviorIntentType.FacePlayer, npc.Name, "the farmer manually asked for a face-player test"),
                 "Emote" => new BehaviorIntent(BehaviorIntentType.Emote, npc.Name, "the farmer manually asked for an emote test", this.config.ManualEmoteId),
                 "ApproachPlayer" => new BehaviorIntent(BehaviorIntentType.ApproachPlayer, npc.Name, "the farmer manually asked for an approach-player test"),
+                "Pause" => new BehaviorIntent(BehaviorIntentType.Pause, npc.Name, "the farmer manually asked for a pause-and-notice test"),
+                "LookAround" => new BehaviorIntent(BehaviorIntentType.LookAround, npc.Name, "the farmer manually asked for a look-around test"),
+                "StepAway" => new BehaviorIntent(BehaviorIntentType.StepAway, npc.Name, "the farmer manually asked for a step-away test"),
                 _ => new BehaviorIntent(BehaviorIntentType.FacePlayer, npc.Name, "the farmer manually asked for a behavior test")
             };
         }
@@ -36,6 +39,21 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
         var disposition = NpcDisposition.For(npc);
         var world = WorldContext.For(npc);
         var influence = StateInfluence.From(state, disposition, world);
+
+        if (trigger == BehaviorTrigger.Manual
+            && this.config.AllowApproachPlayer
+            && distance <= 1.75f
+            && this.ShouldStepAway(state)
+            && this.random.NextDouble() < Math.Clamp(0.45 + influence.StepAwayBonus, 0.1, 0.85))
+        {
+            return new BehaviorIntent(
+                BehaviorIntentType.StepAway,
+                npc.Name,
+                influence.HasContext
+                    ? $"they kept a little more personal space ({influence.Reason})"
+                    : "they gave the farmer a little more room"
+            );
+        }
 
         if (trigger == BehaviorTrigger.Manual && this.config.AllowApproachPlayer && distance > 2.25f && distance <= this.config.MaxInteractionDistanceTiles)
         {
@@ -55,6 +73,30 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
                         : "they chose to step closer to the farmer before talking"
                 );
             }
+        }
+
+        double pauseChance = (trigger == BehaviorTrigger.Manual ? 0.18 : 0.1) + influence.PauseBonus;
+        if (this.config.AllowFacePlayer && this.random.NextDouble() < Math.Clamp(pauseChance, 0.03, 0.5))
+        {
+            return new BehaviorIntent(
+                BehaviorIntentType.Pause,
+                npc.Name,
+                influence.HasContext
+                    ? $"they paused for a beat because of the current moment ({influence.Reason})"
+                    : "they briefly paused when the farmer came near"
+            );
+        }
+
+        double lookAroundChance = (trigger == BehaviorTrigger.Manual ? 0.16 : 0.12) + influence.LookAroundBonus;
+        if (this.config.AllowFacePlayer && this.random.NextDouble() < Math.Clamp(lookAroundChance, 0.02, 0.55))
+        {
+            return new BehaviorIntent(
+                BehaviorIntentType.LookAround,
+                npc.Name,
+                influence.HasContext
+                    ? $"their attention drifted to the surroundings ({influence.Reason})"
+                    : "they took a quick look around the area"
+            );
         }
 
         double emoteChance = (trigger == BehaviorTrigger.Manual ? 0.35 : 0.25) + influence.EmoteBonus;
@@ -83,6 +125,19 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
         );
     }
 
+    private bool ShouldStepAway(LivingNpcState? state)
+    {
+        if (state == null)
+        {
+            return false;
+        }
+
+        return state.CurrentInclination is "NeedsSpace" or "GentleBoundary" or "Reserved"
+            || state.Mood is "Overloaded" or "CrowdedButWarm" or "Guarded"
+            || state.RepeatedConversationPressure >= 40
+            || state.Openness <= 25;
+    }
+
     private int ChooseEmoteId(BehaviorTrigger trigger, LivingNpcState? state, NpcDispositionProfile disposition)
     {
         if (trigger == BehaviorTrigger.Manual)
@@ -105,30 +160,36 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
         };
     }
 
-    private sealed record StateInfluence(bool HasContext, double ApproachBonus, double EmoteBonus, string Reason)
+    private sealed record StateInfluence(bool HasContext, double ApproachBonus, double EmoteBonus, double PauseBonus, double LookAroundBonus, double StepAwayBonus, string Reason)
     {
         public static StateInfluence From(LivingNpcState? state, NpcDispositionProfile disposition, WorldContextSnapshot world)
         {
             double approachBonus = disposition.ApproachModifier + world.ApproachModifier;
             double emoteBonus = disposition.EmoteModifier + world.EmoteModifier;
+            double pauseBonus = 0;
+            double lookAroundBonus = 0;
+            double stepAwayBonus = 0;
             var reasons = new List<string> { disposition.Reason, world.Reason };
 
             if (state?.Attention >= 75)
             {
                 approachBonus += 0.18;
                 emoteBonus += 0.12;
+                pauseBonus += 0.03;
                 reasons.Add("high attention");
             }
             else if (state?.Attention >= 50)
             {
                 approachBonus += 0.08;
                 emoteBonus += 0.05;
+                pauseBonus += 0.02;
                 reasons.Add("moderate attention");
             }
             else if (state?.Attention <= 20)
             {
                 approachBonus -= 0.12;
                 emoteBonus -= 0.08;
+                lookAroundBonus += 0.08;
                 reasons.Add("low attention");
             }
 
@@ -169,6 +230,7 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
                         double pressure = Math.Clamp((state.RepeatedConversationPressure + 20) / 100d, 0.05, 1);
                         approachBonus -= 0.08 + (0.14 * pressure);
                         emoteBonus -= 0.02 + (0.04 * pressure);
+                        stepAwayBonus += 0.15 + (0.25 * pressure);
                         reasons.Add($"{state.InteractionComfortTier.ToLowerInvariant()} relationship repeat pressure");
                         break;
 
@@ -190,6 +252,7 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
                     case "PoliteRepeat":
                         approachBonus -= 0.07;
                         emoteBonus += 0.01;
+                        pauseBonus += 0.05;
                         reasons.Add("repeated chat with low relationship");
                         break;
 
@@ -245,24 +308,35 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
                 case "Curious":
                     approachBonus += 0.05;
                     emoteBonus += 0.08;
+                    lookAroundBonus += 0.06;
                     reasons.Add("curious mood");
                     break;
 
                 case "Overloaded":
                     approachBonus -= 0.16;
                     emoteBonus -= 0.05;
+                    stepAwayBonus += 0.24;
                     reasons.Add("needs a little space");
                     break;
 
                 case "CrowdedButWarm":
                     approachBonus -= 0.04;
                     emoteBonus += 0.01;
+                    stepAwayBonus += 0.08;
                     reasons.Add("close but repeated attention");
                     break;
 
                 case "Polite":
                     approachBonus -= 0.04;
+                    pauseBonus += 0.05;
                     reasons.Add("polite reserve");
+                    break;
+
+                case "Guarded":
+                case "Focused":
+                    pauseBonus += 0.08;
+                    lookAroundBonus += 0.08;
+                    reasons.Add("watchful mood");
                     break;
             }
 
@@ -270,7 +344,7 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
                 ? string.Join(", ", reasons)
                 : "steady neutral state";
 
-            return new StateInfluence(true, approachBonus, emoteBonus, reason);
+            return new StateInfluence(true, approachBonus, emoteBonus, pauseBonus, lookAroundBonus, stepAwayBonus, reason);
         }
     }
 }

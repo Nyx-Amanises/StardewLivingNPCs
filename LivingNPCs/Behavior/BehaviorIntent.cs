@@ -10,7 +10,10 @@ internal enum BehaviorIntentType
 {
     FacePlayer,
     Emote,
-    ApproachPlayer
+    ApproachPlayer,
+    Pause,
+    LookAround,
+    StepAway
 }
 
 internal sealed record BehaviorIntent(

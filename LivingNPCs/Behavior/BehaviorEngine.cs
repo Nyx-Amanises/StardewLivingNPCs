@@ -7,6 +7,7 @@ using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Pathfinding;
+using SObject = StardewValley.Object;
 
 namespace LivingNPCs.Behavior;
 
@@ -246,7 +247,7 @@ internal sealed class BehaviorEngine
 
     private void TryRecordConversationStart(ButtonPressedEventArgs e)
     {
-        if (!this.config.EnableConversationMemory || Game1.eventUp || !e.Button.IsActionButton())
+        if (!this.config.EnableConversationMemory || !e.Button.IsActionButton())
         {
             return;
         }
@@ -256,6 +257,7 @@ internal sealed class BehaviorEngine
             return;
         }
 
+        SObject? heldGift = Game1.player.ActiveObject;
         int timeMarker = (Game1.Date.TotalDays * 10000) + Game1.timeOfDay;
         if (this.lastConversationMemoryTimeByNpc.TryGetValue(npc.Name, out int lastTimeMarker) && lastTimeMarker == timeMarker)
         {
@@ -263,12 +265,43 @@ internal sealed class BehaviorEngine
         }
 
         this.lastConversationMemoryTimeByNpc[npc.Name] = timeMarker;
+        if (heldGift != null)
+        {
+            var gift = this.BuildGiftMemoryDetails(npc, heldGift);
+            this.memory.RecordGiftOffered(npc, gift, this.config.MaxMemoryEntriesPerNpc);
+            if (this.config.EnableNpcState)
+            {
+                this.memory.UpdateStateForGift(npc, gift);
+            }
+
+            this.PushInteractionContext(npc, $"Recorded gift interaction for {npc.Name}: {gift.ItemName} ({gift.TastePromptLabel}).");
+            return;
+        }
+
+        if (Game1.eventUp)
+        {
+            string eventContext = this.DescribeCurrentEventContext();
+            this.memory.RecordEventInteraction(npc, eventContext, this.config.MaxMemoryEntriesPerNpc);
+            if (this.config.EnableNpcState)
+            {
+                this.memory.UpdateStateForEventInteraction(npc, eventContext);
+            }
+
+            this.PushInteractionContext(npc, $"Recorded event interaction for {npc.Name}: {eventContext}.");
+            return;
+        }
+
         this.memory.RecordConversationStart(npc, this.config.MaxMemoryEntriesPerNpc);
         if (this.config.EnableNpcState)
         {
             this.memory.UpdateStateForConversationStart(npc);
         }
 
+        this.PushInteractionContext(npc, $"Recorded conversation start for {npc.Name}.");
+    }
+
+    private void PushInteractionContext(NPC npc, string debugMessage)
+    {
         string promptContext = this.memory.BuildPromptContext(npc, this.config.PromptMemoryEntries, this.config.EnableNpcState);
         bool pushedToValleyTalk = this.valleyTalkBridge.PushBehaviorContext(npc, promptContext);
 
@@ -276,11 +309,52 @@ internal sealed class BehaviorEngine
         {
             this.monitor.Log(
                 pushedToValleyTalk
-                    ? $"Recorded conversation start and primed ValleyTalk context for {npc.Name}:\n{promptContext}"
-                    : $"Recorded conversation start for {npc.Name}; ValleyTalk context was not pushed.",
+                    ? $"{debugMessage} Primed ValleyTalk context:\n{promptContext}"
+                    : $"{debugMessage} ValleyTalk context was not pushed.",
                 LogLevel.Debug
             );
         }
+    }
+
+    private GiftMemoryDetails BuildGiftMemoryDetails(NPC npc, SObject gift)
+    {
+        int taste = this.TryGetGiftTaste(npc, gift);
+        var labels = this.DescribeGiftTaste(taste);
+        string itemName = string.IsNullOrWhiteSpace(gift.DisplayName) ? gift.Name : gift.DisplayName;
+        return new GiftMemoryDetails(itemName, labels.DebugLabel, labels.PromptLabel, taste);
+    }
+
+    private int TryGetGiftTaste(NPC npc, SObject gift)
+    {
+        try
+        {
+            var method = typeof(NPC).GetMethod("getGiftTasteForThisItem", [typeof(SObject)]);
+            object? result = method?.Invoke(npc, [gift]);
+            return result is int taste ? taste : -1;
+        }
+        catch
+        {
+            return -1;
+        }
+    }
+
+    private GiftTasteLabels DescribeGiftTaste(int taste)
+    {
+        return taste switch
+        {
+            0 => new GiftTasteLabels("最爱", "loved gift"),
+            2 => new GiftTasteLabels("喜欢", "liked gift"),
+            4 => new GiftTasteLabels("不喜欢", "disliked gift"),
+            6 => new GiftTasteLabels("讨厌", "hated gift"),
+            8 => new GiftTasteLabels("普通", "neutral gift"),
+            _ => new GiftTasteLabels("未知喜好", "unknown gift taste")
+        };
+    }
+
+    private string DescribeCurrentEventContext()
+    {
+        string location = Game1.currentLocation?.DisplayName ?? Game1.currentLocation?.Name ?? "当前地点";
+        return $"event or festival moment at {location} on {Game1.season} {Game1.dayOfMonth}, {Game1.timeOfDay}";
     }
 
     private bool TryFindNpcForInteraction(ICursorPosition cursor, out NPC? npc)
@@ -343,6 +417,9 @@ internal sealed class BehaviorEngine
             BehaviorIntentType.FacePlayer => this.TryFacePlayer(npc),
             BehaviorIntentType.Emote => this.TryEmote(npc, intent.EmoteId),
             BehaviorIntentType.ApproachPlayer => this.TryApproachPlayer(npc),
+            BehaviorIntentType.Pause => this.TryPause(npc),
+            BehaviorIntentType.LookAround => this.TryLookAround(npc),
+            BehaviorIntentType.StepAway => this.TryStepAway(npc),
             _ => false
         };
 
@@ -423,6 +500,18 @@ internal sealed class BehaviorEngine
             return false;
         }
 
+        if (intent.Type == BehaviorIntentType.StepAway && !this.config.AllowApproachPlayer)
+        {
+            reason = "movement behavior is disabled";
+            return false;
+        }
+
+        if ((intent.Type == BehaviorIntentType.Pause || intent.Type == BehaviorIntentType.LookAround) && !this.config.AllowFacePlayer)
+        {
+            reason = "small attention behavior is disabled";
+            return false;
+        }
+
         reason = string.Empty;
         return true;
     }
@@ -450,6 +539,30 @@ internal sealed class BehaviorEngine
         return true;
     }
 
+    private bool TryPause(NPC npc)
+    {
+        if (!this.config.AllowFacePlayer)
+        {
+            return false;
+        }
+
+        npc.controller = null;
+        npc.Halt();
+        this.TryFacePlayer(npc);
+        return true;
+    }
+
+    private bool TryLookAround(NPC npc)
+    {
+        if (!this.config.AllowFacePlayer)
+        {
+            return false;
+        }
+
+        npc.faceDirection(this.random.Next(4));
+        return true;
+    }
+
     private bool TryApproachPlayer(NPC npc)
     {
         if (!this.config.AllowApproachPlayer || Game1.currentLocation == null)
@@ -458,6 +571,29 @@ internal sealed class BehaviorEngine
         }
 
         if (!this.TryFindApproachTile(npc, out Point targetTile))
+        {
+            this.TryFacePlayer(npc);
+            return false;
+        }
+
+        npc.controller = new PathFindController(
+            npc,
+            Game1.currentLocation,
+            targetTile,
+            this.GetDirectionTowardPlayerFromTile(targetTile)
+        );
+
+        return npc.controller != null;
+    }
+
+    private bool TryStepAway(NPC npc)
+    {
+        if (!this.config.AllowApproachPlayer || Game1.currentLocation == null)
+        {
+            return false;
+        }
+
+        if (!this.TryFindStepAwayTile(npc, out Point targetTile))
         {
             this.TryFacePlayer(npc);
             return false;
@@ -527,6 +663,48 @@ internal sealed class BehaviorEngine
         }
 
         foreach (var candidate in candidates.OrderBy(tile => Vector2.Distance(new Vector2(tile.X, tile.Y), npc.Tile)))
+        {
+            if (this.IsSafeDestinationTile(location, candidate))
+            {
+                targetTile = candidate;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private bool TryFindStepAwayTile(NPC npc, out Point targetTile)
+    {
+        targetTile = Point.Zero;
+        var location = Game1.currentLocation;
+        if (location == null)
+        {
+            return false;
+        }
+
+        var npcTile = npc.TilePoint;
+        Vector2 away = npc.Tile - Game1.player.Tile;
+        int awayX = Math.Abs(away.X) >= Math.Abs(away.Y) ? Math.Sign(away.X) : 0;
+        int awayY = Math.Abs(away.Y) > Math.Abs(away.X) ? Math.Sign(away.Y) : 0;
+        if (awayX == 0 && awayY == 0)
+        {
+            awayY = 1;
+        }
+
+        var candidates = new[]
+        {
+            new Point(npcTile.X + awayX, npcTile.Y + awayY),
+            new Point(npcTile.X + awayY, npcTile.Y + awayX),
+            new Point(npcTile.X - awayY, npcTile.Y - awayX),
+            new Point(npcTile.X + awayX + awayY, npcTile.Y + awayY + awayX),
+            new Point(npcTile.X + awayX - awayY, npcTile.Y + awayY - awayX)
+        };
+
+        foreach (var candidate in candidates
+            .Distinct()
+            .OrderByDescending(tile => Vector2.Distance(new Vector2(tile.X, tile.Y), Game1.player.Tile))
+            .ThenBy(tile => Vector2.Distance(new Vector2(tile.X, tile.Y), npc.Tile)))
         {
             if (this.IsSafeDestinationTile(location, candidate))
             {
@@ -608,6 +786,9 @@ internal sealed class BehaviorEngine
             BehaviorIntentType.FacePlayer => "转向玩家",
             BehaviorIntentType.Emote => "显示表情",
             BehaviorIntentType.ApproachPlayer => "走近玩家",
+            BehaviorIntentType.Pause => "停下看向玩家",
+            BehaviorIntentType.LookAround => "环顾四周",
+            BehaviorIntentType.StepAway => "后退一步",
             _ => intentType.ToString()
         };
     }
@@ -622,7 +803,11 @@ internal sealed class BehaviorEngine
             "facing behavior is disabled" => "转向行为已关闭",
             "emote behavior is disabled" => "表情行为已关闭",
             "approach behavior is disabled" => "走近玩家行为已关闭",
+            "movement behavior is disabled" => "移动类行为已关闭",
+            "small attention behavior is disabled" => "小型注意力行为已关闭",
             _ => reason
         };
     }
 }
+
+internal sealed record GiftTasteLabels(string DebugLabel, string PromptLabel);

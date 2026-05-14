@@ -110,6 +110,32 @@ internal sealed class BehaviorMemory
         return entry;
     }
 
+    public BehaviorMemoryEntry RecordGiftOffered(NPC npc, GiftMemoryDetails gift, int maxEntriesPerNpc)
+    {
+        var entry = this.CreateEntry(
+            npc,
+            "Gift",
+            "GiftOffered",
+            $"the farmer offered {gift.ItemName}; gift taste: {gift.TastePromptLabel}"
+        );
+
+        this.AddEntry(entry, maxEntriesPerNpc);
+        return entry;
+    }
+
+    public BehaviorMemoryEntry RecordEventInteraction(NPC npc, string eventContext, int maxEntriesPerNpc)
+    {
+        var entry = this.CreateEntry(
+            npc,
+            "Event",
+            "EventInteraction",
+            $"the farmer interacted with them during an event scene: {eventContext}"
+        );
+
+        this.AddEntry(entry, maxEntriesPerNpc);
+        return entry;
+    }
+
     public LivingNpcState UpdateStateForBehavior(NPC npc, BehaviorIntent intent, string source)
     {
         var state = this.GetOrCreateState(npc);
@@ -138,6 +164,25 @@ internal sealed class BehaviorMemory
                 opennessDelta += 6;
                 familiarityGain += 1;
                 break;
+
+            case BehaviorIntentType.Pause:
+                state.Mood = "Attentive";
+                state.CurrentInclination = "Acknowledging";
+                attentionDelta += 2;
+                break;
+
+            case BehaviorIntentType.LookAround:
+                state.Mood = "Aware";
+                state.CurrentInclination = "Aware";
+                attentionDelta += 1;
+                break;
+
+            case BehaviorIntentType.StepAway:
+                state.Mood = source == "passive" ? "Careful" : "Guarded";
+                state.CurrentInclination = "GentleBoundary";
+                attentionDelta += 2;
+                opennessDelta -= 4;
+                break;
         }
 
         this.AddFamiliarity(state, familiarityGain, dailyCap: 6);
@@ -145,6 +190,86 @@ internal sealed class BehaviorMemory
         state.Openness = LivingNpcState.ClampScore(state.Openness + opennessDelta);
         this.ApplyWorldStateInfluence(state, world);
         state.LastInteraction = source == "passive" ? "passive nearby reaction" : "small behavior near the farmer";
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        return state;
+    }
+
+    public LivingNpcState UpdateStateForGift(NPC npc, GiftMemoryDetails gift)
+    {
+        var state = this.GetOrCreateState(npc);
+        var world = WorldContext.For(npc);
+        if (state.LastGiftTotalDays != Game1.Date.TotalDays)
+        {
+            state.GiftsToday = 0;
+        }
+
+        state.GiftsToday += 1;
+        state.LastGiftName = gift.ItemName;
+        state.LastGiftTaste = gift.TasteLabel;
+        state.LastGiftTotalDays = Game1.Date.TotalDays;
+        state.LastGiftTimeOfDay = Game1.timeOfDay;
+
+        int familiarityGain = gift.TasteScore switch
+        {
+            0 => 4,
+            2 => 3,
+            8 => 1,
+            _ => 0
+        };
+
+        int attentionDelta = gift.TasteScore switch
+        {
+            0 => 14,
+            2 => 10,
+            4 => 4,
+            6 => 6,
+            _ => 6
+        };
+
+        int opennessDelta = gift.TasteScore switch
+        {
+            0 => 12,
+            2 => 8,
+            4 => -5,
+            6 => -12,
+            _ => 2
+        };
+
+        state.Mood = gift.TasteScore switch
+        {
+            0 => "Delighted",
+            2 => "Pleased",
+            4 => "Awkward",
+            6 => "Upset",
+            _ => "GiftAware"
+        };
+        state.CurrentInclination = gift.TasteScore is 0 or 2 ? "OpenToTalk" : gift.TasteScore == 6 ? "Reserved" : "Acknowledging";
+
+        this.AddFamiliarity(state, familiarityGain, dailyCap: 8);
+        state.Attention = LivingNpcState.ClampScore(state.Attention + attentionDelta);
+        state.Openness = LivingNpcState.ClampScore(state.Openness + opennessDelta);
+        this.ApplyWorldStateInfluence(state, world);
+        state.LastInteraction = "the farmer offered a gift";
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        return state;
+    }
+
+    public LivingNpcState UpdateStateForEventInteraction(NPC npc, string eventContext)
+    {
+        var state = this.GetOrCreateState(npc);
+        var world = WorldContext.For(npc);
+        state.LastEventContext = eventContext;
+        state.LastEventTotalDays = Game1.Date.TotalDays;
+        state.LastEventTimeOfDay = Game1.timeOfDay;
+        state.Mood = "EventAware";
+        state.CurrentInclination = state.Familiarity >= 35 || world.FriendshipHearts >= 4 ? "OpenToTalk" : "Acknowledging";
+        state.Attention = LivingNpcState.ClampScore(state.Attention + 8);
+        state.Openness = LivingNpcState.ClampScore(state.Openness + (world.FriendshipHearts >= 4 ? 4 : 1));
+        this.AddFamiliarity(state, amount: 1, dailyCap: 8);
+        this.ApplyWorldStateInfluence(state, world);
+        state.LastInteraction = "the farmer interacted during an event";
         state.LastUpdatedTotalDays = Game1.Date.TotalDays;
         state.LastUpdatedTimeOfDay = Game1.timeOfDay;
         return state;
@@ -192,6 +317,10 @@ internal sealed class BehaviorMemory
             }
 
             this.RefreshConversationDay(state);
+            if (state.LastGiftTotalDays != Game1.Date.TotalDays)
+            {
+                state.GiftsToday = 0;
+            }
 
             if (dailyDecay <= 0)
             {
@@ -575,6 +704,8 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Mood: {state.Mood}; attention to farmer: {state.Attention}/100; response inclination: {state.CurrentInclination}.");
             prompt.AppendLine($"- Long-term familiarity with the farmer: {state.Familiarity}/100 ({state.FamiliarityPromptLabel}).");
             prompt.AppendLine($"- Relationship-aware interaction rhythm: {state.InteractionRhythmPromptLabel}; comfort tier: {state.InteractionComfortTierPromptLabel}.");
+            prompt.AppendLine($"- Recent gift context: {state.LastGiftPromptLabel}.");
+            prompt.AppendLine($"- Recent event context: {state.LastEventPromptLabel}.");
             prompt.AppendLine($"- Scene influence on mood: {state.LastSceneInfluenceReason}.");
             prompt.AppendLine($"- Last interaction: {state.LastInteraction}.");
         }
@@ -618,6 +749,8 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 对玩家熟悉度：{state.FamiliarityLabel} ({state.Familiarity})");
             summary.AppendLine($"- 互动节奏：{state.InteractionRhythmLabel}");
             summary.AppendLine($"- 互动舒适度：{state.InteractionComfortTierLabel}");
+            summary.AppendLine($"- 最近礼物：{state.LastGiftLabel}");
+            summary.AppendLine($"- 最近事件：{state.LastEventLabel}");
             summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
             summary.AppendLine($"- 当前场景：{world.DebugLabel}");
             summary.AppendLine($"- 情境影响：{state.LastSceneInfluenceLabel}");
@@ -673,6 +806,14 @@ internal sealed class BehaviorMemory
                 DailyConversationComfortLimit = 2,
                 RepeatedConversationPressure = 0,
                 LastFriendshipHearts = 0,
+                LastGiftName = string.Empty,
+                LastGiftTaste = string.Empty,
+                LastGiftTotalDays = -1,
+                LastGiftTimeOfDay = 0,
+                GiftsToday = 0,
+                LastEventContext = string.Empty,
+                LastEventTotalDays = -1,
+                LastEventTimeOfDay = 0,
                 LastSceneContext = "none",
                 LastSceneInfluence = "none",
                 LastSceneInfluenceReason = "none",
@@ -692,18 +833,26 @@ internal sealed class BehaviorMemory
     {
         string location = string.IsNullOrWhiteSpace(entry.LocationDisplayName) ? entry.LocationName : entry.LocationDisplayName;
         string locationSuffix = string.IsNullOrWhiteSpace(location) ? string.Empty : $" at {location}";
-        string kind = string.Equals(entry.Kind, "Conversation", System.StringComparison.OrdinalIgnoreCase)
-            ? "conversation"
-            : "behavior";
+        string kind = entry.Kind.ToLowerInvariant() switch
+        {
+            "conversation" => "conversation",
+            "gift" => "gift",
+            "event" => "event",
+            _ => "behavior"
+        };
 
         return $"{entry.Season} {entry.Day}, {entry.TimeOfDay}{locationSuffix}: {kind} - {entry.Action}; reason: {entry.Reason}";
     }
 
     private string FormatDebugKind(BehaviorMemoryEntry entry)
     {
-        return string.Equals(entry.Kind, "Conversation", System.StringComparison.OrdinalIgnoreCase)
-            ? "[对话]"
-            : "[行为]";
+        return entry.Kind.ToLowerInvariant() switch
+        {
+            "conversation" => "[对话]",
+            "gift" => "[礼物]",
+            "event" => "[事件]",
+            _ => "[行为]"
+        };
     }
 
     private void RebuildDailyCounts()
@@ -744,6 +893,13 @@ internal sealed class BehaviorMemoryEntry
     public string LocationDisplayName { get; set; } = string.Empty;
 }
 
+internal sealed record GiftMemoryDetails(
+    string ItemName,
+    string TasteLabel,
+    string TastePromptLabel,
+    int TasteScore
+);
+
 internal sealed class LivingNpcState
 {
     public string NpcName { get; set; } = string.Empty;
@@ -763,6 +919,14 @@ internal sealed class LivingNpcState
     public int DailyConversationComfortLimit { get; set; } = 2;
     public int RepeatedConversationPressure { get; set; }
     public int LastFriendshipHearts { get; set; }
+    public string LastGiftName { get; set; } = string.Empty;
+    public string LastGiftTaste { get; set; } = string.Empty;
+    public int LastGiftTotalDays { get; set; } = -1;
+    public int LastGiftTimeOfDay { get; set; }
+    public int GiftsToday { get; set; }
+    public string LastEventContext { get; set; } = string.Empty;
+    public int LastEventTotalDays { get; set; } = -1;
+    public int LastEventTimeOfDay { get; set; }
     public string LastSceneContext { get; set; } = "none";
     public string LastSceneInfluence { get; set; } = "none";
     public string LastSceneInfluenceReason { get; set; } = "none";
@@ -776,11 +940,14 @@ internal sealed class LivingNpcState
         "Aware" => "注意到周围",
         "Attentive" => "专注",
         "Calm" => "放松",
+        "Careful" => "谨慎",
         "Chilly" => "有些怕冷",
         "Comfortable" => "自在",
         "CrowdedButWarm" => "亲近但有点频繁",
         "Curious" => "好奇",
+        "Delighted" => "非常高兴",
         "Engaged" => "投入",
+        "EventAware" => "留意活动气氛",
         "Expressive" => "情绪外露",
         "Familiar" => "熟悉",
         "Focused" => "专注于事务",
@@ -788,11 +955,15 @@ internal sealed class LivingNpcState
         "Guarded" => "警觉",
         "Hurried" => "匆忙",
         "Overloaded" => "有点应接不暇",
+        "Pleased" => "高兴",
         "Polite" => "礼貌克制",
         "Public" => "留意公共场合",
         "Quiet" => "安静",
         "Sociable" => "有社交兴致",
         "Surprised" => "有些意外",
+        "Upset" => "不太高兴",
+        "Awkward" => "有些尴尬",
+        "GiftAware" => "注意到礼物",
         "Warm" => "温和",
         _ => "普通"
     };
@@ -903,6 +1074,22 @@ internal sealed class LivingNpcState
         _ => this.LastSceneInfluence
     };
 
+    public string LastGiftLabel => string.IsNullOrWhiteSpace(this.LastGiftName)
+        ? "暂无"
+        : $"{this.LastGiftName}（{this.LastGiftTaste}，第 {this.LastGiftTotalDays} 天 {this.LastGiftTimeOfDay}，今天第 {this.GiftsToday} 次礼物记录）";
+
+    public string LastGiftPromptLabel => string.IsNullOrWhiteSpace(this.LastGiftName)
+        ? "no recent LivingNPCs gift memory"
+        : $"the farmer recently offered {this.LastGiftName}; gift taste: {this.LastGiftTaste}; gifts recorded today: {this.GiftsToday}";
+
+    public string LastEventLabel => string.IsNullOrWhiteSpace(this.LastEventContext)
+        ? "暂无"
+        : $"{this.LastEventContext}（第 {this.LastEventTotalDays} 天 {this.LastEventTimeOfDay}）";
+
+    public string LastEventPromptLabel => string.IsNullOrWhiteSpace(this.LastEventContext)
+        ? "no recent LivingNPCs event memory"
+        : this.LastEventContext;
+
     public string LastInteractionLabel => this.LastInteraction switch
     {
         "none yet" => "暂无",
@@ -942,6 +1129,7 @@ internal sealed class LivingNpcState
         this.DailyConversationComfortLimit = System.Math.Clamp(this.DailyConversationComfortLimit <= 0 ? 2 : this.DailyConversationComfortLimit, 1, 8);
         this.RepeatedConversationPressure = System.Math.Clamp(this.RepeatedConversationPressure, 0, 100);
         this.LastFriendshipHearts = System.Math.Clamp(this.LastFriendshipHearts, 0, 14);
+        this.GiftsToday = System.Math.Max(0, this.GiftsToday);
         if (string.IsNullOrWhiteSpace(this.Mood))
         {
             this.Mood = "Neutral";
@@ -981,6 +1169,11 @@ internal sealed class LivingNpcState
         {
             this.InteractionComfortTier = "Distant";
         }
+
+        if (this.LastGiftTotalDays != Game1.Date.TotalDays)
+        {
+            this.GiftsToday = 0;
+        }
     }
 
     public LivingNpcState Clone()
@@ -1004,6 +1197,14 @@ internal sealed class LivingNpcState
             DailyConversationComfortLimit = this.DailyConversationComfortLimit,
             RepeatedConversationPressure = this.RepeatedConversationPressure,
             LastFriendshipHearts = this.LastFriendshipHearts,
+            LastGiftName = this.LastGiftName,
+            LastGiftTaste = this.LastGiftTaste,
+            LastGiftTotalDays = this.LastGiftTotalDays,
+            LastGiftTimeOfDay = this.LastGiftTimeOfDay,
+            GiftsToday = this.GiftsToday,
+            LastEventContext = this.LastEventContext,
+            LastEventTotalDays = this.LastEventTotalDays,
+            LastEventTimeOfDay = this.LastEventTimeOfDay,
             LastSceneContext = this.LastSceneContext,
             LastSceneInfluence = this.LastSceneInfluence,
             LastSceneInfluenceReason = this.LastSceneInfluenceReason,

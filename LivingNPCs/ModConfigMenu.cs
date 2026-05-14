@@ -10,7 +10,10 @@ internal static class ModConfigMenu
         "Auto",
         "FacePlayer",
         "Emote",
-        "ApproachPlayer"
+        "ApproachPlayer",
+        "Pause",
+        "LookAround",
+        "StepAway"
     ];
 
     public static void Register(ModEntry modEntry, ModConfig config)
@@ -298,6 +301,9 @@ internal static class ModConfigMenu
             "FacePlayer" => "只测试：转向玩家",
             "Emote" => "只测试：显示表情",
             "ApproachPlayer" => "只测试：走近玩家",
+            "Pause" => "只测试：停下看向玩家",
+            "LookAround" => "只测试：环顾四周",
+            "StepAway" => "只测试：后退一步",
             _ => value
         };
     }

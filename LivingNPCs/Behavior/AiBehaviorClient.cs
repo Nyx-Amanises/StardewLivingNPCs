@@ -99,6 +99,8 @@ internal sealed class AiBehaviorClient
         if (this.config.AllowFacePlayer)
         {
             allowed.Add("FacePlayer");
+            allowed.Add("Pause");
+            allowed.Add("LookAround");
         }
 
         if (this.config.AllowEmotes)
@@ -109,6 +111,7 @@ internal sealed class AiBehaviorClient
         if (this.config.AllowApproachPlayer && trigger == BehaviorTrigger.Manual)
         {
             allowed.Add("ApproachPlayer");
+            allowed.Add("StepAway");
         }
 
         var world = WorldContext.For(npc);
@@ -128,7 +131,7 @@ internal sealed class AiBehaviorClient
         prompt.AppendLine();
         prompt.AppendLine("Choose one tiny behavior that makes the NPC feel alive without disrupting schedules.");
         prompt.AppendLine("Return exactly this JSON shape:");
-        prompt.AppendLine("{\"intent\":\"FacePlayer|Emote|ApproachPlayer\",\"reason\":\"short in-world reason\",\"emoteId\":16}");
+        prompt.AppendLine("{\"intent\":\"FacePlayer|Emote|ApproachPlayer|Pause|LookAround|StepAway\",\"reason\":\"short in-world reason\",\"emoteId\":16}");
         return prompt.ToString();
     }
 
@@ -188,6 +191,16 @@ internal sealed class AiBehaviorClient
         }
 
         if (type == BehaviorIntentType.ApproachPlayer && !this.config.AllowApproachPlayer)
+        {
+            return null;
+        }
+
+        if (type == BehaviorIntentType.StepAway && !this.config.AllowApproachPlayer)
+        {
+            return null;
+        }
+
+        if ((type == BehaviorIntentType.Pause || type == BehaviorIntentType.LookAround) && !this.config.AllowFacePlayer)
         {
             return null;
         }
