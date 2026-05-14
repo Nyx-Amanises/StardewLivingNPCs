@@ -21,6 +21,7 @@ namespace ValleyTalk
         public int MarriageFrequency { get; set; } = 4;
         public int GiftFrequency { get; set; } = 4;
         public string TypedResponses { get; set; } = "With Generated";
+        public bool AllowLocalContentPackDialogueForAi { get; set; } = true;
         public string DisableCharacters
         {
             get => disableCharacters;

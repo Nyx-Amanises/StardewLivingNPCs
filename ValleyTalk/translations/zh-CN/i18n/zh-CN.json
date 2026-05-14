@@ -268,6 +268,8 @@
   "weatherRain": "\u6B63\u5728\u4E0B\u5927\u96E8\u3002",
   "dateTimeDayOfSeason": "\u73B0\u5728\u662F{{Season}}\u7684\u7B2C{{DayOfSeason}}\u5929\u3002",
   "dateTimeTimeOfDay": "\u73B0\u5728\u662F{{TimeOfDay}}\u3002",
+  "configAllowLocalContentPackDialogueForAi": "允许本地内容包对话用于 AI",
+  "configAllowLocalContentPackDialogueForAiTooltip": "本地 fork 选项：允许已加载的内容包对话（包括 SVE/RSV）作为 AI 上下文使用，即使内容包没有声明 PermitAiUse。",
   "dateTimeEarlyMorningNormal.maleNpc": "${\u8FD9\u662F\u519C\u6C11\u8D77\u5E8A\u6D3B\u52A8\u7684\u6B63\u5E38\u65F6\u95F4\u3002^\u8FD9\u662F\u519C\u5987\u5E73\u65F6\u8D77\u5E8A\u6D3B\u52A8\u7684\u65F6\u95F4\u3002}$",
   "dateTimeEarlyMorningNormal.femaleNpc": "${\u8FD9\u662F\u519C\u592B\u8D77\u5E8A\u6D3B\u52A8\u7684\u6B63\u5E38\u65F6\u95F4\u3002^\u8FD9\u662F\u519C\u6C11\u8D77\u5E8A\u6D3B\u52A8\u7684\u6B63\u5E38\u65F6\u95F4\u3002}$",
   "dateTimeNewThisYear.maleNpc": "${\u8FD9\u4F4D\u519C\u6C11\u4ECA\u5E74\u662F\u7B2C\u4E00\u6B21\u6765\u4F69\u5229\u5EB7\u9547\u3002^\u8FD9\u4F4D\u519C\u6C11\u4ECA\u5E74\u662F\u7B2C\u4E00\u6B21\u6765\u9E48\u9E55\u9547\u3002}$",

@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using Microsoft.Xna.Framework.Content;
 using StardewModdingAPI.Events;
 using System.Threading;
+using StardewValley.GameData.Characters;
 
 namespace ValleyTalk;
 
@@ -190,9 +191,24 @@ public class Character
         }
         catch (Exception)
         {
-            _bioData = new BioData();
-            _bioData.Name = Name;
-            _bioData.Missing = true;
+            var fallbackBio = BuildFallbackBioData();
+            if (fallbackBio != null)
+            {
+                _bioData = fallbackBio;
+                ValidPortraits = new List<string>() { "h", "s", "l", "a" };
+                PossiblePreoccupations = new List<string>(_bioData.Preoccupations);
+                PossiblePreoccupations.AddRange(GetLovedAndHatedGiftNames());
+                ModEntry.SMonitor.Log($"Generated fallback bio for custom NPC {Name} from Data/Characters.", StardewModdingAPI.LogLevel.Debug);
+                return;
+            }
+
+            _bioData = new BioData
+            {
+                Name = Name,
+                Missing = true
+            };
+            ValidPortraits = new List<string>() { "h", "s", "l", "a" };
+            PossiblePreoccupations = GetLovedAndHatedGiftNames().ToList();
             ModEntry.SMonitor.Log($"No bio file found for {Name}.", StardewModdingAPI.LogLevel.Warn);
             return;
         }
@@ -204,6 +220,106 @@ public class Character
         ValidPortraits.AddRange(_bioData.ExtraPortraits.Keys);
         PossiblePreoccupations = new List<string>(_bioData.Preoccupations);
         PossiblePreoccupations.AddRange(GetLovedAndHatedGiftNames());
+    }
+
+    private BioData BuildFallbackBioData()
+    {
+        if (Game1.characterData == null || !Game1.characterData.TryGetValue(Name, out CharacterData data))
+        {
+            return null;
+        }
+
+        var bio = new BioData
+        {
+            Name = Name,
+            Biography = BuildFallbackBiography(data),
+            BiographyEnd = "This biography was generated locally from Stardew Valley 1.6 Data/Characters because no ValleyTalk bio file was found. Treat it as lightweight guidance, not full canon.",
+            UsePatchedDialogue = ModEntry.Config.AllowLocalContentPackDialogueForAi,
+            Missing = false
+        };
+
+        bio.Traits["manner"] = new BioData.ListEntry
+        {
+            id = "manner",
+            Heading = "Manner",
+            Description = data.Manner.ToString()
+        };
+        bio.Traits["social"] = new BioData.ListEntry
+        {
+            id = "social",
+            Heading = "Social style",
+            Description = data.SocialAnxiety.ToString()
+        };
+        bio.Traits["outlook"] = new BioData.ListEntry
+        {
+            id = "outlook",
+            Heading = "Outlook",
+            Description = data.Optimism.ToString()
+        };
+
+        if (data.FriendsAndFamily != null)
+        {
+            foreach (var pair in data.FriendsAndFamily.Take(8))
+            {
+                bio.Relationships[pair.Key] = new BioData.ListEntry
+                {
+                    id = pair.Key,
+                    Heading = pair.Key,
+                    Description = string.IsNullOrWhiteSpace(pair.Value) ? "known connection" : pair.Value
+                };
+            }
+        }
+
+        bio.Preoccupations.AddRange(BuildFallbackPreoccupations(data));
+        return bio;
+    }
+
+    private string BuildFallbackBiography(CharacterData data)
+    {
+        string displayName = StardewNpc?.displayName ?? Name;
+        var details = new List<string>
+        {
+            $"{displayName} is a loaded Stardew Valley character without a dedicated ValleyTalk biography file.",
+            $"Use the game's Data/Characters profile as a conservative baseline: age category {data.Age}, home region {data.HomeRegion}, manner {data.Manner}, social style {data.SocialAnxiety}, outlook {data.Optimism}.",
+            data.CanBeRomanced
+                ? $"{displayName} is marked romanceable, so closer relationship states may allow warmer and more personal dialogue."
+                : $"{displayName} is not marked romanceable, so keep personal warmth appropriate to friendship and context."
+        };
+
+        if (data.FriendsAndFamily is { Count: > 0 })
+        {
+            details.Add($"Known family or close connections include {string.Join(", ", data.FriendsAndFamily.Keys.Take(6))}.");
+        }
+
+        if (ModEntry.Config.AllowLocalContentPackDialogueForAi)
+        {
+            details.Add("Local content-pack dialogue is allowed for AI in this fork, so patched dialogue samples may be used when available.");
+        }
+        else
+        {
+            details.Add("Content-pack dialogue may be filtered unless the pack declares PermitAiUse, so rely more on this baseline profile and current game context.");
+        }
+
+        return string.Join(" ", details);
+    }
+
+    private IEnumerable<string> BuildFallbackPreoccupations(CharacterData data)
+    {
+        foreach (string value in new[] { data.HomeRegion, data.Manner.ToString(), data.SocialAnxiety.ToString(), data.Optimism.ToString() })
+        {
+            if (!string.IsNullOrWhiteSpace(value))
+            {
+                yield return value;
+            }
+        }
+
+        if (data.FriendsAndFamily != null)
+        {
+            foreach (string name in data.FriendsAndFamily.Keys.Take(4))
+            {
+                yield return name;
+            }
+        }
     }
 
     private void LoadEventHistory()

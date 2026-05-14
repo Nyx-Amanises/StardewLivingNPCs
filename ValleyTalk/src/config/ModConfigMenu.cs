@@ -121,6 +121,13 @@ namespace ValleyTalk
                 allowedValues: new string[] { "Always", "With Generated", "Never" },
                 setValue: (value) =>{ Config.TypedResponses = value; }
             );
+            ConfigMenu.AddBoolOption(
+                mod: ModManifest,
+                name: () => Util.GetString("configAllowLocalContentPackDialogueForAi", returnNull: true) ?? "Allow local content-pack dialogue for AI",
+                tooltip: () => Util.GetString("configAllowLocalContentPackDialogueForAiTooltip", returnNull: true) ?? "Local fork option: allow loaded content-pack dialogue, including SVE/RSV, to be used as AI context even when the content pack has not declared PermitAiUse.",
+                getValue: () => Config.AllowLocalContentPackDialogueForAi,
+                setValue: (value) =>{ Config.AllowLocalContentPackDialogueForAi = value; }
+            );
             ConfigMenu.AddKeybind(
                 mod: ModManifest,
                 name: () => Util.GetString("configKeybind", returnNull: true) ?? "Keybind for typed dialogue",

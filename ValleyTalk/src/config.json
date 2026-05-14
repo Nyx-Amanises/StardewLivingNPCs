@@ -12,6 +12,7 @@
   "MarriageFrequency": 4,
   "GiftFrequency": 4,
   "TypedResponses": "With Generated",
+  "AllowLocalContentPackDialogueForAi": true,
   "DisableCharacters": "",
   "InitiateTypedDialogueKey": "LeftAlt",
   "SupressConnectionCheck": false

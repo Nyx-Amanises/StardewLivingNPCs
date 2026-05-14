@@ -162,6 +162,7 @@ namespace ValleyTalk
 
         private void CheckContentPacks()
         {
+            BlockModdedContent = false;
             var contentPacks = SHelper.ModRegistry.GetAll().Where(p => p.IsContentPack).ToList();
             var blockedContentPacks = contentPacks
                 .Where(p => !SldConstants.PermitListContentPacks.Contains(p.Manifest.UniqueID))
@@ -171,6 +172,13 @@ namespace ValleyTalk
                 );
             if (blockedContentPacks.Any())
             {
+                if (Config.AllowLocalContentPackDialogueForAi)
+                {
+                    Monitor.Log("Local content-pack dialogue override is enabled. ValleyTalk will allow loaded content-pack dialogue in AI context for this local fork.", LogLevel.Warn);
+                    Monitor.Log($"Content packs included by local override: {string.Join(", ", blockedContentPacks.Select(p => p.Manifest.Name))}", LogLevel.Info);
+                    return;
+                }
+
                 Monitor.Log("Note: Content packs have been found that don't have mod author approval for use with AI.", LogLevel.Warn);
                 Monitor.Log("While content from content packs will be displayed in-game, it will not be use for AI dialogue generation.", LogLevel.Warn);
                 Monitor.Log($"Content packs without author approval: {string.Join(", ", blockedContentPacks.Select(p => p.Manifest.Name))}", LogLevel.Info);

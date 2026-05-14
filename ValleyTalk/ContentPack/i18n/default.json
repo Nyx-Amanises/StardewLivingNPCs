@@ -272,6 +272,8 @@
   "configPromptFormatTooltip": "Format of the prompt to send to the AI model.",
   "configTranslation": "Translate outputs",
   "configTranslationTooltip": "Translate the AI model outputs to the game language (without i18n pack).",
+  "configAllowLocalContentPackDialogueForAi": "Allow local content-pack dialogue for AI",
+  "configAllowLocalContentPackDialogueForAiTooltip": "Local fork option: allow loaded content-pack dialogue, including SVE/RSV, to be used as AI context even when the content pack has not declared PermitAiUse.",
   "configFrequencyGeneral": "Frequency of general lines",
   "configFrequencyGeneralTooltip": "How often should the mod generate general lines.",
   "configFrequencyMarriage": "Frequency of marriage lines",
