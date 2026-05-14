@@ -71,6 +71,11 @@ internal sealed class BehaviorEngine
 
     private void OnDayStarted(object? sender, DayStartedEventArgs e)
     {
+        if (this.config.EnableNpcState)
+        {
+            this.memory.DecayStates(this.config.NpcStateDailyDecay);
+        }
+
         this.memory.ResetDaily();
         this.valleyTalkBridge.ClearAll();
         this.pendingRequests.Clear();
@@ -259,8 +264,12 @@ internal sealed class BehaviorEngine
 
         this.lastConversationMemoryTimeByNpc[npc.Name] = timeMarker;
         this.memory.RecordConversationStart(npc, this.config.MaxMemoryEntriesPerNpc);
+        if (this.config.EnableNpcState)
+        {
+            this.memory.UpdateStateForConversationStart(npc);
+        }
 
-        string promptContext = this.memory.BuildPromptContext(npc, this.config.PromptMemoryEntries);
+        string promptContext = this.memory.BuildPromptContext(npc, this.config.PromptMemoryEntries, this.config.EnableNpcState);
         bool pushedToValleyTalk = this.valleyTalkBridge.PushBehaviorContext(npc, promptContext);
 
         if (this.config.Debug)
@@ -348,7 +357,12 @@ internal sealed class BehaviorEngine
         }
 
         this.memory.Record(npc, intent, this.config.MaxMemoryEntriesPerNpc);
-        string promptContext = this.memory.BuildPromptContext(npc, this.config.PromptMemoryEntries);
+        if (this.config.EnableNpcState)
+        {
+            this.memory.UpdateStateForBehavior(npc, intent, source);
+        }
+
+        string promptContext = this.memory.BuildPromptContext(npc, this.config.PromptMemoryEntries, this.config.EnableNpcState);
         bool pushedToValleyTalk = this.valleyTalkBridge.PushBehaviorContext(npc, promptContext);
 
         if (this.config.Debug)
@@ -548,9 +562,9 @@ internal sealed class BehaviorEngine
             return;
         }
 
-        string summary = this.memory.BuildDebugSummary(npc, this.config.PromptMemoryEntries);
+        string summary = this.memory.BuildDebugSummary(npc, this.config.PromptMemoryEntries, this.config.EnableNpcState);
         this.monitor.Log(summary, LogLevel.Info);
-        this.ShowFeedback($"LivingNPCs：已在 SMAPI 控制台输出 {npc.displayName} 的行为记忆。");
+        this.ShowFeedback($"LivingNPCs：已在 SMAPI 控制台输出 {npc.displayName} 的状态和记忆。");
     }
 
     private bool TryFindNearestNpcIgnoringDailyBudget(out NPC? nearest)

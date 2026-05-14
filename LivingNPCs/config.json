@@ -8,6 +8,8 @@
   "MaxMemoryEntriesPerNpc": 20,
   "PromptMemoryEntries": 4,
   "EnableConversationMemory": true,
+  "EnableNpcState": true,
+  "NpcStateDailyDecay": 12,
   "EnablePassiveBehaviors": true,
   "PassiveBehaviorChancePercent": 6,
   "MaxBehaviorsPerNpcPerDay": 2,

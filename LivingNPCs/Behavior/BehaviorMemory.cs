@@ -9,18 +9,22 @@ internal sealed class BehaviorMemory
 {
     private readonly Dictionary<string, List<BehaviorMemoryEntry>> entriesByNpc = new();
     private readonly Dictionary<string, int> dailyCountsByNpc = new();
+    private readonly Dictionary<string, LivingNpcState> statesByNpc = new();
+    private int lastStateDecayTotalDays = -1;
 
     public void Load(BehaviorMemorySaveData? saveData, int maxEntriesPerNpc)
     {
         this.entriesByNpc.Clear();
         this.dailyCountsByNpc.Clear();
+        this.statesByNpc.Clear();
+        this.lastStateDecayTotalDays = saveData?.LastStateDecayTotalDays ?? -1;
 
-        if (saveData?.EntriesByNpc == null)
+        if (saveData == null)
         {
             return;
         }
 
-        foreach (var pair in saveData.EntriesByNpc)
+        foreach (var pair in saveData.EntriesByNpc ?? new Dictionary<string, List<BehaviorMemoryEntry>>())
         {
             var entries = pair.Value
                 .Where(entry => !string.IsNullOrWhiteSpace(entry.NpcName))
@@ -35,6 +39,20 @@ internal sealed class BehaviorMemory
             }
         }
 
+        if (saveData.StatesByNpc != null)
+        {
+            foreach (var pair in saveData.StatesByNpc)
+            {
+                if (string.IsNullOrWhiteSpace(pair.Key) || string.IsNullOrWhiteSpace(pair.Value.NpcName))
+                {
+                    continue;
+                }
+
+                pair.Value.Clamp();
+                this.statesByNpc[pair.Key] = pair.Value;
+            }
+        }
+
         this.RebuildDailyCounts();
     }
 
@@ -45,7 +63,12 @@ internal sealed class BehaviorMemory
             EntriesByNpc = this.entriesByNpc.ToDictionary(
                 pair => pair.Key,
                 pair => pair.Value.ToList()
-            )
+            ),
+            StatesByNpc = this.statesByNpc.ToDictionary(
+                pair => pair.Key,
+                pair => pair.Value.Clone()
+            ),
+            LastStateDecayTotalDays = this.lastStateDecayTotalDays
         };
     }
 
@@ -78,6 +101,74 @@ internal sealed class BehaviorMemory
 
         this.AddEntry(entry, maxEntriesPerNpc);
         return entry;
+    }
+
+    public LivingNpcState UpdateStateForBehavior(NPC npc, BehaviorIntent intent, string source)
+    {
+        var state = this.GetOrCreateState(npc);
+        int attentionDelta = source == "passive" ? 6 : 12;
+        int opennessDelta = source == "passive" ? 2 : 4;
+
+        switch (intent.Type)
+        {
+            case BehaviorIntentType.FacePlayer:
+                state.Mood = source == "passive" ? "Aware" : "Curious";
+                state.CurrentInclination = "Acknowledging";
+                break;
+
+            case BehaviorIntentType.Emote:
+                state.Mood = "Expressive";
+                state.CurrentInclination = "Reacting";
+                attentionDelta += 4;
+                break;
+
+            case BehaviorIntentType.ApproachPlayer:
+                state.Mood = "Engaged";
+                state.CurrentInclination = "OpenToTalk";
+                attentionDelta += 8;
+                opennessDelta += 6;
+                break;
+        }
+
+        state.Attention = LivingNpcState.ClampScore(state.Attention + attentionDelta);
+        state.Openness = LivingNpcState.ClampScore(state.Openness + opennessDelta);
+        state.LastInteraction = source == "passive" ? "passive nearby reaction" : "small behavior near the farmer";
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        return state;
+    }
+
+    public LivingNpcState UpdateStateForConversationStart(NPC npc)
+    {
+        var state = this.GetOrCreateState(npc);
+        state.Mood = state.Openness >= 60 ? "Warm" : "Attentive";
+        state.CurrentInclination = "OpenToTalk";
+        state.Attention = LivingNpcState.ClampScore(state.Attention + 18);
+        state.Openness = LivingNpcState.ClampScore(state.Openness + 6);
+        state.LastInteraction = "the farmer started a conversation";
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        return state;
+    }
+
+    public void DecayStates(int dailyDecay)
+    {
+        if (dailyDecay <= 0 || this.lastStateDecayTotalDays == Game1.Date.TotalDays)
+        {
+            return;
+        }
+
+        this.lastStateDecayTotalDays = Game1.Date.TotalDays;
+        foreach (var state in this.statesByNpc.Values)
+        {
+            state.Attention = LivingNpcState.MoveToward(state.Attention, 35, dailyDecay);
+            state.Openness = LivingNpcState.MoveToward(state.Openness, 50, dailyDecay / 2);
+            state.CurrentInclination = state.Attention >= 55 ? "Aware" : "Neutral";
+            state.Mood = state.Openness >= 58 ? "Calm" : "Neutral";
+            state.LastInteraction = "time passed";
+            state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        }
     }
 
     private BehaviorMemoryEntry CreateEntry(NPC npc, string kind, string action, string reason)
@@ -113,9 +204,16 @@ internal sealed class BehaviorMemory
         }
     }
 
-    public string BuildPromptContext(NPC npc, int maxEntries)
+    public string BuildPromptContext(NPC npc, int maxEntries, bool includeState)
     {
-        if (!this.entriesByNpc.TryGetValue(npc.Name, out var entries) || entries.Count == 0)
+        this.entriesByNpc.TryGetValue(npc.Name, out var entries);
+        LivingNpcState? state = null;
+        if (includeState)
+        {
+            this.statesByNpc.TryGetValue(npc.Name, out state);
+        }
+
+        if ((entries == null || entries.Count == 0) && state == null)
         {
             return string.Empty;
         }
@@ -126,32 +224,91 @@ internal sealed class BehaviorMemory
         prompt.AppendLine("Use these as quiet scene context for the next reply. Do not mention LivingNPCs, prompts, mods, JSON, or AI systems.");
         prompt.AppendLine("If an entry is relevant, the character may naturally acknowledge it as something that just happened or affected the mood of the scene.");
 
-        foreach (var entry in entries.TakeLast(maxEntries))
+        if (state != null)
         {
-            prompt.AppendLine($"- {this.FormatPromptEntry(entry)}");
+            prompt.AppendLine();
+            prompt.AppendLine("Current lightweight NPC state:");
+            prompt.AppendLine($"- Mood: {state.Mood}; attention to farmer: {state.Attention}/100; response inclination: {state.CurrentInclination}.");
+            prompt.AppendLine($"- Last interaction: {state.LastInteraction}.");
+        }
+
+        if (entries is { Count: > 0 })
+        {
+            prompt.AppendLine();
+            prompt.AppendLine("Recent tracked moments:");
+            foreach (var entry in entries.TakeLast(maxEntries))
+            {
+                prompt.AppendLine($"- {this.FormatPromptEntry(entry)}");
+            }
         }
 
         prompt.AppendLine("Keep the next line in character and consistent with the current Stardew Valley scene.");
         return prompt.ToString();
     }
 
-    public string BuildDebugSummary(NPC npc, int maxEntries)
+    public string BuildDebugSummary(NPC npc, int maxEntries, bool includeState)
     {
-        if (!this.entriesByNpc.TryGetValue(npc.Name, out var entries) || entries.Count == 0)
+        this.entriesByNpc.TryGetValue(npc.Name, out var entries);
+        LivingNpcState? state = null;
+        if (includeState)
         {
-            return $"{npc.displayName} 还没有 LivingNPCs 行为记忆。";
+            this.statesByNpc.TryGetValue(npc.Name, out state);
+        }
+
+        if ((entries == null || entries.Count == 0) && state == null)
+        {
+            return $"{npc.displayName} 还没有 LivingNPCs 行为/互动记忆或状态。";
         }
 
         var summary = new StringBuilder();
-        summary.AppendLine($"{npc.displayName} 最近 {System.Math.Min(entries.Count, maxEntries)} 条 LivingNPCs 行为/互动记忆：");
-        foreach (var entry in entries.TakeLast(maxEntries))
+        if (state != null)
         {
-            string location = string.IsNullOrWhiteSpace(entry.LocationDisplayName) ? entry.LocationName : entry.LocationDisplayName;
-            string locationSuffix = string.IsNullOrWhiteSpace(location) ? string.Empty : $" @ {location}";
-            summary.AppendLine($"- 第 {entry.TotalDays} 天 {entry.TimeOfDay}{locationSuffix}: {this.FormatDebugKind(entry)} {entry.Action}; {entry.Reason}");
+            summary.AppendLine($"{npc.displayName} 当前 LivingNPCs 状态：");
+            summary.AppendLine($"- 心情：{state.MoodLabel}");
+            summary.AppendLine($"- 对玩家注意度：{state.AttentionLabel} ({state.Attention})");
+            summary.AppendLine($"- 回应倾向：{state.InclinationLabel}");
+            summary.AppendLine($"- 最近互动：{state.LastInteractionLabel}");
+        }
+
+        if (entries is { Count: > 0 })
+        {
+            if (summary.Length > 0)
+            {
+                summary.AppendLine();
+            }
+
+            summary.AppendLine($"{npc.displayName} 最近 {System.Math.Min(entries.Count, maxEntries)} 条 LivingNPCs 行为/互动记忆：");
+            foreach (var entry in entries.TakeLast(maxEntries))
+            {
+                string location = string.IsNullOrWhiteSpace(entry.LocationDisplayName) ? entry.LocationName : entry.LocationDisplayName;
+                string locationSuffix = string.IsNullOrWhiteSpace(location) ? string.Empty : $" @ {location}";
+                summary.AppendLine($"- 第 {entry.TotalDays} 天 {entry.TimeOfDay}{locationSuffix}: {this.FormatDebugKind(entry)} {entry.Action}; {entry.Reason}");
+            }
         }
 
         return summary.ToString().TrimEnd();
+    }
+
+    private LivingNpcState GetOrCreateState(NPC npc)
+    {
+        if (!this.statesByNpc.TryGetValue(npc.Name, out var state))
+        {
+            state = new LivingNpcState
+            {
+                NpcName = npc.Name,
+                Mood = "Neutral",
+                Attention = 35,
+                Openness = 50,
+                CurrentInclination = "Neutral",
+                LastInteraction = "none yet",
+                LastUpdatedTotalDays = Game1.Date.TotalDays,
+                LastUpdatedTimeOfDay = Game1.timeOfDay
+            };
+            this.statesByNpc[npc.Name] = state;
+        }
+
+        state.NpcName = npc.Name;
+        return state;
     }
 
     private string FormatPromptEntry(BehaviorMemoryEntry entry)
@@ -191,6 +348,8 @@ internal sealed class BehaviorMemory
 internal sealed class BehaviorMemorySaveData
 {
     public Dictionary<string, List<BehaviorMemoryEntry>> EntriesByNpc { get; set; } = new();
+    public Dictionary<string, LivingNpcState> StatesByNpc { get; set; } = new();
+    public int LastStateDecayTotalDays { get; set; } = -1;
 }
 
 internal sealed class BehaviorMemoryEntry
@@ -206,4 +365,106 @@ internal sealed class BehaviorMemoryEntry
     public int TotalDays { get; set; }
     public string LocationName { get; set; } = string.Empty;
     public string LocationDisplayName { get; set; } = string.Empty;
+}
+
+internal sealed class LivingNpcState
+{
+    public string NpcName { get; set; } = string.Empty;
+    public string Mood { get; set; } = "Neutral";
+    public int Attention { get; set; } = 35;
+    public int Openness { get; set; } = 50;
+    public string CurrentInclination { get; set; } = "Neutral";
+    public string LastInteraction { get; set; } = "none yet";
+    public int LastUpdatedTotalDays { get; set; }
+    public int LastUpdatedTimeOfDay { get; set; }
+
+    public string MoodLabel => this.Mood switch
+    {
+        "Aware" => "注意到周围",
+        "Attentive" => "专注",
+        "Calm" => "放松",
+        "Curious" => "好奇",
+        "Engaged" => "投入",
+        "Expressive" => "情绪外露",
+        "Warm" => "温和",
+        _ => "普通"
+    };
+
+    public string AttentionLabel => this.Attention switch
+    {
+        >= 75 => "高",
+        >= 45 => "中",
+        _ => "低"
+    };
+
+    public string InclinationLabel => this.CurrentInclination switch
+    {
+        "Acknowledging" => "会简单回应",
+        "Aware" => "注意到玩家",
+        "OpenToTalk" => "愿意继续回应",
+        "Reacting" => "正在反应",
+        _ => "普通"
+    };
+
+    public string LastInteractionLabel => this.LastInteraction switch
+    {
+        "none yet" => "暂无",
+        "passive nearby reaction" => "附近发生了一次自然反应",
+        "small behavior near the farmer" => "刚在玩家附近做过小动作",
+        "the farmer started a conversation" => "玩家刚主动开始对话",
+        "time passed" => "时间过去，状态回落",
+        _ => this.LastInteraction
+    };
+
+    public static int ClampScore(int value)
+    {
+        return System.Math.Clamp(value, 0, 100);
+    }
+
+    public static int MoveToward(int value, int target, int amount)
+    {
+        if (amount <= 0 || value == target)
+        {
+            return value;
+        }
+
+        return value < target
+            ? System.Math.Min(value + amount, target)
+            : System.Math.Max(value - amount, target);
+    }
+
+    public void Clamp()
+    {
+        this.Attention = ClampScore(this.Attention);
+        this.Openness = ClampScore(this.Openness);
+        if (string.IsNullOrWhiteSpace(this.Mood))
+        {
+            this.Mood = "Neutral";
+        }
+
+        if (string.IsNullOrWhiteSpace(this.CurrentInclination))
+        {
+            this.CurrentInclination = "Neutral";
+        }
+
+        if (string.IsNullOrWhiteSpace(this.LastInteraction))
+        {
+            this.LastInteraction = "none yet";
+        }
+    }
+
+    public LivingNpcState Clone()
+    {
+        return new LivingNpcState
+        {
+            NpcName = this.NpcName,
+            Mood = this.Mood,
+            Attention = this.Attention,
+            Openness = this.Openness,
+            CurrentInclination = this.CurrentInclination,
+            LastInteraction = this.LastInteraction,
+            LastUpdatedTotalDays = this.LastUpdatedTotalDays,
+            LastUpdatedTimeOfDay = this.LastUpdatedTimeOfDay
+        };
+    }
 }

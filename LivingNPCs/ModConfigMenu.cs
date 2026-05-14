@@ -142,6 +142,30 @@ internal static class ModConfigMenu
 
         configMenu.AddSectionTitle(
             mod: manifest,
+            text: () => "NPC 状态"
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "启用 NPC 状态",
+            tooltip: () => "记录每个 NPC 的轻量当前状态，例如心情、注意度和回应倾向。",
+            getValue: () => config.EnableNpcState,
+            setValue: value => config.EnableNpcState = value
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "每日状态衰减",
+            tooltip: () => "每天开始时，NPC 状态向普通状态回落的幅度。",
+            getValue: () => config.NpcStateDailyDecay,
+            setValue: value => config.NpcStateDailyDecay = value,
+            min: 0,
+            max: 50,
+            interval: 1
+        );
+
+        configMenu.AddSectionTitle(
+            mod: manifest,
             text: () => "行为设置"
         );
 
