@@ -708,7 +708,21 @@ internal sealed class BehaviorMemory
 
         prompt.AppendLine();
         prompt.AppendLine("Current state:");
+        prompt.AppendLine($"- Character profile source: {disposition.SourceLabel}.");
         prompt.AppendLine($"- Disposition: {disposition.PromptLabel}.");
+        if (disposition.HasProfileContext)
+        {
+            if (!string.IsNullOrWhiteSpace(disposition.BackgroundPrompt))
+            {
+                prompt.AppendLine($"- Character background: {disposition.BackgroundPrompt}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(disposition.DialoguePrompt))
+            {
+                prompt.AppendLine($"- Character dialogue cue: {disposition.DialoguePrompt}");
+            }
+        }
+
         prompt.AppendLine($"- Scene: {world.PromptLabel}; location: {world.LocationDisplayName}; date: {world.Season} {world.DayOfMonth}; time: {world.TimeOfDay}.");
         if (state != null)
         {
@@ -764,7 +778,7 @@ internal sealed class BehaviorMemory
     {
         if (state == null)
         {
-            return $"{npc.displayName} should sound {disposition.PromptLabel}, shaped by the current scene: {world.PromptLabel}.";
+            return $"{npc.displayName} should sound {disposition.PromptLabel}, shaped by {disposition.SourceLabel} profile context and the current scene: {world.PromptLabel}.";
         }
 
         string tone = this.BuildToneCue(state);
@@ -773,7 +787,7 @@ internal sealed class BehaviorMemory
             ? $"scene pressure suggests {world.StateInfluence.Mood}/{world.StateInfluence.Inclination}"
             : "scene pressure is mild";
 
-        return $"{npc.displayName} should sound {tone}; temperament is {disposition.PromptLabel}; relationship is {state.FamiliarityPromptLabel}; {rhythm}; {scenePressure}.";
+        return $"{npc.displayName} should sound {tone}; temperament is {disposition.PromptLabel}; profile source is {disposition.SourceLabel}; relationship is {state.FamiliarityPromptLabel}; {rhythm}; {scenePressure}.";
     }
 
     private IEnumerable<string> BuildPriorityPromptContext(
@@ -941,6 +955,7 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 互动舒适度：{state.InteractionComfortTierLabel}");
             summary.AppendLine($"- 最近礼物：{state.LastGiftLabel}");
             summary.AppendLine($"- 最近事件：{state.LastEventLabel}");
+            summary.AppendLine($"- 角色资料：{disposition.SourceDebugLabel}");
             summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
             summary.AppendLine($"- 当前场景：{world.DebugLabel}");
             summary.AppendLine($"- 情境影响：{state.LastSceneInfluenceLabel}");
@@ -950,6 +965,7 @@ internal sealed class BehaviorMemory
         else
         {
             summary.AppendLine($"{npc.displayName} 当前 LivingNPCs 倾向：");
+            summary.AppendLine($"- 角色资料：{disposition.SourceDebugLabel}");
             summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
             summary.AppendLine($"- 当前场景：{world.DebugLabel}");
         }

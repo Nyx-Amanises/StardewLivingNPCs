@@ -115,10 +115,18 @@ internal sealed class AiBehaviorClient
         }
 
         var world = WorldContext.For(npc);
+        var disposition = NpcDisposition.For(npc);
         string nearby = string.Join(", ", world.NearbyNpcNames);
 
         var prompt = new StringBuilder();
         prompt.AppendLine($"NPC: {npc.displayName} ({npc.Name})");
+        prompt.AppendLine($"Profile source: {disposition.SourceLabel}");
+        prompt.AppendLine($"Disposition: {disposition.PromptLabel}");
+        if (disposition.HasProfileContext)
+        {
+            prompt.AppendLine($"Profile context: {disposition.BackgroundPrompt} {disposition.DialoguePrompt}");
+        }
+
         prompt.AppendLine($"Trigger: {trigger}");
         prompt.AppendLine($"Location: {world.LocationDisplayName} ({world.LocationName})");
         prompt.AppendLine($"Date: year {Game1.year}, {world.Season} {world.DayOfMonth}");
