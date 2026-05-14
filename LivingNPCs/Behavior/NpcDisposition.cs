@@ -132,7 +132,8 @@ internal static class NpcDisposition
     private static readonly HashSet<string> SveNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "Alesia", "Andy", "Apples", "Bear", "Camilla", "Charlie", "Claire", "Dusty", "Gunther", "Isaac", "Jadu", "Jolyne",
-        "Lance", "Magnus", "Martin", "Morgan", "Morris", "Olivia", "Scarlett", "Sophia", "Susan", "Victor"
+        "Lance", "Magnus", "Martin", "Morgan", "Morris", "Olivia", "Scarlett", "Sophia", "Susan", "Victor", "Gil",
+        "MarlonFay", "Qi"
     };
 
     private static readonly HashSet<string> RsvNames = new(StringComparer.OrdinalIgnoreCase)
@@ -196,7 +197,7 @@ internal static class NpcDisposition
             string romancePrompt = data.CanBeRomanced ? "romanceable social profile" : "non-romance social profile";
             string agePrompt = data.Age.ToString().ToLowerInvariant();
             string sourceLabel = GetKnownSourceLabel(npc.Name);
-            string sourceDebugLabel = GetKnownSourceDebugLabel(npc.Name);
+            string sourceDebugLabel = $"{GetKnownSourceDebugLabel(npc.Name)}（Data/Characters 推断）";
             string background = BuildCharacterDataBackground(npc, data, sourceLabel);
             string dialogue = BuildCharacterDataDialogueCue(data);
 
@@ -233,6 +234,15 @@ internal static class NpcDisposition
         {
             $"{npc.displayName} is handled as a {sourceLabel} character using Stardew Valley 1.6 Data/Characters."
         };
+
+        if (string.Equals(sourceLabel, "Stardew Valley Expanded", StringComparison.OrdinalIgnoreCase))
+        {
+            details.Add("This is part of the Stardew Valley Expanded world, so keep continuity compatible with SVE's added locations, jobs, families, and larger adventure/magic arcs without quoting mod dialogue.");
+        }
+        else if (string.Equals(sourceLabel, "Ridgeside Village", StringComparison.OrdinalIgnoreCase))
+        {
+            details.Add("This is part of Ridgeside Village, so keep continuity compatible with the mountain village community, local family networks, and RSV social life without quoting mod dialogue.");
+        }
 
         details.Add($"Age category: {data.Age}; home region: {data.HomeRegion}; romanceable: {(data.CanBeRomanced ? "yes" : "no")}.");
 
@@ -444,7 +454,7 @@ internal static class NpcDisposition
             passiveEmoteId,
             reason,
             "Stardew Valley Expanded",
-            "Stardew Valley Expanded",
+            "Stardew Valley Expanded（专属摘要）",
             backgroundPrompt,
             dialoguePrompt
         );
@@ -468,7 +478,7 @@ internal static class NpcDisposition
             passiveEmoteId,
             reason,
             "Ridgeside Village",
-            "Ridgeside Village",
+            "Ridgeside Village（专属摘要）",
             backgroundPrompt,
             dialoguePrompt
         );
