@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using Newtonsoft.Json;
 using ValleyTalk;
@@ -358,14 +359,35 @@ public class Character
     
     public async Task<string[]> CreateBasicDialogue(DialogueContext context)
     {
+        var totalWatch = Stopwatch.StartNew();
+        var promptInitWatch = Stopwatch.StartNew();
         string[] results = Array.Empty<string>();
         var prompts = new Prompts(context, this);
+        promptInitWatch.Stop();
 
         const int maxRetryAttempts = 4;
         int timeoutSeconds = ModEntry.Config.QueryTimeout;
         int retryCount = 0;
+        bool loggedTiming = false;
+        long promptBuildMilliseconds = 0;
+        long inferenceMilliseconds = 0;
+        int promptCharacters = 0;
+        int responseCharacters = 0;
         Exception lastException = null;
         LlmResponse result;
+
+        void LogTiming(string outcome, int dialogueLines = 0)
+        {
+            if (!ModEntry.Config.Debug)
+            {
+                return;
+            }
+
+            ModEntry.SMonitor.Log(
+                $"[ValleyTalk timing] {Name}: {outcome}; total={totalWatch.ElapsedMilliseconds}ms, promptInit={promptInitWatch.ElapsedMilliseconds}ms, promptBuild={promptBuildMilliseconds}ms, model={inferenceMilliseconds}ms, promptChars={promptCharacters}, responseChars={responseCharacters}, attempts={retryCount}, lines={dialogueLines}.",
+                StardewModdingAPI.LogLevel.Info
+            );
+        }
         
         for (int attempt = 0; attempt <= maxRetryAttempts; attempt++)
         {
@@ -387,15 +409,40 @@ public class Character
 
                 try
                 {
+                    var promptBuildWatch = Stopwatch.StartNew();
+                    string systemPrompt = prompts.System;
+                    string gameConstantContext = prompts.GameConstantContext;
+                    string npcConstantContext = prompts.NpcConstantContext;
+                    string generatedPrompt = $"{prompts.CorePrompt}{prompts.Instructions}{prompts.Command}";
+                    string responseStart = prompts.ResponseStart;
+                    promptBuildWatch.Stop();
+
+                    promptBuildMilliseconds += promptBuildWatch.ElapsedMilliseconds;
+                    promptCharacters = systemPrompt.Length
+                        + gameConstantContext.Length
+                        + npcConstantContext.Length
+                        + generatedPrompt.Length
+                        + responseStart.Length;
+
+                    var inferenceWatch = Stopwatch.StartNew();
                     var inferenceTask = Llm.Instance.RunInference(
-                        prompts.System,
-                        $"{prompts.GameConstantContext}",
-                        $"{prompts.NpcConstantContext}",
-                        $"{prompts.CorePrompt}{prompts.Instructions}{prompts.Command}",
-                        prompts.ResponseStart
+                        systemPrompt,
+                        gameConstantContext,
+                        npcConstantContext,
+                        generatedPrompt,
+                        responseStart
                     );
 
-                    result = await inferenceTask.WaitAsync(cts.Token);
+                    try
+                    {
+                        result = await inferenceTask.WaitAsync(cts.Token);
+                    }
+                    finally
+                    {
+                        inferenceWatch.Stop();
+                        inferenceMilliseconds += inferenceWatch.ElapsedMilliseconds;
+                    }
+                    responseCharacters = result.Text?.Length ?? 0;
 
                     if (result.IsSuccess)
                     {
@@ -416,6 +463,8 @@ public class Character
                 if (resultsInternal.Length > 0)
                 {
                     results = resultsInternal;
+                    LogTiming("success", resultsInternal.Length);
+                    loggedTiming = true;
                     break; // Success, exit retry loop
                 }
 
@@ -479,6 +528,11 @@ public class Character
                     break;
                 }
             }
+        }
+
+        if (!loggedTiming)
+        {
+            LogTiming(lastException == null ? "empty response" : "failed");
         }
 
         // Handle final result
