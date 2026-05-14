@@ -154,11 +154,19 @@ internal sealed class BehaviorMemory
     {
         var state = this.GetOrCreateState(npc);
         var world = WorldContext.For(npc);
-        this.AddFamiliarity(state, amount: 3, dailyCap: 6);
+        this.UpdateConversationRhythm(state);
+        int familiarityGain = state.ConversationsToday == 1 ? 3 : state.ConversationsToday <= 3 ? 1 : 0;
+        if (state.ConversationsToday == 1 && state.ConsecutiveConversationDays >= 3)
+        {
+            familiarityGain += 1;
+        }
+
+        this.AddFamiliarity(state, familiarityGain, dailyCap: 6);
         state.Mood = state.Openness >= 60 || state.Familiarity >= 40 ? "Warm" : "Attentive";
         state.CurrentInclination = "OpenToTalk";
         state.Attention = LivingNpcState.ClampScore(state.Attention + 18);
         state.Openness = LivingNpcState.ClampScore(state.Openness + (state.Familiarity >= 40 ? 8 : 6));
+        this.ApplyConversationRhythmInfluence(state);
         this.ApplyWorldStateInfluence(state, world);
         state.LastInteraction = "the farmer started a conversation";
         state.LastUpdatedTotalDays = Game1.Date.TotalDays;
@@ -168,7 +176,7 @@ internal sealed class BehaviorMemory
 
     public void DecayStates(int dailyDecay)
     {
-        if (dailyDecay <= 0 || this.lastStateDecayTotalDays == Game1.Date.TotalDays)
+        if (this.lastStateDecayTotalDays == Game1.Date.TotalDays)
         {
             return;
         }
@@ -180,6 +188,13 @@ internal sealed class BehaviorMemory
             if (state.LastFamiliarityGainTotalDays != Game1.Date.TotalDays)
             {
                 state.FamiliarityGainedToday = 0;
+            }
+
+            this.RefreshConversationDay(state);
+
+            if (dailyDecay <= 0)
+            {
+                continue;
             }
 
             state.Attention = LivingNpcState.MoveToward(state.Attention, 35, dailyDecay);
@@ -214,6 +229,128 @@ internal sealed class BehaviorMemory
 
         state.Familiarity = LivingNpcState.ClampScore(state.Familiarity + gained);
         state.FamiliarityGainedToday += gained;
+    }
+
+    private void RefreshConversationDay(LivingNpcState state)
+    {
+        int today = Game1.Date.TotalDays;
+        if (state.LastConversationTotalDays == today)
+        {
+            return;
+        }
+
+        state.ConversationsToday = 0;
+        if (state.LastConversationTotalDays >= 0)
+        {
+            state.LastConversationGapDays = System.Math.Max(1, today - state.LastConversationTotalDays);
+            state.InteractionRhythm = state.LastConversationGapDays >= 7
+                ? "LongQuietGap"
+                : "NoConversationToday";
+        }
+        else
+        {
+            state.LastConversationGapDays = -1;
+            state.InteractionRhythm = "New";
+        }
+    }
+
+    private void UpdateConversationRhythm(LivingNpcState state)
+    {
+        int today = Game1.Date.TotalDays;
+        int previousConversationDay = state.LastConversationTotalDays;
+
+        if (previousConversationDay == today)
+        {
+            state.ConversationsToday = System.Math.Max(0, state.ConversationsToday) + 1;
+            state.LastConversationGapDays = 0;
+            if (state.ConsecutiveConversationDays <= 0)
+            {
+                state.ConsecutiveConversationDays = 1;
+            }
+        }
+        else
+        {
+            state.LastConversationGapDays = previousConversationDay >= 0
+                ? System.Math.Max(1, today - previousConversationDay)
+                : -1;
+            state.ConversationsToday = 1;
+            state.ConsecutiveConversationDays = previousConversationDay == today - 1
+                ? System.Math.Max(1, state.ConsecutiveConversationDays + 1)
+                : 1;
+        }
+
+        state.LastConversationTotalDays = today;
+        state.LastConversationTimeOfDay = Game1.timeOfDay;
+        state.InteractionRhythm = this.DetermineInteractionRhythm(state);
+    }
+
+    private string DetermineInteractionRhythm(LivingNpcState state)
+    {
+        if (state.ConversationsToday >= 4)
+        {
+            return "CrowdedToday";
+        }
+
+        if (state.ConversationsToday >= 2)
+        {
+            return "CheckedInAgain";
+        }
+
+        if (state.LastConversationGapDays >= 7)
+        {
+            return "AfterLongGap";
+        }
+
+        if (state.ConsecutiveConversationDays >= 5)
+        {
+            return "DailyRoutine";
+        }
+
+        if (state.ConsecutiveConversationDays >= 3)
+        {
+            return "BuildingRoutine";
+        }
+
+        return state.LastConversationGapDays < 0 ? "FirstConversation" : "FreshToday";
+    }
+
+    private void ApplyConversationRhythmInfluence(LivingNpcState state)
+    {
+        switch (state.InteractionRhythm)
+        {
+            case "CrowdedToday":
+                state.Mood = "Overloaded";
+                state.CurrentInclination = "NeedsSpace";
+                state.Attention = LivingNpcState.ClampScore(state.Attention - 3);
+                state.Openness = LivingNpcState.ClampScore(state.Openness - 12);
+                break;
+
+            case "CheckedInAgain":
+                state.Mood = state.Openness >= 65 ? "Familiar" : "Aware";
+                state.Attention = LivingNpcState.ClampScore(state.Attention + 2);
+                state.Openness = LivingNpcState.ClampScore(state.Openness - 3);
+                break;
+
+            case "AfterLongGap":
+                state.Mood = "Surprised";
+                state.CurrentInclination = "Reconnecting";
+                state.Attention = LivingNpcState.ClampScore(state.Attention + 6);
+                state.Openness = LivingNpcState.ClampScore(state.Openness - 2);
+                break;
+
+            case "DailyRoutine":
+                state.Mood = "Comfortable";
+                state.CurrentInclination = "OpenToTalk";
+                state.Attention = LivingNpcState.ClampScore(state.Attention + 4);
+                state.Openness = LivingNpcState.ClampScore(state.Openness + 5);
+                break;
+
+            case "BuildingRoutine":
+                state.Mood = "Familiar";
+                state.Attention = LivingNpcState.ClampScore(state.Attention + 2);
+                state.Openness = LivingNpcState.ClampScore(state.Openness + 2);
+                break;
+        }
     }
 
     private void ApplyWorldStateInfluence(LivingNpcState state, WorldContextSnapshot world)
@@ -315,6 +452,7 @@ internal sealed class BehaviorMemory
             prompt.AppendLine("Current lightweight NPC state:");
             prompt.AppendLine($"- Mood: {state.Mood}; attention to farmer: {state.Attention}/100; response inclination: {state.CurrentInclination}.");
             prompt.AppendLine($"- Long-term familiarity with the farmer: {state.Familiarity}/100 ({state.FamiliarityPromptLabel}).");
+            prompt.AppendLine($"- Interaction rhythm: {state.InteractionRhythmPromptLabel}.");
             prompt.AppendLine($"- Scene influence on mood: {state.LastSceneInfluenceReason}.");
             prompt.AppendLine($"- Last interaction: {state.LastInteraction}.");
         }
@@ -356,6 +494,7 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 心情：{state.MoodLabel}");
             summary.AppendLine($"- 对玩家注意度：{state.AttentionLabel} ({state.Attention})");
             summary.AppendLine($"- 对玩家熟悉度：{state.FamiliarityLabel} ({state.Familiarity})");
+            summary.AppendLine($"- 互动节奏：{state.InteractionRhythmLabel}");
             summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
             summary.AppendLine($"- 当前场景：{world.DebugLabel}");
             summary.AppendLine($"- 情境影响：{state.LastSceneInfluenceLabel}");
@@ -401,6 +540,12 @@ internal sealed class BehaviorMemory
                 Familiarity = 0,
                 FamiliarityGainedToday = 0,
                 LastFamiliarityGainTotalDays = Game1.Date.TotalDays,
+                ConversationsToday = 0,
+                ConsecutiveConversationDays = 0,
+                LastConversationTotalDays = -1,
+                LastConversationTimeOfDay = 0,
+                LastConversationGapDays = -1,
+                InteractionRhythm = "New",
                 LastSceneContext = "none",
                 LastSceneInfluence = "none",
                 LastSceneInfluenceReason = "none",
@@ -481,6 +626,12 @@ internal sealed class LivingNpcState
     public int Familiarity { get; set; }
     public int FamiliarityGainedToday { get; set; }
     public int LastFamiliarityGainTotalDays { get; set; } = -1;
+    public int ConversationsToday { get; set; }
+    public int ConsecutiveConversationDays { get; set; }
+    public int LastConversationTotalDays { get; set; } = -1;
+    public int LastConversationTimeOfDay { get; set; }
+    public int LastConversationGapDays { get; set; } = -1;
+    public string InteractionRhythm { get; set; } = "New";
     public string LastSceneContext { get; set; } = "none";
     public string LastSceneInfluence { get; set; } = "none";
     public string LastSceneInfluenceReason { get; set; } = "none";
@@ -499,13 +650,16 @@ internal sealed class LivingNpcState
         "Curious" => "好奇",
         "Engaged" => "投入",
         "Expressive" => "情绪外露",
+        "Familiar" => "熟悉",
         "Focused" => "专注于事务",
         "Fresh" => "精神不错",
         "Guarded" => "警觉",
         "Hurried" => "匆忙",
+        "Overloaded" => "有点应接不暇",
         "Public" => "留意公共场合",
         "Quiet" => "安静",
         "Sociable" => "有社交兴致",
+        "Surprised" => "有些意外",
         "Warm" => "温和",
         _ => "普通"
     };
@@ -541,13 +695,47 @@ internal sealed class LivingNpcState
         "Careful" => "谨慎回应",
         "Comfortable" => "自在回应",
         "Focused" => "保持专注",
+        "NeedsSpace" => "需要一点空间",
         "OpenToTalk" => "愿意继续回应",
         "Public" => "顾及周围的人",
         "Quiet" => "安静回应",
         "Reacting" => "正在反应",
+        "Reconnecting" => "重新熟悉",
         "Reserved" => "保守回应",
         "Sheltering" => "想避开天气",
         _ => "普通"
+    };
+
+    public string InteractionRhythmLabel => this.InteractionRhythm switch
+    {
+        "AfterLongGap" => $"隔了 {this.LastConversationGapDays} 天才再次聊天",
+        "BuildingRoutine" => $"连续 {this.ConsecutiveConversationDays} 天打招呼",
+        "CheckedInAgain" => $"今天第 {this.ConversationsToday} 次聊天",
+        "CrowdedToday" => $"今天已经聊了 {this.ConversationsToday} 次，有点频繁",
+        "DailyRoutine" => $"连续 {this.ConsecutiveConversationDays} 天聊天，像日常习惯",
+        "FirstConversation" => "第一次记录到对话",
+        "FreshToday" => "今天第一次聊天",
+        "LongQuietGap" => $"已经 {this.LastConversationGapDays} 天没有聊天",
+        "NoConversationToday" => this.LastConversationGapDays <= 1
+            ? "今天还没聊天，昨天聊过"
+            : $"今天还没聊天，上次聊天在 {this.LastConversationGapDays} 天前",
+        _ => "暂无稳定节奏"
+    };
+
+    public string InteractionRhythmPromptLabel => this.InteractionRhythm switch
+    {
+        "AfterLongGap" => $"they are speaking again after {this.LastConversationGapDays} days without a recorded conversation",
+        "BuildingRoutine" => $"the farmer has checked in for {this.ConsecutiveConversationDays} consecutive days",
+        "CheckedInAgain" => $"this is conversation {this.ConversationsToday} with the farmer today",
+        "CrowdedToday" => $"the farmer has already spoken with them {this.ConversationsToday} times today, so the attention may feel repetitive",
+        "DailyRoutine" => $"the farmer has spoken with them for {this.ConsecutiveConversationDays} consecutive days, forming a familiar daily rhythm",
+        "FirstConversation" => "this is the first recorded LivingNPCs conversation with the farmer",
+        "FreshToday" => "this is the first recorded conversation with the farmer today",
+        "LongQuietGap" => $"there has been no recorded conversation with the farmer for {this.LastConversationGapDays} days",
+        "NoConversationToday" => this.LastConversationGapDays <= 1
+            ? "there has been no recorded conversation with the farmer today, but they spoke yesterday"
+            : $"there has been no recorded conversation with the farmer today; the last one was {this.LastConversationGapDays} days ago",
+        _ => "no stable interaction rhythm yet"
     };
 
     public string LastSceneInfluenceLabel => this.LastSceneInfluence switch
@@ -589,6 +777,9 @@ internal sealed class LivingNpcState
         this.Openness = ClampScore(this.Openness);
         this.Familiarity = ClampScore(this.Familiarity);
         this.FamiliarityGainedToday = System.Math.Clamp(this.FamiliarityGainedToday, 0, 100);
+        this.ConversationsToday = System.Math.Max(0, this.ConversationsToday);
+        this.ConsecutiveConversationDays = System.Math.Max(0, this.ConsecutiveConversationDays);
+        this.LastConversationGapDays = this.LastConversationGapDays < -1 ? -1 : this.LastConversationGapDays;
         if (string.IsNullOrWhiteSpace(this.Mood))
         {
             this.Mood = "Neutral";
@@ -618,6 +809,11 @@ internal sealed class LivingNpcState
         {
             this.LastSceneInfluenceReason = "none";
         }
+
+        if (string.IsNullOrWhiteSpace(this.InteractionRhythm))
+        {
+            this.InteractionRhythm = "New";
+        }
     }
 
     public LivingNpcState Clone()
@@ -631,6 +827,12 @@ internal sealed class LivingNpcState
             Familiarity = this.Familiarity,
             FamiliarityGainedToday = this.FamiliarityGainedToday,
             LastFamiliarityGainTotalDays = this.LastFamiliarityGainTotalDays,
+            ConversationsToday = this.ConversationsToday,
+            ConsecutiveConversationDays = this.ConsecutiveConversationDays,
+            LastConversationTotalDays = this.LastConversationTotalDays,
+            LastConversationTimeOfDay = this.LastConversationTimeOfDay,
+            LastConversationGapDays = this.LastConversationGapDays,
+            InteractionRhythm = this.InteractionRhythm,
             LastSceneContext = this.LastSceneContext,
             LastSceneInfluence = this.LastSceneInfluence,
             LastSceneInfluenceReason = this.LastSceneInfluenceReason,

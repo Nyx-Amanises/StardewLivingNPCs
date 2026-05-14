@@ -161,15 +161,50 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
                 reasons.Add("recognizes the farmer");
             }
 
+            if (state?.ConversationsToday >= 4)
+            {
+                approachBonus -= 0.18;
+                emoteBonus -= 0.04;
+                reasons.Add("many conversations today");
+            }
+            else if (state?.ConversationsToday >= 2)
+            {
+                approachBonus -= 0.05;
+                emoteBonus += 0.02;
+                reasons.Add("already checked in today");
+            }
+
+            if (state?.ConsecutiveConversationDays >= 5)
+            {
+                approachBonus += 0.08;
+                emoteBonus += 0.03;
+                reasons.Add("familiar daily routine");
+            }
+            else if (state?.ConsecutiveConversationDays >= 3)
+            {
+                approachBonus += 0.04;
+                reasons.Add("building a daily routine");
+            }
+
+            if (state?.LastConversationGapDays >= 7)
+            {
+                approachBonus -= 0.02;
+                emoteBonus += 0.06;
+                reasons.Add("speaking again after time apart");
+            }
+
             switch (state?.Mood)
             {
                 case "Engaged":
                 case "Warm":
+                case "Comfortable":
+                case "Familiar":
                     approachBonus += 0.12;
                     reasons.Add(state.Mood.ToLowerInvariant());
                     break;
 
                 case "Expressive":
+                case "Surprised":
                     emoteBonus += 0.25;
                     reasons.Add("expressive mood");
                     break;
@@ -178,6 +213,12 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
                     approachBonus += 0.05;
                     emoteBonus += 0.08;
                     reasons.Add("curious mood");
+                    break;
+
+                case "Overloaded":
+                    approachBonus -= 0.16;
+                    emoteBonus -= 0.05;
+                    reasons.Add("needs a little space");
                     break;
             }
 
