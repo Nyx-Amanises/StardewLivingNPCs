@@ -34,7 +34,8 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
         float distance = Vector2.Distance(npc.Tile, Game1.player.Tile);
         LivingNpcState? state = this.config.EnableNpcState ? this.memory.GetState(npc) : null;
         var disposition = NpcDisposition.For(npc);
-        var influence = StateInfluence.From(state, disposition);
+        var world = WorldContext.For(npc);
+        var influence = StateInfluence.From(state, disposition, world);
 
         if (trigger == BehaviorTrigger.Manual && this.config.AllowApproachPlayer && distance > 2.25f && distance <= this.config.MaxInteractionDistanceTiles)
         {
@@ -106,11 +107,11 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
 
     private sealed record StateInfluence(bool HasContext, double ApproachBonus, double EmoteBonus, string Reason)
     {
-        public static StateInfluence From(LivingNpcState? state, NpcDispositionProfile disposition)
+        public static StateInfluence From(LivingNpcState? state, NpcDispositionProfile disposition, WorldContextSnapshot world)
         {
-            double approachBonus = disposition.ApproachModifier;
-            double emoteBonus = disposition.EmoteModifier;
-            var reasons = new List<string> { disposition.Reason };
+            double approachBonus = disposition.ApproachModifier + world.ApproachModifier;
+            double emoteBonus = disposition.EmoteModifier + world.EmoteModifier;
+            var reasons = new List<string> { disposition.Reason, world.Reason };
 
             if (state?.Attention >= 75)
             {

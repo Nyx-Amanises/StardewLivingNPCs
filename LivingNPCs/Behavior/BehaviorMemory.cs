@@ -249,15 +249,11 @@ internal sealed class BehaviorMemory
     {
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
         var disposition = NpcDisposition.For(npc);
+        var world = WorldContext.For(npc);
         LivingNpcState? state = null;
         if (includeState)
         {
             this.statesByNpc.TryGetValue(npc.Name, out state);
-        }
-
-        if ((entries == null || entries.Count == 0) && state == null)
-        {
-            return string.Empty;
         }
 
         var prompt = new StringBuilder();
@@ -266,6 +262,7 @@ internal sealed class BehaviorMemory
         prompt.AppendLine("Use these as quiet scene context for the next reply. Do not mention LivingNPCs, prompts, mods, JSON, or AI systems.");
         prompt.AppendLine("If an entry is relevant, the character may naturally acknowledge it as something that just happened or affected the mood of the scene.");
         prompt.AppendLine($"Behavior disposition: {disposition.PromptLabel}.");
+        prompt.AppendLine($"Current scene: {world.PromptLabel}; location: {world.LocationDisplayName}; date: {world.Season} {world.DayOfMonth}; time: {world.TimeOfDay}.");
 
         if (state != null)
         {
@@ -294,6 +291,7 @@ internal sealed class BehaviorMemory
     {
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
         var disposition = NpcDisposition.For(npc);
+        var world = WorldContext.For(npc);
         LivingNpcState? state = null;
         if (includeState)
         {
@@ -302,7 +300,7 @@ internal sealed class BehaviorMemory
 
         if ((entries == null || entries.Count == 0) && state == null)
         {
-            return $"{npc.displayName} 还没有 LivingNPCs 行为/互动记忆或状态。";
+            return $"{npc.displayName} 还没有 LivingNPCs 行为/互动记忆或状态。\n- 行为倾向：{disposition.DebugLabel}\n- 当前场景：{world.DebugLabel}";
         }
 
         var summary = new StringBuilder();
@@ -313,6 +311,7 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 对玩家注意度：{state.AttentionLabel} ({state.Attention})");
             summary.AppendLine($"- 对玩家熟悉度：{state.FamiliarityLabel} ({state.Familiarity})");
             summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
+            summary.AppendLine($"- 当前场景：{world.DebugLabel}");
             summary.AppendLine($"- 回应倾向：{state.InclinationLabel}");
             summary.AppendLine($"- 最近互动：{state.LastInteractionLabel}");
         }
@@ -320,6 +319,7 @@ internal sealed class BehaviorMemory
         {
             summary.AppendLine($"{npc.displayName} 当前 LivingNPCs 倾向：");
             summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
+            summary.AppendLine($"- 当前场景：{world.DebugLabel}");
         }
 
         if (entries is { Count: > 0 })

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -112,20 +111,16 @@ internal sealed class AiBehaviorClient
             allowed.Add("ApproachPlayer");
         }
 
-        string weather = Game1.IsRainingHere() ? "raining" : Game1.IsSnowingHere() ? "snowing" : "clear";
-        string nearby = string.Join(", ", Game1.currentLocation.characters
-            .Where(other => other.Name != npc.Name)
-            .OrderBy(other => Math.Abs(other.Tile.X - npc.Tile.X) + Math.Abs(other.Tile.Y - npc.Tile.Y))
-            .Take(4)
-            .Select(other => other.displayName));
+        var world = WorldContext.For(npc);
+        string nearby = string.Join(", ", world.NearbyNpcNames);
 
         var prompt = new StringBuilder();
         prompt.AppendLine($"NPC: {npc.displayName} ({npc.Name})");
         prompt.AppendLine($"Trigger: {trigger}");
-        prompt.AppendLine($"Location: {Game1.currentLocation.DisplayName} ({Game1.currentLocation.Name})");
-        prompt.AppendLine($"Date: year {Game1.year}, {Game1.season} {Game1.dayOfMonth}");
-        prompt.AppendLine($"Time: {Game1.timeOfDay}");
-        prompt.AppendLine($"Weather: {weather}");
+        prompt.AppendLine($"Location: {world.LocationDisplayName} ({world.LocationName})");
+        prompt.AppendLine($"Date: year {Game1.year}, {world.Season} {world.DayOfMonth}");
+        prompt.AppendLine($"Time: {world.TimeOfDay}");
+        prompt.AppendLine($"Scene context: {world.PromptLabel}");
         prompt.AppendLine($"Distance to farmer in tiles: {Math.Round(Vector2.Distance(npc.Tile, Game1.player.Tile), 1)}");
         prompt.AppendLine($"Nearby NPCs: {(string.IsNullOrWhiteSpace(nearby) ? "none" : nearby)}");
         prompt.AppendLine();
