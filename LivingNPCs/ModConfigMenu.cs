@@ -172,6 +172,84 @@ internal static class ModConfigMenu
 
         configMenu.AddSectionTitle(
             mod: manifest,
+            text: () => "AI 影响世界"
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "允许 AI 触发世界动作",
+            tooltip: () => "允许 AI 在严格限制下触发少量实际效果，例如小礼物、少量金钱、浇水或短暂同行。",
+            getValue: () => config.EnableAiWorldActions,
+            setValue: value => config.EnableAiWorldActions = value
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "允许 NPC 送小礼物",
+            tooltip: () => "只有关系已有一点熟悉时，NPC 才可能偶尔给玩家一个低价值小礼物。",
+            getValue: () => config.AllowAiSmallGifts,
+            setValue: value => config.AllowAiSmallGifts = value
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "允许 NPC 送钱",
+            tooltip: () => "只有关系较熟时，NPC 才可能偶尔给玩家少量金钱。",
+            getValue: () => config.AllowAiMoneyGifts,
+            setValue: value => config.AllowAiMoneyGifts = value
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "单次送钱上限",
+            tooltip: () => "每次 AI 触发送钱动作时，最多给玩家多少金币。",
+            getValue: () => config.MaxAiMoneyGiftAmount,
+            setValue: value => config.MaxAiMoneyGiftAmount = value,
+            min: 25,
+            max: 1000,
+            interval: 25
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "允许 NPC 帮忙浇水",
+            tooltip: () => "只有在农场且关系较熟时，NPC 才可能给附近已种植但未浇水的作物浇水。",
+            getValue: () => config.AllowAiFarmHelp,
+            setValue: value => config.AllowAiFarmHelp = value
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "单次最多浇水格数",
+            tooltip: () => "一次 AI 帮忙浇水最多影响多少格附近作物。",
+            getValue: () => config.MaxAiWateredTilesPerAction,
+            setValue: value => config.MaxAiWateredTilesPerAction = value,
+            min: 1,
+            max: 24,
+            interval: 1
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "允许 NPC 短暂同行",
+            tooltip: () => "只有关系已有一点熟悉且 NPC 当前空闲时，AI 才可能让 NPC 短时间陪玩家同行。",
+            getValue: () => config.AllowAiWalkTogether,
+            setValue: value => config.AllowAiWalkTogether = value
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "同行最长时长",
+            tooltip: () => "一次 AI 同行最多持续多少游戏分钟。",
+            getValue: () => config.MaxAiWalkTogetherMinutes,
+            setValue: value => config.MaxAiWalkTogetherMinutes = value,
+            min: 5,
+            max: 60,
+            interval: 5
+        );
+
+        configMenu.AddSectionTitle(
+            mod: manifest,
             text: () => "NPC 状态"
         );
 

@@ -6,7 +6,9 @@ using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
+using StardewValley.Locations;
 using StardewValley.Pathfinding;
+using StardewValley.TerrainFeatures;
 using SObject = StardewValley.Object;
 
 namespace LivingNPCs.Behavior;
@@ -25,6 +27,7 @@ internal sealed class BehaviorEngine
     private readonly AiBehaviorClient aiBehaviorClient;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
     private readonly List<PendingAmbientRemark> pendingAmbientRemarks = new();
+    private readonly List<PendingWalkTogether> pendingWalks = new();
     private readonly Dictionary<string, int> lastConversationMemoryTimeByNpc = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
 
@@ -82,6 +85,7 @@ internal sealed class BehaviorEngine
         this.valleyTalkBridge.ClearAll();
         this.pendingRequests.Clear();
         this.pendingAmbientRemarks.Clear();
+        this.pendingWalks.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
     }
 
@@ -91,6 +95,7 @@ internal sealed class BehaviorEngine
         this.valleyTalkBridge.ClearAll();
         this.pendingRequests.Clear();
         this.pendingAmbientRemarks.Clear();
+        this.pendingWalks.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
     }
 
@@ -176,6 +181,7 @@ internal sealed class BehaviorEngine
         }
 
         this.TryShowPendingAmbientRemarks();
+        this.TryUpdatePendingWalks();
     }
 
     private bool TryFindNearestNpc(out NPC? nearest)
@@ -286,6 +292,11 @@ internal sealed class BehaviorEngine
             this.QueueAmbientRemark(npc, result.AmbientFollowUpText, result.AmbientFollowUpDelayMinutes);
         }
 
+        if (this.config.EnableAiWorldActions && result.Actions.Count > 0)
+        {
+            this.TryExecuteConversationActions(npc, result.Actions);
+        }
+
         this.PushInteractionContext(
             npc,
             $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, +{result.AppliedFriendshipDelta} extra friendship."
@@ -354,6 +365,351 @@ internal sealed class BehaviorEngine
         int mins = timeOfDay % 100;
         int totalMinutes = (hours * 60) + mins + minutes;
         return ((totalMinutes / 60) * 100) + (totalMinutes % 60);
+    }
+
+    private void TryExecuteConversationActions(NPC npc, IReadOnlyList<ValleyTalkWorldActionRequest> actions)
+    {
+        foreach (var action in actions.Take(1))
+        {
+            bool executed = action.Type switch
+            {
+                "give_small_gift" => this.TryGiveSmallGift(npc, action, out _),
+                "give_money" => this.TryGiveMoney(npc, action, out _),
+                "water_nearby_crops" => this.TryWaterNearbyCrops(npc, action, out _),
+                "walk_together" => this.TryStartWalkTogether(npc, action, out _),
+                _ => false
+            };
+
+            if (!executed && this.config.Debug)
+            {
+                string reason = action.Type switch
+                {
+                    "give_small_gift" => "gift request rejected",
+                    "give_money" => "money request rejected",
+                    "water_nearby_crops" => "watering request rejected",
+                    "walk_together" => "walk request rejected",
+                    _ => "unknown request rejected"
+                };
+                this.monitor.Log($"Skipped AI world action {action.Type} for {npc.Name}: {reason}.", LogLevel.Debug);
+            }
+        }
+    }
+
+    private bool TryGiveSmallGift(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
+    {
+        reason = string.Empty;
+        if (!this.CanUseWorldAction(npc, "small_gift", requireFriendly: false, out reason))
+        {
+            return false;
+        }
+
+        var state = this.memory.GetState(npc);
+        if (!this.config.AllowAiSmallGifts || state == null || state.LastAiSmallGiftTotalDays == Game1.Date.TotalDays)
+        {
+            reason = "small gifts are disabled or already used today";
+            return false;
+        }
+
+        SObject gift = this.CreateSmallGift();
+        if (!Game1.player.addItemToInventoryBool(gift))
+        {
+            reason = "player inventory is full";
+            return false;
+        }
+
+        state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
+        this.memory.RecordNpcWorldAction(
+            npc,
+            "GaveSmallGift",
+            this.BuildWorldActionReason(action.Reason, $"they gave the farmer {gift.DisplayName} after an AI conversation"),
+            this.config.MaxMemoryEntriesPerNpc
+        );
+        this.MarkStateAfterWorldAction(state, "they gave the farmer a small gift");
+        this.ShowFeedback($"LivingNPCs：{npc.displayName} 给了你 {gift.DisplayName}。");
+        return true;
+    }
+
+    private bool TryGiveMoney(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
+    {
+        reason = string.Empty;
+        if (!this.CanUseWorldAction(npc, "money", requireFriendly: true, out reason))
+        {
+            return false;
+        }
+
+        var state = this.memory.GetState(npc);
+        if (!this.config.AllowAiMoneyGifts || state == null || state.LastAiMoneyGiftTotalDays == Game1.Date.TotalDays)
+        {
+            reason = "money gifts are disabled or already used today";
+            return false;
+        }
+
+        int amount = System.Math.Clamp(action.Amount <= 0 ? 100 : action.Amount, 25, this.config.MaxAiMoneyGiftAmount);
+        Game1.player.Money += amount;
+        state.LastAiMoneyGiftTotalDays = Game1.Date.TotalDays;
+        this.memory.RecordNpcWorldAction(
+            npc,
+            "GaveMoney",
+            this.BuildWorldActionReason(action.Reason, $"they gave the farmer {amount}g after an AI conversation"),
+            this.config.MaxMemoryEntriesPerNpc
+        );
+        this.MarkStateAfterWorldAction(state, "they gave the farmer some money");
+        this.ShowFeedback($"LivingNPCs：{npc.displayName} 给了你 {amount}g。");
+        return true;
+    }
+
+    private bool TryWaterNearbyCrops(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
+    {
+        reason = string.Empty;
+        if (!this.CanUseWorldAction(npc, "farm_help", requireFriendly: true, out reason))
+        {
+            return false;
+        }
+
+        var state = this.memory.GetState(npc);
+        if (!this.config.AllowAiFarmHelp || state == null || state.LastAiFarmHelpTotalDays == Game1.Date.TotalDays)
+        {
+            reason = "farm help is disabled or already used today";
+            return false;
+        }
+
+        if (Game1.currentLocation is not Farm farm)
+        {
+            reason = "the player is not on the farm";
+            return false;
+        }
+
+        int requestedTiles = action.TileCount <= 0 ? 6 : action.TileCount;
+        int maxTiles = System.Math.Clamp(requestedTiles, 1, this.config.MaxAiWateredTilesPerAction);
+        var nearbyTiles = farm.terrainFeatures.Pairs
+            .Where(pair => pair.Value is HoeDirt dirt && dirt.crop != null && dirt.state.Value != 1)
+            .OrderBy(pair => Vector2.Distance(pair.Key, Game1.player.Tile))
+            .Take(maxTiles)
+            .ToList();
+
+        foreach (var pair in nearbyTiles)
+        {
+            if (pair.Value is HoeDirt dirt)
+            {
+                dirt.state.Value = 1;
+                dirt.updateNeighbors();
+            }
+        }
+
+        if (nearbyTiles.Count == 0)
+        {
+            reason = "there are no nearby unwatered crops";
+            return false;
+        }
+
+        state.LastAiFarmHelpTotalDays = Game1.Date.TotalDays;
+        this.memory.RecordNpcWorldAction(
+            npc,
+            "WateredNearbyCrops",
+            this.BuildWorldActionReason(action.Reason, $"they watered {nearbyTiles.Count} nearby crop tiles for the farmer"),
+            this.config.MaxMemoryEntriesPerNpc
+        );
+        this.MarkStateAfterWorldAction(state, "they helped the farmer with watering");
+        this.ShowFeedback($"LivingNPCs：{npc.displayName} 帮你浇了 {nearbyTiles.Count} 格作物。");
+        return true;
+    }
+
+    private bool TryStartWalkTogether(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
+    {
+        reason = string.Empty;
+        if (!this.CanUseWorldAction(npc, "walk_together", requireFriendly: false, out reason))
+        {
+            return false;
+        }
+
+        var state = this.memory.GetState(npc);
+        if (!this.config.AllowAiWalkTogether || state == null || state.LastAiWalkTogetherTotalDays == Game1.Date.TotalDays)
+        {
+            reason = "walk together is disabled or already used today";
+            return false;
+        }
+
+        if (npc.controller != null)
+        {
+            reason = "the NPC is already moving";
+            return false;
+        }
+
+        int durationMinutes = System.Math.Clamp(
+            action.DurationMinutes <= 0 ? 10 : action.DurationMinutes,
+            5,
+            this.config.MaxAiWalkTogetherMinutes
+        );
+        this.pendingWalks.RemoveAll(walk => walk.NpcName == npc.Name);
+        this.pendingWalks.Add(new PendingWalkTogether(
+            npc.Name,
+            Game1.Date.TotalDays,
+            npc.currentLocation?.Name ?? string.Empty,
+            this.AddMinutesToTime(Game1.timeOfDay, durationMinutes),
+            Game1.player.TilePoint,
+            null
+        ));
+        state.LastAiWalkTogetherTotalDays = Game1.Date.TotalDays;
+        this.memory.RecordNpcWorldAction(
+            npc,
+            "WalkedTogether",
+            this.BuildWorldActionReason(action.Reason, $"they agreed to walk with the farmer for about {durationMinutes} minutes"),
+            this.config.MaxMemoryEntriesPerNpc
+        );
+        this.MarkStateAfterWorldAction(state, "they agreed to walk with the farmer");
+        this.ShowFeedback($"LivingNPCs：{npc.displayName} 会陪你走一会儿。");
+        return true;
+    }
+
+    private bool CanUseWorldAction(NPC npc, string actionName, bool requireFriendly, out string reason)
+    {
+        reason = string.Empty;
+        if (!this.config.EnableAiWorldActions)
+        {
+            reason = "AI world actions are disabled";
+            return false;
+        }
+
+        if (Game1.eventUp || Game1.currentLocation == null || npc.currentLocation != Game1.currentLocation)
+        {
+            reason = "world action cannot run in the current scene";
+            return false;
+        }
+
+        var state = this.memory.GetState(npc);
+        if (state == null)
+        {
+            reason = "there is no NPC state yet";
+            return false;
+        }
+
+        bool atLeastFamiliar = state.InteractionComfortTier is "Familiar" or "Friendly" or "Trusted" or "Intimate";
+        bool atLeastFriendly = state.InteractionComfortTier is "Friendly" or "Trusted" or "Intimate";
+        if (requireFriendly ? !atLeastFriendly : !atLeastFamiliar)
+        {
+            reason = $"{actionName} requires a closer relationship";
+            return false;
+        }
+
+        return true;
+    }
+
+    private SObject CreateSmallGift()
+    {
+        string[] giftIds =
+        [
+            "(O)216",
+            "(O)223",
+            "(O)395"
+        ];
+        string itemId = giftIds[this.random.Next(giftIds.Length)];
+        return ItemRegistry.Create<SObject>(itemId);
+    }
+
+    private string BuildWorldActionReason(string requestedReason, string fallback)
+    {
+        return string.IsNullOrWhiteSpace(requestedReason)
+            ? fallback
+            : requestedReason.Trim();
+    }
+
+    private void MarkStateAfterWorldAction(LivingNpcState state, string lastInteraction)
+    {
+        state.LastInteraction = lastInteraction;
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+    }
+
+    private void TryUpdatePendingWalks()
+    {
+        if (this.pendingWalks.Count == 0)
+        {
+            return;
+        }
+
+        if (Game1.eventUp)
+        {
+            foreach (var walk in this.pendingWalks.ToList())
+            {
+                this.TryFindNpcInCurrentLocation(walk.NpcName, out NPC? npc);
+                this.StopWalkTogether(walk, npc);
+            }
+
+            return;
+        }
+
+        foreach (var walk in this.pendingWalks.ToList())
+        {
+            NPC? npc = null;
+            if (walk.TotalDays != Game1.Date.TotalDays
+                || Game1.timeOfDay >= walk.EndTimeOfDay
+                || !this.TryFindNpcInCurrentLocation(walk.NpcName, out npc)
+                || npc == null
+                || npc.currentLocation?.Name != walk.LocationName)
+            {
+                this.StopWalkTogether(walk, npc);
+                continue;
+            }
+
+            if (Game1.activeClickableMenu != null)
+            {
+                continue;
+            }
+
+            if (Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles + 4)
+            {
+                this.StopWalkTogether(walk, npc);
+                continue;
+            }
+
+            if (npc.controller != null && walk.LastAssignedController != null && npc.controller != walk.LastAssignedController)
+            {
+                this.StopWalkTogether(walk, npc);
+                continue;
+            }
+
+            if (npc.controller != null && walk.LastAssignedController == null)
+            {
+                this.StopWalkTogether(walk, npc);
+                continue;
+            }
+
+            if (Vector2.Distance(npc.Tile, Game1.player.Tile) <= 1.5f)
+            {
+                this.TryFacePlayer(npc);
+                continue;
+            }
+
+            if (walk.LastPlayerTile == Game1.player.TilePoint && npc.controller != null)
+            {
+                continue;
+            }
+
+            if (!this.TryFindApproachTile(npc, out Point targetTile))
+            {
+                continue;
+            }
+
+            npc.controller = new PathFindController(
+                npc,
+                Game1.currentLocation,
+                targetTile,
+                this.GetDirectionTowardPlayerFromTile(targetTile)
+            );
+            walk.LastPlayerTile = Game1.player.TilePoint;
+            walk.LastAssignedController = npc.controller;
+        }
+    }
+
+    private void StopWalkTogether(PendingWalkTogether walk, NPC? npc)
+    {
+        if (npc != null && npc.controller == walk.LastAssignedController)
+        {
+            npc.controller = null;
+            npc.Halt();
+        }
+
+        this.pendingWalks.Remove(walk);
     }
 
     private void TryRecordConversationStart(ButtonPressedEventArgs e)
@@ -930,3 +1286,30 @@ internal sealed record PendingAmbientRemark(
     string LocationName,
     Vector2 OriginTile
 );
+
+internal sealed class PendingWalkTogether
+{
+    public PendingWalkTogether(
+        string npcName,
+        int totalDays,
+        string locationName,
+        int endTimeOfDay,
+        Point lastPlayerTile,
+        PathFindController? lastAssignedController
+    )
+    {
+        this.NpcName = npcName;
+        this.TotalDays = totalDays;
+        this.LocationName = locationName;
+        this.EndTimeOfDay = endTimeOfDay;
+        this.LastPlayerTile = lastPlayerTile;
+        this.LastAssignedController = lastAssignedController;
+    }
+
+    public string NpcName { get; }
+    public int TotalDays { get; }
+    public string LocationName { get; }
+    public int EndTimeOfDay { get; }
+    public Point LastPlayerTile { get; set; }
+    public PathFindController? LastAssignedController { get; set; }
+}

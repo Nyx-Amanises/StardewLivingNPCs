@@ -22,10 +22,14 @@ internal sealed class ConversationAnalysis
     [JsonProperty("ambientFollowUp")]
     public ConversationAmbientFollowUp AmbientFollowUp { get; set; } = new();
 
+    [JsonProperty("actions")]
+    public List<ConversationWorldActionRequest> Actions { get; set; } = new();
+
     public bool HasContent => this.RapportDelta > 0
         || this.Memories.Count > 0
         || this.EndConversation
-        || this.AmbientFollowUp.HasContent;
+        || this.AmbientFollowUp.HasContent
+        || this.Actions.Count > 0;
 
     public string ToJson()
     {
@@ -72,6 +76,20 @@ internal sealed class ConversationAnalysis
             analysis.AmbientFollowUp ??= new ConversationAmbientFollowUp();
             analysis.AmbientFollowUp.Text = analysis.AmbientFollowUp.Text?.Trim() ?? string.Empty;
             analysis.AmbientFollowUp.DelayMinutes = Math.Clamp(analysis.AmbientFollowUp.DelayMinutes, 0, 120);
+            analysis.Actions = analysis.Actions
+                .Where(action => action != null)
+                .Select(action =>
+                {
+                    action.Type = NormalizeActionType(action.Type);
+                    action.Reason = action.Reason?.Trim() ?? string.Empty;
+                    action.Amount = Math.Clamp(action.Amount, 0, 250);
+                    action.TileCount = Math.Clamp(action.TileCount, 0, 12);
+                    action.DurationMinutes = Math.Clamp(action.DurationMinutes, 0, 20);
+                    return action;
+                })
+                .Where(action => action.Type != "none")
+                .Take(1)
+                .ToList();
             return analysis;
         }
         catch
@@ -89,6 +107,18 @@ internal sealed class ConversationAnalysis
             "boundary" => "boundary",
             "relationship" => "relationship",
             _ => "fact"
+        };
+    }
+
+    private static string NormalizeActionType(string type)
+    {
+        return type?.Trim().ToLowerInvariant() switch
+        {
+            "give_small_gift" => "give_small_gift",
+            "give_money" => "give_money",
+            "water_nearby_crops" => "water_nearby_crops",
+            "walk_together" => "walk_together",
+            _ => "none"
         };
     }
 }
@@ -114,4 +144,22 @@ internal sealed class ConversationAmbientFollowUp
     public int DelayMinutes { get; set; }
 
     public bool HasContent => !string.IsNullOrWhiteSpace(this.Text);
+}
+
+internal sealed class ConversationWorldActionRequest
+{
+    [JsonProperty("type")]
+    public string Type { get; set; } = "none";
+
+    [JsonProperty("amount")]
+    public int Amount { get; set; }
+
+    [JsonProperty("tileCount")]
+    public int TileCount { get; set; }
+
+    [JsonProperty("durationMinutes")]
+    public int DurationMinutes { get; set; }
+
+    [JsonProperty("reason")]
+    public string Reason { get; set; } = string.Empty;
 }

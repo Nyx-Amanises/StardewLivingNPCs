@@ -138,6 +138,19 @@ internal sealed class BehaviorMemory
         return entry;
     }
 
+    public BehaviorMemoryEntry RecordNpcWorldAction(NPC npc, string action, string reason, int maxEntriesPerNpc)
+    {
+        var entry = this.CreateEntry(
+            npc,
+            "NpcAction",
+            action,
+            reason
+        );
+
+        this.AddEntry(entry, maxEntriesPerNpc);
+        return entry;
+    }
+
     public ValleyTalkExchangeResult RecordValleyTalkExchange(
         NPC npc,
         string playerText,
@@ -208,7 +221,8 @@ internal sealed class BehaviorMemory
             analysis.RapportDelta,
             analysis.EndConversation,
             analysis.AmbientFollowUp.Text,
-            analysis.AmbientFollowUp.DelayMinutes
+            analysis.AmbientFollowUp.DelayMinutes,
+            analysis.Actions
         );
     }
 
@@ -1144,6 +1158,7 @@ internal sealed class BehaviorMemory
             "gift" => "gift",
             "event" => "event",
             "longtermmemory" => "long-term memory",
+            "npcaction" => "npc action",
             _ => "behavior"
         };
 
@@ -1158,6 +1173,7 @@ internal sealed class BehaviorMemory
             "gift" => "[礼物]",
             "event" => "[事件]",
             "longtermmemory" => "[长期记忆]",
+            "npcaction" => "[NPC动作]",
             _ => "[行为]"
         };
     }
@@ -1190,6 +1206,20 @@ internal sealed class BehaviorMemory
                     return memory;
                 })
                 .Take(4)
+                .ToList();
+            analysis.Actions = analysis.Actions
+                .Where(action => action != null)
+                .Select(action =>
+                {
+                    action.Type = NormalizeWorldActionType(action.Type);
+                    action.Reason = action.Reason?.Trim() ?? string.Empty;
+                    action.Amount = System.Math.Clamp(action.Amount, 0, 250);
+                    action.TileCount = System.Math.Clamp(action.TileCount, 0, 12);
+                    action.DurationMinutes = System.Math.Clamp(action.DurationMinutes, 0, 20);
+                    return action;
+                })
+                .Where(action => action.Type != "none")
+                .Take(1)
                 .ToList();
             return analysis;
         }
@@ -1321,6 +1351,18 @@ internal sealed class BehaviorMemory
         };
     }
 
+    private static string NormalizeWorldActionType(string type)
+    {
+        return type?.Trim().ToLowerInvariant() switch
+        {
+            "give_small_gift" => "give_small_gift",
+            "give_money" => "give_money",
+            "water_nearby_crops" => "water_nearby_crops",
+            "walk_together" => "walk_together",
+            _ => "none"
+        };
+    }
+
     private static string NormalizeMemorySummary(string summary)
     {
         return Regex.Replace(summary ?? string.Empty, @"\s+", " ").Trim().ToLowerInvariant();
@@ -1393,7 +1435,7 @@ internal sealed class BehaviorMemory
         {
             int count = pair.Value.Count(entry =>
                 entry.TotalDays == Game1.Date.TotalDays
-                && !string.Equals(entry.Kind, "Conversation", System.StringComparison.OrdinalIgnoreCase)
+                && string.Equals(entry.Kind, "Behavior", System.StringComparison.OrdinalIgnoreCase)
             );
             if (count > 0)
             {
@@ -1437,6 +1479,7 @@ internal sealed class ValleyTalkExchangeAnalysis
     public int RapportDelta { get; set; }
     public bool EndConversation { get; set; }
     public ValleyTalkAmbientFollowUp AmbientFollowUp { get; set; } = new();
+    public List<ValleyTalkWorldActionRequest> Actions { get; set; } = new();
     public List<ValleyTalkMemoryCandidate> Memories { get; set; } = new();
 }
 
@@ -1465,18 +1508,29 @@ internal sealed class ValleyTalkAmbientFollowUp
     public int DelayMinutes { get; set; }
 }
 
+internal sealed class ValleyTalkWorldActionRequest
+{
+    public string Type { get; set; } = "none";
+    public int Amount { get; set; }
+    public int TileCount { get; set; }
+    public int DurationMinutes { get; set; }
+    public string Reason { get; set; } = string.Empty;
+}
+
 internal sealed record ValleyTalkExchangeResult(
     int LongTermMemoriesStored,
     int AppliedFriendshipDelta,
     int RequestedFriendshipDelta,
     bool EndConversation,
     string AmbientFollowUpText,
-    int AmbientFollowUpDelayMinutes
+    int AmbientFollowUpDelayMinutes,
+    IReadOnlyList<ValleyTalkWorldActionRequest> Actions
 )
 {
     public bool HasEffect => this.LongTermMemoriesStored > 0
         || this.AppliedFriendshipDelta > 0
-        || !string.IsNullOrWhiteSpace(this.AmbientFollowUpText);
+        || !string.IsNullOrWhiteSpace(this.AmbientFollowUpText)
+        || this.Actions.Count > 0;
 }
 
 internal sealed class LivingNpcState
@@ -1509,6 +1563,10 @@ internal sealed class LivingNpcState
     public List<LongTermMemoryFact> LongTermMemories { get; set; } = new();
     public int AiFriendshipGainedToday { get; set; }
     public int LastAiFriendshipTotalDays { get; set; } = -1;
+    public int LastAiSmallGiftTotalDays { get; set; } = -1;
+    public int LastAiMoneyGiftTotalDays { get; set; } = -1;
+    public int LastAiFarmHelpTotalDays { get; set; } = -1;
+    public int LastAiWalkTogetherTotalDays { get; set; } = -1;
     public string LastSceneContext { get; set; } = "none";
     public string LastSceneInfluence { get; set; } = "none";
     public string LastSceneInfluenceReason { get; set; } = "none";
@@ -1891,6 +1949,10 @@ internal sealed class LivingNpcState
                 .ToList(),
             AiFriendshipGainedToday = this.AiFriendshipGainedToday,
             LastAiFriendshipTotalDays = this.LastAiFriendshipTotalDays,
+            LastAiSmallGiftTotalDays = this.LastAiSmallGiftTotalDays,
+            LastAiMoneyGiftTotalDays = this.LastAiMoneyGiftTotalDays,
+            LastAiFarmHelpTotalDays = this.LastAiFarmHelpTotalDays,
+            LastAiWalkTogetherTotalDays = this.LastAiWalkTogetherTotalDays,
             LastSceneContext = this.LastSceneContext,
             LastSceneInfluence = this.LastSceneInfluence,
             LastSceneInfluenceReason = this.LastSceneInfluenceReason,
