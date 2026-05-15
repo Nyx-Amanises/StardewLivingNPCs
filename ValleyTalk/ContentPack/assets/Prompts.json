@@ -214,6 +214,7 @@
             "instructionsEmotion": "{{i18n:instructionsEmotion}}",
             "instructionsSingleLine": "{{i18n:instructionsSingleLine}}",
             "instructionsResponses": "{{i18n:instructionsResponses}}",
+            "instructionsLivingNpcMetadata": "{{i18n:instructionsLivingNpcMetadata}}",
             "instructionsTranslate": "{{i18n:instructionsTranslate}}",
             "responseStart": "{{i18n:responseStart}}",
             "generalMale": "{{i18n:generalMale}}",

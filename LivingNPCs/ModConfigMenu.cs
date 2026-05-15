@@ -143,6 +143,33 @@ internal static class ModConfigMenu
             setValue: value => config.EnableConversationMemory = value
         );
 
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "AI 对话额外好感",
+            tooltip: () => "让 AI 对话按聊天质量在原版对话好感之外额外增加好感，每个 NPC 每天受上限约束。",
+            getValue: () => config.EnableAiDialogueFriendship,
+            setValue: value => config.EnableAiDialogueFriendship = value
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "AI 对话每日额外好感上限",
+            tooltip: () => "每个 NPC 每天最多通过 AI 对话额外获得多少好感。原版对话好感不计入这个上限。",
+            getValue: () => config.MaxAiDialogueFriendshipPerNpcPerDay,
+            setValue: value => config.MaxAiDialogueFriendshipPerNpcPerDay = value,
+            min: 0,
+            max: 30,
+            interval: 1
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "对话后续气泡",
+            tooltip: () => "允许 AI 对话在合适时留下一个短暂的后续头顶气泡，例如约好同行后边走边补上一句。",
+            getValue: () => config.EnableDialogueFollowUps,
+            setValue: value => config.EnableDialogueFollowUps = value
+        );
+
         configMenu.AddSectionTitle(
             mod: manifest,
             text: () => "NPC 状态"

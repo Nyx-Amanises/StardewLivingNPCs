@@ -50,8 +50,8 @@ public sealed class LivingNPCsApi
         this.engine = engine;
     }
 
-    public bool RecordValleyTalkExchange(string npcName, string npcDisplayName, string playerText, string npcResponse)
+    public bool RecordValleyTalkExchange(string npcName, string npcDisplayName, string playerText, string npcResponse, string analysisJson)
     {
-        return this.engine?.RecordValleyTalkExchange(npcName, npcDisplayName, playerText, npcResponse) == true;
+        return this.engine?.RecordValleyTalkExchange(npcName, npcDisplayName, playerText, npcResponse, analysisJson) == true;
     }
 }

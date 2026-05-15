@@ -29,6 +29,7 @@ public class Character
     private WorldDate _historyCutoffCacheDate;
 
     internal IEnumerable<Tuple<StardewTime,IHistory>> EventHistory => eventHistory.AllTypes;
+    internal ConversationAnalysis LastConversationAnalysis { get; private set; } = ConversationAnalysis.Empty;
 
     public NPC StardewNpc { get; internal set; }
     public List<string> ValidPortraits { get; internal set; }
@@ -365,6 +366,7 @@ public class Character
     
     public async Task<string[]> CreateBasicDialogue(DialogueContext context)
     {
+        this.LastConversationAnalysis = ConversationAnalysis.Empty;
         var totalWatch = Stopwatch.StartNew();
         var promptInitWatch = Stopwatch.StartNew();
         string[] results = Array.Empty<string>();
@@ -449,11 +451,16 @@ public class Character
                         inferenceMilliseconds += inferenceWatch.ElapsedMilliseconds;
                     }
                     responseCharacters = result.Text?.Length ?? 0;
+                    this.LastConversationAnalysis = ConversationAnalysis.Parse(result.Text);
 
                     if (result.IsSuccess)
                     {
                         // Apply relaxed validation if this is the second retry
                         resultsInternal = ProcessLines(result.Text, retryCount > 2).ToArray();
+                        if (this.LastConversationAnalysis.EndConversation && resultsInternal.Length > 1)
+                        {
+                            resultsInternal = resultsInternal.Take(1).ToArray();
+                        }
                     }
                     else
                     {

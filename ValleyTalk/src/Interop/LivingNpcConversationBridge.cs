@@ -1,5 +1,4 @@
 using System;
-using System.Reflection;
 using StardewValley;
 
 namespace ValleyTalk;
@@ -9,10 +8,9 @@ internal static class LivingNpcConversationBridge
     private const string LivingNpcUniqueId = "Codex.LivingNPCs";
 
     private static bool initialized;
-    private static object api;
-    private static MethodInfo recordMethod;
+    private static ILivingNPCsApi api;
 
-    public static void RecordExchange(NPC npc, string playerText, string npcResponse)
+    public static void RecordExchange(NPC npc, string playerText, string npcResponse, string analysisJson)
     {
         if (npc == null || string.IsNullOrWhiteSpace(playerText))
         {
@@ -20,20 +18,20 @@ internal static class LivingNpcConversationBridge
         }
 
         TryInitialize();
-        if (api == null || recordMethod == null)
+        if (api == null)
         {
             return;
         }
 
         try
         {
-            recordMethod.Invoke(api, new object[]
-            {
+            api.RecordValleyTalkExchange(
                 npc.Name,
                 npc.displayName,
                 playerText,
-                npcResponse ?? string.Empty
-            });
+                npcResponse ?? string.Empty,
+                analysisJson ?? string.Empty
+            );
         }
         catch (Exception ex)
         {
@@ -49,7 +47,6 @@ internal static class LivingNpcConversationBridge
         }
 
         initialized = true;
-        api = ModEntry.SHelper.ModRegistry.GetApi<object>(LivingNpcUniqueId);
-        recordMethod = api?.GetType().GetMethod("RecordValleyTalkExchange", BindingFlags.Instance | BindingFlags.Public);
+        api = ModEntry.SHelper.ModRegistry.GetApi<ILivingNPCsApi>(LivingNpcUniqueId);
     }
 }

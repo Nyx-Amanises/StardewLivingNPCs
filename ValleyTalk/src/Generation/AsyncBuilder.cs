@@ -241,14 +241,16 @@ public class AsyncBuilder
         var conversation = _currentConversation?.ToList() ?? new List<ConversationElement>();
         var newDialogueTask = DialogueBuilder.Instance.GenerateResponse(npc, conversation, true);
         var newDialogue = await newDialogueTask;
+        string playerText = conversation.LastOrDefault(line => line.IsPlayerLine)?.Text ?? string.Empty;
+        newDialogue = ConversationTextPostProcessor.NormalizeImmediateNicknameReply(newDialogue, playerText);
         if (string.IsNullOrWhiteSpace(newDialogue))
         {
             ModEntry.SMonitor?.Log("Generated dialogue is empty. Returning fallback dialogue.", StardewModdingAPI.LogLevel.Warn);
             newDialogue = "...";
         }
         DialogueBuilder.Instance.AddConversation(npc, newDialogue);
-        string playerText = conversation.LastOrDefault(line => line.IsPlayerLine)?.Text ?? string.Empty;
-        LivingNpcConversationBridge.RecordExchange(npc, playerText, newDialogue);
+        var analysis = DialogueBuilder.Instance.GetCharacter(npc).LastConversationAnalysis;
+        LivingNpcConversationBridge.RecordExchange(npc, playerText, newDialogue, analysis.ToJson());
 
         // Create a new dialogue with the response and add it to the NPC's dialogue stack
         var dialogueKey = string.IsNullOrWhiteSpace(_currentDialogueKey)

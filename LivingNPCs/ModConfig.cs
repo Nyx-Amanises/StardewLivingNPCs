@@ -14,6 +14,9 @@ internal sealed class ModConfig
     public int MaxMemoryEntriesPerNpc { get; set; } = 20;
     public int PromptMemoryEntries { get; set; } = 4;
     public bool EnableConversationMemory { get; set; } = true;
+    public bool EnableAiDialogueFriendship { get; set; } = true;
+    public int MaxAiDialogueFriendshipPerNpcPerDay { get; set; } = 30;
+    public bool EnableDialogueFollowUps { get; set; } = true;
     public bool EnableNpcState { get; set; } = true;
     public int NpcStateDailyDecay { get; set; } = 12;
     public bool EnablePassiveBehaviors { get; set; } = true;
@@ -55,6 +58,9 @@ internal sealed class ModConfig
         this.MaxMemoryEntriesPerNpc = defaults.MaxMemoryEntriesPerNpc;
         this.PromptMemoryEntries = defaults.PromptMemoryEntries;
         this.EnableConversationMemory = defaults.EnableConversationMemory;
+        this.EnableAiDialogueFriendship = defaults.EnableAiDialogueFriendship;
+        this.MaxAiDialogueFriendshipPerNpcPerDay = defaults.MaxAiDialogueFriendshipPerNpcPerDay;
+        this.EnableDialogueFollowUps = defaults.EnableDialogueFollowUps;
         this.EnableNpcState = defaults.EnableNpcState;
         this.NpcStateDailyDecay = defaults.NpcStateDailyDecay;
         this.EnablePassiveBehaviors = defaults.EnablePassiveBehaviors;

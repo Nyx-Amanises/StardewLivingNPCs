@@ -24,6 +24,7 @@ internal sealed class BehaviorEngine
     private readonly IBehaviorPlanner planner;
     private readonly AiBehaviorClient aiBehaviorClient;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
+    private readonly List<PendingAmbientRemark> pendingAmbientRemarks = new();
     private readonly Dictionary<string, int> lastConversationMemoryTimeByNpc = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
 
@@ -80,6 +81,7 @@ internal sealed class BehaviorEngine
         this.memory.ResetDaily();
         this.valleyTalkBridge.ClearAll();
         this.pendingRequests.Clear();
+        this.pendingAmbientRemarks.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
     }
 
@@ -88,6 +90,7 @@ internal sealed class BehaviorEngine
         this.memory.ResetDaily();
         this.valleyTalkBridge.ClearAll();
         this.pendingRequests.Clear();
+        this.pendingAmbientRemarks.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
     }
 
@@ -149,7 +152,7 @@ internal sealed class BehaviorEngine
 
     private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
     {
-        if (!Context.IsWorldReady || this.pendingRequests.Count == 0)
+        if (!Context.IsWorldReady)
         {
             return;
         }
@@ -171,6 +174,8 @@ internal sealed class BehaviorEngine
 
             this.TryExecute(npc, intent, request.Source);
         }
+
+        this.TryShowPendingAmbientRemarks();
     }
 
     private bool TryFindNearestNpc(out NPC? nearest)
@@ -245,7 +250,7 @@ internal sealed class BehaviorEngine
         return npc != null;
     }
 
-    public bool RecordValleyTalkExchange(string npcName, string npcDisplayName, string playerText, string npcResponse)
+    public bool RecordValleyTalkExchange(string npcName, string npcDisplayName, string playerText, string npcResponse, string analysisJson)
     {
         if (!this.config.EnableConversationMemory || string.IsNullOrWhiteSpace(playerText))
         {
@@ -257,14 +262,98 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        bool recorded = this.memory.RecordValleyTalkExchange(npc, playerText, npcResponse, this.config.MaxMemoryEntriesPerNpc);
-        if (!recorded)
+        var result = this.memory.RecordValleyTalkExchange(
+            npc,
+            playerText,
+            npcResponse,
+            analysisJson,
+            this.config.MaxMemoryEntriesPerNpc,
+            this.config.EnableAiDialogueFriendship ? this.config.MaxAiDialogueFriendshipPerNpcPerDay : 0
+        );
+
+        if (!result.HasEffect)
         {
             return false;
         }
 
-        this.PushInteractionContext(npc, $"Recorded ValleyTalk exchange memory for {npc.Name}.");
+        if (result.AppliedFriendshipDelta > 0)
+        {
+            Game1.player.changeFriendship(result.AppliedFriendshipDelta, npc);
+        }
+
+        if (this.config.EnableDialogueFollowUps && !string.IsNullOrWhiteSpace(result.AmbientFollowUpText))
+        {
+            this.QueueAmbientRemark(npc, result.AmbientFollowUpText, result.AmbientFollowUpDelayMinutes);
+        }
+
+        this.PushInteractionContext(
+            npc,
+            $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, +{result.AppliedFriendshipDelta} extra friendship."
+        );
         return true;
+    }
+
+    private void QueueAmbientRemark(NPC npc, string text, int delayMinutes)
+    {
+        this.pendingAmbientRemarks.RemoveAll(remark => remark.NpcName == npc.Name);
+        this.pendingAmbientRemarks.Add(new PendingAmbientRemark(
+            npc.Name,
+            text.Trim(),
+            Game1.Date.TotalDays,
+            this.AddMinutesToTime(Game1.timeOfDay, System.Math.Clamp(delayMinutes, 0, 120)),
+            npc.currentLocation?.Name ?? string.Empty,
+            npc.Tile
+        ));
+    }
+
+    private void TryShowPendingAmbientRemarks()
+    {
+        if (!this.config.EnableDialogueFollowUps
+            || this.pendingAmbientRemarks.Count == 0
+            || Game1.activeClickableMenu != null
+            || Game1.eventUp)
+        {
+            return;
+        }
+
+        foreach (var remark in this.pendingAmbientRemarks.ToList())
+        {
+            if (remark.TotalDays != Game1.Date.TotalDays)
+            {
+                this.pendingAmbientRemarks.Remove(remark);
+                continue;
+            }
+
+            if (Game1.timeOfDay < remark.NotBeforeTimeOfDay)
+            {
+                continue;
+            }
+
+            if (!this.TryFindNpcInCurrentLocation(remark.NpcName, out NPC? npc)
+                || npc == null
+                || npc.currentLocation?.Name != remark.LocationName
+                || Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles
+                || npc.Tile == remark.OriginTile)
+            {
+                continue;
+            }
+
+            npc.showTextAboveHead(remark.Text);
+            this.pendingAmbientRemarks.Remove(remark);
+
+            if (this.config.Debug)
+            {
+                this.monitor.Log($"Displayed ambient dialogue follow-up for {npc.Name}: {remark.Text}", LogLevel.Debug);
+            }
+        }
+    }
+
+    private int AddMinutesToTime(int timeOfDay, int minutes)
+    {
+        int hours = timeOfDay / 100;
+        int mins = timeOfDay % 100;
+        int totalMinutes = (hours * 60) + mins + minutes;
+        return ((totalMinutes / 60) * 100) + (totalMinutes % 60);
     }
 
     private void TryRecordConversationStart(ButtonPressedEventArgs e)
@@ -833,3 +922,11 @@ internal sealed class BehaviorEngine
 }
 
 internal sealed record GiftTasteLabels(string DebugLabel, string PromptLabel);
+internal sealed record PendingAmbientRemark(
+    string NpcName,
+    string Text,
+    int TotalDays,
+    int NotBeforeTimeOfDay,
+    string LocationName,
+    Vector2 OriginTile
+);
