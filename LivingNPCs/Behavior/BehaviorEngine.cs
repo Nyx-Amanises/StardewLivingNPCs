@@ -23,6 +23,7 @@ internal sealed class BehaviorEngine
     private readonly Random random = new();
     private readonly BehaviorMemory memory = new();
     private readonly ValleyTalkPromptBridge valleyTalkBridge;
+    private readonly GiftSelector giftSelector;
     private readonly IBehaviorPlanner planner;
     private readonly AiBehaviorClient aiBehaviorClient;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
@@ -37,6 +38,7 @@ internal sealed class BehaviorEngine
         this.monitor = monitor;
         this.config = config;
         this.valleyTalkBridge = new ValleyTalkPromptBridge(helper, monitor, config);
+        this.giftSelector = new GiftSelector(this.random);
         this.planner = new AiBehaviorPlanner(new RuleBasedBehaviorPlanner(config, this.random, this.memory));
         this.aiBehaviorClient = new AiBehaviorClient(config, monitor);
     }
@@ -294,7 +296,7 @@ internal sealed class BehaviorEngine
 
         if (this.config.EnableAiWorldActions && result.Actions.Count > 0)
         {
-            this.TryExecuteConversationActions(npc, result.Actions);
+            this.TryExecuteConversationActions(npc, result.Actions, playerText, npcResponse);
         }
 
         this.PushInteractionContext(
@@ -367,13 +369,18 @@ internal sealed class BehaviorEngine
         return ((totalMinutes / 60) * 100) + (totalMinutes % 60);
     }
 
-    private void TryExecuteConversationActions(NPC npc, IReadOnlyList<ValleyTalkWorldActionRequest> actions)
+    private void TryExecuteConversationActions(
+        NPC npc,
+        IReadOnlyList<ValleyTalkWorldActionRequest> actions,
+        string playerText,
+        string npcResponse
+    )
     {
         foreach (var action in actions.Take(1))
         {
             bool executed = action.Type switch
             {
-                "give_small_gift" => this.TryGiveSmallGift(npc, action, out _),
+                "give_small_gift" => this.TryGiveSmallGift(npc, action, playerText, npcResponse, out _),
                 "give_money" => this.TryGiveMoney(npc, action, out _),
                 "water_nearby_crops" => this.TryWaterNearbyCrops(npc, action, out _),
                 "walk_together" => this.TryStartWalkTogether(npc, action, out _),
@@ -395,7 +402,13 @@ internal sealed class BehaviorEngine
         }
     }
 
-    private bool TryGiveSmallGift(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
+    private bool TryGiveSmallGift(
+        NPC npc,
+        ValleyTalkWorldActionRequest action,
+        string playerText,
+        string npcResponse,
+        out string reason
+    )
     {
         reason = string.Empty;
         if (!this.CanUseWorldAction(npc, "small_gift", requireFriendly: false, out reason))
@@ -410,7 +423,8 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        SObject gift = this.CreateSmallGift();
+        GiftSelection selection = this.giftSelector.Choose(npc, state, playerText, npcResponse);
+        SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
         if (!Game1.player.addItemToInventoryBool(gift))
         {
             reason = "player inventory is full";
@@ -421,10 +435,21 @@ internal sealed class BehaviorEngine
         this.memory.RecordNpcWorldAction(
             npc,
             "GaveSmallGift",
-            this.BuildWorldActionReason(action.Reason, $"they gave the farmer {gift.DisplayName} after an AI conversation"),
+            this.BuildWorldActionReason(
+                action.Reason,
+                $"they gave the farmer {gift.DisplayName} after an AI conversation; selection basis: {selection.Reason}"
+            ),
             this.config.MaxMemoryEntriesPerNpc
         );
         this.MarkStateAfterWorldAction(state, "they gave the farmer a small gift");
+        if (this.config.Debug)
+        {
+            this.monitor.Log(
+                $"Selected AI gift for {npc.Name}: {selection.DebugName} ({selection.ItemId}); {selection.Reason}.",
+                LogLevel.Debug
+            );
+        }
+
         this.ShowFeedback($"LivingNPCs：{npc.displayName} 给了你 {gift.DisplayName}。");
         return true;
     }
@@ -592,18 +617,6 @@ internal sealed class BehaviorEngine
         }
 
         return true;
-    }
-
-    private SObject CreateSmallGift()
-    {
-        string[] giftIds =
-        [
-            "(O)216",
-            "(O)223",
-            "(O)395"
-        ];
-        string itemId = giftIds[this.random.Next(giftIds.Length)];
-        return ItemRegistry.Create<SObject>(itemId);
     }
 
     private string BuildWorldActionReason(string requestedReason, string fallback)
