@@ -139,7 +139,14 @@ internal sealed class BehaviorEngine
 
     private void OnTimeChanged(object? sender, TimeChangedEventArgs e)
     {
-        if (!Context.IsWorldReady || !this.config.EnablePassiveBehaviors || Game1.activeClickableMenu != null)
+        if (!Context.IsWorldReady)
+        {
+            return;
+        }
+
+        this.TryUpdateCommitmentTimers();
+
+        if (!this.config.EnablePassiveBehaviors || Game1.activeClickableMenu != null)
         {
             return;
         }
@@ -184,6 +191,7 @@ internal sealed class BehaviorEngine
 
         this.TryShowPendingAmbientRemarks();
         this.TryUpdatePendingWalks();
+        this.TryTriggerCommitmentArrivals();
     }
 
     private bool TryFindNearestNpc(out NPC? nearest)
@@ -276,6 +284,7 @@ internal sealed class BehaviorEngine
             npcResponse,
             analysisJson,
             this.config.MaxMemoryEntriesPerNpc,
+            this.config.EnableCommitments ? this.config.MaxPendingCommitmentsPerNpc : 0,
             this.config.EnableAiDialogueFriendship ? this.config.MaxAiDialogueFriendshipPerNpcPerDay : 0
         );
 
@@ -301,7 +310,7 @@ internal sealed class BehaviorEngine
 
         this.PushInteractionContext(
             npc,
-            $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, {result.PlayerPreferencesStored} player preferences, +{result.AppliedFriendshipDelta} extra friendship."
+            $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, {result.PlayerPreferencesStored} player preferences, {result.CommitmentsStored} commitments, +{result.AppliedFriendshipDelta} extra friendship."
         );
         return true;
     }
@@ -385,6 +394,9 @@ internal sealed class BehaviorEngine
                 "give_money" => this.TryGiveMoney(npc, action, out _),
                 "water_nearby_crops" => this.TryWaterNearbyCrops(npc, action, out _),
                 "walk_together" => this.TryStartWalkTogether(npc, action, out _),
+                "escort_to_location" => this.TryStartEscortToLocation(npc, action, out _),
+                "festival_interaction" => this.TryFestivalInteraction(npc, action, out _),
+                "assist_quest" => this.TryAssistQuest(npc, action, out _),
                 _ => false
             };
 
@@ -397,6 +409,9 @@ internal sealed class BehaviorEngine
                     "give_money" => "money request rejected",
                     "water_nearby_crops" => "watering request rejected",
                     "walk_together" => "walk request rejected",
+                    "escort_to_location" => "escort request rejected",
+                    "festival_interaction" => "festival interaction request rejected",
+                    "assist_quest" => "quest assist request rejected",
                     _ => "unknown request rejected"
                 };
                 this.monitor.Log($"Skipped AI world action {action.Type} for {npc.Name}: {reason}.", LogLevel.Debug);
@@ -674,7 +689,120 @@ internal sealed class BehaviorEngine
         return true;
     }
 
-    private bool CanUseWorldAction(NPC npc, string actionName, bool requireFriendly, out string reason)
+    private bool TryStartEscortToLocation(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
+    {
+        reason = string.Empty;
+        if (!this.config.AllowAiEscortToLocation)
+        {
+            reason = "escort to location is disabled";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(action.TargetLocation))
+        {
+            reason = "escort target location is missing";
+            return false;
+        }
+
+        string targetLocation = BehaviorMemory.NormalizeCommitmentLocation(action.TargetLocation, string.Empty);
+
+        if (!this.TryStartWalkTogether(npc, action, out reason))
+        {
+            return false;
+        }
+
+        var state = this.memory.GetState(npc);
+        if (state != null)
+        {
+            this.memory.RecordNpcWorldAction(
+                npc,
+                "EscortedTowardLocation",
+                this.BuildWorldActionReason(action.Reason, $"they agreed to accompany the farmer toward {targetLocation} within the current safe path limits"),
+                this.config.MaxMemoryEntriesPerNpc
+            );
+            this.MarkStateAfterWorldAction(state, "they agreed to accompany the farmer toward a place");
+        }
+
+        this.ShowFeedback($"LivingNPCs：{npc.displayName} 会先陪你往约定地点走一段。");
+        return true;
+    }
+
+    private bool TryFestivalInteraction(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
+    {
+        reason = string.Empty;
+        if (!this.config.AllowAiFestivalInteractions)
+        {
+            reason = "festival interactions are disabled";
+            return false;
+        }
+
+        if (!this.CanUseWorldAction(npc, "festival_interaction", requireFriendly: false, out reason, allowDuringEvents: true))
+        {
+            return false;
+        }
+
+        if (!Game1.eventUp)
+        {
+            reason = "there is no active event";
+            return false;
+        }
+
+        var state = this.memory.GetState(npc);
+        npc.doEmote(20);
+        if (state != null)
+        {
+            this.memory.RecordNpcWorldAction(
+                npc,
+                "FestivalInteraction",
+                this.BuildWorldActionReason(action.Reason, "they shared a light special interaction during an event scene"),
+                this.config.MaxMemoryEntriesPerNpc
+            );
+            this.MarkStateAfterWorldAction(state, "they shared a small festival interaction");
+        }
+
+        return true;
+    }
+
+    private bool TryAssistQuest(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
+    {
+        reason = string.Empty;
+        if (!this.config.AllowAiQuestAssists)
+        {
+            reason = "quest assists are disabled";
+            return false;
+        }
+
+        if (!this.CanUseWorldAction(npc, "assist_quest", requireFriendly: true, out reason))
+        {
+            return false;
+        }
+
+        if (Game1.player?.questLog == null || Game1.player.questLog.Count == 0)
+        {
+            reason = "the farmer has no active quest";
+            return false;
+        }
+
+        var state = this.memory.GetState(npc);
+        npc.doEmote(16);
+        if (state != null)
+        {
+            string questCue = string.IsNullOrWhiteSpace(action.QuestHint)
+                ? "an active task"
+                : action.QuestHint.Trim();
+            this.memory.RecordNpcWorldAction(
+                npc,
+                "AssistedQuest",
+                this.BuildWorldActionReason(action.Reason, $"they offered light non-completing help around {questCue}"),
+                this.config.MaxMemoryEntriesPerNpc
+            );
+            this.MarkStateAfterWorldAction(state, "they offered light task help");
+        }
+
+        return true;
+    }
+
+    private bool CanUseWorldAction(NPC npc, string actionName, bool requireFriendly, out string reason, bool allowDuringEvents = false)
     {
         reason = string.Empty;
         if (!this.config.EnableAiWorldActions)
@@ -683,7 +811,7 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        if (Game1.eventUp || Game1.currentLocation == null || npc.currentLocation != Game1.currentLocation)
+        if ((!allowDuringEvents && Game1.eventUp) || Game1.currentLocation == null || npc.currentLocation != Game1.currentLocation)
         {
             reason = "world action cannot run in the current scene";
             return false;
@@ -810,6 +938,133 @@ internal sealed class BehaviorEngine
         }
     }
 
+    private void TryUpdateCommitmentTimers()
+    {
+        if (!this.config.EnableCommitments)
+        {
+            return;
+        }
+
+        foreach (var state in this.memory.GetTrackedStates())
+        {
+            foreach (var commitment in state.Commitments.Where(commitment => commitment.Status == "Pending"))
+            {
+                if (this.IsPastCommitmentGraceWindow(commitment))
+                {
+                    commitment.Status = "Expired";
+                    commitment.LastUpdatedTotalDays = Game1.Date.TotalDays;
+                    commitment.LastUpdatedTimeOfDay = Game1.timeOfDay;
+                    continue;
+                }
+
+                if (this.IsWithinCommitmentWindow(commitment))
+                {
+                    state.LastInteraction = "waiting around an agreed plan";
+                    state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+                    state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+                }
+            }
+        }
+    }
+
+    private void TryTriggerCommitmentArrivals()
+    {
+        if (!this.config.EnableCommitments
+            || Game1.currentLocation == null
+            || Game1.player == null
+            || Game1.eventUp)
+        {
+            return;
+        }
+
+        foreach (var npc in Game1.currentLocation.characters.Where(candidate => !string.IsNullOrWhiteSpace(candidate.Name)))
+        {
+            var state = this.memory.GetState(npc);
+            if (state == null)
+            {
+                continue;
+            }
+
+            var commitment = state.Commitments.FirstOrDefault(candidate =>
+                candidate.Status == "Pending"
+                && !candidate.ArrivalGreetingShown
+                && candidate.LocationName == Game1.currentLocation.Name
+                && this.IsWithinCommitmentWindow(candidate)
+            );
+            if (commitment == null)
+            {
+                continue;
+            }
+
+            if (Vector2.Distance(npc.Tile, Game1.player.Tile) > 3f)
+            {
+                if (npc.controller == null)
+                {
+                    this.TryApproachPlayer(npc);
+                }
+
+                continue;
+            }
+
+            npc.showTextAboveHead(this.BuildCommitmentArrivalGreeting(commitment));
+            commitment.ArrivalGreetingShown = true;
+            commitment.Status = "Fulfilled";
+            commitment.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            commitment.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            this.memory.RecordNpcWorldAction(
+                npc,
+                "FulfilledCommitment",
+                $"they fulfilled an agreed plan with the farmer: {commitment.Summary}",
+                this.config.MaxMemoryEntriesPerNpc
+            );
+            this.PushInteractionContext(npc, $"Fulfilled commitment for {npc.Name}: {commitment.Summary}.");
+        }
+    }
+
+    private string BuildCommitmentArrivalGreeting(NpcCommitmentFact commitment)
+    {
+        return commitment.Type switch
+        {
+            "go_together" => "你来了，我们按约定一起走吧。",
+            "help_task" => "你来了，我记得答应过要帮你。",
+            _ => "你来了，我记得我们的约定。"
+        };
+    }
+
+    private bool IsWithinCommitmentWindow(NpcCommitmentFact commitment)
+    {
+        if (commitment.DueTotalDays != Game1.Date.TotalDays)
+        {
+            return false;
+        }
+
+        int now = this.ToDayMinutes(Game1.timeOfDay);
+        int due = this.ToDayMinutes(commitment.TimeOfDay);
+        return now >= due && now <= due + this.config.CommitmentGraceMinutes;
+    }
+
+    private bool IsPastCommitmentGraceWindow(NpcCommitmentFact commitment)
+    {
+        if (commitment.DueTotalDays < Game1.Date.TotalDays)
+        {
+            return true;
+        }
+
+        if (commitment.DueTotalDays > Game1.Date.TotalDays)
+        {
+            return false;
+        }
+
+        return this.ToDayMinutes(Game1.timeOfDay) > this.ToDayMinutes(commitment.TimeOfDay) + this.config.CommitmentGraceMinutes;
+    }
+
+    private int ToDayMinutes(int timeOfDay)
+    {
+        int hours = timeOfDay / 100;
+        int minutes = timeOfDay % 100;
+        return (hours * 60) + minutes;
+    }
+
     private void StopWalkTogether(PendingWalkTogether walk, NPC? npc)
     {
         if (npc != null && npc.controller == walk.LastAssignedController)
@@ -874,6 +1129,29 @@ internal sealed class BehaviorEngine
         }
 
         this.PushInteractionContext(npc, $"Recorded conversation start for {npc.Name}.");
+        this.MarkExpiredCommitmentsMentionedAfterPrompt(npc);
+    }
+
+    private void MarkExpiredCommitmentsMentionedAfterPrompt(NPC npc)
+    {
+        if (!this.config.EnableCommitments)
+        {
+            return;
+        }
+
+        var state = this.memory.GetState(npc);
+        if (state == null)
+        {
+            return;
+        }
+
+        foreach (var commitment in state.Commitments.Where(commitment =>
+                     commitment.Status == "Expired"
+                     && commitment.LastMentionedTotalDays < Game1.Date.TotalDays))
+        {
+            commitment.LastMentionedTotalDays = Game1.Date.TotalDays;
+            commitment.LastMentionedTimeOfDay = Game1.timeOfDay;
+        }
     }
 
     private void PushInteractionContext(NPC npc, string debugMessage)

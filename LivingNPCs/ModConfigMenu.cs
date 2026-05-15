@@ -145,6 +145,37 @@ internal static class ModConfigMenu
 
         configMenu.AddBoolOption(
             mod: manifest,
+            name: () => "启用长期约定",
+            tooltip: () => "让 NPC 记住双方明确答应的再见面、同行或帮忙约定，并在到期时尝试响应。",
+            getValue: () => config.EnableCommitments,
+            setValue: value => config.EnableCommitments = value
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "每个 NPC 最多待履行约定",
+            tooltip: () => "限制每个 NPC 同时最多保留多少条尚未完成的约定。",
+            getValue: () => config.MaxPendingCommitmentsPerNpc,
+            setValue: value => config.MaxPendingCommitmentsPerNpc = value,
+            min: 1,
+            max: 12,
+            interval: 1
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "约定宽限分钟",
+            tooltip: () => "超过约定时间后，最多再给多少游戏分钟的宽限；之后会记为过期。",
+            getValue: () => config.CommitmentGraceMinutes,
+            setValue: value => config.CommitmentGraceMinutes = value,
+            min: 10,
+            max: 360,
+            interval: 10,
+            formatValue: value => $"{value} 分钟"
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
             name: () => "AI 对话额外好感",
             tooltip: () => "让 AI 对话按聊天质量在原版对话好感之外额外增加好感，每个 NPC 每天受上限约束。",
             getValue: () => config.EnableAiDialogueFriendship,
@@ -265,6 +296,30 @@ internal static class ModConfigMenu
             min: 5,
             max: 60,
             interval: 5
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "允许 NPC 陪去约定地点",
+            tooltip: () => "允许 AI 发起有时间限制、路径受限的同行请求；当前只做安全的短时陪走，不改永久日程。",
+            getValue: () => config.AllowAiEscortToLocation,
+            setValue: value => config.AllowAiEscortToLocation = value
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "允许节日特殊互动",
+            tooltip: () => "允许 AI 在节日或事件场景中触发轻量特殊互动。",
+            getValue: () => config.AllowAiFestivalInteractions,
+            setValue: value => config.AllowAiFestivalInteractions = value
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "允许任务协助",
+            tooltip: () => "允许 AI 围绕玩家当前任务做轻量协助，但不会直接完成任务或改任务状态。",
+            getValue: () => config.AllowAiQuestAssists,
+            setValue: value => config.AllowAiQuestAssists = value
         );
 
         configMenu.AddSectionTitle(

@@ -14,6 +14,9 @@ internal sealed class ModConfig
     public int MaxMemoryEntriesPerNpc { get; set; } = 20;
     public int PromptMemoryEntries { get; set; } = 4;
     public bool EnableConversationMemory { get; set; } = true;
+    public bool EnableCommitments { get; set; } = true;
+    public int MaxPendingCommitmentsPerNpc { get; set; } = 4;
+    public int CommitmentGraceMinutes { get; set; } = 120;
     public bool EnableAiDialogueFriendship { get; set; } = true;
     public int MaxAiDialogueFriendshipPerNpcPerDay { get; set; } = 30;
     public bool EnableDialogueFollowUps { get; set; } = true;
@@ -27,6 +30,9 @@ internal sealed class ModConfig
     public int MaxAiWateredTilesPerAction { get; set; } = 12;
     public bool AllowAiWalkTogether { get; set; } = true;
     public int MaxAiWalkTogetherMinutes { get; set; } = 20;
+    public bool AllowAiEscortToLocation { get; set; } = true;
+    public bool AllowAiFestivalInteractions { get; set; } = true;
+    public bool AllowAiQuestAssists { get; set; } = true;
     public bool EnableNpcState { get; set; } = true;
     public int NpcStateDailyDecay { get; set; } = 12;
     public bool EnablePassiveBehaviors { get; set; } = true;
@@ -68,6 +74,9 @@ internal sealed class ModConfig
         this.MaxMemoryEntriesPerNpc = defaults.MaxMemoryEntriesPerNpc;
         this.PromptMemoryEntries = defaults.PromptMemoryEntries;
         this.EnableConversationMemory = defaults.EnableConversationMemory;
+        this.EnableCommitments = defaults.EnableCommitments;
+        this.MaxPendingCommitmentsPerNpc = defaults.MaxPendingCommitmentsPerNpc;
+        this.CommitmentGraceMinutes = defaults.CommitmentGraceMinutes;
         this.EnableAiDialogueFriendship = defaults.EnableAiDialogueFriendship;
         this.MaxAiDialogueFriendshipPerNpcPerDay = defaults.MaxAiDialogueFriendshipPerNpcPerDay;
         this.EnableDialogueFollowUps = defaults.EnableDialogueFollowUps;
@@ -81,6 +90,9 @@ internal sealed class ModConfig
         this.MaxAiWateredTilesPerAction = defaults.MaxAiWateredTilesPerAction;
         this.AllowAiWalkTogether = defaults.AllowAiWalkTogether;
         this.MaxAiWalkTogetherMinutes = defaults.MaxAiWalkTogetherMinutes;
+        this.AllowAiEscortToLocation = defaults.AllowAiEscortToLocation;
+        this.AllowAiFestivalInteractions = defaults.AllowAiFestivalInteractions;
+        this.AllowAiQuestAssists = defaults.AllowAiQuestAssists;
         this.EnableNpcState = defaults.EnableNpcState;
         this.NpcStateDailyDecay = defaults.NpcStateDailyDecay;
         this.EnablePassiveBehaviors = defaults.EnablePassiveBehaviors;

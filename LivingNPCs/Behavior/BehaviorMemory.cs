@@ -34,6 +34,45 @@ internal sealed class BehaviorMemory
         "night"
     };
 
+    private static readonly Dictionary<string, string> CommitmentLocationAliases = new(System.StringComparer.OrdinalIgnoreCase)
+    {
+        ["Farm"] = "Farm",
+        ["农场"] = "Farm",
+        ["Town"] = "Town",
+        ["Pelican Town"] = "Town",
+        ["鹈鹕镇"] = "Town",
+        ["Mountain"] = "Mountain",
+        ["山地"] = "Mountain",
+        ["山上"] = "Mountain",
+        ["Beach"] = "Beach",
+        ["海滩"] = "Beach",
+        ["Forest"] = "Forest",
+        ["Cindersap Forest"] = "Forest",
+        ["森林"] = "Forest",
+        ["煤矿森林"] = "Forest",
+        ["BusStop"] = "BusStop",
+        ["Bus Stop"] = "BusStop",
+        ["巴士站"] = "BusStop",
+        ["Saloon"] = "Saloon",
+        ["Stardrop Saloon"] = "Saloon",
+        ["酒吧"] = "Saloon",
+        ["星之果实酒吧"] = "Saloon",
+        ["SeedShop"] = "SeedShop",
+        ["Pierre's"] = "SeedShop",
+        ["Pierre's General Store"] = "SeedShop",
+        ["杂货店"] = "SeedShop",
+        ["皮埃尔的杂货店"] = "SeedShop",
+        ["ArchaeologyHouse"] = "ArchaeologyHouse",
+        ["Museum"] = "ArchaeologyHouse",
+        ["Library"] = "ArchaeologyHouse",
+        ["博物馆"] = "ArchaeologyHouse",
+        ["图书馆"] = "ArchaeologyHouse",
+        ["Hospital"] = "Hospital",
+        ["Clinic"] = "Hospital",
+        ["诊所"] = "Hospital",
+        ["医院"] = "Hospital"
+    };
+
     private readonly Dictionary<string, List<BehaviorMemoryEntry>> entriesByNpc = new();
     private readonly Dictionary<string, int> dailyCountsByNpc = new();
     private readonly Dictionary<string, LivingNpcState> statesByNpc = new();
@@ -116,6 +155,11 @@ internal sealed class BehaviorMemory
             : null;
     }
 
+    public IEnumerable<LivingNpcState> GetTrackedStates()
+    {
+        return this.statesByNpc.Values;
+    }
+
     public BehaviorMemoryEntry Record(NPC npc, BehaviorIntent intent, int maxEntriesPerNpc)
     {
         var entry = this.CreateEntry(npc, "Behavior", intent.Type.ToString(), intent.Reason);
@@ -182,12 +226,14 @@ internal sealed class BehaviorMemory
         string npcResponse,
         string analysisJson,
         int maxEntriesPerNpc,
+        int maxPendingCommitmentsPerNpc,
         int maxExtraFriendshipPerDay)
     {
         var analysis = ParseExchangeAnalysis(analysisJson);
         var state = this.GetOrCreateState(npc);
         int storedMemories = 0;
         int storedPlayerPreferences = 0;
+        int storedCommitments = 0;
 
         foreach (var candidate in analysis.Memories
                      .Where(memory => memory.Importance >= 40 && !string.IsNullOrWhiteSpace(memory.Summary))
@@ -220,8 +266,25 @@ internal sealed class BehaviorMemory
             }
         }
 
+        foreach (var candidate in analysis.Commitments
+                     .Where(commitment => maxPendingCommitmentsPerNpc > 0 && !string.IsNullOrWhiteSpace(commitment.Summary))
+                     .Take(2))
+        {
+            if (this.StoreCommitment(npc, state, candidate, maxPendingCommitmentsPerNpc))
+            {
+                storedCommitments++;
+                var entry = this.CreateEntry(
+                    npc,
+                    "Commitment",
+                    candidate.Type,
+                    candidate.Summary
+                );
+                this.AddEntry(entry, maxEntriesPerNpc);
+            }
+        }
+
         // Keep one deterministic fallback for nickname requests if the model forgets metadata.
-        if (storedMemories == 0 && storedPlayerPreferences == 0 && TryExtractNicknameRequest(playerText, out string nickname))
+        if (storedMemories == 0 && storedPlayerPreferences == 0 && storedCommitments == 0 && TryExtractNicknameRequest(playerText, out string nickname))
         {
             string status = DetermineNicknameStatus(nickname, npcResponse);
             var fallbackMemory = new ValleyTalkMemoryCandidate
@@ -245,9 +308,9 @@ internal sealed class BehaviorMemory
         }
 
         int appliedFriendship = this.ApplyAiDialogueFriendship(state, analysis.RapportDelta, maxExtraFriendshipPerDay);
-        if (storedMemories > 0 || storedPlayerPreferences > 0 || appliedFriendship > 0)
+        if (storedMemories > 0 || storedPlayerPreferences > 0 || storedCommitments > 0 || appliedFriendship > 0)
         {
-            state.LastInteraction = storedMemories > 0 || storedPlayerPreferences > 0
+            state.LastInteraction = storedMemories > 0 || storedPlayerPreferences > 0 || storedCommitments > 0
                 ? "the farmer shared something worth remembering"
                 : "the farmer had an AI conversation";
             state.LastUpdatedTotalDays = Game1.Date.TotalDays;
@@ -257,6 +320,7 @@ internal sealed class BehaviorMemory
         return new ValleyTalkExchangeResult(
             storedMemories,
             storedPlayerPreferences,
+            storedCommitments,
             appliedFriendship,
             analysis.RapportDelta,
             analysis.EndConversation,
@@ -868,6 +932,7 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Recent event context: {state.LastEventPromptLabel}.");
             prompt.AppendLine($"- Long-term personal memory: {state.LongTermMemoryPromptLabel}.");
             prompt.AppendLine($"- Known farmer preferences: {state.PlayerPreferencePromptLabel}.");
+            prompt.AppendLine($"- Commitments with the farmer: {state.CommitmentPromptLabel}.");
             prompt.AppendLine($"- Personal memory context: {state.FarmerNicknamePromptLabel}.");
             prompt.AppendLine($"- Scene influence on mood: {state.LastSceneInfluenceReason}.");
             prompt.AppendLine($"- Last interaction: {state.LastInteraction}.");
@@ -964,6 +1029,24 @@ internal sealed class BehaviorMemory
                 yield return $"Farmer preference memory: {state.PlayerPreferencePromptLabel}; when a gift or topic naturally matches one of these, it is okay to acknowledge remembering it briefly.";
             }
 
+            var urgentCommitment = state.Commitments.FirstOrDefault(commitment =>
+                commitment.Status == "Pending"
+                && commitment.DueTotalDays <= Game1.Date.TotalDays
+            );
+            if (urgentCommitment != null)
+            {
+                yield return $"Pending commitment: {urgentCommitment.PromptLabel}; if this is due now or today, let it matter naturally.";
+            }
+
+            var expiredCommitment = state.Commitments.FirstOrDefault(commitment =>
+                commitment.Status == "Expired"
+                && commitment.LastMentionedTotalDays < Game1.Date.TotalDays
+            );
+            if (expiredCommitment != null)
+            {
+                yield return $"Unmet commitment: {expiredCommitment.PromptLabel}; the next conversation should briefly acknowledge that it did not happen.";
+            }
+
             if (!string.IsNullOrWhiteSpace(state.InteractionRhythm)
                 && state.InteractionRhythm is not "New" and not "NoConversationToday")
             {
@@ -1019,6 +1102,16 @@ internal sealed class BehaviorMemory
         if (state.PlayerPreferenceMemories.Count > 0)
         {
             yield return "If choosing to mention a remembered farmer preference, keep it short and human, not like reciting a profile.";
+        }
+
+        if (state.Commitments.Any(commitment => commitment.Status == "Pending"))
+        {
+            yield return "Treat pending commitments as future plans, not as completed history.";
+        }
+
+        if (state.Commitments.Any(commitment => commitment.Status == "Expired" && commitment.LastMentionedTotalDays < Game1.Date.TotalDays))
+        {
+            yield return "If there is an unmet commitment, mention it once with appropriate warmth, disappointment, or practicality instead of ignoring it.";
         }
 
         if (state.RepeatedConversationPressure >= 20)
@@ -1115,6 +1208,7 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 最近事件：{state.LastEventLabel}");
             summary.AppendLine($"- 长期记忆：{state.LongTermMemoryDebugLabel}");
             summary.AppendLine($"- 玩家偏好记忆：{state.PlayerPreferenceDebugLabel}");
+            summary.AppendLine($"- 长期约定：{state.CommitmentDebugLabel}");
             summary.AppendLine($"- 长期称呼记忆：{state.FarmerNicknameLabel}");
             summary.AppendLine($"- 今日 AI 对话额外好感：{state.AiFriendshipGainedToday}");
             summary.AppendLine($"- 角色资料：{disposition.SourceDebugLabel}");
@@ -1272,10 +1366,27 @@ internal sealed class BehaviorMemory
                     action.Amount = System.Math.Clamp(action.Amount, 0, 250);
                     action.TileCount = System.Math.Clamp(action.TileCount, 0, 12);
                     action.DurationMinutes = System.Math.Clamp(action.DurationMinutes, 0, 20);
+                    action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
+                    action.QuestHint = action.QuestHint?.Trim() ?? string.Empty;
                     return action;
                 })
                 .Where(action => action.Type != "none")
                 .Take(1)
+                .ToList();
+            analysis.Commitments = analysis.Commitments
+                .Where(commitment => commitment != null && !string.IsNullOrWhiteSpace(commitment.Summary))
+                .Select(commitment =>
+                {
+                    commitment.Type = NormalizeCommitmentType(commitment.Type);
+                    commitment.Summary = commitment.Summary.Trim();
+                    commitment.DueInDays = System.Math.Clamp(commitment.DueInDays, 0, 28);
+                    commitment.TimeOfDay = NormalizeTimeOfDay(commitment.TimeOfDay);
+                    commitment.Location = commitment.Location?.Trim() ?? string.Empty;
+                    commitment.LocationLabel = commitment.LocationLabel?.Trim() ?? string.Empty;
+                    return commitment;
+                })
+                .Where(commitment => commitment.Type != "none")
+                .Take(2)
                 .ToList();
             return analysis;
         }
@@ -1330,6 +1441,77 @@ internal sealed class BehaviorMemory
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
             .Take(16)
+            .ToList();
+        return true;
+    }
+
+    private bool StoreCommitment(NPC npc, LivingNpcState state, ValleyTalkCommitmentCandidate candidate, int maxPendingCommitmentsPerNpc)
+    {
+        string locationName = NormalizeCommitmentLocation(candidate.Location, npc.currentLocation?.Name ?? Game1.currentLocation?.Name ?? string.Empty);
+        string locationLabel = string.IsNullOrWhiteSpace(candidate.LocationLabel)
+            ? GetCommitmentLocationLabel(locationName)
+            : candidate.LocationLabel.Trim();
+        int dueTotalDays = Game1.Date.TotalDays + candidate.DueInDays;
+        string normalizedKey = BuildCommitmentKey(candidate.Type, candidate.Summary, dueTotalDays, candidate.TimeOfDay, locationName);
+        if (string.IsNullOrWhiteSpace(normalizedKey))
+        {
+            return false;
+        }
+
+        var existing = state.Commitments.FirstOrDefault(commitment =>
+            BuildCommitmentKey(commitment.Type, commitment.Summary, commitment.DueTotalDays, commitment.TimeOfDay, commitment.LocationName) == normalizedKey);
+        if (existing != null)
+        {
+            existing.Summary = candidate.Summary.Trim();
+            existing.LocationLabel = locationLabel;
+            existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            existing.TimesReinforced += 1;
+            if (existing.Status == "Expired")
+            {
+                existing.Status = "Pending";
+            }
+
+            return true;
+        }
+
+        state.Commitments.Add(new NpcCommitmentFact
+        {
+            Type = candidate.Type,
+            Summary = candidate.Summary.Trim(),
+            DueTotalDays = dueTotalDays,
+            TimeOfDay = candidate.TimeOfDay,
+            LocationName = locationName,
+            LocationLabel = locationLabel,
+            Status = "Pending",
+            CreatedTotalDays = Game1.Date.TotalDays,
+            CreatedTimeOfDay = Game1.timeOfDay,
+            LastUpdatedTotalDays = Game1.Date.TotalDays,
+            LastUpdatedTimeOfDay = Game1.timeOfDay,
+            TimesReinforced = 1
+        });
+
+        while (state.Commitments.Count(commitment => commitment.Status == "Pending") > maxPendingCommitmentsPerNpc)
+        {
+            var oldestPending = state.Commitments
+                .Where(commitment => commitment.Status == "Pending")
+                .OrderBy(commitment => commitment.DueTotalDays)
+                .ThenBy(commitment => commitment.TimeOfDay)
+                .FirstOrDefault();
+            if (oldestPending == null)
+            {
+                break;
+            }
+
+            state.Commitments.Remove(oldestPending);
+        }
+
+        state.Commitments = state.Commitments
+            .OrderBy(commitment => CommitmentStatusOrder(commitment.Status))
+            .ThenBy(commitment => commitment.DueTotalDays)
+            .ThenBy(commitment => commitment.TimeOfDay)
+            .ThenByDescending(commitment => commitment.LastUpdatedTotalDays)
+            .Take(12)
             .ToList();
         return true;
     }
@@ -1478,6 +1660,20 @@ internal sealed class BehaviorMemory
             "give_money" => "give_money",
             "water_nearby_crops" => "water_nearby_crops",
             "walk_together" => "walk_together",
+            "escort_to_location" => "escort_to_location",
+            "festival_interaction" => "festival_interaction",
+            "assist_quest" => "assist_quest",
+            _ => "none"
+        };
+    }
+
+    internal static string NormalizeCommitmentType(string type)
+    {
+        return type?.Trim().ToLowerInvariant() switch
+        {
+            "meet_again" => "meet_again",
+            "go_together" => "go_together",
+            "help_task" => "help_task",
             _ => "none"
         };
     }
@@ -1515,6 +1711,69 @@ internal sealed class BehaviorMemory
         return normalizedKind == "none" || string.IsNullOrWhiteSpace(identity)
             ? string.Empty
             : $"{normalizedKind}:{identity}";
+    }
+
+    internal static int NormalizeTimeOfDay(int value)
+    {
+        if (value <= 0)
+        {
+            return 900;
+        }
+
+        int hours = System.Math.Clamp(value / 100, 6, 26);
+        int minutes = System.Math.Clamp(value % 100, 0, 50);
+        minutes -= minutes % 10;
+        return (hours * 100) + minutes;
+    }
+
+    internal static string NormalizeCommitmentLocation(string value, string fallback)
+    {
+        string candidate = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        if (CommitmentLocationAliases.TryGetValue(candidate, out string? mapped))
+        {
+            return mapped;
+        }
+
+        return string.IsNullOrWhiteSpace(candidate) ? "Town" : candidate;
+    }
+
+    private static string GetCommitmentLocationLabel(string locationName)
+    {
+        return locationName switch
+        {
+            "Farm" => "the farm",
+            "Town" => "Pelican Town",
+            "Mountain" => "the mountain",
+            "Beach" => "the beach",
+            "Forest" => "Cindersap Forest",
+            "BusStop" => "the bus stop",
+            "Saloon" => "the Stardrop Saloon",
+            "SeedShop" => "Pierre's General Store",
+            "ArchaeologyHouse" => "the museum and library",
+            "Hospital" => "the clinic",
+            _ => locationName
+        };
+    }
+
+    private static string BuildCommitmentKey(string type, string summary, int dueTotalDays, int timeOfDay, string locationName)
+    {
+        string normalizedType = NormalizeCommitmentType(type);
+        string normalizedSummary = NormalizeMemorySummary(summary);
+        string normalizedLocation = NormalizeCommitmentLocation(locationName, string.Empty);
+        return normalizedType == "none" || string.IsNullOrWhiteSpace(normalizedSummary)
+            ? string.Empty
+            : $"{normalizedType}:{normalizedSummary}:{dueTotalDays}:{timeOfDay}:{normalizedLocation}";
+    }
+
+    private static int CommitmentStatusOrder(string status)
+    {
+        return status switch
+        {
+            "Pending" => 0,
+            "Expired" => 1,
+            "Fulfilled" => 2,
+            _ => 3
+        };
     }
 
     private static bool TryExtractNicknameRequest(string playerText, out string nickname)
@@ -1629,6 +1888,7 @@ internal sealed class ValleyTalkExchangeAnalysis
     public bool EndConversation { get; set; }
     public ValleyTalkAmbientFollowUp AmbientFollowUp { get; set; } = new();
     public List<ValleyTalkWorldActionRequest> Actions { get; set; } = new();
+    public List<ValleyTalkCommitmentCandidate> Commitments { get; set; } = new();
     public List<ValleyTalkMemoryCandidate> Memories { get; set; } = new();
 }
 
@@ -1669,6 +1929,27 @@ internal sealed class PlayerPreferenceFact
     public int TimesReinforced { get; set; }
 }
 
+internal sealed class NpcCommitmentFact
+{
+    public string Type { get; set; } = "meet_again";
+    public string Summary { get; set; } = string.Empty;
+    public int DueTotalDays { get; set; } = -1;
+    public int TimeOfDay { get; set; } = 900;
+    public string LocationName { get; set; } = string.Empty;
+    public string LocationLabel { get; set; } = string.Empty;
+    public string Status { get; set; } = "Pending";
+    public int CreatedTotalDays { get; set; } = -1;
+    public int CreatedTimeOfDay { get; set; }
+    public int LastUpdatedTotalDays { get; set; } = -1;
+    public int LastUpdatedTimeOfDay { get; set; }
+    public int LastMentionedTotalDays { get; set; } = -1;
+    public int LastMentionedTimeOfDay { get; set; }
+    public bool ArrivalGreetingShown { get; set; }
+    public int TimesReinforced { get; set; }
+
+    public string PromptLabel => $"{this.Type} at {this.LocationLabel} on total day {this.DueTotalDays} around {this.TimeOfDay}; status: {this.Status}; summary: {this.Summary}";
+}
+
 internal sealed class ValleyTalkAmbientFollowUp
 {
     public string Text { get; set; } = string.Empty;
@@ -1682,11 +1963,24 @@ internal sealed class ValleyTalkWorldActionRequest
     public int TileCount { get; set; }
     public int DurationMinutes { get; set; }
     public string Reason { get; set; } = string.Empty;
+    public string TargetLocation { get; set; } = string.Empty;
+    public string QuestHint { get; set; } = string.Empty;
+}
+
+internal sealed class ValleyTalkCommitmentCandidate
+{
+    public string Type { get; set; } = "none";
+    public string Summary { get; set; } = string.Empty;
+    public int DueInDays { get; set; }
+    public int TimeOfDay { get; set; } = 900;
+    public string Location { get; set; } = string.Empty;
+    public string LocationLabel { get; set; } = string.Empty;
 }
 
 internal sealed record ValleyTalkExchangeResult(
     int LongTermMemoriesStored,
     int PlayerPreferencesStored,
+    int CommitmentsStored,
     int AppliedFriendshipDelta,
     int RequestedFriendshipDelta,
     bool EndConversation,
@@ -1697,6 +1991,7 @@ internal sealed record ValleyTalkExchangeResult(
 {
     public bool HasEffect => this.LongTermMemoriesStored > 0
         || this.PlayerPreferencesStored > 0
+        || this.CommitmentsStored > 0
         || this.AppliedFriendshipDelta > 0
         || !string.IsNullOrWhiteSpace(this.AmbientFollowUpText)
         || this.Actions.Count > 0;
@@ -1731,6 +2026,7 @@ internal sealed class LivingNpcState
     public int LastEventTimeOfDay { get; set; }
     public List<LongTermMemoryFact> LongTermMemories { get; set; } = new();
     public List<PlayerPreferenceFact> PlayerPreferenceMemories { get; set; } = new();
+    public List<NpcCommitmentFact> Commitments { get; set; } = new();
     public int AiFriendshipGainedToday { get; set; }
     public int LastAiFriendshipTotalDays { get; set; } = -1;
     public int LastAiSmallGiftTotalDays { get; set; } = -1;
@@ -1949,6 +2245,29 @@ internal sealed class LivingNpcState
         }
     }
 
+    public string CommitmentPromptLabel
+    {
+        get
+        {
+            var commitments = this.GetTopCommitments(4).ToList();
+            return commitments.Count == 0
+                ? "no durable commitments are recorded"
+                : string.Join("; ", commitments.Select(commitment => commitment.PromptLabel));
+        }
+    }
+
+    public string CommitmentDebugLabel
+    {
+        get
+        {
+            var commitments = this.GetTopCommitments(4).ToList();
+            return commitments.Count == 0
+                ? "暂无"
+                : string.Join("；", commitments.Select(commitment =>
+                    $"{commitment.Summary}（{commitment.Type}，{commitment.LocationLabel}，第 {commitment.DueTotalDays} 天 {commitment.TimeOfDay}，{commitment.Status}）"));
+        }
+    }
+
     public string FarmerNicknamePromptLabel
     {
         get
@@ -2059,6 +2378,39 @@ internal sealed class LivingNpcState
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
             .Take(16)
+            .ToList();
+        this.Commitments ??= new List<NpcCommitmentFact>();
+        this.Commitments = this.Commitments
+            .Where(commitment => commitment != null && !string.IsNullOrWhiteSpace(commitment.Summary))
+            .Select(commitment =>
+            {
+                commitment.Type = BehaviorMemory.NormalizeCommitmentType(commitment.Type);
+                commitment.Summary = commitment.Summary.Trim();
+                commitment.TimeOfDay = BehaviorMemory.NormalizeTimeOfDay(commitment.TimeOfDay);
+                commitment.LocationName = BehaviorMemory.NormalizeCommitmentLocation(commitment.LocationName, "Town");
+                commitment.LocationLabel = string.IsNullOrWhiteSpace(commitment.LocationLabel)
+                    ? commitment.LocationName
+                    : commitment.LocationLabel.Trim();
+                commitment.Status = commitment.Status switch
+                {
+                    "Fulfilled" => "Fulfilled",
+                    "Expired" => "Expired",
+                    _ => "Pending"
+                };
+                commitment.TimesReinforced = System.Math.Max(0, commitment.TimesReinforced);
+                return commitment;
+            })
+            .Where(commitment => commitment.Type != "none")
+            .OrderBy(commitment => commitment.Status switch
+            {
+                "Pending" => 0,
+                "Expired" => 1,
+                "Fulfilled" => 2,
+                _ => 3
+            })
+            .ThenBy(commitment => commitment.DueTotalDays)
+            .ThenBy(commitment => commitment.TimeOfDay)
+            .Take(12)
             .ToList();
         this.AiFriendshipGainedToday = System.Math.Clamp(this.AiFriendshipGainedToday, 0, 30);
         if (string.IsNullOrWhiteSpace(this.Mood))
@@ -2174,6 +2526,26 @@ internal sealed class LivingNpcState
                     TimesReinforced = memory.TimesReinforced
                 })
                 .ToList(),
+            Commitments = this.Commitments
+                .Select(commitment => new NpcCommitmentFact
+                {
+                    Type = commitment.Type,
+                    Summary = commitment.Summary,
+                    DueTotalDays = commitment.DueTotalDays,
+                    TimeOfDay = commitment.TimeOfDay,
+                    LocationName = commitment.LocationName,
+                    LocationLabel = commitment.LocationLabel,
+                    Status = commitment.Status,
+                    CreatedTotalDays = commitment.CreatedTotalDays,
+                    CreatedTimeOfDay = commitment.CreatedTimeOfDay,
+                    LastUpdatedTotalDays = commitment.LastUpdatedTotalDays,
+                    LastUpdatedTimeOfDay = commitment.LastUpdatedTimeOfDay,
+                    LastMentionedTotalDays = commitment.LastMentionedTotalDays,
+                    LastMentionedTimeOfDay = commitment.LastMentionedTimeOfDay,
+                    ArrivalGreetingShown = commitment.ArrivalGreetingShown,
+                    TimesReinforced = commitment.TimesReinforced
+                })
+                .ToList(),
             AiFriendshipGainedToday = this.AiFriendshipGainedToday,
             LastAiFriendshipTotalDays = this.LastAiFriendshipTotalDays,
             LastAiSmallGiftTotalDays = this.LastAiSmallGiftTotalDays,
@@ -2210,6 +2582,21 @@ internal sealed class LivingNpcState
             .OrderByDescending(memory => memory.Importance)
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+            .Take(count);
+    }
+
+    private IEnumerable<NpcCommitmentFact> GetTopCommitments(int count)
+    {
+        return this.Commitments
+            .OrderBy(commitment => commitment.Status switch
+            {
+                "Pending" => 0,
+                "Expired" => 1,
+                "Fulfilled" => 2,
+                _ => 3
+            })
+            .ThenBy(commitment => commitment.DueTotalDays)
+            .ThenBy(commitment => commitment.TimeOfDay)
             .Take(count);
     }
 }

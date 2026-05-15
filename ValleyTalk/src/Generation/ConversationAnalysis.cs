@@ -50,11 +50,15 @@ internal sealed class ConversationAnalysis
     [JsonProperty("actions")]
     public List<ConversationWorldActionRequest> Actions { get; set; } = new();
 
+    [JsonProperty("commitments")]
+    public List<ConversationCommitmentCandidate> Commitments { get; set; } = new();
+
     public bool HasContent => this.RapportDelta > 0
         || this.Memories.Count > 0
         || this.EndConversation
         || this.AmbientFollowUp.HasContent
-        || this.Actions.Count > 0;
+        || this.Actions.Count > 0
+        || this.Commitments.Count > 0;
 
     public string ToJson()
     {
@@ -114,10 +118,27 @@ internal sealed class ConversationAnalysis
                     action.Amount = Math.Clamp(action.Amount, 0, 250);
                     action.TileCount = Math.Clamp(action.TileCount, 0, 12);
                     action.DurationMinutes = Math.Clamp(action.DurationMinutes, 0, 20);
+                    action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
+                    action.QuestHint = action.QuestHint?.Trim() ?? string.Empty;
                     return action;
                 })
                 .Where(action => action.Type != "none")
                 .Take(1)
+                .ToList();
+            analysis.Commitments = analysis.Commitments
+                .Where(commitment => commitment != null && !string.IsNullOrWhiteSpace(commitment.Summary))
+                .Select(commitment =>
+                {
+                    commitment.Type = NormalizeCommitmentType(commitment.Type);
+                    commitment.Summary = commitment.Summary.Trim();
+                    commitment.DueInDays = Math.Clamp(commitment.DueInDays, 0, 28);
+                    commitment.TimeOfDay = NormalizeTimeOfDay(commitment.TimeOfDay);
+                    commitment.Location = commitment.Location?.Trim() ?? string.Empty;
+                    commitment.LocationLabel = commitment.LocationLabel?.Trim() ?? string.Empty;
+                    return commitment;
+                })
+                .Where(commitment => commitment.Type != "none")
+                .Take(2)
                 .ToList();
             return analysis;
         }
@@ -148,8 +169,35 @@ internal sealed class ConversationAnalysis
             "give_money" => "give_money",
             "water_nearby_crops" => "water_nearby_crops",
             "walk_together" => "walk_together",
+            "escort_to_location" => "escort_to_location",
+            "festival_interaction" => "festival_interaction",
+            "assist_quest" => "assist_quest",
             _ => "none"
         };
+    }
+
+    private static string NormalizeCommitmentType(string type)
+    {
+        return type?.Trim().ToLowerInvariant() switch
+        {
+            "meet_again" => "meet_again",
+            "go_together" => "go_together",
+            "help_task" => "help_task",
+            _ => "none"
+        };
+    }
+
+    private static int NormalizeTimeOfDay(int value)
+    {
+        if (value <= 0)
+        {
+            return 900;
+        }
+
+        int hours = Math.Clamp(value / 100, 6, 26);
+        int minutes = Math.Clamp(value % 100, 0, 50);
+        minutes -= minutes % 10;
+        return (hours * 100) + minutes;
     }
 
     private static string NormalizePlayerPreferenceKind(string kind)
@@ -234,4 +282,31 @@ internal sealed class ConversationWorldActionRequest
 
     [JsonProperty("reason")]
     public string Reason { get; set; } = string.Empty;
+
+    [JsonProperty("targetLocation")]
+    public string TargetLocation { get; set; } = string.Empty;
+
+    [JsonProperty("questHint")]
+    public string QuestHint { get; set; } = string.Empty;
+}
+
+internal sealed class ConversationCommitmentCandidate
+{
+    [JsonProperty("type")]
+    public string Type { get; set; } = "none";
+
+    [JsonProperty("summary")]
+    public string Summary { get; set; } = string.Empty;
+
+    [JsonProperty("dueInDays")]
+    public int DueInDays { get; set; }
+
+    [JsonProperty("timeOfDay")]
+    public int TimeOfDay { get; set; } = 900;
+
+    [JsonProperty("location")]
+    public string Location { get; set; } = string.Empty;
+
+    [JsonProperty("locationLabel")]
+    public string LocationLabel { get; set; } = string.Empty;
 }
