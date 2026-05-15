@@ -346,6 +346,28 @@ internal static class ModConfigMenu
             interval: 1
         );
 
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "每日情绪衰减",
+            tooltip: () => "每天开始时，长期人际情绪向平静回落的幅度。",
+            getValue: () => config.NpcEmotionDailyDecay,
+            setValue: value => config.NpcEmotionDailyDecay = value,
+            min: 0,
+            max: 50,
+            interval: 1
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "每日冲突衰减",
+            tooltip: () => "每天开始时，未解决冲突严重度自然下降的幅度；道歉和合适礼物会额外加快恢复。",
+            getValue: () => config.NpcConflictDailyDecay,
+            setValue: value => config.NpcConflictDailyDecay = value,
+            min: 0,
+            max: 50,
+            interval: 1
+        );
+
         configMenu.AddSectionTitle(
             mod: manifest,
             text: () => "行为设置"

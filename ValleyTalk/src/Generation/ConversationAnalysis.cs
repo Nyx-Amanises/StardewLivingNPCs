@@ -47,18 +47,26 @@ internal sealed class ConversationAnalysis
     [JsonProperty("ambientFollowUp")]
     public ConversationAmbientFollowUp AmbientFollowUp { get; set; } = new();
 
+    [JsonProperty("emotionImpact")]
+    public ConversationEmotionImpact EmotionImpact { get; set; } = new();
+
     [JsonProperty("actions")]
     public List<ConversationWorldActionRequest> Actions { get; set; } = new();
 
     [JsonProperty("commitments")]
     public List<ConversationCommitmentCandidate> Commitments { get; set; } = new();
 
+    [JsonProperty("conflicts")]
+    public List<ConversationConflictCandidate> Conflicts { get; set; } = new();
+
     public bool HasContent => this.RapportDelta > 0
         || this.Memories.Count > 0
         || this.EndConversation
         || this.AmbientFollowUp.HasContent
+        || this.EmotionImpact.HasContent
         || this.Actions.Count > 0
-        || this.Commitments.Count > 0;
+        || this.Commitments.Count > 0
+        || this.Conflicts.Count > 0;
 
     public string ToJson()
     {
@@ -109,6 +117,11 @@ internal sealed class ConversationAnalysis
             analysis.AmbientFollowUp ??= new ConversationAmbientFollowUp();
             analysis.AmbientFollowUp.Text = analysis.AmbientFollowUp.Text?.Trim() ?? string.Empty;
             analysis.AmbientFollowUp.DelayMinutes = Math.Clamp(analysis.AmbientFollowUp.DelayMinutes, 0, 120);
+            analysis.EmotionImpact ??= new ConversationEmotionImpact();
+            analysis.EmotionImpact.Emotion = NormalizeEmotion(analysis.EmotionImpact.Emotion);
+            analysis.EmotionImpact.IntensityDelta = Math.Clamp(analysis.EmotionImpact.IntensityDelta, -100, 100);
+            analysis.EmotionImpact.RepairDelta = Math.Clamp(analysis.EmotionImpact.RepairDelta, 0, 100);
+            analysis.EmotionImpact.Reason = analysis.EmotionImpact.Reason?.Trim() ?? string.Empty;
             analysis.Actions = analysis.Actions
                 .Where(action => action != null)
                 .Select(action =>
@@ -138,6 +151,18 @@ internal sealed class ConversationAnalysis
                     return commitment;
                 })
                 .Where(commitment => commitment.Type != "none")
+                .Take(2)
+                .ToList();
+            analysis.Conflicts = analysis.Conflicts
+                .Where(conflict => conflict != null && !string.IsNullOrWhiteSpace(conflict.Summary))
+                .Select(conflict =>
+                {
+                    conflict.CauseKind = NormalizeConflictCauseKind(conflict.CauseKind);
+                    conflict.Summary = conflict.Summary.Trim();
+                    conflict.Severity = Math.Clamp(conflict.Severity, 0, 100);
+                    return conflict;
+                })
+                .Where(conflict => conflict.Severity > 0)
                 .Take(2)
                 .ToList();
             return analysis;
@@ -184,6 +209,32 @@ internal sealed class ConversationAnalysis
             "go_together" => "go_together",
             "help_task" => "help_task",
             _ => "none"
+        };
+    }
+
+    private static string NormalizeEmotion(string emotion)
+    {
+        return emotion?.Trim().ToLowerInvariant() switch
+        {
+            "happy" => "Happy",
+            "calm" => "Calm",
+            "uneasy" => "Uneasy",
+            "upset" => "Upset",
+            "angry" => "Angry",
+            "sad" => "Sad",
+            _ => "none"
+        };
+    }
+
+    private static string NormalizeConflictCauseKind(string causeKind)
+    {
+        return causeKind?.Trim().ToLowerInvariant() switch
+        {
+            "dialogue" => "dialogue",
+            "gift" => "gift",
+            "boundary" => "boundary",
+            "promise" => "promise",
+            _ => "dialogue"
         };
     }
 
@@ -266,6 +317,29 @@ internal sealed class ConversationAmbientFollowUp
     public bool HasContent => !string.IsNullOrWhiteSpace(this.Text);
 }
 
+internal sealed class ConversationEmotionImpact
+{
+    [JsonProperty("emotion")]
+    public string Emotion { get; set; } = "none";
+
+    [JsonProperty("intensityDelta")]
+    public int IntensityDelta { get; set; }
+
+    [JsonProperty("apology")]
+    public bool Apology { get; set; }
+
+    [JsonProperty("repairDelta")]
+    public int RepairDelta { get; set; }
+
+    [JsonProperty("reason")]
+    public string Reason { get; set; } = string.Empty;
+
+    public bool HasContent => this.Emotion != "none"
+        || this.IntensityDelta != 0
+        || this.Apology
+        || this.RepairDelta > 0;
+}
+
 internal sealed class ConversationWorldActionRequest
 {
     [JsonProperty("type")]
@@ -309,4 +383,16 @@ internal sealed class ConversationCommitmentCandidate
 
     [JsonProperty("locationLabel")]
     public string LocationLabel { get; set; } = string.Empty;
+}
+
+internal sealed class ConversationConflictCandidate
+{
+    [JsonProperty("causeKind")]
+    public string CauseKind { get; set; } = "dialogue";
+
+    [JsonProperty("summary")]
+    public string Summary { get; set; } = string.Empty;
+
+    [JsonProperty("severity")]
+    public int Severity { get; set; }
 }

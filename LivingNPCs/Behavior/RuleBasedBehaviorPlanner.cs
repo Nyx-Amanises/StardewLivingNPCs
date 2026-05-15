@@ -134,6 +134,8 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
 
         return state.CurrentInclination is "NeedsSpace" or "GentleBoundary" or "Reserved"
             || state.Mood is "Overloaded" or "CrowdedButWarm" or "Guarded"
+            || state.CurrentEmotion is "Upset" or "Angry"
+            || state.HighestUnresolvedConflictSeverity >= 25
             || state.RepeatedConversationPressure >= 40
             || state.Openness <= 25;
     }
@@ -224,6 +226,16 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
 
             if (state != null)
             {
+                if (state.HighestUnresolvedConflictSeverity > 0)
+                {
+                    double conflictPressure = Math.Clamp(state.HighestUnresolvedConflictSeverity / 100d, 0.05, 1);
+                    approachBonus -= 0.12 + (0.2 * conflictPressure);
+                    emoteBonus -= 0.03 + (0.06 * conflictPressure);
+                    pauseBonus += 0.05 + (0.08 * conflictPressure);
+                    stepAwayBonus += 0.18 + (0.3 * conflictPressure);
+                    reasons.Add("unresolved conflict");
+                }
+
                 switch (state.InteractionRhythm)
                 {
                     case "CrowdedToday":
@@ -337,6 +349,43 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
                     pauseBonus += 0.08;
                     lookAroundBonus += 0.08;
                     reasons.Add("watchful mood");
+                    break;
+            }
+
+            switch (state?.CurrentEmotion)
+            {
+                case "Happy":
+                    approachBonus += 0.07;
+                    emoteBonus += 0.04;
+                    reasons.Add("happy emotion");
+                    break;
+
+                case "Uneasy":
+                    approachBonus -= 0.05;
+                    pauseBonus += 0.04;
+                    stepAwayBonus += 0.04;
+                    reasons.Add("uneasy emotion");
+                    break;
+
+                case "Upset":
+                    approachBonus -= 0.12;
+                    pauseBonus += 0.06;
+                    stepAwayBonus += 0.12;
+                    reasons.Add("upset emotion");
+                    break;
+
+                case "Angry":
+                    approachBonus -= 0.22;
+                    emoteBonus -= 0.08;
+                    pauseBonus += 0.08;
+                    stepAwayBonus += 0.24;
+                    reasons.Add("angry emotion");
+                    break;
+
+                case "Sad":
+                    approachBonus -= 0.08;
+                    pauseBonus += 0.08;
+                    reasons.Add("sad emotion");
                     break;
             }
 

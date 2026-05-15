@@ -80,7 +80,11 @@ internal sealed class BehaviorEngine
     {
         if (this.config.EnableNpcState)
         {
-            this.memory.DecayStates(this.config.NpcStateDailyDecay);
+            this.memory.DecayStates(
+                this.config.NpcStateDailyDecay,
+                this.config.NpcEmotionDailyDecay,
+                this.config.NpcConflictDailyDecay
+            );
         }
 
         this.memory.ResetDaily();
@@ -310,7 +314,7 @@ internal sealed class BehaviorEngine
 
         this.PushInteractionContext(
             npc,
-            $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, {result.PlayerPreferencesStored} player preferences, {result.CommitmentsStored} commitments, +{result.AppliedFriendshipDelta} extra friendship."
+            $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, {result.PlayerPreferencesStored} player preferences, {result.CommitmentsStored} commitments, {result.ConflictsStored} conflicts, {result.ConflictsResolved} resolved conflicts, +{result.AppliedFriendshipDelta} extra friendship."
         );
         return true;
     }
@@ -826,6 +830,12 @@ internal sealed class BehaviorEngine
 
         bool atLeastFamiliar = state.InteractionComfortTier is "Familiar" or "Friendly" or "Trusted" or "Intimate";
         bool atLeastFriendly = state.InteractionComfortTier is "Friendly" or "Trusted" or "Intimate";
+        if (state.HighestUnresolvedConflictSeverity >= 30)
+        {
+            reason = $"{actionName} is blocked by unresolved conflict";
+            return false;
+        }
+
         if (requireFriendly ? !atLeastFriendly : !atLeastFamiliar)
         {
             reason = $"{actionName} requires a closer relationship";
@@ -1163,6 +1173,15 @@ internal sealed class BehaviorEngine
         {
             commitment.FollowUpMentionedTotalDays = Game1.Date.TotalDays;
             commitment.FollowUpMentionedTimeOfDay = Game1.timeOfDay;
+        }
+
+        foreach (var conflict in state.Conflicts.Where(conflict =>
+                     conflict.Status == "Resolved"
+                     && conflict.ResolvedTotalDays >= Game1.Date.TotalDays - 3
+                     && conflict.RecoveryMentionedTotalDays < 0))
+        {
+            conflict.RecoveryMentionedTotalDays = Game1.Date.TotalDays;
+            conflict.RecoveryMentionedTimeOfDay = Game1.timeOfDay;
         }
     }
 

@@ -234,6 +234,9 @@ internal sealed class BehaviorMemory
         int storedMemories = 0;
         int storedPlayerPreferences = 0;
         int storedCommitments = 0;
+        int storedConflicts = 0;
+        int resolvedConflicts = 0;
+        bool emotionChanged = false;
 
         foreach (var candidate in analysis.Memories
                      .Where(memory => memory.Importance >= 40 && !string.IsNullOrWhiteSpace(memory.Summary))
@@ -283,8 +286,35 @@ internal sealed class BehaviorMemory
             }
         }
 
+        foreach (var candidate in analysis.Conflicts
+                     .Where(conflict => !string.IsNullOrWhiteSpace(conflict.Summary) && conflict.Severity > 0)
+                     .Take(2))
+        {
+            if (this.StoreConflict(state, candidate))
+            {
+                storedConflicts++;
+                var entry = this.CreateEntry(
+                    npc,
+                    "Conflict",
+                    candidate.CauseKind,
+                    candidate.Summary
+                );
+                this.AddEntry(entry, maxEntriesPerNpc);
+            }
+        }
+
+        if (analysis.EmotionImpact.HasEffect)
+        {
+            emotionChanged = this.ApplyDialogueEmotionImpact(state, analysis.EmotionImpact);
+            resolvedConflicts += this.ApplyConflictRepair(state, analysis.EmotionImpact.RepairDelta, analysis.EmotionImpact.Apology);
+        }
+
         // Keep one deterministic fallback for nickname requests if the model forgets metadata.
-        if (storedMemories == 0 && storedPlayerPreferences == 0 && storedCommitments == 0 && TryExtractNicknameRequest(playerText, out string nickname))
+        if (storedMemories == 0
+            && storedPlayerPreferences == 0
+            && storedCommitments == 0
+            && storedConflicts == 0
+            && TryExtractNicknameRequest(playerText, out string nickname))
         {
             string status = DetermineNicknameStatus(nickname, npcResponse);
             var fallbackMemory = new ValleyTalkMemoryCandidate
@@ -308,11 +338,31 @@ internal sealed class BehaviorMemory
         }
 
         int appliedFriendship = this.ApplyAiDialogueFriendship(state, analysis.RapportDelta, maxExtraFriendshipPerDay);
-        if (storedMemories > 0 || storedPlayerPreferences > 0 || storedCommitments > 0 || appliedFriendship > 0)
+        if (storedMemories > 0
+            || storedPlayerPreferences > 0
+            || storedCommitments > 0
+            || storedConflicts > 0
+            || resolvedConflicts > 0
+            || emotionChanged
+            || appliedFriendship > 0)
         {
-            state.LastInteraction = storedMemories > 0 || storedPlayerPreferences > 0 || storedCommitments > 0
-                ? "the farmer shared something worth remembering"
-                : "the farmer had an AI conversation";
+            if (storedMemories > 0 || storedPlayerPreferences > 0 || storedCommitments > 0)
+            {
+                state.LastInteraction = "the farmer shared something worth remembering";
+            }
+            else if (storedConflicts > 0)
+            {
+                state.LastInteraction = "the farmer caused interpersonal friction";
+            }
+            else if (resolvedConflicts > 0)
+            {
+                state.LastInteraction = "the farmer helped repair a conflict";
+            }
+            else
+            {
+                state.LastInteraction = "the farmer had an AI conversation";
+            }
+
             state.LastUpdatedTotalDays = Game1.Date.TotalDays;
             state.LastUpdatedTimeOfDay = Game1.timeOfDay;
         }
@@ -321,6 +371,9 @@ internal sealed class BehaviorMemory
             storedMemories,
             storedPlayerPreferences,
             storedCommitments,
+            storedConflicts,
+            resolvedConflicts,
+            emotionChanged,
             appliedFriendship,
             analysis.RapportDelta,
             analysis.EndConversation,
@@ -440,6 +493,39 @@ internal sealed class BehaviorMemory
         };
         state.CurrentInclination = gift.TasteScore is 0 or 2 ? "OpenToTalk" : gift.TasteScore == 6 ? "Reserved" : "Acknowledging";
 
+        switch (gift.TasteScore)
+        {
+            case 0:
+                this.ApplyEmotion(state, "Happy", 18, $"the farmer gave them a loved gift: {gift.ItemName}");
+                this.ApplyConflictRepair(state, 18, apology: false);
+                break;
+
+            case 2:
+                this.ApplyEmotion(state, "Happy", 10, $"the farmer gave them a liked gift: {gift.ItemName}");
+                this.ApplyConflictRepair(state, 10, apology: false);
+                break;
+
+            case 4:
+                this.ApplyEmotion(state, "Uneasy", 14, $"the farmer gave them a disliked gift: {gift.ItemName}");
+                this.StoreConflict(state, new ValleyTalkConflictCandidate
+                {
+                    CauseKind = "gift",
+                    Summary = $"The farmer gave them a disliked gift: {gift.ItemName}.",
+                    Severity = 15
+                });
+                break;
+
+            case 6:
+                this.ApplyEmotion(state, "Upset", 28, $"the farmer gave them a hated gift: {gift.ItemName}");
+                this.StoreConflict(state, new ValleyTalkConflictCandidate
+                {
+                    CauseKind = "gift",
+                    Summary = $"The farmer gave them a hated gift: {gift.ItemName}.",
+                    Severity = 35
+                });
+                break;
+        }
+
         this.AddFamiliarity(state, familiarityGain, dailyCap: 8);
         state.Attention = LivingNpcState.ClampScore(state.Attention + attentionDelta);
         state.Openness = LivingNpcState.ClampScore(state.Openness + opennessDelta);
@@ -504,6 +590,14 @@ internal sealed class BehaviorMemory
         state.CurrentInclination = "OpenToTalk";
         state.Attention = LivingNpcState.ClampScore(state.Attention + 18);
         state.Openness = LivingNpcState.ClampScore(state.Openness + (state.Familiarity >= 40 ? 8 : 6));
+        if (state.HasUnresolvedConflict)
+        {
+            int severity = state.HighestUnresolvedConflictSeverity;
+            state.Mood = severity >= 60 ? "Guarded" : "Polite";
+            state.CurrentInclination = severity >= 60 ? "NeedsSpace" : "Reserved";
+            state.Openness = LivingNpcState.ClampScore(state.Openness - System.Math.Min(18, 4 + (severity / 5)));
+        }
+
         this.ApplyConversationRhythmInfluence(state);
         this.ApplyWorldStateInfluence(state, world);
         state.LastInteraction = "the farmer started a conversation";
@@ -512,7 +606,7 @@ internal sealed class BehaviorMemory
         return state;
     }
 
-    public void DecayStates(int dailyDecay)
+    public void DecayStates(int dailyDecay, int emotionDailyDecay, int conflictDailyDecay)
     {
         if (this.lastStateDecayTotalDays == Game1.Date.TotalDays)
         {
@@ -541,6 +635,7 @@ internal sealed class BehaviorMemory
 
             if (dailyDecay <= 0)
             {
+                this.DecayEmotionAndConflicts(state, emotionDailyDecay, conflictDailyDecay);
                 continue;
             }
 
@@ -551,6 +646,7 @@ internal sealed class BehaviorMemory
             state.LastInteraction = "time passed";
             state.LastUpdatedTotalDays = Game1.Date.TotalDays;
             state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            this.DecayEmotionAndConflicts(state, emotionDailyDecay, conflictDailyDecay);
         }
     }
 
@@ -944,6 +1040,7 @@ internal sealed class BehaviorMemory
         if (state != null)
         {
             prompt.AppendLine($"- Mood: {state.Mood}; attention to farmer: {state.Attention}/100; response inclination: {state.CurrentInclination}.");
+            prompt.AppendLine($"- Interpersonal emotion: {state.EmotionPromptLabel}.");
             prompt.AppendLine($"- Long-term familiarity with the farmer: {state.Familiarity}/100 ({state.FamiliarityPromptLabel}).");
             prompt.AppendLine($"- Relationship-aware interaction rhythm: {state.InteractionRhythmPromptLabel}; comfort tier: {state.InteractionComfortTierPromptLabel}.");
             prompt.AppendLine($"- Recent gift context: {state.LastGiftPromptLabel}.");
@@ -951,6 +1048,7 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Long-term personal memory: {state.LongTermMemoryPromptLabel}.");
             prompt.AppendLine($"- Known farmer preferences: {state.PlayerPreferencePromptLabel}.");
             prompt.AppendLine($"- Commitments with the farmer: {state.CommitmentPromptLabel}.");
+            prompt.AppendLine($"- Conflict memory: {state.ConflictPromptLabel}.");
             prompt.AppendLine($"- Personal memory context: {state.FarmerNicknamePromptLabel}.");
             prompt.AppendLine($"- Scene influence on mood: {state.LastSceneInfluenceReason}.");
             prompt.AppendLine($"- Last interaction: {state.LastInteraction}.");
@@ -1075,6 +1173,26 @@ internal sealed class BehaviorMemory
                 yield return $"Recently fulfilled commitment: {fulfilledCommitment.FulfilledPromptLabel}; this really happened, so the next conversation may briefly reflect on it as a shared experience.";
             }
 
+            var activeConflict = state.Conflicts
+                .Where(conflict => conflict.Status is "Active" or "Recovering")
+                .OrderByDescending(conflict => conflict.Severity)
+                .ThenByDescending(conflict => conflict.LastUpdatedTotalDays)
+                .FirstOrDefault();
+            if (activeConflict != null)
+            {
+                yield return $"Unresolved conflict: {activeConflict.PromptLabel}; while this remains unresolved, warmth should be reduced and the NPC may be brief, cool, or decline closeness.";
+            }
+
+            var recoveredConflict = state.Conflicts.FirstOrDefault(conflict =>
+                conflict.Status == "Resolved"
+                && conflict.ResolvedTotalDays >= Game1.Date.TotalDays - 3
+                && conflict.RecoveryMentionedTotalDays < 0
+            );
+            if (recoveredConflict != null)
+            {
+                yield return $"Recently resolved conflict: {recoveredConflict.ResolvedPromptLabel}; if it fits naturally, the NPC may briefly make clear that the earlier issue is past now.";
+            }
+
             if (!string.IsNullOrWhiteSpace(state.InteractionRhythm)
                 && state.InteractionRhythm is not "New" and not "NoConversationToday")
             {
@@ -1150,6 +1268,19 @@ internal sealed class BehaviorMemory
             yield return "If a recently fulfilled commitment is relevant, mention it as something the two of you actually did together, not as a future plan.";
         }
 
+        if (state.HasUnresolvedConflict)
+        {
+            yield return "An unresolved conflict is still shaping the relationship; do not answer with default warmth, and if the conflict is severe it is okay to keep the reply short or refuse a friendly invitation.";
+        }
+
+        if (state.Conflicts.Any(conflict =>
+                conflict.Status == "Resolved"
+                && conflict.ResolvedTotalDays >= Game1.Date.TotalDays - 3
+                && conflict.RecoveryMentionedTotalDays < 0))
+        {
+            yield return "If a recently resolved conflict is relevant, it is okay to say in a natural in-character way that the earlier matter is behind you now.";
+        }
+
         if (state.RepeatedConversationPressure >= 20)
         {
             yield return "Because the farmer has been checking in repeatedly, it is okay to sound brief, amused, busy, or gently boundary-setting.";
@@ -1163,6 +1294,16 @@ internal sealed class BehaviorMemory
 
     private string BuildToneCue(LivingNpcState state)
     {
+        string emotion = state.CurrentEmotion switch
+        {
+            "Happy" => "genuinely pleased",
+            "Uneasy" => "slightly uneasy",
+            "Upset" => "not entirely pleased",
+            "Angry" => "angry",
+            "Sad" => "sad",
+            _ => "calm"
+        };
+
         string attention = state.Attention switch
         {
             >= 75 => "attentive",
@@ -1177,7 +1318,7 @@ internal sealed class BehaviorMemory
             _ => "reserved"
         };
 
-        return $"{state.Mood.ToLowerInvariant()}, {attention}, and {openness}";
+        return $"{state.Mood.ToLowerInvariant()}, {emotion}, {attention}, and {openness}";
     }
 
     private string BuildRhythmCue(LivingNpcState state)
@@ -1236,6 +1377,7 @@ internal sealed class BehaviorMemory
         {
             summary.AppendLine($"{npc.displayName} 当前 LivingNPCs 状态：");
             summary.AppendLine($"- 心情：{state.MoodLabel}");
+            summary.AppendLine($"- 人际情绪：{state.EmotionLabel}");
             summary.AppendLine($"- 对玩家注意度：{state.AttentionLabel} ({state.Attention})");
             summary.AppendLine($"- 对玩家熟悉度：{state.FamiliarityLabel} ({state.Familiarity})");
             summary.AppendLine($"- 互动节奏：{state.InteractionRhythmLabel}");
@@ -1245,6 +1387,7 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 长期记忆：{state.LongTermMemoryDebugLabel}");
             summary.AppendLine($"- 玩家偏好记忆：{state.PlayerPreferenceDebugLabel}");
             summary.AppendLine($"- 长期约定：{state.CommitmentDebugLabel}");
+            summary.AppendLine($"- 冲突记忆：{state.ConflictDebugLabel}");
             summary.AppendLine($"- 长期称呼记忆：{state.FarmerNicknameLabel}");
             summary.AppendLine($"- 今日 AI 对话额外好感：{state.AiFriendshipGainedToday}");
             summary.AppendLine($"- 角色资料：{disposition.SourceDebugLabel}");
@@ -1340,6 +1483,7 @@ internal sealed class BehaviorMemory
             "gift" => "gift",
             "event" => "event",
             "longtermmemory" => "long-term memory",
+            "conflict" => "conflict",
             "npcaction" => "npc action",
             _ => "behavior"
         };
@@ -1355,6 +1499,7 @@ internal sealed class BehaviorMemory
             "gift" => "[礼物]",
             "event" => "[事件]",
             "longtermmemory" => "[长期记忆]",
+            "conflict" => "[冲突]",
             "npcaction" => "[NPC动作]",
             _ => "[行为]"
         };
@@ -1378,6 +1523,11 @@ internal sealed class BehaviorMemory
             analysis.AmbientFollowUp ??= new ValleyTalkAmbientFollowUp();
             analysis.AmbientFollowUp.Text = analysis.AmbientFollowUp.Text?.Trim() ?? string.Empty;
             analysis.AmbientFollowUp.DelayMinutes = System.Math.Clamp(analysis.AmbientFollowUp.DelayMinutes, 0, 120);
+            analysis.EmotionImpact ??= new ValleyTalkEmotionImpact();
+            analysis.EmotionImpact.Emotion = NormalizeEmotion(analysis.EmotionImpact.Emotion);
+            analysis.EmotionImpact.IntensityDelta = System.Math.Clamp(analysis.EmotionImpact.IntensityDelta, -100, 100);
+            analysis.EmotionImpact.RepairDelta = System.Math.Clamp(analysis.EmotionImpact.RepairDelta, 0, 100);
+            analysis.EmotionImpact.Reason = analysis.EmotionImpact.Reason?.Trim() ?? string.Empty;
             analysis.Memories = analysis.Memories
                 .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
                 .Select(memory =>
@@ -1424,12 +1574,219 @@ internal sealed class BehaviorMemory
                 .Where(commitment => commitment.Type != "none")
                 .Take(2)
                 .ToList();
+            analysis.Conflicts = analysis.Conflicts
+                .Where(conflict => conflict != null && !string.IsNullOrWhiteSpace(conflict.Summary))
+                .Select(conflict =>
+                {
+                    conflict.CauseKind = NormalizeConflictCauseKind(conflict.CauseKind);
+                    conflict.Summary = conflict.Summary.Trim();
+                    conflict.Severity = System.Math.Clamp(conflict.Severity, 0, 100);
+                    return conflict;
+                })
+                .Where(conflict => conflict.Severity > 0)
+                .Take(2)
+                .ToList();
             return analysis;
         }
         catch
         {
             return new ValleyTalkExchangeAnalysis();
         }
+    }
+
+    private bool ApplyDialogueEmotionImpact(LivingNpcState state, ValleyTalkEmotionImpact impact)
+    {
+        if (!impact.HasEffect)
+        {
+            return false;
+        }
+
+        string reason = string.IsNullOrWhiteSpace(impact.Reason)
+            ? "the latest conversation changed how they felt"
+            : impact.Reason;
+        if (impact.Emotion == "none")
+        {
+            if (impact.IntensityDelta < 0)
+            {
+                state.EmotionIntensity = LivingNpcState.ClampScore(state.EmotionIntensity + impact.IntensityDelta);
+                if (state.EmotionIntensity == 0)
+                {
+                    state.CurrentEmotion = "Calm";
+                }
+
+                state.LastEmotionReason = reason;
+                state.LastEmotionUpdatedTotalDays = Game1.Date.TotalDays;
+                state.LastEmotionUpdatedTimeOfDay = Game1.timeOfDay;
+                return true;
+            }
+
+            return false;
+        }
+
+        this.ApplyEmotion(state, impact.Emotion, impact.IntensityDelta, reason);
+        return true;
+    }
+
+    private void ApplyEmotion(LivingNpcState state, string emotion, int intensityDelta, string reason)
+    {
+        string normalizedEmotion = NormalizeEmotion(emotion);
+        if (normalizedEmotion == "none")
+        {
+            return;
+        }
+
+        int baseIntensity = state.CurrentEmotion == normalizedEmotion
+            ? state.EmotionIntensity
+            : normalizedEmotion == "Calm"
+                ? 0
+                : System.Math.Max(10, state.EmotionIntensity / 2);
+        state.CurrentEmotion = normalizedEmotion == "none" ? "Calm" : normalizedEmotion;
+        state.EmotionIntensity = LivingNpcState.ClampScore(baseIntensity + intensityDelta);
+        if (state.EmotionIntensity == 0)
+        {
+            state.CurrentEmotion = "Calm";
+        }
+
+        state.LastEmotionReason = string.IsNullOrWhiteSpace(reason)
+            ? "the latest interaction changed how they felt"
+            : reason.Trim();
+        state.LastEmotionUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastEmotionUpdatedTimeOfDay = Game1.timeOfDay;
+    }
+
+    private bool StoreConflict(LivingNpcState state, ValleyTalkConflictCandidate candidate)
+    {
+        string normalizedSummary = NormalizeMemorySummary(candidate.Summary);
+        if (string.IsNullOrWhiteSpace(normalizedSummary) || candidate.Severity <= 0)
+        {
+            return false;
+        }
+
+        var existing = state.Conflicts.FirstOrDefault(conflict =>
+            conflict.Status != "Resolved"
+            && NormalizeMemorySummary(conflict.Summary) == normalizedSummary);
+        if (existing != null)
+        {
+            existing.CauseKind = candidate.CauseKind;
+            existing.Severity = LivingNpcState.ClampScore(System.Math.Max(existing.Severity, candidate.Severity) + 8);
+            existing.Status = GetConflictStatus(existing.Severity);
+            existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            existing.TimesReinforced += 1;
+            this.ApplyEmotionForConflict(state, existing);
+            return true;
+        }
+
+        var conflict = new NpcConflictFact
+        {
+            CauseKind = candidate.CauseKind,
+            Summary = candidate.Summary.Trim(),
+            Severity = LivingNpcState.ClampScore(candidate.Severity),
+            Status = GetConflictStatus(candidate.Severity),
+            CreatedTotalDays = Game1.Date.TotalDays,
+            CreatedTimeOfDay = Game1.timeOfDay,
+            LastUpdatedTotalDays = Game1.Date.TotalDays,
+            LastUpdatedTimeOfDay = Game1.timeOfDay,
+            TimesReinforced = 1
+        };
+        state.Conflicts.Add(conflict);
+        state.Conflicts = state.Conflicts
+            .OrderBy(conflictEntry => ConflictStatusOrder(conflictEntry.Status))
+            .ThenByDescending(conflictEntry => conflictEntry.Severity)
+            .ThenByDescending(conflictEntry => conflictEntry.LastUpdatedTotalDays)
+            .Take(12)
+            .ToList();
+        this.ApplyEmotionForConflict(state, conflict);
+        return true;
+    }
+
+    private int ApplyConflictRepair(LivingNpcState state, int repairDelta, bool apology)
+    {
+        int totalRepair = System.Math.Clamp(repairDelta + (apology ? 12 : 0), 0, 100);
+        if (totalRepair <= 0)
+        {
+            return 0;
+        }
+
+        int resolved = 0;
+        foreach (var conflict in state.Conflicts.Where(conflict => conflict.Status is "Active" or "Recovering"))
+        {
+            conflict.RepairScore = LivingNpcState.ClampScore(conflict.RepairScore + totalRepair);
+            conflict.Severity = LivingNpcState.ClampScore(conflict.Severity - totalRepair);
+            conflict.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            conflict.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            if (apology)
+            {
+                conflict.ApologyCount += 1;
+            }
+
+            if (conflict.Severity == 0)
+            {
+                ResolveConflict(conflict);
+                resolved++;
+            }
+            else
+            {
+                conflict.Status = GetConflictStatus(conflict.Severity);
+            }
+        }
+
+        if (resolved > 0)
+        {
+            this.ApplyEmotion(state, "Calm", -state.EmotionIntensity, "an earlier conflict has been repaired");
+        }
+
+        return resolved;
+    }
+
+    private void DecayEmotionAndConflicts(LivingNpcState state, int emotionDailyDecay, int conflictDailyDecay)
+    {
+        if (emotionDailyDecay > 0 && state.EmotionIntensity > 0)
+        {
+            state.EmotionIntensity = LivingNpcState.MoveToward(state.EmotionIntensity, 0, emotionDailyDecay);
+            if (state.EmotionIntensity == 0)
+            {
+                state.CurrentEmotion = "Calm";
+            }
+        }
+
+        if (conflictDailyDecay <= 0)
+        {
+            return;
+        }
+
+        foreach (var conflict in state.Conflicts.Where(conflict => conflict.Status is "Active" or "Recovering"))
+        {
+            conflict.Severity = LivingNpcState.MoveToward(conflict.Severity, 0, conflictDailyDecay);
+            conflict.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            conflict.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            if (conflict.Severity == 0)
+            {
+                ResolveConflict(conflict);
+            }
+            else
+            {
+                conflict.Status = GetConflictStatus(conflict.Severity);
+            }
+        }
+    }
+
+    private void ApplyEmotionForConflict(LivingNpcState state, NpcConflictFact conflict)
+    {
+        string emotion = conflict.Severity switch
+        {
+            >= 70 => "Angry",
+            >= 35 => "Upset",
+            _ => "Uneasy"
+        };
+        this.ApplyEmotion(state, emotion, conflict.Severity / 2, conflict.Summary);
+    }
+
+    private static void ResolveConflict(NpcConflictFact conflict)
+    {
+        conflict.Status = "Resolved";
+        conflict.ResolvedTotalDays = Game1.Date.TotalDays;
+        conflict.ResolvedTimeOfDay = Game1.timeOfDay;
     }
 
     private bool StorePlayerPreferenceMemory(LivingNpcState state, ValleyTalkMemoryCandidate candidate)
@@ -1703,6 +2060,32 @@ internal sealed class BehaviorMemory
         };
     }
 
+    internal static string NormalizeEmotion(string emotion)
+    {
+        return emotion?.Trim().ToLowerInvariant() switch
+        {
+            "happy" => "Happy",
+            "calm" => "Calm",
+            "uneasy" => "Uneasy",
+            "upset" => "Upset",
+            "angry" => "Angry",
+            "sad" => "Sad",
+            _ => "none"
+        };
+    }
+
+    internal static string NormalizeConflictCauseKind(string causeKind)
+    {
+        return causeKind?.Trim().ToLowerInvariant() switch
+        {
+            "dialogue" => "dialogue",
+            "gift" => "gift",
+            "boundary" => "boundary",
+            "promise" => "promise",
+            _ => "dialogue"
+        };
+    }
+
     internal static string NormalizeCommitmentType(string type)
     {
         return type?.Trim().ToLowerInvariant() switch
@@ -1808,6 +2191,27 @@ internal sealed class BehaviorMemory
             "Pending" => 0,
             "Expired" => 1,
             "Fulfilled" => 2,
+            _ => 3
+        };
+    }
+
+    private static string GetConflictStatus(int severity)
+    {
+        return severity switch
+        {
+            <= 0 => "Resolved",
+            < 30 => "Recovering",
+            _ => "Active"
+        };
+    }
+
+    internal static int ConflictStatusOrder(string status)
+    {
+        return status switch
+        {
+            "Active" => 0,
+            "Recovering" => 1,
+            "Resolved" => 2,
             _ => 3
         };
     }
@@ -1923,8 +2327,10 @@ internal sealed class ValleyTalkExchangeAnalysis
     public int RapportDelta { get; set; }
     public bool EndConversation { get; set; }
     public ValleyTalkAmbientFollowUp AmbientFollowUp { get; set; } = new();
+    public ValleyTalkEmotionImpact EmotionImpact { get; set; } = new();
     public List<ValleyTalkWorldActionRequest> Actions { get; set; } = new();
     public List<ValleyTalkCommitmentCandidate> Commitments { get; set; } = new();
+    public List<ValleyTalkConflictCandidate> Conflicts { get; set; } = new();
     public List<ValleyTalkMemoryCandidate> Memories { get; set; } = new();
 }
 
@@ -1991,10 +2397,46 @@ internal sealed class NpcCommitmentFact
     public string FulfilledPromptLabel => $"{this.Type} at {this.LocationLabel} was fulfilled on total day {this.FulfilledTotalDays} around {this.FulfilledTimeOfDay}; summary: {this.Summary}";
 }
 
+internal sealed class NpcConflictFact
+{
+    public string CauseKind { get; set; } = "dialogue";
+    public string Summary { get; set; } = string.Empty;
+    public int Severity { get; set; }
+    public string Status { get; set; } = "Active";
+    public int CreatedTotalDays { get; set; } = -1;
+    public int CreatedTimeOfDay { get; set; }
+    public int LastUpdatedTotalDays { get; set; } = -1;
+    public int LastUpdatedTimeOfDay { get; set; }
+    public int ResolvedTotalDays { get; set; } = -1;
+    public int ResolvedTimeOfDay { get; set; }
+    public int RecoveryMentionedTotalDays { get; set; } = -1;
+    public int RecoveryMentionedTimeOfDay { get; set; }
+    public int RepairScore { get; set; }
+    public int ApologyCount { get; set; }
+    public int TimesReinforced { get; set; }
+
+    public string PromptLabel => $"{this.Status.ToLowerInvariant()} conflict, severity {this.Severity}/100, cause {this.CauseKind}: {this.Summary}";
+    public string ResolvedPromptLabel => $"resolved conflict from total day {this.CreatedTotalDays}, cause {this.CauseKind}: {this.Summary}";
+}
+
 internal sealed class ValleyTalkAmbientFollowUp
 {
     public string Text { get; set; } = string.Empty;
     public int DelayMinutes { get; set; }
+}
+
+internal sealed class ValleyTalkEmotionImpact
+{
+    public string Emotion { get; set; } = "none";
+    public int IntensityDelta { get; set; }
+    public bool Apology { get; set; }
+    public int RepairDelta { get; set; }
+    public string Reason { get; set; } = string.Empty;
+
+    public bool HasEffect => this.Emotion != "none"
+        || this.IntensityDelta != 0
+        || this.Apology
+        || this.RepairDelta > 0;
 }
 
 internal sealed class ValleyTalkWorldActionRequest
@@ -2018,10 +2460,20 @@ internal sealed class ValleyTalkCommitmentCandidate
     public string LocationLabel { get; set; } = string.Empty;
 }
 
+internal sealed class ValleyTalkConflictCandidate
+{
+    public string CauseKind { get; set; } = "dialogue";
+    public string Summary { get; set; } = string.Empty;
+    public int Severity { get; set; }
+}
+
 internal sealed record ValleyTalkExchangeResult(
     int LongTermMemoriesStored,
     int PlayerPreferencesStored,
     int CommitmentsStored,
+    int ConflictsStored,
+    int ConflictsResolved,
+    bool EmotionChanged,
     int AppliedFriendshipDelta,
     int RequestedFriendshipDelta,
     bool EndConversation,
@@ -2033,6 +2485,9 @@ internal sealed record ValleyTalkExchangeResult(
     public bool HasEffect => this.LongTermMemoriesStored > 0
         || this.PlayerPreferencesStored > 0
         || this.CommitmentsStored > 0
+        || this.ConflictsStored > 0
+        || this.ConflictsResolved > 0
+        || this.EmotionChanged
         || this.AppliedFriendshipDelta > 0
         || !string.IsNullOrWhiteSpace(this.AmbientFollowUpText)
         || this.Actions.Count > 0;
@@ -2042,6 +2497,11 @@ internal sealed class LivingNpcState
 {
     public string NpcName { get; set; } = string.Empty;
     public string Mood { get; set; } = "Neutral";
+    public string CurrentEmotion { get; set; } = "Calm";
+    public int EmotionIntensity { get; set; }
+    public string LastEmotionReason { get; set; } = "none";
+    public int LastEmotionUpdatedTotalDays { get; set; } = -1;
+    public int LastEmotionUpdatedTimeOfDay { get; set; }
     public int Attention { get; set; } = 35;
     public int Openness { get; set; } = 50;
     public int Familiarity { get; set; }
@@ -2068,6 +2528,7 @@ internal sealed class LivingNpcState
     public List<LongTermMemoryFact> LongTermMemories { get; set; } = new();
     public List<PlayerPreferenceFact> PlayerPreferenceMemories { get; set; } = new();
     public List<NpcCommitmentFact> Commitments { get; set; } = new();
+    public List<NpcConflictFact> Conflicts { get; set; } = new();
     public int AiFriendshipGainedToday { get; set; }
     public int LastAiFriendshipTotalDays { get; set; } = -1;
     public int LastAiSmallGiftTotalDays { get; set; } = -1;
@@ -2119,6 +2580,34 @@ internal sealed class LivingNpcState
         "Warm" => "温和",
         _ => "普通"
     };
+
+    public string EmotionLabel => this.CurrentEmotion switch
+    {
+        "Happy" => $"开心（{this.EmotionIntensity}）",
+        "Uneasy" => $"有些不自在（{this.EmotionIntensity}）",
+        "Upset" => $"不悦（{this.EmotionIntensity}）",
+        "Angry" => $"生气（{this.EmotionIntensity}）",
+        "Sad" => $"伤心（{this.EmotionIntensity}）",
+        _ => $"平静（{this.EmotionIntensity}）"
+    };
+
+    public string EmotionPromptLabel => this.CurrentEmotion switch
+    {
+        "Happy" => $"happy, intensity {this.EmotionIntensity}/100; latest reason: {this.LastEmotionReason}",
+        "Uneasy" => $"uneasy, intensity {this.EmotionIntensity}/100; latest reason: {this.LastEmotionReason}",
+        "Upset" => $"upset, intensity {this.EmotionIntensity}/100; latest reason: {this.LastEmotionReason}",
+        "Angry" => $"angry, intensity {this.EmotionIntensity}/100; latest reason: {this.LastEmotionReason}",
+        "Sad" => $"sad, intensity {this.EmotionIntensity}/100; latest reason: {this.LastEmotionReason}",
+        _ => $"calm, intensity {this.EmotionIntensity}/100"
+    };
+
+    public bool HasUnresolvedConflict => this.Conflicts.Any(conflict => conflict.Status is "Active" or "Recovering");
+
+    public int HighestUnresolvedConflictSeverity => this.Conflicts
+        .Where(conflict => conflict.Status is "Active" or "Recovering")
+        .Select(conflict => conflict.Severity)
+        .DefaultIfEmpty(0)
+        .Max();
 
     public string FamiliarityLabel => this.Familiarity switch
     {
@@ -2309,6 +2798,29 @@ internal sealed class LivingNpcState
         }
     }
 
+    public string ConflictPromptLabel
+    {
+        get
+        {
+            var conflicts = this.GetTopConflicts(4).ToList();
+            return conflicts.Count == 0
+                ? "no durable conflict memory has been recorded"
+                : string.Join("; ", conflicts.Select(conflict => conflict.PromptLabel));
+        }
+    }
+
+    public string ConflictDebugLabel
+    {
+        get
+        {
+            var conflicts = this.GetTopConflicts(4).ToList();
+            return conflicts.Count == 0
+                ? "暂无"
+                : string.Join("；", conflicts.Select(conflict =>
+                    $"{conflict.Summary}（{conflict.CauseKind}，严重度 {conflict.Severity}，{conflict.Status}）"));
+        }
+    }
+
     public string FarmerNicknamePromptLabel
     {
         get
@@ -2351,6 +2863,8 @@ internal sealed class LivingNpcState
         "passive nearby reaction" => "附近发生了一次自然反应",
         "small behavior near the farmer" => "刚在玩家附近做过小动作",
         "the farmer started a conversation" => "玩家刚主动开始对话",
+        "the farmer caused interpersonal friction" => "玩家刚造成了一次关系摩擦",
+        "the farmer helped repair a conflict" => "玩家刚缓和了一次冲突",
         "time passed" => "时间过去，状态回落",
         _ => this.LastInteraction
     };
@@ -2377,6 +2891,13 @@ internal sealed class LivingNpcState
         this.Attention = ClampScore(this.Attention);
         this.Openness = ClampScore(this.Openness);
         this.Familiarity = ClampScore(this.Familiarity);
+        this.CurrentEmotion = BehaviorMemory.NormalizeEmotion(this.CurrentEmotion);
+        if (this.CurrentEmotion == "none")
+        {
+            this.CurrentEmotion = "Calm";
+        }
+
+        this.EmotionIntensity = ClampScore(this.EmotionIntensity);
         this.FamiliarityGainedToday = System.Math.Clamp(this.FamiliarityGainedToday, 0, 100);
         this.ConversationsToday = System.Math.Max(0, this.ConversationsToday);
         this.ConsecutiveConversationDays = System.Math.Max(0, this.ConsecutiveConversationDays);
@@ -2459,6 +2980,36 @@ internal sealed class LivingNpcState
             .ThenBy(commitment => commitment.TimeOfDay)
             .Take(12)
             .ToList();
+        this.Conflicts ??= new List<NpcConflictFact>();
+        this.Conflicts = this.Conflicts
+            .Where(conflict => conflict != null && !string.IsNullOrWhiteSpace(conflict.Summary))
+            .Select(conflict =>
+            {
+                conflict.CauseKind = BehaviorMemory.NormalizeConflictCauseKind(conflict.CauseKind);
+                conflict.Summary = conflict.Summary.Trim();
+                conflict.Severity = ClampScore(conflict.Severity);
+                conflict.Status = conflict.Status switch
+                {
+                    "Resolved" => "Resolved",
+                    "Recovering" => "Recovering",
+                    _ => conflict.Severity <= 0 ? "Resolved" : "Active"
+                };
+                conflict.RepairScore = ClampScore(conflict.RepairScore);
+                conflict.ApologyCount = System.Math.Max(0, conflict.ApologyCount);
+                conflict.TimesReinforced = System.Math.Max(0, conflict.TimesReinforced);
+                if (conflict.Status == "Resolved" && conflict.ResolvedTotalDays < 0)
+                {
+                    conflict.ResolvedTotalDays = conflict.LastUpdatedTotalDays;
+                    conflict.ResolvedTimeOfDay = conflict.LastUpdatedTimeOfDay;
+                }
+
+                return conflict;
+            })
+            .OrderBy(conflict => BehaviorMemory.ConflictStatusOrder(conflict.Status))
+            .ThenByDescending(conflict => conflict.Severity)
+            .ThenByDescending(conflict => conflict.LastUpdatedTotalDays)
+            .Take(12)
+            .ToList();
         this.AiFriendshipGainedToday = System.Math.Clamp(this.AiFriendshipGainedToday, 0, 30);
         if (string.IsNullOrWhiteSpace(this.Mood))
         {
@@ -2488,6 +3039,11 @@ internal sealed class LivingNpcState
         if (string.IsNullOrWhiteSpace(this.LastSceneInfluenceReason))
         {
             this.LastSceneInfluenceReason = "none";
+        }
+
+        if (string.IsNullOrWhiteSpace(this.LastEmotionReason))
+        {
+            this.LastEmotionReason = "none";
         }
 
         if (string.IsNullOrWhiteSpace(this.FarmerNicknameStatus) && !string.IsNullOrWhiteSpace(this.FarmerNickname))
@@ -2522,6 +3078,11 @@ internal sealed class LivingNpcState
         {
             NpcName = this.NpcName,
             Mood = this.Mood,
+            CurrentEmotion = this.CurrentEmotion,
+            EmotionIntensity = this.EmotionIntensity,
+            LastEmotionReason = this.LastEmotionReason,
+            LastEmotionUpdatedTotalDays = this.LastEmotionUpdatedTotalDays,
+            LastEmotionUpdatedTimeOfDay = this.LastEmotionUpdatedTimeOfDay,
             Attention = this.Attention,
             Openness = this.Openness,
             Familiarity = this.Familiarity,
@@ -2597,6 +3158,26 @@ internal sealed class LivingNpcState
                     TimesReinforced = commitment.TimesReinforced
                 })
                 .ToList(),
+            Conflicts = this.Conflicts
+                .Select(conflict => new NpcConflictFact
+                {
+                    CauseKind = conflict.CauseKind,
+                    Summary = conflict.Summary,
+                    Severity = conflict.Severity,
+                    Status = conflict.Status,
+                    CreatedTotalDays = conflict.CreatedTotalDays,
+                    CreatedTimeOfDay = conflict.CreatedTimeOfDay,
+                    LastUpdatedTotalDays = conflict.LastUpdatedTotalDays,
+                    LastUpdatedTimeOfDay = conflict.LastUpdatedTimeOfDay,
+                    ResolvedTotalDays = conflict.ResolvedTotalDays,
+                    ResolvedTimeOfDay = conflict.ResolvedTimeOfDay,
+                    RecoveryMentionedTotalDays = conflict.RecoveryMentionedTotalDays,
+                    RecoveryMentionedTimeOfDay = conflict.RecoveryMentionedTimeOfDay,
+                    RepairScore = conflict.RepairScore,
+                    ApologyCount = conflict.ApologyCount,
+                    TimesReinforced = conflict.TimesReinforced
+                })
+                .ToList(),
             AiFriendshipGainedToday = this.AiFriendshipGainedToday,
             LastAiFriendshipTotalDays = this.LastAiFriendshipTotalDays,
             LastAiSmallGiftTotalDays = this.LastAiSmallGiftTotalDays,
@@ -2648,6 +3229,21 @@ internal sealed class LivingNpcState
             })
             .ThenBy(commitment => commitment.DueTotalDays)
             .ThenBy(commitment => commitment.TimeOfDay)
+            .Take(count);
+    }
+
+    private IEnumerable<NpcConflictFact> GetTopConflicts(int count)
+    {
+        return this.Conflicts
+            .OrderBy(conflict => conflict.Status switch
+            {
+                "Active" => 0,
+                "Recovering" => 1,
+                "Resolved" => 2,
+                _ => 3
+            })
+            .ThenByDescending(conflict => conflict.Severity)
+            .ThenByDescending(conflict => conflict.LastUpdatedTotalDays)
             .Take(count);
     }
 }

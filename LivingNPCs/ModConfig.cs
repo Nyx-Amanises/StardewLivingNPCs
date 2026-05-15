@@ -35,6 +35,8 @@ internal sealed class ModConfig
     public bool AllowAiQuestAssists { get; set; } = true;
     public bool EnableNpcState { get; set; } = true;
     public int NpcStateDailyDecay { get; set; } = 12;
+    public int NpcEmotionDailyDecay { get; set; } = 12;
+    public int NpcConflictDailyDecay { get; set; } = 8;
     public bool EnablePassiveBehaviors { get; set; } = true;
     public int PassiveBehaviorChancePercent { get; set; } = 6;
     public int MaxBehaviorsPerNpcPerDay { get; set; } = 2;
@@ -95,6 +97,8 @@ internal sealed class ModConfig
         this.AllowAiQuestAssists = defaults.AllowAiQuestAssists;
         this.EnableNpcState = defaults.EnableNpcState;
         this.NpcStateDailyDecay = defaults.NpcStateDailyDecay;
+        this.NpcEmotionDailyDecay = defaults.NpcEmotionDailyDecay;
+        this.NpcConflictDailyDecay = defaults.NpcConflictDailyDecay;
         this.EnablePassiveBehaviors = defaults.EnablePassiveBehaviors;
         this.PassiveBehaviorChancePercent = defaults.PassiveBehaviorChancePercent;
         this.MaxBehaviorsPerNpcPerDay = defaults.MaxBehaviorsPerNpcPerDay;
