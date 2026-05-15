@@ -381,6 +381,7 @@ internal sealed class BehaviorEngine
             bool executed = action.Type switch
             {
                 "give_small_gift" => this.TryGiveSmallGift(npc, action, playerText, npcResponse, out _),
+                "give_meaningful_gift" => this.TryGiveMeaningfulGift(npc, action, playerText, npcResponse, out _),
                 "give_money" => this.TryGiveMoney(npc, action, out _),
                 "water_nearby_crops" => this.TryWaterNearbyCrops(npc, action, out _),
                 "walk_together" => this.TryStartWalkTogether(npc, action, out _),
@@ -392,6 +393,7 @@ internal sealed class BehaviorEngine
                 string reason = action.Type switch
                 {
                     "give_small_gift" => "gift request rejected",
+                    "give_meaningful_gift" => "meaningful gift request rejected",
                     "give_money" => "money request rejected",
                     "water_nearby_crops" => "watering request rejected",
                     "walk_together" => "walk request rejected",
@@ -417,9 +419,12 @@ internal sealed class BehaviorEngine
         }
 
         var state = this.memory.GetState(npc);
-        if (!this.config.AllowAiSmallGifts || state == null || state.LastAiSmallGiftTotalDays == Game1.Date.TotalDays)
+        if (!this.config.AllowAiSmallGifts
+            || state == null
+            || state.LastAiSmallGiftTotalDays == Game1.Date.TotalDays
+            || state.LastAiMeaningfulGiftTotalDays == Game1.Date.TotalDays)
         {
-            reason = "small gifts are disabled or already used today";
+            reason = "small gifts are disabled or another AI gift was already used today";
             return false;
         }
 
@@ -480,6 +485,83 @@ internal sealed class BehaviorEngine
         );
         this.MarkStateAfterWorldAction(state, "they gave the farmer some money");
         this.ShowFeedback($"LivingNPCs：{npc.displayName} 给了你 {amount}g。");
+        return true;
+    }
+
+    private bool TryGiveMeaningfulGift(
+        NPC npc,
+        ValleyTalkWorldActionRequest action,
+        string playerText,
+        string npcResponse,
+        out string reason
+    )
+    {
+        reason = string.Empty;
+        if (!this.CanUseWorldAction(npc, "meaningful_gift", requireFriendly: true, out reason))
+        {
+            return false;
+        }
+
+        var state = this.memory.GetState(npc);
+        if (!this.config.AllowAiMeaningfulGifts || state == null)
+        {
+            reason = "meaningful gifts are disabled";
+            return false;
+        }
+
+        if (state.LastAiSmallGiftTotalDays == Game1.Date.TotalDays)
+        {
+            reason = "another AI gift was already used today";
+            return false;
+        }
+
+        int daysSinceLastMeaningfulGift = state.LastAiMeaningfulGiftTotalDays < 0
+            ? int.MaxValue
+            : Game1.Date.TotalDays - state.LastAiMeaningfulGiftTotalDays;
+        if (daysSinceLastMeaningfulGift < this.config.AiMeaningfulGiftCooldownDays)
+        {
+            reason = "meaningful gift cooldown is active";
+            return false;
+        }
+
+        bool highRelationship = state.InteractionComfortTier is "Trusted" or "Intimate";
+        bool recentSpecialEvent = !string.IsNullOrWhiteSpace(state.LastEventContext)
+            && state.LastEventTotalDays >= Game1.Date.TotalDays - 1;
+        bool meaningfulMemoryCue = this.giftSelector.HasMeaningfulMemoryCue(state, playerText, npcResponse);
+        if (!highRelationship && !recentSpecialEvent && !meaningfulMemoryCue)
+        {
+            reason = "meaningful gifts require a strong relationship, recent event, or important memory cue";
+            return false;
+        }
+
+        GiftSelection selection = this.giftSelector.ChooseMeaningful(npc, state, playerText, npcResponse);
+        SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
+        if (!Game1.player.addItemToInventoryBool(gift))
+        {
+            reason = "player inventory is full";
+            return false;
+        }
+
+        state.LastAiMeaningfulGiftTotalDays = Game1.Date.TotalDays;
+        this.memory.RecordNpcWorldAction(
+            npc,
+            "GaveMeaningfulGift",
+            this.BuildWorldActionReason(
+                action.Reason,
+                $"they gave the farmer a meaningful {gift.DisplayName}; selection basis: {selection.Reason}"
+            ),
+            this.config.MaxMemoryEntriesPerNpc
+        );
+        this.MarkStateAfterWorldAction(state, "they gave the farmer a meaningful gift");
+        if (this.config.Debug)
+        {
+            this.monitor.Log(
+                $"Selected meaningful AI gift for {npc.Name}: {selection.DebugName} ({selection.ItemId}); {selection.Reason}.",
+                LogLevel.Debug
+            );
+        }
+
+        this.ShowFeedback($"LivingNPCs：{npc.displayName} 给了你 {gift.DisplayName}。");
         return true;
     }
 

@@ -19,6 +19,8 @@ internal sealed class ModConfig
     public bool EnableDialogueFollowUps { get; set; } = true;
     public bool EnableAiWorldActions { get; set; } = true;
     public bool AllowAiSmallGifts { get; set; } = true;
+    public bool AllowAiMeaningfulGifts { get; set; } = true;
+    public int AiMeaningfulGiftCooldownDays { get; set; } = 7;
     public bool AllowAiMoneyGifts { get; set; } = true;
     public int MaxAiMoneyGiftAmount { get; set; } = 250;
     public bool AllowAiFarmHelp { get; set; } = true;
@@ -71,6 +73,8 @@ internal sealed class ModConfig
         this.EnableDialogueFollowUps = defaults.EnableDialogueFollowUps;
         this.EnableAiWorldActions = defaults.EnableAiWorldActions;
         this.AllowAiSmallGifts = defaults.AllowAiSmallGifts;
+        this.AllowAiMeaningfulGifts = defaults.AllowAiMeaningfulGifts;
+        this.AiMeaningfulGiftCooldownDays = defaults.AiMeaningfulGiftCooldownDays;
         this.AllowAiMoneyGifts = defaults.AllowAiMoneyGifts;
         this.MaxAiMoneyGiftAmount = defaults.MaxAiMoneyGiftAmount;
         this.AllowAiFarmHelp = defaults.AllowAiFarmHelp;

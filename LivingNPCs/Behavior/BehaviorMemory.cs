@@ -1356,6 +1356,7 @@ internal sealed class BehaviorMemory
         return type?.Trim().ToLowerInvariant() switch
         {
             "give_small_gift" => "give_small_gift",
+            "give_meaningful_gift" => "give_meaningful_gift",
             "give_money" => "give_money",
             "water_nearby_crops" => "water_nearby_crops",
             "walk_together" => "walk_together",
@@ -1564,6 +1565,7 @@ internal sealed class LivingNpcState
     public int AiFriendshipGainedToday { get; set; }
     public int LastAiFriendshipTotalDays { get; set; } = -1;
     public int LastAiSmallGiftTotalDays { get; set; } = -1;
+    public int LastAiMeaningfulGiftTotalDays { get; set; } = -1;
     public int LastAiMoneyGiftTotalDays { get; set; } = -1;
     public int LastAiFarmHelpTotalDays { get; set; } = -1;
     public int LastAiWalkTogetherTotalDays { get; set; } = -1;
@@ -1950,6 +1952,7 @@ internal sealed class LivingNpcState
             AiFriendshipGainedToday = this.AiFriendshipGainedToday,
             LastAiFriendshipTotalDays = this.LastAiFriendshipTotalDays,
             LastAiSmallGiftTotalDays = this.LastAiSmallGiftTotalDays,
+            LastAiMeaningfulGiftTotalDays = this.LastAiMeaningfulGiftTotalDays,
             LastAiMoneyGiftTotalDays = this.LastAiMoneyGiftTotalDays,
             LastAiFarmHelpTotalDays = this.LastAiFarmHelpTotalDays,
             LastAiWalkTogetherTotalDays = this.LastAiWalkTogetherTotalDays,

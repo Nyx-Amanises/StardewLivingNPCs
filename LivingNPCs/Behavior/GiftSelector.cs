@@ -7,7 +7,7 @@ namespace LivingNPCs.Behavior;
 
 internal sealed class GiftSelector
 {
-    private static readonly IReadOnlyList<GiftCandidate> Candidates =
+    private static readonly IReadOnlyList<GiftCandidate> SmallCandidates =
     [
         new("(O)216", "Bread", ["food", "comfort", "practical"]),
         new("(O)223", "Cookie", ["food", "comfort", "sweet", "youthful"]),
@@ -31,6 +31,26 @@ internal sealed class GiftSelector
         new("(O)414", "Crystal Fruit", ["nature", "forage", "food", "adventurous", "magical"], "winter"),
         new("(O)416", "Snow Yam", ["nature", "forage", "food", "practical"], "winter"),
         new("(O)418", "Crocus", ["nature", "forage", "flower", "artistic"], "winter")
+    ];
+
+    private static readonly IReadOnlyList<GiftCandidate> MeaningfulCandidates =
+    [
+        new("(O)66", "Amethyst", ["adventurous", "magical", "artistic"]),
+        new("(O)72", "Diamond", ["artistic", "refined", "special"]),
+        new("(O)80", "Quartz", ["scholarly", "magical"]),
+        new("(O)82", "Fire Quartz", ["adventurous", "magical"]),
+        new("(O)84", "Frozen Tear", ["comfort", "magical", "special"]),
+        new("(O)86", "Earth Crystal", ["nature", "magical"]),
+        new("(O)220", "Chocolate Cake", ["comfort", "sweet", "special"]),
+        new("(O)221", "Pink Cake", ["comfort", "sweet", "flower", "special"]),
+        new("(O)234", "Blueberry Tart", ["food", "sweet", "comfort"]),
+        new("(O)240", "Farmer's Lunch", ["food", "practical", "special"]),
+        new("(O)421", "Sunflower", ["flower", "artistic", "special"], "summer"),
+        new("(O)591", "Tulip", ["flower", "artistic"], "spring"),
+        new("(O)593", "Summer Spangle", ["flower", "artistic"], "summer"),
+        new("(O)595", "Fairy Rose", ["flower", "artistic", "magical", "special"], "fall"),
+        new("(O)597", "Blue Jazz", ["flower", "artistic"], "spring"),
+        new("(O)608", "Pumpkin Pie", ["food", "comfort", "special"], "fall")
     ];
 
     private static readonly Dictionary<string, string[]> ExplicitNpcTags = new(StringComparer.OrdinalIgnoreCase)
@@ -125,14 +145,54 @@ internal sealed class GiftSelector
         string npcResponse
     )
     {
+        return this.ChooseFromPool(SmallCandidates, GiftTier.Small, npc, state, playerText, npcResponse);
+    }
+
+    public GiftSelection ChooseMeaningful(
+        NPC npc,
+        LivingNpcState state,
+        string playerText,
+        string npcResponse
+    )
+    {
+        return this.ChooseFromPool(MeaningfulCandidates, GiftTier.Meaningful, npc, state, playerText, npcResponse);
+    }
+
+    public bool HasMeaningfulMemoryCue(
+        LivingNpcState state,
+        string playerText,
+        string npcResponse
+    )
+    {
+        var conversationTags = BuildConversationTags(playerText, npcResponse);
+        var memoryTags = BuildMemoryTags(state);
+        bool matchingTags = conversationTags.Overlaps(memoryTags);
+        bool freshImportantMemory = state.LongTermMemories.Any(memory =>
+            memory.Importance >= 85
+            && memory.LastUpdatedTotalDays >= Game1.Date.TotalDays - 1
+        );
+
+        return matchingTags || freshImportantMemory;
+    }
+
+    private GiftSelection ChooseFromPool(
+        IReadOnlyList<GiftCandidate> pool,
+        GiftTier tier,
+        NPC npc,
+        LivingNpcState state,
+        string playerText,
+        string npcResponse
+    )
+    {
         string season = Game1.season.ToString().ToLowerInvariant();
         var disposition = NpcDisposition.For(npc);
         var npcTags = this.BuildNpcTags(npc, disposition);
         var topicTags = BuildConversationTags(playerText, npcResponse);
+        var memoryTags = BuildMemoryTags(state);
 
-        var scored = Candidates
+        var scored = pool
             .Where(candidate => string.IsNullOrWhiteSpace(candidate.Season) || candidate.Season == season)
-            .Select(candidate => new ScoredGift(candidate, Score(candidate, npcTags, topicTags, state)))
+            .Select(candidate => new ScoredGift(candidate, Score(candidate, tier, npcTags, topicTags, memoryTags, state)))
             .ToList();
 
         int bestScore = scored.Max(candidate => candidate.Score);
@@ -144,7 +204,8 @@ internal sealed class GiftSelector
         return new GiftSelection(
             chosen.Candidate.ItemId,
             chosen.Candidate.DebugName,
-            $"profile tags: {FormatTags(npcTags)}; conversation tags: {FormatTags(topicTags)}; score: {chosen.Score}"
+            tier,
+            $"profile tags: {FormatTags(npcTags)}; conversation tags: {FormatTags(topicTags)}; memory tags: {FormatTags(memoryTags)}; score: {chosen.Score}"
         );
     }
 
@@ -211,6 +272,20 @@ internal sealed class GiftSelector
         return tags;
     }
 
+    private static HashSet<string> BuildMemoryTags(LivingNpcState state)
+    {
+        var tags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var memory in state.LongTermMemories
+                     .Where(memory => memory.Importance >= 70)
+                     .Take(4))
+        {
+            AddTagsForText(tags, memory.Summary.ToLowerInvariant());
+            tags.UnionWith(BuildConversationTags(memory.Summary, string.Empty));
+        }
+
+        return tags;
+    }
+
     private static void AddTagsForText(HashSet<string> tags, string text)
     {
         if (ContainsAny(text, "warm", "caring", "motherly", "family", "gentle", "community"))
@@ -231,6 +306,11 @@ internal sealed class GiftSelector
         if (ContainsAny(text, "artistic", "expressive", "stylish", "performer", "creative"))
         {
             tags.Add("artistic");
+        }
+
+        if (ContainsAny(text, "elegant", "wealthy", "refined", "polished"))
+        {
+            tags.Add("refined");
         }
 
         if (ContainsAny(text, "adventurer", "fighter", "danger", "brave", "battle"))
@@ -256,14 +336,17 @@ internal sealed class GiftSelector
 
     private static int Score(
         GiftCandidate candidate,
+        GiftTier tier,
         IReadOnlySet<string> npcTags,
         IReadOnlySet<string> topicTags,
+        IReadOnlySet<string> memoryTags,
         LivingNpcState state
     )
     {
         int score = 10;
         score += candidate.Tags.Count(tag => npcTags.Contains(tag)) * 5;
         score += candidate.Tags.Count(tag => topicTags.Contains(tag)) * 8;
+        score += candidate.Tags.Count(tag => memoryTags.Contains(tag)) * 7;
 
         if (!string.IsNullOrWhiteSpace(candidate.Season))
         {
@@ -280,6 +363,12 @@ internal sealed class GiftSelector
             && candidate.Tags.Any(tag => tag is "comfort" or "sweet"))
         {
             score -= 2;
+        }
+
+        if (tier == GiftTier.Meaningful
+            && candidate.Tags.Contains("special"))
+        {
+            score += state.InteractionComfortTier is "Trusted" or "Intimate" ? 5 : 2;
         }
 
         return score;
@@ -316,5 +405,12 @@ internal sealed record ScoredGift(
 internal sealed record GiftSelection(
     string ItemId,
     string DebugName,
+    GiftTier Tier,
     string Reason
 );
+
+internal enum GiftTier
+{
+    Small,
+    Meaningful
+}

@@ -13,6 +13,8 @@
   "EnableDialogueFollowUps": true,
   "EnableAiWorldActions": true,
   "AllowAiSmallGifts": true,
+  "AllowAiMeaningfulGifts": true,
+  "AiMeaningfulGiftCooldownDays": 7,
   "AllowAiMoneyGifts": true,
   "MaxAiMoneyGiftAmount": 250,
   "AllowAiFarmHelp": true,

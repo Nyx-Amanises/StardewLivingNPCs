@@ -115,6 +115,7 @@ internal sealed class ConversationAnalysis
         return type?.Trim().ToLowerInvariant() switch
         {
             "give_small_gift" => "give_small_gift",
+            "give_meaningful_gift" => "give_meaningful_gift",
             "give_money" => "give_money",
             "water_nearby_crops" => "water_nearby_crops",
             "walk_together" => "walk_together",

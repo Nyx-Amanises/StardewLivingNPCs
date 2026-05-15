@@ -193,6 +193,25 @@ internal static class ModConfigMenu
 
         configMenu.AddBoolOption(
             mod: manifest,
+            name: () => "允许 NPC 送有意义的礼物",
+            tooltip: () => "只有关系很深、近期有特别事件，或对话触及重要长期记忆时，NPC 才可能送出更用心的礼物。",
+            getValue: () => config.AllowAiMeaningfulGifts,
+            setValue: value => config.AllowAiMeaningfulGifts = value
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "有意义礼物冷却天数",
+            tooltip: () => "同一个 NPC 两次送出有意义礼物之间至少相隔多少天。",
+            getValue: () => config.AiMeaningfulGiftCooldownDays,
+            setValue: value => config.AiMeaningfulGiftCooldownDays = value,
+            min: 1,
+            max: 28,
+            interval: 1
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
             name: () => "允许 NPC 送钱",
             tooltip: () => "只有关系较熟时，NPC 才可能偶尔给玩家少量金钱。",
             getValue: () => config.AllowAiMoneyGifts,
