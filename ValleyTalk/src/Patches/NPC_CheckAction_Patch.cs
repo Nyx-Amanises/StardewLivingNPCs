@@ -10,19 +10,14 @@ namespace ValleyTalk
     [HarmonyPatch(typeof(NPC), nameof(NPC.checkAction))]
     public class NPC_CheckAction_Patch
     {
-
-        /// <summary>
-        /// Key to press while clicking on an NPC to initiate typed dialogue
-        /// </summary>
-        public static SButton InitiateTypedDialogueKey = ModEntry.Config.InitiateTypedDialogueKey;
-
         /// <summary>
         /// Prefix method for NPC.checkAction
         /// </summary>
         public static bool Prefix(ref NPC __instance, ref bool __result, Farmer who, GameLocation l)
         {
-            // Check if the Alt key is being held down (or whatever key is configured)
-            bool wasTriggerKeyDown = ModEntry.SHelper.Input.IsDown(InitiateTypedDialogueKey);
+            // Check if the configured key is being held down while clicking the NPC.
+            var triggerKey = ModEntry.Config.InitiateTypedDialogueKey;
+            bool wasTriggerKeyDown = triggerKey != SButton.None && ModEntry.SHelper.Input.IsDown(triggerKey);
 
             // Check for cases when we should not allow initiating typed dialogue
             if (
