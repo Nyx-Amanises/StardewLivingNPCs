@@ -35,12 +35,12 @@ internal sealed class GiftSelector
 
     private static readonly IReadOnlyList<GiftCandidate> MeaningfulCandidates =
     [
-        new("(O)66", "Amethyst", ["adventurous", "magical", "artistic"]),
-        new("(O)72", "Diamond", ["artistic", "refined", "special"]),
-        new("(O)80", "Quartz", ["scholarly", "magical"]),
-        new("(O)82", "Fire Quartz", ["adventurous", "magical"]),
-        new("(O)84", "Frozen Tear", ["comfort", "magical", "special"]),
-        new("(O)86", "Earth Crystal", ["nature", "magical"]),
+        new("(O)66", "Amethyst", ["mineral", "adventurous", "magical", "artistic"]),
+        new("(O)72", "Diamond", ["mineral", "artistic", "refined", "special"]),
+        new("(O)80", "Quartz", ["mineral", "scholarly", "magical"]),
+        new("(O)82", "Fire Quartz", ["mineral", "adventurous", "magical"]),
+        new("(O)84", "Frozen Tear", ["mineral", "comfort", "magical", "special"]),
+        new("(O)86", "Earth Crystal", ["mineral", "nature", "magical"]),
         new("(O)220", "Chocolate Cake", ["comfort", "sweet", "special"]),
         new("(O)221", "Pink Cake", ["comfort", "sweet", "flower", "special"]),
         new("(O)234", "Blueberry Tart", ["food", "sweet", "comfort"]),
@@ -166,13 +166,20 @@ internal sealed class GiftSelector
     {
         var conversationTags = BuildConversationTags(playerText, npcResponse);
         var memoryTags = BuildMemoryTags(state);
-        bool matchingTags = conversationTags.Overlaps(memoryTags);
+        var playerPreferences = BuildPlayerPreferenceSignals(state);
+        bool matchingTags = conversationTags.Overlaps(memoryTags)
+            || conversationTags.Overlaps(playerPreferences.LikedTags)
+            || conversationTags.Overlaps(playerPreferences.DislikedTags);
         bool freshImportantMemory = state.LongTermMemories.Any(memory =>
             memory.Importance >= 85
             && memory.LastUpdatedTotalDays >= Game1.Date.TotalDays - 1
         );
+        bool freshImportantPreference = state.PlayerPreferenceMemories.Any(memory =>
+            memory.Importance >= 85
+            && memory.LastUpdatedTotalDays >= Game1.Date.TotalDays - 1
+        );
 
-        return matchingTags || freshImportantMemory;
+        return matchingTags || freshImportantMemory || freshImportantPreference;
     }
 
     private GiftSelection ChooseFromPool(
@@ -189,10 +196,11 @@ internal sealed class GiftSelector
         var npcTags = this.BuildNpcTags(npc, disposition);
         var topicTags = BuildConversationTags(playerText, npcResponse);
         var memoryTags = BuildMemoryTags(state);
+        var playerPreferences = BuildPlayerPreferenceSignals(state);
 
         var scored = pool
             .Where(candidate => string.IsNullOrWhiteSpace(candidate.Season) || candidate.Season == season)
-            .Select(candidate => new ScoredGift(candidate, Score(candidate, tier, npcTags, topicTags, memoryTags, state)))
+            .Select(candidate => new ScoredGift(candidate, Score(candidate, tier, npcTags, topicTags, memoryTags, playerPreferences, state)))
             .ToList();
 
         int bestScore = scored.Max(candidate => candidate.Score);
@@ -200,12 +208,14 @@ internal sealed class GiftSelector
             .Where(candidate => candidate.Score >= bestScore - 2)
             .ToList();
         var chosen = finalists[this.random.Next(finalists.Count)];
+        string matchedPlayerPreference = FindMatchedPlayerPreference(chosen.Candidate, playerPreferences);
 
         return new GiftSelection(
             chosen.Candidate.ItemId,
             chosen.Candidate.DebugName,
             tier,
-            $"profile tags: {FormatTags(npcTags)}; conversation tags: {FormatTags(topicTags)}; memory tags: {FormatTags(memoryTags)}; score: {chosen.Score}"
+            $"profile tags: {FormatTags(npcTags)}; conversation tags: {FormatTags(topicTags)}; memory tags: {FormatTags(memoryTags)}; player-liked tags: {FormatTags(playerPreferences.LikedTags)}; player-disliked tags: {FormatTags(playerPreferences.DislikedTags)}; score: {chosen.Score}",
+            matchedPlayerPreference
         );
     }
 
@@ -263,6 +273,12 @@ internal sealed class GiftSelector
             tags.Add("practical");
         }
 
+        if (ContainsAny(text, "矿石", "矿物", "宝石", "水晶", "gem", "mineral", "crystal"))
+        {
+            tags.Add("mineral");
+            tags.Add("adventurous");
+        }
+
         if (ContainsAny(text, "书", "图书馆", "学习", "研究", "book", "library", "study", "research"))
         {
             tags.Add("scholarly");
@@ -270,6 +286,97 @@ internal sealed class GiftSelector
         }
 
         return tags;
+    }
+
+    private static PlayerPreferenceSignals BuildPlayerPreferenceSignals(LivingNpcState state)
+    {
+        var likedTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var dislikedTags = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var likedSubjects = new List<string>();
+        var dislikedSubjects = new List<string>();
+        var giftRelevantMemories = new List<PlayerPreferenceFact>();
+
+        foreach (var memory in state.PlayerPreferenceMemories
+                     .Where(memory => memory.Importance >= 55)
+                     .OrderByDescending(memory => memory.Importance)
+                     .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+                     .Take(8))
+        {
+            var memoryTags = new HashSet<string>(memory.Tags, StringComparer.OrdinalIgnoreCase);
+            memoryTags.UnionWith(BuildConversationTags($"{memory.Subject} {memory.Summary}", string.Empty));
+            ExpandPreferenceTags(memoryTags);
+
+            switch (memory.PreferenceKind)
+            {
+                case "liked_item_category":
+                    likedTags.UnionWith(memoryTags);
+                    AddSubject(likedSubjects, memory.Subject);
+                    giftRelevantMemories.Add(memory);
+                    break;
+
+                case "disliked_item":
+                    dislikedTags.UnionWith(memoryTags);
+                    AddSubject(dislikedSubjects, memory.Subject);
+                    giftRelevantMemories.Add(memory);
+                    break;
+
+                case "habit":
+                case "value":
+                case "goal":
+                    likedTags.UnionWith(memoryTags);
+                    giftRelevantMemories.Add(memory);
+                    break;
+            }
+        }
+
+        return new PlayerPreferenceSignals(
+            likedTags,
+            dislikedTags,
+            likedSubjects,
+            dislikedSubjects,
+            giftRelevantMemories
+        );
+    }
+
+    private static void ExpandPreferenceTags(HashSet<string> tags)
+    {
+        if (tags.Contains("mining"))
+        {
+            tags.Add("mineral");
+            tags.Add("adventurous");
+        }
+
+        if (tags.Contains("fishing"))
+        {
+            tags.Add("nature");
+            tags.Add("practical");
+        }
+
+        if (tags.Contains("farming"))
+        {
+            tags.Add("food");
+            tags.Add("practical");
+        }
+
+        if (tags.Contains("morning"))
+        {
+            tags.Add("drink");
+            tags.Add("practical");
+        }
+
+        if (tags.Contains("night"))
+        {
+            tags.Add("drink");
+            tags.Add("comfort");
+        }
+    }
+
+    private static void AddSubject(List<string> subjects, string subject)
+    {
+        if (!string.IsNullOrWhiteSpace(subject))
+        {
+            subjects.Add(subject.Trim());
+        }
     }
 
     private static HashSet<string> BuildMemoryTags(LivingNpcState state)
@@ -340,6 +447,7 @@ internal sealed class GiftSelector
         IReadOnlySet<string> npcTags,
         IReadOnlySet<string> topicTags,
         IReadOnlySet<string> memoryTags,
+        PlayerPreferenceSignals playerPreferences,
         LivingNpcState state
     )
     {
@@ -347,6 +455,18 @@ internal sealed class GiftSelector
         score += candidate.Tags.Count(tag => npcTags.Contains(tag)) * 5;
         score += candidate.Tags.Count(tag => topicTags.Contains(tag)) * 8;
         score += candidate.Tags.Count(tag => memoryTags.Contains(tag)) * 7;
+        score += candidate.Tags.Count(tag => playerPreferences.LikedTags.Contains(tag)) * 12;
+        score -= candidate.Tags.Count(tag => playerPreferences.DislikedTags.Contains(tag)) * 18;
+
+        if (playerPreferences.LikedSubjects.Any(subject => SubjectMatchesCandidate(subject, candidate)))
+        {
+            score += 18;
+        }
+
+        if (playerPreferences.DislikedSubjects.Any(subject => SubjectMatchesCandidate(subject, candidate)))
+        {
+            score -= 30;
+        }
 
         if (!string.IsNullOrWhiteSpace(candidate.Season))
         {
@@ -372,6 +492,31 @@ internal sealed class GiftSelector
         }
 
         return score;
+    }
+
+    private static string FindMatchedPlayerPreference(GiftCandidate candidate, PlayerPreferenceSignals playerPreferences)
+    {
+        var match = playerPreferences.GiftRelevantMemories.FirstOrDefault(memory =>
+            memory.PreferenceKind != "disliked_item"
+            && (
+                memory.Tags.Any(tag => candidate.Tags.Contains(tag, StringComparer.OrdinalIgnoreCase))
+                || SubjectMatchesCandidate(memory.Subject, candidate)
+            )
+        );
+        return match?.Summary ?? string.Empty;
+    }
+
+    private static bool SubjectMatchesCandidate(string subject, GiftCandidate candidate)
+    {
+        if (string.IsNullOrWhiteSpace(subject))
+        {
+            return false;
+        }
+
+        string normalizedSubject = subject.Trim().ToLowerInvariant();
+        string normalizedCandidate = candidate.DebugName.Trim().ToLowerInvariant();
+        return normalizedSubject.Contains(normalizedCandidate, StringComparison.OrdinalIgnoreCase)
+            || normalizedCandidate.Contains(normalizedSubject, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ContainsAny(string text, params string[] needles)
@@ -406,7 +551,16 @@ internal sealed record GiftSelection(
     string ItemId,
     string DebugName,
     GiftTier Tier,
-    string Reason
+    string Reason,
+    string MatchedPlayerPreference
+);
+
+internal sealed record PlayerPreferenceSignals(
+    IReadOnlySet<string> LikedTags,
+    IReadOnlySet<string> DislikedTags,
+    IReadOnlyList<string> LikedSubjects,
+    IReadOnlyList<string> DislikedSubjects,
+    IReadOnlyList<PlayerPreferenceFact> GiftRelevantMemories
 );
 
 internal enum GiftTier

@@ -8,6 +8,31 @@ namespace ValleyTalk;
 
 internal sealed class ConversationAnalysis
 {
+    private static readonly HashSet<string> AllowedPlayerPreferenceTags = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "food",
+        "drink",
+        "flower",
+        "mineral",
+        "forage",
+        "nature",
+        "sweet",
+        "comfort",
+        "practical",
+        "scholarly",
+        "adventurous",
+        "magical",
+        "artistic",
+        "refined",
+        "work",
+        "active",
+        "fishing",
+        "mining",
+        "farming",
+        "morning",
+        "night"
+    };
+
     public static readonly ConversationAnalysis Empty = new();
 
     [JsonProperty("rapportDelta")]
@@ -69,6 +94,10 @@ internal sealed class ConversationAnalysis
                     memory.Kind = NormalizeKind(memory.Kind);
                     memory.Summary = memory.Summary.Trim();
                     memory.Importance = Math.Clamp(memory.Importance, 0, 100);
+                    memory.PlayerPreferenceKind = NormalizePlayerPreferenceKind(memory.PlayerPreferenceKind);
+                    memory.Subject = memory.Subject?.Trim() ?? string.Empty;
+                    memory.Tags = NormalizePlayerPreferenceTags(memory.Tags);
+                    memory.PlayerPreference = memory.PlayerPreference && memory.PlayerPreferenceKind != "none";
                     return memory;
                 })
                 .Take(4)
@@ -122,6 +151,36 @@ internal sealed class ConversationAnalysis
             _ => "none"
         };
     }
+
+    private static string NormalizePlayerPreferenceKind(string kind)
+    {
+        return kind?.Trim().ToLowerInvariant() switch
+        {
+            "liked_item_category" => "liked_item_category",
+            "disliked_item" => "disliked_item",
+            "habit" => "habit",
+            "value" => "value",
+            "goal" => "goal",
+            _ => "none"
+        };
+    }
+
+    private static List<string> NormalizePlayerPreferenceTags(IEnumerable<string> tags)
+    {
+        if (tags == null)
+        {
+            return new List<string>();
+        }
+
+        return tags?
+            .Where(tag => !string.IsNullOrWhiteSpace(tag))
+            .Select(tag => tag.Trim().ToLowerInvariant())
+            .Where(tag => AllowedPlayerPreferenceTags.Contains(tag))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Take(6)
+            .ToList()
+            ?? new List<string>();
+    }
 }
 
 internal sealed class ConversationMemoryCandidate
@@ -134,6 +193,18 @@ internal sealed class ConversationMemoryCandidate
 
     [JsonProperty("importance")]
     public int Importance { get; set; }
+
+    [JsonProperty("playerPreference")]
+    public bool PlayerPreference { get; set; }
+
+    [JsonProperty("playerPreferenceKind")]
+    public string PlayerPreferenceKind { get; set; } = "none";
+
+    [JsonProperty("subject")]
+    public string Subject { get; set; } = string.Empty;
+
+    [JsonProperty("tags")]
+    public List<string> Tags { get; set; } = new();
 }
 
 internal sealed class ConversationAmbientFollowUp

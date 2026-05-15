@@ -301,7 +301,7 @@ internal sealed class BehaviorEngine
 
         this.PushInteractionContext(
             npc,
-            $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, +{result.AppliedFriendshipDelta} extra friendship."
+            $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, {result.PlayerPreferencesStored} player preferences, +{result.AppliedFriendshipDelta} extra friendship."
         );
         return true;
     }
@@ -442,7 +442,10 @@ internal sealed class BehaviorEngine
             "GaveSmallGift",
             this.BuildWorldActionReason(
                 action.Reason,
-                $"they gave the farmer {gift.DisplayName} after an AI conversation; selection basis: {selection.Reason}"
+                this.BuildGiftSelectionReason(
+                    $"they gave the farmer {gift.DisplayName} after an AI conversation",
+                    selection
+                )
             ),
             this.config.MaxMemoryEntriesPerNpc
         );
@@ -548,7 +551,10 @@ internal sealed class BehaviorEngine
             "GaveMeaningfulGift",
             this.BuildWorldActionReason(
                 action.Reason,
-                $"they gave the farmer a meaningful {gift.DisplayName}; selection basis: {selection.Reason}"
+                this.BuildGiftSelectionReason(
+                    $"they gave the farmer a meaningful {gift.DisplayName}",
+                    selection
+                )
             ),
             this.config.MaxMemoryEntriesPerNpc
         );
@@ -705,7 +711,15 @@ internal sealed class BehaviorEngine
     {
         return string.IsNullOrWhiteSpace(requestedReason)
             ? fallback
-            : requestedReason.Trim();
+            : $"{requestedReason.Trim()}; {fallback}";
+    }
+
+    private string BuildGiftSelectionReason(string prefix, GiftSelection selection)
+    {
+        string rememberedPreference = string.IsNullOrWhiteSpace(selection.MatchedPlayerPreference)
+            ? string.Empty
+            : $"; remembered farmer preference: {selection.MatchedPlayerPreference}";
+        return $"{prefix}; selection basis: {selection.Reason}{rememberedPreference}";
     }
 
     private void MarkStateAfterWorldAction(LivingNpcState state, string lastInteraction)
