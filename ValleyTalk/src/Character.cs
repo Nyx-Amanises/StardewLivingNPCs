@@ -84,6 +84,12 @@ public class Character
         }
 
         string[] tasteLevels = npcGiftTastes.Split('/');
+        if (tasteLevels.Length <= 7)
+        {
+            ModEntry.SMonitor.Log($"Gift taste data for {Name} has {tasteLevels.Length} fields; expected at least 8. Skipping gift-based prompt hints.", StardewModdingAPI.LogLevel.Debug);
+            return Array.Empty<string>();
+        }
+
         var lovedGifts = ArgUtility.SplitBySpace(tasteLevels[1]);
         var hatedGifts = ArgUtility.SplitBySpace(tasteLevels[7]);
 

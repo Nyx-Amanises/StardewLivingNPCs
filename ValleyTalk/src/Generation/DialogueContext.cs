@@ -139,6 +139,12 @@ public class DialogueContext
     public DialogueContext(string value)
     {
         Value = value;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            elements = Array.Empty<string>();
+            return;
+        }
+
         elements = value.Split('_');
 
         // Delete any empty elements from the start
@@ -146,17 +152,23 @@ public class DialogueContext
         {
             elements = elements.Skip(1).ToArray();
         }
+        if (elements.Length == 0) return;
+
         // If the first element in an M then set the context to married, and remove it from the list
         if (elements[0] == "M")
         {
             Married = true;
             elements = elements.Skip(1).ToArray();
         }
+        if (elements.Length == 0) return;
+
         if (elements[0] == "B")
         {
             Birthday = true;
             elements = elements.Skip(1).ToArray();
         }
+        if (elements.Length == 0) return;
+
         // Check if the first element is a season.  If so, set the season and remove it from the list
         if (!int.TryParse(elements[0], out _) && Enum.TryParse<Season>(elements[0], true, out Season season))
         {
@@ -167,8 +179,8 @@ public class DialogueContext
         // Check if the first element is a valid GUID. If so, set the chat ID and remove it from the list
         if (Guid.TryParse(elements[0], out _))
         {
-            ChatID = $"{elements[0]}_{elements[1]}";
-            elements = elements.Skip(2).ToArray();
+            ChatID = elements.Length >= 2 ? $"{elements[0]}_{elements[1]}" : elements[0];
+            elements = elements.Skip(Math.Min(2, elements.Length)).ToArray();
         }
         else if (locations.Any(x => value.StartsWith(x, StringComparison.OrdinalIgnoreCase)))
         {
@@ -219,6 +231,12 @@ public class DialogueContext
         }
         else if (elements[0].StartsWith("Accept", StringComparison.OrdinalIgnoreCase))
         {
+            if (elements.Length < 2)
+            {
+                elements = Array.Empty<string>();
+                return;
+            }
+
             // If element 1 starts with (O) then remove it
             var gift = elements[1];
             while (gift.StartsWith("(O)"))

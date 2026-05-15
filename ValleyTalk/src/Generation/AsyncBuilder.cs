@@ -106,7 +106,8 @@ public class AsyncBuilder
         }
         catch (Exception ex)
         {
-            ModEntry.SMonitor?.Log($"Error generating NPC response: {ex.Message}", StardewModdingAPI.LogLevel.Error);
+            var npc = _speakingNpc;
+            ModEntry.SMonitor?.Log($"Error generating NPC response for {npc?.Name ?? "unknown NPC"}: {ex}", StardewModdingAPI.LogLevel.Error);
 
             // Make sure to hide thinking window even if there's an error
             if (AndroidHelper.IsAndroid)
@@ -118,6 +119,7 @@ public class AsyncBuilder
                     {
                         Game1.exitActiveMenu();
                     }
+                    ShowFallbackDialogue(npc);
                     ModEntry.SHelper.Events.GameLoop.UpdateTicked -= errorHandler;
                 };
                 ModEntry.SHelper.Events.GameLoop.UpdateTicked += errorHandler;
@@ -128,6 +130,7 @@ public class AsyncBuilder
                 {
                     Game1.exitActiveMenu();
                 }
+                ShowFallbackDialogue(npc);
             }
         }
         finally
@@ -142,6 +145,26 @@ public class AsyncBuilder
             _currentTaste = 0;
             _awaitedType = GenerationType.None;
         }
+
+        void ShowFallbackDialogue(NPC npc)
+        {
+            if (npc == null)
+            {
+                return;
+            }
+
+            try
+            {
+                var fallback = new Dialogue(npc, $"{SldConstants.DialogueKeyPrefix}Error", "...");
+                npc.CurrentDialogue.Push(fallback);
+                Game1.DrawDialogue(fallback);
+                npc.CurrentDialogue.TryPop(out _);
+            }
+            catch (Exception fallbackException)
+            {
+                ModEntry.SMonitor?.Log($"Error showing fallback NPC response for {npc.Name}: {fallbackException}", StardewModdingAPI.LogLevel.Error);
+            }
+        }
     }
 
     internal void RequestNpcResponse(NPC currentNpc, IEnumerable<ConversationElement> currentConversation)
@@ -153,7 +176,7 @@ public class AsyncBuilder
         }
 
         _speakingNpc = currentNpc;
-        _currentConversation = currentConversation;
+        _currentConversation = currentConversation?.ToArray() ?? Array.Empty<ConversationElement>();
         _awaitedType = GenerationType.conversation;
         _awaitingGeneration = true;
     }
@@ -209,17 +232,27 @@ public class AsyncBuilder
     private async Task<Dialogue> GenerateNpcResponse()
     {
         var npc = _speakingNpc;
-        var newDialogueTask = DialogueBuilder.Instance.GenerateResponse(npc, _currentConversation.ToList(), true);
-        var newDialogue = await newDialogueTask;
-        if (newDialogue == null)
+        if (npc == null)
         {
-            ModEntry.SMonitor?.Log("Generated dialogue is null. Returning empty dialogue.", StardewModdingAPI.LogLevel.Warn);
+            ModEntry.SMonitor?.Log("No NPC available for response generation.", StardewModdingAPI.LogLevel.Warn);
             return null;
+        }
+
+        var conversation = _currentConversation?.ToList() ?? new List<ConversationElement>();
+        var newDialogueTask = DialogueBuilder.Instance.GenerateResponse(npc, conversation, true);
+        var newDialogue = await newDialogueTask;
+        if (string.IsNullOrWhiteSpace(newDialogue))
+        {
+            ModEntry.SMonitor?.Log("Generated dialogue is empty. Returning fallback dialogue.", StardewModdingAPI.LogLevel.Warn);
+            newDialogue = "...";
         }
         DialogueBuilder.Instance.AddConversation(npc, newDialogue);
 
         // Create a new dialogue with the response and add it to the NPC's dialogue stack
-        var dialogue = new Dialogue(npc, _currentDialogueKey, newDialogue);
+        var dialogueKey = string.IsNullOrWhiteSpace(_currentDialogueKey)
+            ? $"{SldConstants.DialogueKeyPrefix}Conversation"
+            : _currentDialogueKey;
+        var dialogue = new Dialogue(npc, dialogueKey, newDialogue);
         return dialogue;
     }
 }
