@@ -108,9 +108,12 @@ internal abstract class LlmOpenAiBase : Llm
                     apiResponseCode = (int)((HttpRequestException)ex.InnerException).StatusCode;
                 }
                 Log.Debug(ex.Message);
-                Log.Debug("Retrying...");
                 retry--;
-                Thread.Sleep(100);
+                if (retry > 0)
+                {
+                    Log.Debug("Retrying...");
+                    await Task.Delay(100);
+                }
             }
         }
         return new LlmResponse(responseString, apiResponseCode);

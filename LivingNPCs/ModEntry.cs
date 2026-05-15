@@ -5,8 +5,13 @@ namespace LivingNPCs;
 
 public sealed class ModEntry : Mod
 {
-    private BehaviorEngine engine = null!;
+    private BehaviorEngine? engine;
     private ModConfig config = null!;
+
+    public override object GetApi()
+    {
+        return new LivingNPCsApi(this.engine);
+    }
 
     public override void Entry(IModHelper helper)
     {
@@ -33,5 +38,20 @@ public sealed class ModEntry : Mod
     private void OnGameLaunched(object? sender, StardewModdingAPI.Events.GameLaunchedEventArgs e)
     {
         ModConfigMenu.Register(this, this.config);
+    }
+}
+
+public sealed class LivingNPCsApi
+{
+    private readonly BehaviorEngine? engine;
+
+    internal LivingNPCsApi(BehaviorEngine? engine)
+    {
+        this.engine = engine;
+    }
+
+    public bool RecordValleyTalkExchange(string npcName, string npcDisplayName, string playerText, string npcResponse)
+    {
+        return this.engine?.RecordValleyTalkExchange(npcName, npcDisplayName, playerText, npcResponse) == true;
     }
 }

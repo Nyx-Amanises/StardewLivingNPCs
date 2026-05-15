@@ -247,6 +247,8 @@ public class AsyncBuilder
             newDialogue = "...";
         }
         DialogueBuilder.Instance.AddConversation(npc, newDialogue);
+        string playerText = conversation.LastOrDefault(line => line.IsPlayerLine)?.Text ?? string.Empty;
+        LivingNpcConversationBridge.RecordExchange(npc, playerText, newDialogue);
 
         // Create a new dialogue with the response and add it to the NPC's dialogue stack
         var dialogueKey = string.IsNullOrWhiteSpace(_currentDialogueKey)

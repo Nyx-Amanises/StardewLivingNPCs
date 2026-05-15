@@ -435,7 +435,8 @@ public class Character
                         gameConstantContext,
                         npcConstantContext,
                         generatedPrompt,
-                        responseStart
+                        responseStart,
+                        allowRetry: false
                     );
 
                     try

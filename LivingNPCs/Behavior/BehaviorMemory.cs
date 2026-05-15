@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using StardewValley;
 
 namespace LivingNPCs.Behavior;
@@ -134,6 +135,48 @@ internal sealed class BehaviorMemory
 
         this.AddEntry(entry, maxEntriesPerNpc);
         return entry;
+    }
+
+    public bool RecordValleyTalkExchange(NPC npc, string playerText, string npcResponse, int maxEntriesPerNpc)
+    {
+        if (!TryExtractNicknameRequest(playerText, out string nickname))
+        {
+            return false;
+        }
+
+        string status = DetermineNicknameStatus(nickname, npcResponse);
+        string action = status switch
+        {
+            "Accepted" => "NicknameAccepted",
+            "Rejected" => "NicknameRejected",
+            _ => "NicknameRequested"
+        };
+
+        string reason = status switch
+        {
+            "Accepted" => $"the farmer asked to be called {nickname}, and the NPC appeared to accept",
+            "Rejected" => $"the farmer asked to be called {nickname}, but the NPC did not seem to accept",
+            _ => $"the farmer asked to be called {nickname}; the NPC's acceptance is unclear"
+        };
+
+        var entry = this.CreateEntry(npc, "SocialMemory", action, reason);
+        this.AddEntry(entry, maxEntriesPerNpc);
+
+        var state = this.GetOrCreateState(npc);
+        state.FarmerNickname = nickname;
+        state.FarmerNicknameStatus = status;
+        state.FarmerNicknameTotalDays = Game1.Date.TotalDays;
+        state.FarmerNicknameTimeOfDay = Game1.timeOfDay;
+        state.LastInteraction = "the farmer made a personal request";
+
+        int familiarityGain = status == "Accepted" ? 2 : status == "Rejected" ? 0 : 1;
+        int opennessDelta = status == "Accepted" ? 3 : status == "Rejected" ? -2 : 0;
+        this.AddFamiliarity(state, familiarityGain, dailyCap: 6);
+        state.Openness = LivingNpcState.ClampScore(state.Openness + opennessDelta);
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+
+        return true;
     }
 
     public LivingNpcState UpdateStateForBehavior(NPC npc, BehaviorIntent intent, string source)
@@ -731,6 +774,7 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Relationship-aware interaction rhythm: {state.InteractionRhythmPromptLabel}; comfort tier: {state.InteractionComfortTierPromptLabel}.");
             prompt.AppendLine($"- Recent gift context: {state.LastGiftPromptLabel}.");
             prompt.AppendLine($"- Recent event context: {state.LastEventPromptLabel}.");
+            prompt.AppendLine($"- Personal memory context: {state.FarmerNicknamePromptLabel}.");
             prompt.AppendLine($"- Scene influence on mood: {state.LastSceneInfluenceReason}.");
             prompt.AppendLine($"- Last interaction: {state.LastInteraction}.");
         }
@@ -809,6 +853,11 @@ internal sealed class BehaviorMemory
             {
                 string freshness = FormatMemoryAge(state.LastEventTotalDays);
                 yield return $"Event memory: {state.LastEventContext} ({freshness}); acknowledge only if the conversation naturally continues it.";
+            }
+
+            if (!string.IsNullOrWhiteSpace(state.FarmerNickname))
+            {
+                yield return $"Personal name memory: {state.FarmerNicknamePromptLabel}.";
             }
 
             if (!string.IsNullOrWhiteSpace(state.InteractionRhythm)
@@ -955,6 +1004,7 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 互动舒适度：{state.InteractionComfortTierLabel}");
             summary.AppendLine($"- 最近礼物：{state.LastGiftLabel}");
             summary.AppendLine($"- 最近事件：{state.LastEventLabel}");
+            summary.AppendLine($"- 长期称呼记忆：{state.FarmerNicknameLabel}");
             summary.AppendLine($"- 角色资料：{disposition.SourceDebugLabel}");
             summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
             summary.AppendLine($"- 当前场景：{world.DebugLabel}");
@@ -1044,6 +1094,7 @@ internal sealed class BehaviorMemory
             "conversation" => "conversation",
             "gift" => "gift",
             "event" => "event",
+            "socialmemory" => "personal memory",
             _ => "behavior"
         };
 
@@ -1057,8 +1108,70 @@ internal sealed class BehaviorMemory
             "conversation" => "[对话]",
             "gift" => "[礼物]",
             "event" => "[事件]",
+            "socialmemory" => "[长期记忆]",
             _ => "[行为]"
         };
+    }
+
+    private static bool TryExtractNicknameRequest(string playerText, out string nickname)
+    {
+        nickname = string.Empty;
+        if (string.IsNullOrWhiteSpace(playerText))
+        {
+            return false;
+        }
+
+        var patterns = new[]
+        {
+            @"(?:以后|以后就|以后你可以|你可以|之后|以后请)?\s*(?:叫|喊|称呼)我(?:为|作|做)?\s*(?<name>[\u4e00-\u9fffA-Za-z0-9_·•\-]{1,12}?)(?=就|吧|好了|可以了|行了|，|。|,|\.|!|！|\?|？|$)",
+            @"(?:call|name)\s+me\s+(?<name>[A-Za-z0-9_·•\-]{1,24})(?=\s|,|\.|!|\?|$)"
+        };
+
+        foreach (string pattern in patterns)
+        {
+            var match = Regex.Match(playerText, pattern, RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (!match.Success)
+            {
+                continue;
+            }
+
+            nickname = CleanNickname(match.Groups["name"].Value);
+            return !string.IsNullOrWhiteSpace(nickname);
+        }
+
+        return false;
+    }
+
+    private static string CleanNickname(string nickname)
+    {
+        return nickname
+            .Trim()
+            .Trim('“', '”', '"', '\'', '‘', '’', '，', ',', '。', '.', '！', '!', '？', '?', '：', ':');
+    }
+
+    private static string DetermineNicknameStatus(string nickname, string npcResponse)
+    {
+        if (string.IsNullOrWhiteSpace(npcResponse))
+        {
+            return "Requested";
+        }
+
+        string response = npcResponse.ToLowerInvariant();
+        bool rejected = ContainsAny(response, "不行", "不能", "不太", "不熟", "暂时", "抱歉", "对不起", "还是算了", "don't", "cannot", "can't", "won't");
+        if (rejected)
+        {
+            return "Rejected";
+        }
+
+        bool accepted = response.Contains(nickname.ToLowerInvariant())
+            || ContainsAny(response, "可以", "当然", "好啊", "好的", "没问题", "行", "愿意", "sure", "okay", "ok", "of course");
+
+        return accepted ? "Accepted" : "Requested";
+    }
+
+    private static bool ContainsAny(string value, params string[] needles)
+    {
+        return needles.Any(value.Contains);
     }
 
     private void RebuildDailyCounts()
@@ -1138,6 +1251,10 @@ internal sealed class LivingNpcState
     public string LastSceneInfluenceReason { get; set; } = "none";
     public string CurrentInclination { get; set; } = "Neutral";
     public string LastInteraction { get; set; } = "none yet";
+    public string FarmerNickname { get; set; } = string.Empty;
+    public string FarmerNicknameStatus { get; set; } = string.Empty;
+    public int FarmerNicknameTotalDays { get; set; } = -1;
+    public int FarmerNicknameTimeOfDay { get; set; }
     public int LastUpdatedTotalDays { get; set; }
     public int LastUpdatedTimeOfDay { get; set; }
 
@@ -1296,6 +1413,42 @@ internal sealed class LivingNpcState
         ? "no recent LivingNPCs event memory"
         : $"last recorded event context: {this.LastEventContext}";
 
+    public string FarmerNicknamePromptLabel
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(this.FarmerNickname))
+            {
+                return "no personal name preference has been recorded";
+            }
+
+            return this.FarmerNicknameStatus switch
+            {
+                "Accepted" => $"the farmer asked to be called {this.FarmerNickname}, and this NPC accepted; use that name occasionally and naturally, not every line",
+                "Rejected" => $"the farmer asked to be called {this.FarmerNickname}, but this NPC did not accept; do not use that name unless the relationship later changes",
+                _ => $"the farmer asked to be called {this.FarmerNickname}; acceptance is unclear, so the NPC may decide whether to use it based on personality and relationship"
+            };
+        }
+    }
+
+    public string FarmerNicknameLabel
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(this.FarmerNickname))
+            {
+                return "暂无";
+            }
+
+            return this.FarmerNicknameStatus switch
+            {
+                "Accepted" => $"已接受称呼“{this.FarmerNickname}”",
+                "Rejected" => $"未接受称呼“{this.FarmerNickname}”",
+                _ => $"玩家请求称呼“{this.FarmerNickname}”，是否接受尚不明确"
+            };
+        }
+    }
+
     public string LastInteractionLabel => this.LastInteraction switch
     {
         "none yet" => "暂无",
@@ -1366,6 +1519,11 @@ internal sealed class LivingNpcState
             this.LastSceneInfluenceReason = "none";
         }
 
+        if (string.IsNullOrWhiteSpace(this.FarmerNicknameStatus) && !string.IsNullOrWhiteSpace(this.FarmerNickname))
+        {
+            this.FarmerNicknameStatus = "Requested";
+        }
+
         if (string.IsNullOrWhiteSpace(this.InteractionRhythm))
         {
             this.InteractionRhythm = "New";
@@ -1416,6 +1574,10 @@ internal sealed class LivingNpcState
             LastSceneInfluenceReason = this.LastSceneInfluenceReason,
             CurrentInclination = this.CurrentInclination,
             LastInteraction = this.LastInteraction,
+            FarmerNickname = this.FarmerNickname,
+            FarmerNicknameStatus = this.FarmerNicknameStatus,
+            FarmerNicknameTotalDays = this.FarmerNicknameTotalDays,
+            FarmerNicknameTimeOfDay = this.FarmerNicknameTimeOfDay,
             LastUpdatedTotalDays = this.LastUpdatedTotalDays,
             LastUpdatedTimeOfDay = this.LastUpdatedTimeOfDay
         };

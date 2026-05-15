@@ -245,6 +245,28 @@ internal sealed class BehaviorEngine
         return npc != null;
     }
 
+    public bool RecordValleyTalkExchange(string npcName, string npcDisplayName, string playerText, string npcResponse)
+    {
+        if (!this.config.EnableConversationMemory || string.IsNullOrWhiteSpace(playerText))
+        {
+            return false;
+        }
+
+        if (!this.TryFindNpcInCurrentLocation(npcName, out NPC? npc) || npc == null)
+        {
+            return false;
+        }
+
+        bool recorded = this.memory.RecordValleyTalkExchange(npc, playerText, npcResponse, this.config.MaxMemoryEntriesPerNpc);
+        if (!recorded)
+        {
+            return false;
+        }
+
+        this.PushInteractionContext(npc, $"Recorded ValleyTalk exchange memory for {npc.Name}.");
+        return true;
+    }
+
     private void TryRecordConversationStart(ButtonPressedEventArgs e)
     {
         if (!this.config.EnableConversationMemory || !e.Button.IsActionButton())
