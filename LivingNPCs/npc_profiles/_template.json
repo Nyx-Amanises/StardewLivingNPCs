@@ -1,0 +1,16 @@
+{
+  "npcNames": [
+    "InternalNpcName",
+    "显示名或别名"
+  ],
+  "promptLabel": "quiet, observant, practical, and slow to trust",
+  "debugLabel": "安静、观察型、务实、慢热",
+  "approachModifier": 0.01,
+  "emoteModifier": 0.02,
+  "passiveEmoteId": 16,
+  "reason": "brief temperament summary",
+  "sourceLabel": "Custom NPC Pack Name",
+  "sourceDebugLabel": "Custom NPC Pack Name（社区资料）",
+  "backgroundPrompt": "Write a concise spoiler-safe background summary here.",
+  "dialoguePrompt": "Explain how this NPC should sound in ordinary dialogue."
+}

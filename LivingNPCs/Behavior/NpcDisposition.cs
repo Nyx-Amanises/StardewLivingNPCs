@@ -1,13 +1,23 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using StardewValley;
 using StardewValley.GameData.Characters;
+using StardewModdingAPI;
 
 namespace LivingNPCs.Behavior;
 
 internal static class NpcDisposition
 {
+    private static readonly JsonSerializerOptions CommunityProfileJsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        AllowTrailingCommas = true
+    };
+
     private static readonly NpcDispositionProfile Warm = Vanilla(
         "warm and approachable",
         "温和、容易回应",
@@ -96,12 +106,22 @@ internal static class NpcDisposition
         ["Susan"] = Sve("practical, warm, resilient, and farm-minded", "务实、坚韧、亲切", 0.05, 0.02, 20, "resilient farmer temperament", "Runs Emerald Farm and has experience with isolation after the railroad blockage separated her from normal town life.", "Use grounded farm talk and sincere neighborly warmth."),
         ["Victor"] = Sve("thoughtful, educated, courteous, and quietly uncertain", "体贴、有教养、略不确定", 0.03, 0.02, 8, "polite engineering temperament", "Olivia's son, an engineering graduate balancing family comfort, intellect, and uncertainty about his path.", "Make him considerate and technical without making him cold."),
         ["Alesia"] = Sve("battle-tested, stern, and protective", "强硬、老练、保护欲强", 0.02, 0.04, 16, "veteran adventurer temperament", "An adventurer tied to SVE's expanded guild and dangerous regions.", "Use concise, capable lines that notice risk and readiness."),
+        ["Bear"] = Sve("reclusive, simple, food-motivated, and unexpectedly friendly", "隐居、直白、贪吃但友善", 0.02, 0.02, 20, "woodland merchant temperament", "A hidden woodland merchant who lives in a cave west of the forest and becomes connected to the farmer through the maple syrup encounter; he is also friendly with Apples.", "Keep lines plain, sensory, and good-natured rather than making him sound like a normal townsperson."),
         ["Camilla"] = Sve("powerful, composed, arcane, and hard to read", "强大、冷静、神秘", -0.02, 0.06, 8, "arcane authority temperament", "A high-level magical figure connected to SVE's Castle Village arc.", "Keep her controlled, perceptive, and slightly distant."),
+        ["Charlie"] = Sve("gentle, timid, animal-like, and affectionate", "温顺、胆小、动物感", -0.03, 0.02, 8, "beloved animal companion temperament", "Shane's chicken, seen wandering after his later story events and often tied to Jas and Shane's everyday life.", "Treat Charlie as an animal companion, not a speaking villager; if dialogue is ever forced, keep it extremely simple and non-human."),
+        ["CharlieChicken"] = Sve("gentle, timid, animal-like, and affectionate", "温顺、胆小、动物感", -0.03, 0.02, 8, "beloved animal companion temperament", "Shane's chicken, seen wandering after his later story events and often tied to Jas and Shane's everyday life.", "Treat Charlie as an animal companion, not a speaking villager; if dialogue is ever forced, keep it extremely simple and non-human."),
+        ["Dusty"] = Sve("friendly, excitable, and openly affectionate", "亲人、兴奋、很会表达", 0.06, 0.08, 32, "friendly dog temperament", "Alex's dog, usually communicating through posture, barks, and obvious affection rather than normal speech.", "Treat Dusty as a dog; favor simple, warm reactions instead of human-style conversation."),
+        ["Gil"] = Sve("laconic, veteran, and quietly watchful", "寡言、老练、安静警觉", -0.03, 0.01, 16, "old guild veteran temperament", "A longtime Adventurer's Guild member and Marlon's old colleague, usually handling the quieter administrative side of guild life.", "Use sparse, dry lines shaped by age, experience, and long familiarity with danger."),
+        ["Gunther"] = Sve("scholarly, courteous, observant, and museum-minded", "学者气、礼貌、观察型", 0.02, 0.02, 8, "museum curator temperament", "The curator of the museum and library, made fully social in SVE; his daily world is built around artifacts, archaeology, and careful stewardship.", "Use precise, courteous language and let curiosity about history or objects surface naturally."),
+        ["GuntherSilvian"] = Sve("scholarly, courteous, observant, and museum-minded", "学者气、礼貌、观察型", 0.02, 0.02, 8, "museum curator temperament", "The curator of the museum and library, made fully social in SVE; his daily world is built around artifacts, archaeology, and careful stewardship.", "Use precise, courteous language and let curiosity about history or objects surface naturally."),
         ["Isaac"] = Sve("serious, dangerous, disciplined, and reserved", "严肃、危险、克制", -0.03, 0.03, 16, "danger-seasoned adventurer temperament", "A combat-focused figure connected to SVE's harder adventuring content.", "Make him terse and alert, with respect earned through competence."),
         ["Jadu"] = Sve("guarded, unusual, and observant", "神秘、观察型、疏离", -0.02, 0.04, 8, "strange outsider temperament", "A nonstandard figure from SVE's broader world, best treated as watchful and not fully ordinary.", "Keep details restrained unless the game has already revealed more."),
         ["Jolyne"] = Sve("formal, capable, and socially measured", "正式、能干、有分寸", 0.01, 0.02, 16, "measured professional temperament", "A Castle Village related character who should feel competent and socially controlled.", "Use precise, reserved lines."),
+        ["MarlonFay"] = Sve("vigilant, duty-bound, seasoned, and socially restrained", "警觉、尽责、老练、克制", -0.01, 0.02, 16, "guildmaster temperament", "The long-serving founder and leader of the Pelican Town Adventurer's Guild, shaped by monster hunting, old comrades, and a strong sense of duty.", "Use concise, honorable lines; warmth should come through respect more often than overt sentiment."),
+        ["MrQi"] = Sve("cryptic, testing, amused, and hard to read", "神秘、试探、难以看透", -0.02, 0.05, 8, "enigmatic challenger temperament", "A mysterious figure tied to late-game challenges, hidden knowledge, and deliberate tests of the farmer.", "Keep motives opaque and phrasing playful but controlled; do not over-explain him."),
+        ["Qi"] = Sve("cryptic, testing, amused, and hard to read", "神秘、试探、难以看透", -0.02, 0.05, 8, "enigmatic challenger temperament", "A mysterious figure tied to late-game challenges, hidden knowledge, and deliberate tests of the farmer.", "Keep motives opaque and phrasing playful but controlled; do not over-explain him."),
 
-        // Ridgeside Village core profiles. Other RSV NPCs still get inferred from Data/Characters.
+        // Ridgeside Village core profiles. More minor RSV NPCs still get inferred from Data/Characters.
         ["Lenny"] = Rsv("warm, civic-minded, direct, and responsible", "亲切、有责任感、村务型", 0.06, 0.02, 20, "community leader temperament", "A central Ridgeside community figure and Lewis's sister, often framed around village work and responsibility.", "Let civic duty, familiarity, and practical care shape her tone."),
         ["Richard"] = Rsv("steady, traditional, older, and family-minded", "沉稳、传统、长辈感", 0.01, 0.01, 16, "elder hotel-family temperament", "Lives around the Log Cabin Hotel and is tied closely to Ysabelle as her grandfather.", "Use older, grounded speech and measured warmth."),
         ["Ysabelle"] = Rsv("outgoing, blunt, positive, and stylish", "外向、直白、积极", 0.06, 0.05, 32, "bold hotel resident temperament", "Richard's granddaughter at the Log Cabin Hotel, socially forward and not especially shy.", "Let her be lively and direct without making every line sugary."),
@@ -119,21 +139,38 @@ internal static class NpcDisposition
         ["Jeric"] = Rsv("cheerful, sporty, friendly, and straightforward", "阳光、运动型、友好", 0.07, 0.04, 32, "active friendly temperament", "A sociable Ridgeside local with a bright, active energy.", "Use simple direct warmth and physical energy."),
         ["Blair"] = Rsv("friendly, creative, expressive, and sociable", "友好、创意、外向", 0.06, 0.06, 32, "creative social temperament", "A Ridgeside local whose tone can lean stylish, bright, and socially aware.", "Use lively social confidence."),
         ["Alissa"] = Rsv("confident, social, polished, and image-aware", "自信、社交、在意形象", 0.04, 0.05, 32, "polished social temperament", "A Ridgeside villager with a more confident, social presence.", "Let confidence show, but scale warmth with relationship."),
+        ["Anton"] = Rsv("wry, drifting, intelligent, and bruised beneath the surface", "有点散漫、聪明、内里受挫", 0.01, 0.03, 16, "recovering architect temperament", "A former architect living with the Legame family while trying to get back on his feet; he is close to Paula and sits between Lorenzo and Kiarra in the sibling group.", "Use dry humor, sensitivity around failure, and gradual openness rather than making him simply lazy."),
+        ["Ariah"] = Rsv("dutiful, pressured, intelligent, and carefully composed", "自律、有压力、聪明", -0.01, 0.02, 8, "pressured heir temperament", "A young Amethyne family member and high school student living under Maive's expectations, with Louie and Zayne as close family.", "Let poise and pressure coexist; avoid making her sound carefree unless trust or context supports it."),
+        ["Bert"] = Rsv("cheerful, indulgent, family-loving, and easygoing", "乐天、宠家人、随和", 0.06, 0.03, 20, "happy-go-lucky parent temperament", "Olga's husband and Trinnie's father, known for doting on his family and balancing Olga's stricter temperament.", "Use affectionate, relaxed warmth and an older villager's easy humor."),
+        ["Bryle"] = Rsv("alert, capable, loyal, and more open than he first appears", "警觉、能干、讲义气", 0.03, 0.04, 16, "professional bodyguard temperament", "A bodyguard for the Governor and longtime friend of Jeric who periodically visits Ridgeside; his history with Faye can matter when already revealed.", "Use capable, straightforward lines with a guard's awareness of risk."),
+        ["Carmen"] = Rsv("hardworking, bluntly funny, maternal, and sea-minded", "勤快、直率、母亲感", 0.04, 0.03, 20, "fisherwoman temperament", "A fisherwoman and divorced single mother supporting Blair, with a longstanding connection to Willy and daily life shaped by the water.", "Use practical fishing talk, dry humor, and protective care for family."),
         ["Corine"] = Rsv("motherly, practical, warm, and busy", "母亲感、务实、忙碌", 0.06, 0.02, 20, "busy family temperament", "A family-centered Ridgeside resident whose daily life should feel practical and caring.", "Use warm practicality and household awareness."),
         ["Daia"] = Rsv("poised, reserved, and quietly perceptive", "克制、优雅、观察型", -0.01, 0.03, 16, "poised villager temperament", "A Ridgeside local best treated as composed and observant unless closer context says otherwise.", "Use measured speech and subtle reactions."),
+        ["Ezekiel"] = Rsv("gregarious, hearty, direct, and family-proud", "外向、爽朗、重视家人", 0.06, 0.04, 20, "boisterous elder temperament", "Corine's father and an older Ridgeside resident with a strong family presence and a more outgoing style than many elders.", "Use frank warmth, family references, and a little larger-than-life energy."),
+        ["Faye"] = Rsv("creative, ambitious, polished, and quietly vulnerable", "有创意、有野心、细腻", 0.03, 0.05, 20, "aspiring designer temperament", "A waitress at Pika's Restaurant who hopes to become a successful fashion designer in her own right.", "Use style awareness and ambition, with warmth that should still feel earned."),
         ["Irene"] = Rsv("professional, composed, and caring", "专业、冷静、关怀", 0.02, 0.02, 16, "care professional temperament", "A Ridgeside resident whose role should feel competent and quietly supportive.", "Use calm, professional warmth."),
         ["Keahi"] = Rsv("active, bright, practical, and community-oriented", "活跃、开朗、实干", 0.06, 0.04, 32, "energetic local temperament", "A Ridgeside local with a warm, practical presence.", "Use open friendliness and everyday village awareness."),
         ["Kiarra"] = Rsv("confident, resilient, expressive, and strong-willed", "自信、坚韧、有主见", 0.04, 0.05, 32, "strong-willed temperament", "A Ridgeside villager whose tone can carry pride and resilience.", "Use direct confidence while respecting relationship pacing."),
         ["Malaya"] = Rsv("gentle, curious, thoughtful, and careful", "温和、好奇、谨慎", 0.02, 0.03, 8, "thoughtful local temperament", "A Ridgeside character who should feel attentive and emotionally careful.", "Use soft curiosity and restrained openness."),
+        ["Freddie"] = Rsv("steady, seasoned, affectionate, and quietly brave", "沉稳、老练、温厚", 0.02, 0.02, 16, "retired adventurer temperament", "Lola's husband and a retired former adventurer who chose a quieter life in Ridgeside after years of danger.", "Use older, grounded speech and let old competence sit beneath domestic calm."),
+        ["Lola"] = Rsv("quiet, formidable, affectionate, and adventure-seasoned", "安静、强悍、温厚", 0.01, 0.03, 16, "retired assassin temperament", "A retired ex-adventurer and ex-assassin living with Freddie, usually reserved until talk turns to old travels or monster slaying.", "Use calm, economical lines with flashes of formidable experience."),
+        ["Lorenzo"] = Rsv("responsible, courteous, worried, and family-first", "负责、礼貌、爱操心", 0.02, 0.02, 16, "family shopkeeper temperament", "Owner of Heaps Convenience Store, Shanice's husband, and the older Legame sibling who worries over Anton and Kiarra.", "Use practical store-owner talk and protective family concern."),
+        ["Louie"] = Rsv("privileged, bright, restless, and still very young", "家境优渥、聪明、孩子气", 0.04, 0.04, 20, "young heir temperament", "A young Amethyne family member growing up under expectations at the mansion, with Sonny often caring for him day to day.", "Keep him recognizably childlike even when he sounds precocious."),
+        ["Maive"] = Rsv("authoritative, refined, exacting, and legacy-minded", "威严、精致、要求高", -0.02, 0.02, 16, "family matriarch temperament", "The wealthy Amethyne matriarch and head of the family corporation, with Ariah and Louie currently in her household.", "Use controlled, polished speech shaped by status, legacy, and expectation."),
+        ["Olga"] = Rsv("strict, caring, practical, and protective", "严格、关心、务实", 0.02, 0.02, 16, "protective parent temperament", "Bert's wife and Trinnie's mother, often the firmer counterweight in a loving family household.", "Let care show through discipline, planning, and concern rather than softness alone."),
         ["Paula"] = Rsv("capable, busy, blunt, and caring underneath", "能干、忙碌、嘴硬心软", 0.02, 0.03, 16, "busy caretaker temperament", "A Ridgeside local whose warmth is best shown through practical concern.", "Use brisk lines with care underneath."),
+        ["Pika"] = Rsv("hardworking, hospitable, paternal, and food-focused", "勤快、好客、父亲感", 0.05, 0.03, 20, "restaurant owner temperament", "Owner of Pika's Restaurant and Keahi's father, working hard while carrying memories of his late wife Leilani.", "Use warm hospitality, kitchen awareness, and fatherly concern without flattening him into generic cheer."),
+        ["Shanice"] = Rsv("capable, hospitable, organized, and family-minded", "能干、好客、有条理", 0.05, 0.02, 20, "shopkeeper temperament", "Runs Heaps Convenience Store with her husband Lorenzo and is part of the Legame household with Anton and Kiarra nearby.", "Use practical shopkeeper warmth and grounded household awareness."),
+        ["Sonny"] = Rsv("dutiful, polished, observant, and quietly kind", "尽责、得体、观察型", 0.01, 0.02, 16, "butler temperament", "The Amethyne family butler, especially present around Maive, Ariah, Louie, and Zayne.", "Use formal, attentive language with warmth kept subtle and service-oriented."),
+        ["Trinnie"] = Rsv("bright, playful, social, and strongly childlike", "活泼、爱玩、孩子气", 0.07, 0.06, 32, "lively child temperament", "Bert and Olga's daughter, often connected to the village children and younger social life.", "Keep lines energetic, simple, and age-appropriate."),
         ["Zayne"] = Rsv("guarded, intense, sharp, and slow to trust", "有防备、强烈、锋利", -0.05, 0.04, 16, "guarded outsider temperament", "A Ridgeside character who should feel wary and emotionally defended until trust develops.", "Keep early lines clipped or cool, then soften with relationship."),
     };
 
     private static readonly HashSet<string> SveNames = new(StringComparer.OrdinalIgnoreCase)
     {
-        "Alesia", "Andy", "Apples", "Bear", "Camilla", "Charlie", "Claire", "Dusty", "Gunther", "Isaac", "Jadu", "Jolyne",
+        "Alesia", "Andy", "Apples", "Bear", "Camilla", "Charlie", "CharlieChicken", "Claire", "Dusty", "Gunther", "GuntherSilvian", "Isaac", "Jadu", "Jolyne",
         "Lance", "Magnus", "Martin", "Morgan", "Morris", "Olivia", "Scarlett", "Sophia", "Susan", "Victor", "Gil",
-        "MarlonFay", "Qi"
+        "MarlonFay", "MrQi", "Qi"
     };
 
     private static readonly HashSet<string> RsvNames = new(StringComparer.OrdinalIgnoreCase)
@@ -145,6 +182,62 @@ internal static class NpcDisposition
         "Sari", "Sean", "Shanice", "Shiro", "Sonny", "Torts", "TreehouseGirl", "Trinnie", "Undreya", "Ysabelle", "Yuuma",
         "Zachary", "Zayne"
     };
+
+    public static void LoadCommunityProfiles(string modDirectoryPath, IMonitor monitor)
+    {
+        string profilesDirectory = Path.Combine(modDirectoryPath, "npc_profiles");
+        if (!Directory.Exists(profilesDirectory))
+        {
+            return;
+        }
+
+        int loadedProfiles = 0;
+        int loadedNames = 0;
+
+        foreach (string filePath in Directory.EnumerateFiles(profilesDirectory, "*.json", SearchOption.AllDirectories))
+        {
+            string fileName = Path.GetFileName(filePath);
+            if (fileName.StartsWith("_", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            try
+            {
+                string json = File.ReadAllText(filePath);
+                foreach (NpcProfileDefinition definition in ReadCommunityProfileDefinitions(json))
+                {
+                    if (!TryCreateCommunityProfile(definition, out var profile, out string validationError))
+                    {
+                        monitor.Log($"Skipped NPC profile in '{fileName}': {validationError}", LogLevel.Warn);
+                        continue;
+                    }
+
+                    int namesAdded = 0;
+                    foreach (string npcName in definition.NpcNames
+                        .Where(name => !string.IsNullOrWhiteSpace(name))
+                        .Select(name => name.Trim())
+                        .Distinct(StringComparer.OrdinalIgnoreCase))
+                    {
+                        Profiles[npcName] = profile;
+                        namesAdded++;
+                    }
+
+                    loadedProfiles++;
+                    loadedNames += namesAdded;
+                }
+            }
+            catch (Exception ex)
+            {
+                monitor.Log($"Failed loading NPC profile file '{fileName}': {ex.Message}", LogLevel.Warn);
+            }
+        }
+
+        if (loadedProfiles > 0)
+        {
+            monitor.Log($"Loaded {loadedProfiles} community NPC profile(s) covering {loadedNames} name key(s).", LogLevel.Info);
+        }
+    }
 
     public static NpcDispositionProfile For(NPC npc)
     {
@@ -401,6 +494,90 @@ internal static class NpcDisposition
         };
     }
 
+    private static IEnumerable<NpcProfileDefinition> ReadCommunityProfileDefinitions(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        JsonElement root = document.RootElement;
+
+        if (root.ValueKind == JsonValueKind.Array)
+        {
+            return JsonSerializer.Deserialize<List<NpcProfileDefinition>>(json, CommunityProfileJsonOptions)
+                ?? Enumerable.Empty<NpcProfileDefinition>();
+        }
+
+        if (root.ValueKind == JsonValueKind.Object
+            && root.TryGetProperty("profiles", out JsonElement profiles)
+            && profiles.ValueKind == JsonValueKind.Array)
+        {
+            return JsonSerializer.Deserialize<List<NpcProfileDefinition>>(profiles.GetRawText(), CommunityProfileJsonOptions)
+                ?? Enumerable.Empty<NpcProfileDefinition>();
+        }
+
+        if (root.ValueKind == JsonValueKind.Object)
+        {
+            var definition = JsonSerializer.Deserialize<NpcProfileDefinition>(json, CommunityProfileJsonOptions);
+            return definition is null
+                ? Enumerable.Empty<NpcProfileDefinition>()
+                : new[] { definition };
+        }
+
+        return Enumerable.Empty<NpcProfileDefinition>();
+    }
+
+    private static bool TryCreateCommunityProfile(
+        NpcProfileDefinition definition,
+        out NpcDispositionProfile profile,
+        out string validationError)
+    {
+        profile = null!;
+
+        if (definition.NpcNames.Count == 0 || definition.NpcNames.All(string.IsNullOrWhiteSpace))
+        {
+            validationError = "npcNames is required.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.PromptLabel))
+        {
+            validationError = "promptLabel is required.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.DebugLabel))
+        {
+            validationError = "debugLabel is required.";
+            return false;
+        }
+
+        if (string.IsNullOrWhiteSpace(definition.Reason))
+        {
+            validationError = "reason is required.";
+            return false;
+        }
+
+        string sourceLabel = string.IsNullOrWhiteSpace(definition.SourceLabel)
+            ? "community NPC profile"
+            : definition.SourceLabel.Trim();
+        string sourceDebugLabel = string.IsNullOrWhiteSpace(definition.SourceDebugLabel)
+            ? $"{sourceLabel}（社区资料）"
+            : definition.SourceDebugLabel.Trim();
+
+        profile = new NpcDispositionProfile(
+            definition.PromptLabel.Trim(),
+            definition.DebugLabel.Trim(),
+            definition.ApproachModifier,
+            definition.EmoteModifier,
+            definition.PassiveEmoteId,
+            definition.Reason.Trim(),
+            sourceLabel,
+            sourceDebugLabel,
+            definition.BackgroundPrompt?.Trim() ?? string.Empty,
+            definition.DialoguePrompt?.Trim() ?? string.Empty
+        );
+        validationError = string.Empty;
+        return true;
+    }
+
     private static int StableBucket(string value)
     {
         unchecked
@@ -482,6 +659,31 @@ internal static class NpcDisposition
             backgroundPrompt,
             dialoguePrompt
         );
+    }
+
+    private sealed class NpcProfileDefinition
+    {
+        public List<string> NpcNames { get; init; } = new();
+
+        public string PromptLabel { get; init; } = string.Empty;
+
+        public string DebugLabel { get; init; } = string.Empty;
+
+        public double ApproachModifier { get; init; }
+
+        public double EmoteModifier { get; init; }
+
+        public int PassiveEmoteId { get; init; } = 16;
+
+        public string Reason { get; init; } = string.Empty;
+
+        public string? SourceLabel { get; init; }
+
+        public string? SourceDebugLabel { get; init; }
+
+        public string? BackgroundPrompt { get; init; }
+
+        public string? DialoguePrompt { get; init; }
     }
 }
 

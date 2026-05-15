@@ -29,6 +29,7 @@ public sealed class ModEntry : Mod
             return;
         }
 
+        NpcDisposition.LoadCommunityProfiles(helper.DirectoryPath, Monitor);
         this.engine = new BehaviorEngine(helper, Monitor, this.config);
         this.engine.RegisterEvents();
 

@@ -258,10 +258,16 @@ LivingNPCs 当前允许的世界动作只有：
 ### 自定义 NPC 兼容
 
 - 原版角色有内置倾向。
+- SVE 当前内置识别到的角色已经补齐手写摘要，并处理了常见内部别名。
+- RSV 已补充一批主要村民的手写摘要；其余角色仍可依靠 `Data/Characters` 做基础推断。
 - 对未手写配置的 NPC，会从 `Data/Characters` 推断基础性格。
 - 已对 SVE 和 RSV 做了专门识别：
   - 有些角色有手写摘要。
   - 其余角色会保留所属 Mod 的世界观提示，并回退到基础推断。
+- `npc_profiles/` 目录支持社区直接放入 JSON 人物资料：
+  - 可新增自定义 NPC；
+  - 也可覆盖已有条目做修正；
+  - 模板与提交流程见 [`npc_profiles/README.md`](./npc_profiles/README.md)。
 
 ## 使用方法
 
