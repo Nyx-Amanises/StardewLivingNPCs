@@ -469,6 +469,24 @@ internal sealed class BehaviorMemory
         return state;
     }
 
+    public LivingNpcState UpdateStateForFulfilledCommitment(NPC npc, NpcCommitmentFact commitment)
+    {
+        var state = this.GetOrCreateState(npc);
+        var world = WorldContext.For(npc);
+        state.Mood = state.InteractionComfortTier is "Trusted" or "Intimate"
+            ? "Comfortable"
+            : "Pleased";
+        state.CurrentInclination = "OpenToTalk";
+        state.Attention = LivingNpcState.ClampScore(state.Attention + 10);
+        state.Openness = LivingNpcState.ClampScore(state.Openness + 8);
+        this.AddFamiliarity(state, amount: 2, dailyCap: 8);
+        this.ApplyWorldStateInfluence(state, world);
+        state.LastInteraction = $"they fulfilled a plan with the farmer: {commitment.Summary}";
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        return state;
+    }
+
     public LivingNpcState UpdateStateForConversationStart(NPC npc)
     {
         var state = this.GetOrCreateState(npc);
@@ -1047,6 +1065,16 @@ internal sealed class BehaviorMemory
                 yield return $"Unmet commitment: {expiredCommitment.PromptLabel}; the next conversation should briefly acknowledge that it did not happen.";
             }
 
+            var fulfilledCommitment = state.Commitments.FirstOrDefault(commitment =>
+                commitment.Status == "Fulfilled"
+                && commitment.FulfilledTotalDays >= Game1.Date.TotalDays - 3
+                && commitment.FollowUpMentionedTotalDays < 0
+            );
+            if (fulfilledCommitment != null)
+            {
+                yield return $"Recently fulfilled commitment: {fulfilledCommitment.FulfilledPromptLabel}; this really happened, so the next conversation may briefly reflect on it as a shared experience.";
+            }
+
             if (!string.IsNullOrWhiteSpace(state.InteractionRhythm)
                 && state.InteractionRhythm is not "New" and not "NoConversationToday")
             {
@@ -1112,6 +1140,14 @@ internal sealed class BehaviorMemory
         if (state.Commitments.Any(commitment => commitment.Status == "Expired" && commitment.LastMentionedTotalDays < Game1.Date.TotalDays))
         {
             yield return "If there is an unmet commitment, mention it once with appropriate warmth, disappointment, or practicality instead of ignoring it.";
+        }
+
+        if (state.Commitments.Any(commitment =>
+                commitment.Status == "Fulfilled"
+                && commitment.FulfilledTotalDays >= Game1.Date.TotalDays - 3
+                && commitment.FollowUpMentionedTotalDays < 0))
+        {
+            yield return "If a recently fulfilled commitment is relevant, mention it as something the two of you actually did together, not as a future plan.";
         }
 
         if (state.RepeatedConversationPressure >= 20)
@@ -1945,9 +1981,14 @@ internal sealed class NpcCommitmentFact
     public int LastMentionedTotalDays { get; set; } = -1;
     public int LastMentionedTimeOfDay { get; set; }
     public bool ArrivalGreetingShown { get; set; }
+    public int FulfilledTotalDays { get; set; } = -1;
+    public int FulfilledTimeOfDay { get; set; }
+    public int FollowUpMentionedTotalDays { get; set; } = -1;
+    public int FollowUpMentionedTimeOfDay { get; set; }
     public int TimesReinforced { get; set; }
 
     public string PromptLabel => $"{this.Type} at {this.LocationLabel} on total day {this.DueTotalDays} around {this.TimeOfDay}; status: {this.Status}; summary: {this.Summary}";
+    public string FulfilledPromptLabel => $"{this.Type} at {this.LocationLabel} was fulfilled on total day {this.FulfilledTotalDays} around {this.FulfilledTimeOfDay}; summary: {this.Summary}";
 }
 
 internal sealed class ValleyTalkAmbientFollowUp
@@ -2397,6 +2438,12 @@ internal sealed class LivingNpcState
                     "Expired" => "Expired",
                     _ => "Pending"
                 };
+                if (commitment.Status == "Fulfilled" && commitment.FulfilledTotalDays < 0)
+                {
+                    commitment.FulfilledTotalDays = commitment.LastUpdatedTotalDays;
+                    commitment.FulfilledTimeOfDay = commitment.LastUpdatedTimeOfDay;
+                }
+
                 commitment.TimesReinforced = System.Math.Max(0, commitment.TimesReinforced);
                 return commitment;
             })
@@ -2543,6 +2590,10 @@ internal sealed class LivingNpcState
                     LastMentionedTotalDays = commitment.LastMentionedTotalDays,
                     LastMentionedTimeOfDay = commitment.LastMentionedTimeOfDay,
                     ArrivalGreetingShown = commitment.ArrivalGreetingShown,
+                    FulfilledTotalDays = commitment.FulfilledTotalDays,
+                    FulfilledTimeOfDay = commitment.FulfilledTimeOfDay,
+                    FollowUpMentionedTotalDays = commitment.FollowUpMentionedTotalDays,
+                    FollowUpMentionedTimeOfDay = commitment.FollowUpMentionedTimeOfDay,
                     TimesReinforced = commitment.TimesReinforced
                 })
                 .ToList(),

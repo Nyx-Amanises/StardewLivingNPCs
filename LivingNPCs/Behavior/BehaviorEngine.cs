@@ -1009,8 +1009,11 @@ internal sealed class BehaviorEngine
             npc.showTextAboveHead(this.BuildCommitmentArrivalGreeting(commitment));
             commitment.ArrivalGreetingShown = true;
             commitment.Status = "Fulfilled";
+            commitment.FulfilledTotalDays = Game1.Date.TotalDays;
+            commitment.FulfilledTimeOfDay = Game1.timeOfDay;
             commitment.LastUpdatedTotalDays = Game1.Date.TotalDays;
             commitment.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            this.memory.UpdateStateForFulfilledCommitment(npc, commitment);
             this.memory.RecordNpcWorldAction(
                 npc,
                 "FulfilledCommitment",
@@ -1129,10 +1132,10 @@ internal sealed class BehaviorEngine
         }
 
         this.PushInteractionContext(npc, $"Recorded conversation start for {npc.Name}.");
-        this.MarkExpiredCommitmentsMentionedAfterPrompt(npc);
+        this.MarkCommitmentFollowUpsMentionedAfterPrompt(npc);
     }
 
-    private void MarkExpiredCommitmentsMentionedAfterPrompt(NPC npc)
+    private void MarkCommitmentFollowUpsMentionedAfterPrompt(NPC npc)
     {
         if (!this.config.EnableCommitments)
         {
@@ -1151,6 +1154,15 @@ internal sealed class BehaviorEngine
         {
             commitment.LastMentionedTotalDays = Game1.Date.TotalDays;
             commitment.LastMentionedTimeOfDay = Game1.timeOfDay;
+        }
+
+        foreach (var commitment in state.Commitments.Where(commitment =>
+                     commitment.Status == "Fulfilled"
+                     && commitment.FulfilledTotalDays >= Game1.Date.TotalDays - 3
+                     && commitment.FollowUpMentionedTotalDays < 0))
+        {
+            commitment.FollowUpMentionedTotalDays = Game1.Date.TotalDays;
+            commitment.FollowUpMentionedTimeOfDay = Game1.timeOfDay;
         }
     }
 
