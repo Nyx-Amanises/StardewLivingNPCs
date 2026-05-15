@@ -371,7 +371,7 @@ public class Character
         var prompts = new Prompts(context, this);
         promptInitWatch.Stop();
 
-        const int maxRetryAttempts = 4;
+        int maxRetryAttempts = context.ChatHistory.Any() ? 0 : 1;
         int timeoutSeconds = ModEntry.Config.QueryTimeout;
         int retryCount = 0;
         bool loggedTiming = false;
@@ -401,11 +401,10 @@ public class Character
 
             try
             {
-                // Apply delay before retry (no delay for first attempt or second attempt)
-                if (attempt >= 2)
+                // Keep retries short enough that the player doesn't get stuck in a thinking window.
+                if (attempt > 0)
                 {
-                    await Task.Delay(TimeSpan.FromSeconds(5));
-                    timeoutSeconds *= 2; // Double the timeout for each retry after the first
+                    await Task.Delay(TimeSpan.FromSeconds(2));
                 }
 
                 // Execute with timeout
@@ -512,13 +511,20 @@ public class Character
                     Log.Debug($"Command: {prompts.Command}");
                     Log.Debug($"Response Start: {prompts.ResponseStart}");
                     Log.Debug($"-------------------");
-                    Log.Debug($"Results: {resultsInternal[0]}");
-                    if (resultsInternal.Length > 1)
+                    if (resultsInternal.Length > 0)
                     {
-                        foreach (var resultLine in resultsInternal.Skip(1))
+                        Log.Debug($"Results: {resultsInternal[0]}");
+                        if (resultsInternal.Length > 1)
                         {
-                            Log.Debug($"Response: {resultLine}");
+                            foreach (var resultLine in resultsInternal.Skip(1))
+                            {
+                                Log.Debug($"Response: {resultLine}");
+                            }
                         }
+                    }
+                    else
+                    {
+                        Log.Debug("Results: <no parseable dialogue line>");
                     }
                     Log.Debug("--------------------------------------------------");
                 }
@@ -542,9 +548,16 @@ public class Character
         }
 
         // Handle final result
-        if (results.Length == 0 && lastException != null)
+        if (results.Length == 0)
         {
-            ModEntry.SMonitor.Log($"Error generating AI response for {Name}: {lastException}", StardewModdingAPI.LogLevel.Error);
+            if (lastException != null)
+            {
+                ModEntry.SMonitor.Log($"Error generating AI response for {Name}: {lastException}", StardewModdingAPI.LogLevel.Error);
+            }
+            else
+            {
+                ModEntry.SMonitor.Log($"AI response for {Name} could not be parsed. Using fallback dialogue.", StardewModdingAPI.LogLevel.Warn);
+            }
             results = new string[] { "..." };
         }
 
@@ -561,9 +574,9 @@ public class Character
         var resultLines = resultString.Split('\n').AsEnumerable();
         // Remove any line breaks
         resultLines = resultLines.Select(x => x.Replace("\n", "").Replace("\r", "").Trim());
-        resultLines = resultLines.Where(x => !string.IsNullOrWhiteSpace(x));
+        var cleanedLines = resultLines.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
         // Find the first line that starts with '-' and remove any lines before it
-        resultLines = resultLines.SkipWhile(x => !x.StartsWith("-"));
+        resultLines = NormalizeModelOutputLines(cleanedLines);
         var dialogueLine = resultLines.FirstOrDefault();
         if (dialogueLine == null || !dialogueLine.StartsWith("-"))
         {
@@ -590,6 +603,52 @@ public class Character
         }
         resultLines = new List<string>(){dialogueLine}.Concat(responseLines);
         return resultLines;
+    }
+
+    private IEnumerable<string> NormalizeModelOutputLines(List<string> cleanedLines)
+    {
+        var firstDialogueIndex = cleanedLines.FindIndex(x => x.StartsWith("-"));
+        if (firstDialogueIndex >= 0)
+        {
+            return cleanedLines.Skip(firstDialogueIndex);
+        }
+
+        var firstResponseIndex = cleanedLines.FindIndex(x => x.StartsWith("%"));
+        var dialogueCandidates = firstResponseIndex >= 0
+            ? cleanedLines.Take(firstResponseIndex).ToList()
+            : cleanedLines;
+
+        var dialogueCandidate = dialogueCandidates
+            .LastOrDefault(x => !IsLikelyResponsePreamble(x));
+
+        if (string.IsNullOrWhiteSpace(dialogueCandidate) || dialogueCandidate.StartsWith("%"))
+        {
+            return Array.Empty<string>();
+        }
+
+        if (ModEntry.Config.Debug)
+        {
+            Log.Warning($"Accepted AI response for {Name} even though it was missing the required '-' prefix.");
+        }
+
+        var normalized = new List<string> { $"- {dialogueCandidate.TrimStart('-', ' ')}" };
+        if (firstResponseIndex >= 0)
+        {
+            normalized.AddRange(cleanedLines.Skip(firstResponseIndex));
+        }
+        else
+        {
+            normalized.AddRange(cleanedLines.Skip(cleanedLines.IndexOf(dialogueCandidate) + 1).Where(x => x.StartsWith("%")));
+        }
+        return normalized;
+    }
+
+    private bool IsLikelyResponsePreamble(string line)
+    {
+        return line.StartsWith("Here is", StringComparison.OrdinalIgnoreCase)
+            || line.StartsWith("Sure", StringComparison.OrdinalIgnoreCase)
+            || line.StartsWith("以下", StringComparison.OrdinalIgnoreCase)
+            || line.StartsWith("当然", StringComparison.OrdinalIgnoreCase);
     }
 
     private string CommonCleanup(string line)
