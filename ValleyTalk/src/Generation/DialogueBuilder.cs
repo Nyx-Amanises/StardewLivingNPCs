@@ -81,6 +81,15 @@ namespace ValleyTalk
         
         internal async Task<string> GenerateResponse(NPC instance, List<ConversationElement> conversation, bool dontSkipNext = false)
         {
+            return (await this.GenerateResponseDetailed(instance, conversation, dontSkipNext)).FormattedLine;
+        }
+
+        internal async Task<GeneratedResponse> GenerateResponseDetailed(
+            NPC instance,
+            List<ConversationElement> conversation,
+            bool dontSkipNext = false,
+            Action<string> onToken = null)
+        {
             var character = GetCharacter(instance);
 
             DialogueContext context = LastContext ?? GetBasicContext(instance);
@@ -89,10 +98,12 @@ namespace ValleyTalk
             fullHistory.AddRange(conversation.Where(x => !fullHistory.Any(y => y.Id == x.Id)));
             context.ChatHistory = fullHistory;
             LastContext = context;
-            var theLine = await character.CreateBasicDialogue(context);
+            var theLine = await character.CreateBasicDialogue(context, onToken);
             string formattedLine = FormatLine(theLine);
-            //return formattedLine;
-            return $"{(dontSkipNext ? "" : "skip#")}{formattedLine}";
+            return new GeneratedResponse(
+                $"{(dontSkipNext ? "" : "skip#")}{formattedLine}",
+                theLine
+            );
         }
 
         internal async Task<Dialogue> GenerateGift(NPC instance, StardewValley.Object gift, int taste)
@@ -156,6 +167,37 @@ namespace ValleyTalk
             {
                 sb.Append($"#$r -999997 0 {SldConstants.DialogueKeyPrefix}TypedResponse#{Util.GetString("uiTypeYourResponse")}");
             }
+            return sb.ToString();
+        }
+
+        internal string BuildResponseOnlyLine(string[] theLine)
+        {
+            if (theLine == null || theLine.Length == 0)
+            {
+                return string.Empty;
+            }
+
+            if (theLine.Length == 1 && ModEntry.Config.TypedResponses != "Always")
+            {
+                return string.Empty;
+            }
+
+            var sb = new StringBuilder();
+            sb.Append(Util.GetString("outputRespond"));
+            sb.Append($"#$q {responseIndex++} {SldConstants.DialogueKeyPrefix}Default#{Util.GetString("outputRespond")}");
+            sb.Append($"#$r -999999 0 {SldConstants.DialogueKeyPrefix}Silent#{Util.GetString("outputStaySilent")}");
+
+            for (int i = 1; i < theLine.Length; i++)
+            {
+                sb.Append($"#$r -999998 0 {SldConstants.DialogueKeyPrefix}Next#");
+                sb.Append(theLine[i]);
+            }
+
+            if (ModEntry.Config.TypedResponses != "Never")
+            {
+                sb.Append($"#$r -999997 0 {SldConstants.DialogueKeyPrefix}TypedResponse#{Util.GetString("uiTypeYourResponse")}");
+            }
+
             return sb.ToString();
         }
 
@@ -324,6 +366,7 @@ namespace ValleyTalk
             {
                 fullHistory.Add(new ConversationElement(newDialogue, isPlayerLine));
             }
+            context.ChatHistory = fullHistory;
             // Store whether the last line was from the player to help the LLM format responses appropriately
             context.LastLineIsPlayerInput = isPlayerLine;
             character.AddConversation(fullHistory, Game1.year, Game1.season, Game1.dayOfMonth, Game1.timeOfDay);

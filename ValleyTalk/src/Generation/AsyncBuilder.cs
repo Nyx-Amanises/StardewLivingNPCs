@@ -35,6 +35,14 @@ public class AsyncBuilder
         if (_awaitingGeneration && Game1.activeClickableMenu == null)
         {
             _awaitingGeneration = false;
+            if (_awaitedType == GenerationType.conversation && Llm.Instance is IStreamingLlm)
+            {
+                var streamingWindow = new StreamingDialogueWindow(_speakingNpc);
+                Game1.activeClickableMenu = streamingWindow;
+                _ = PerformStreamingConversation(streamingWindow);
+                return;
+            }
+
             var character = DialogueBuilder.Instance.GetCharacter(_speakingNpc);
             var display = Util.GetString(character, "uiThinking", new { Name = _speakingNpc.displayName }) ?? $"{_speakingNpc.displayName} is thinking";
             // Show "Thinking..." window
@@ -164,6 +172,89 @@ public class AsyncBuilder
             {
                 ModEntry.SMonitor?.Log($"Error showing fallback NPC response for {npc.Name}: {fallbackException}", StardewModdingAPI.LogLevel.Error);
             }
+        }
+    }
+
+    private async Task PerformStreamingConversation(StreamingDialogueWindow streamingWindow)
+    {
+        try
+        {
+            var npc = _speakingNpc;
+            if (npc == null)
+            {
+                throw new InvalidOperationException("No NPC available for streaming response generation.");
+            }
+
+            var conversation = _currentConversation?.ToList() ?? new List<ConversationElement>();
+            var generated = await DialogueBuilder.Instance.GenerateResponseDetailed(
+                npc,
+                conversation,
+                dontSkipNext: true,
+                onToken: streamingWindow.AppendToken
+            );
+
+            string playerText = conversation.LastOrDefault(line => line.IsPlayerLine)?.Text ?? string.Empty;
+            string newDialogue = ConversationTextPostProcessor.NormalizeImmediateNicknameReply(generated.FormattedLine, playerText);
+            string[] parsedLines = generated.ParsedLines.ToArray();
+            if (parsedLines.Length > 0)
+            {
+                parsedLines[0] = ConversationTextPostProcessor.NormalizeImmediateNicknameReply(parsedLines[0], playerText);
+            }
+
+            if (string.IsNullOrWhiteSpace(newDialogue))
+            {
+                ModEntry.SMonitor?.Log("Generated streaming dialogue is empty. Returning fallback dialogue.", StardewModdingAPI.LogLevel.Warn);
+                newDialogue = "...";
+                parsedLines = new[] { "..." };
+            }
+
+            DialogueBuilder.Instance.AddConversation(npc, newDialogue);
+            var analysis = DialogueBuilder.Instance.GetCharacter(npc).LastConversationAnalysis;
+            LivingNpcConversationBridge.RecordExchange(npc, playerText, newDialogue, analysis.ToJson());
+
+            string responseOnlyLine = analysis.EndConversation
+                ? string.Empty
+                : DialogueBuilder.Instance.BuildResponseOnlyLine(parsedLines);
+            string dialogueKey = string.IsNullOrWhiteSpace(_currentDialogueKey)
+                ? $"{SldConstants.DialogueKeyPrefix}Conversation"
+                : _currentDialogueKey;
+            string displayLine = parsedLines.FirstOrDefault() ?? "...";
+
+            streamingWindow.Complete(displayLine, () =>
+            {
+                if (Game1.activeClickableMenu == streamingWindow)
+                {
+                    Game1.exitActiveMenu();
+                }
+
+                if (!string.IsNullOrWhiteSpace(responseOnlyLine))
+                {
+                    Game1.DrawDialogue(new Dialogue(npc, dialogueKey, responseOnlyLine));
+                }
+            });
+        }
+        catch (Exception ex)
+        {
+            var npc = _speakingNpc;
+            ModEntry.SMonitor?.Log($"Error generating streaming NPC response for {npc?.Name ?? "unknown NPC"}: {ex}", StardewModdingAPI.LogLevel.Error);
+            streamingWindow.Complete("...", () =>
+            {
+                if (Game1.activeClickableMenu == streamingWindow)
+                {
+                    Game1.exitActiveMenu();
+                }
+            });
+        }
+        finally
+        {
+            _awaitingGeneration = false;
+            _speakingNpc = null;
+            _currentDialogueKey = "";
+            _originalLine = null;
+            _currentConversation = null;
+            _currentGift = null;
+            _currentTaste = 0;
+            _awaitedType = GenerationType.None;
         }
     }
 

@@ -364,7 +364,7 @@ public class Character
         return _sampleCache;
     }
     
-    public async Task<string[]> CreateBasicDialogue(DialogueContext context)
+    public async Task<string[]> CreateBasicDialogue(DialogueContext context, Action<string> onToken = null)
     {
         this.LastConversationAnalysis = ConversationAnalysis.Empty;
         var totalWatch = Stopwatch.StartNew();
@@ -432,18 +432,33 @@ public class Character
                         + responseStart.Length;
 
                     var inferenceWatch = Stopwatch.StartNew();
-                    var inferenceTask = Llm.Instance.RunInference(
-                        systemPrompt,
-                        gameConstantContext,
-                        npcConstantContext,
-                        generatedPrompt,
-                        responseStart,
-                        allowRetry: false
-                    );
-
                     try
                     {
-                        result = await inferenceTask.WaitAsync(cts.Token);
+                        if (onToken != null && Llm.Instance is IStreamingLlm streamingLlm)
+                        {
+                            result = await streamingLlm.RunInferenceStreaming(
+                                systemPrompt,
+                                gameConstantContext,
+                                npcConstantContext,
+                                generatedPrompt,
+                                onToken,
+                                cts.Token,
+                                responseStart,
+                                allowRetry: false
+                            );
+                        }
+                        else
+                        {
+                            var inferenceTask = Llm.Instance.RunInference(
+                                systemPrompt,
+                                gameConstantContext,
+                                npcConstantContext,
+                                generatedPrompt,
+                                responseStart,
+                                allowRetry: false
+                            );
+                            result = await inferenceTask.WaitAsync(cts.Token);
+                        }
                     }
                     finally
                     {

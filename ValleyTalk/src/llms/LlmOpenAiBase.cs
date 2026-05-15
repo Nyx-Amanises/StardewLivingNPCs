@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq; // Added
+using System.IO;
 using System.Net.Http;
 using System.Text;
 using Newtonsoft.Json; // Changed
@@ -12,7 +13,7 @@ using ValleyTalk.Platform;
 
 namespace ValleyTalk;
 
-internal abstract class LlmOpenAiBase : Llm
+internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
 {
     protected string apiKey;
     protected string modelName;
@@ -117,6 +118,193 @@ internal abstract class LlmOpenAiBase : Llm
             }
         }
         return new LlmResponse(responseString, apiResponseCode);
+    }
+
+    public async Task<LlmResponse> RunInferenceStreaming(
+        string systemPromptString,
+        string gameCacheString,
+        string npcCacheString,
+        string promptString,
+        Action<string> onToken,
+        CancellationToken cancellationToken,
+        string responseStart = "",
+        int n_predict = 2048,
+        string cacheContext = "",
+        bool allowRetry = true)
+    {
+        var inputString = JsonConvert.SerializeObject(new
+        {
+            model = modelName,
+            max_tokens = n_predict,
+            stream = true,
+            messages = new PromptElement[]
+            {
+                new()
+                {
+                    role = "system",
+                    content = systemPromptString
+                },
+                new()
+                {
+                    role = "user",
+                    content = gameCacheString + npcCacheString + promptString
+                }
+            }
+        });
+
+        int retry = allowRetry ? 3 : 1;
+        var fullUrl = $"{url}/v1/chat/completions";
+        string lastResponse = string.Empty;
+        int apiResponseCode = 500;
+
+        while (retry > 0)
+        {
+            try
+            {
+                using var client = new HttpClient
+                {
+                    Timeout = Timeout.InfiniteTimeSpan
+                };
+                using var request = new HttpRequestMessage(HttpMethod.Post, fullUrl)
+                {
+                    Content = new StringContent(inputString, Encoding.UTF8, "application/json")
+                };
+                if (!string.IsNullOrWhiteSpace(apiKey))
+                {
+                    request.Headers.Add("Authorization", $"Bearer {apiKey}");
+                }
+
+                using var response = await client.SendAsync(
+                    request,
+                    HttpCompletionOption.ResponseHeadersRead,
+                    cancellationToken
+                );
+                apiResponseCode = (int)response.StatusCode;
+                response.EnsureSuccessStatusCode();
+
+                await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
+                using var reader = new StreamReader(stream);
+                var fullText = new StringBuilder();
+                var rawResponse = new StringBuilder();
+
+                while (!reader.EndOfStream)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    string line = await reader.ReadLineAsync().WaitAsync(cancellationToken) ?? string.Empty;
+                    rawResponse.AppendLine(line);
+
+                    if (string.IsNullOrWhiteSpace(line))
+                    {
+                        continue;
+                    }
+
+                    string payload = line.StartsWith("data:", StringComparison.OrdinalIgnoreCase)
+                        ? line["data:".Length..].Trim()
+                        : line.Trim();
+                    if (payload == "[DONE]")
+                    {
+                        break;
+                    }
+
+                    if (!TryExtractStreamingContent(payload, out string token))
+                    {
+                        continue;
+                    }
+
+                    fullText.Append(token);
+                    onToken?.Invoke(token);
+                }
+
+                if (fullText.Length > 0)
+                {
+                    return new LlmResponse(fullText.ToString());
+                }
+
+                lastResponse = rawResponse.ToString();
+                if (TryExtractNonStreamingContent(lastResponse, out string fallbackText))
+                {
+                    onToken?.Invoke(fallbackText);
+                    return new LlmResponse(fallbackText);
+                }
+
+                retry--;
+            }
+            catch (Exception ex)
+            {
+                Log.Debug(ex.Message);
+                retry--;
+                if (retry > 0)
+                {
+                    Log.Debug("Retrying...");
+                    await Task.Delay(100, cancellationToken);
+                }
+            }
+        }
+
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var fallback = await this.RunInference(
+            systemPromptString,
+            gameCacheString,
+            npcCacheString,
+            promptString,
+            responseStart,
+            n_predict,
+            cacheContext,
+            allowRetry: false
+        );
+        if (fallback.IsSuccess && !string.IsNullOrWhiteSpace(fallback.Text))
+        {
+            onToken?.Invoke(fallback.Text);
+            return fallback;
+        }
+
+        if (TryExtractNonStreamingContent(lastResponse, out string text))
+        {
+            return new LlmResponse(text);
+        }
+
+        return new LlmResponse(lastResponse, apiResponseCode);
+    }
+
+    private static bool TryExtractStreamingContent(string payload, out string token)
+    {
+        token = string.Empty;
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return false;
+        }
+
+        try
+        {
+            var json = JObject.Parse(payload);
+            token = json["choices"]?[0]?["delta"]?["content"]?.ToString() ?? string.Empty;
+            return !string.IsNullOrEmpty(token);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool TryExtractNonStreamingContent(string payload, out string text)
+    {
+        text = string.Empty;
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return false;
+        }
+
+        try
+        {
+            var json = JObject.Parse(payload);
+            text = json["choices"]?[0]?["message"]?["content"]?.ToString() ?? string.Empty;
+            return !string.IsNullOrWhiteSpace(text);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     internal override Dictionary<string, double>[] RunInferenceProbabilities(string fullPrompt, int n_predict = 1)
