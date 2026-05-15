@@ -911,6 +911,35 @@ public class Prompts
             prompt.AppendLine(Util.GetString(Character,"dateTimeNewThisYear"));
         }
 
+        int elapsedDays = ((Game1.year - 1) * 112)
+            + (SeasonToIndex(Game1.season) * 28)
+            + (Game1.dayOfMonth - 1);
+        int completedSeasons = elapsedDays / 28;
+        if (elapsedDays == 0)
+        {
+            prompt.AppendLine(Util.GetString(Character, "dateTimeResidencyToday"));
+        }
+        else
+        {
+            prompt.AppendLine(Util.GetString(
+                Character,
+                "dateTimeResidencyProgress",
+                new { ElapsedDays = elapsedDays, CompletedSeasons = completedSeasons }
+            ));
+        }
+
+    }
+
+    private static int SeasonToIndex(StardewValley.Season season)
+    {
+        return season switch
+        {
+            StardewValley.Season.Spring => 0,
+            StardewValley.Season.Summer => 1,
+            StardewValley.Season.Fall => 2,
+            StardewValley.Season.Winter => 3,
+            _ => 0
+        };
     }
 
     private void GetEventHistory(StringBuilder prompt)

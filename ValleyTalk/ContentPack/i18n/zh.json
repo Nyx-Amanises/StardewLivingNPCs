@@ -9,6 +9,8 @@
   "coreInstructionHeading": "指令：",
   "coreContextHeading": "上下文：",
   "coreFarmerGender": "农夫是${男性^女性}$。除了经营农场，${他^她}$也会冒险，并有一些通常偏${男性^女性}$的兴趣和习惯。",
+  "dateTimeResidencyToday": "农夫今天才来到鹈鹕镇。",
+  "dateTimeResidencyProgress": "农夫自第一年春季 1 日来到鹈鹕镇以来，已经在这里生活了 {{ElapsedDays}} 天，并完整度过了 {{CompletedSeasons}} 个季节。",
   "currentConversationHeading": "当前对话：",
   "currentConversationIntro": "农夫和{{Name}}正在对话中。新台词应该自然接续前文，不要重复已有内容。不要用“{{Name}}：”开头，那只是历史记录的一部分。前文如下：",
   "currentConversationJustSpoke": "农夫和{{Name}}刚刚说过话。对白应该考虑最近一次交流。",

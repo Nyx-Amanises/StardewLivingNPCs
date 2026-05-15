@@ -104,7 +104,7 @@ internal class StardewEventHistory
 
     internal bool Any()
     {
-        return _eventHistory.Any() || _overheardHistory.Any() || _dialogueHistory.Any();
+        return _eventHistory.Any() || _overheardHistory.Any() || _dialogueHistory.Any() || _conversationHistory.Any();
     }
 
     internal Tuple<StardewTime,IHistory> Last()

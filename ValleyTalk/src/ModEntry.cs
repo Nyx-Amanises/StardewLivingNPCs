@@ -117,6 +117,7 @@ namespace ValleyTalk
             SHelper = helper;
 
             helper.Events.GameLoop.GameLaunched += OnGameLaunched;
+            helper.Events.GameLoop.SaveLoaded += OnSaveLoaded;
 
             Config = Helper.ReadConfig<ModConfig>();
 
@@ -190,6 +191,11 @@ namespace ValleyTalk
         private void OnGameLaunched(object sender, GameLaunchedEventArgs e)
         {
             ModConfigMenu.Register(this);
+        }
+
+        private void OnSaveLoaded(object sender, SaveLoadedEventArgs e)
+        {
+            ConversationTranscriptExporter.ExportAllKnownHistories();
         }
     }
 }

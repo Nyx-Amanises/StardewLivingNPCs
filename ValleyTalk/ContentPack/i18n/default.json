@@ -186,6 +186,8 @@
   "dateTimeTimeOfDay": "It is {{TimeOfDay}}.",
   "dateTimeEarlyMorningNormal": "This is a normal time for the farmer to be up and about.",
   "dateTimeNewThisYear": "The farmer is new to Pelican Town this year.",
+  "dateTimeResidencyToday": "The farmer arrived in Pelican Town today.",
+  "dateTimeResidencyProgress": "The farmer has lived in Pelican Town for {{ElapsedDays}} days since arriving on Spring 1 of Year 1, and has completed {{CompletedSeasons}} full seasons in the valley.",
   "eventHistoryHeading": "Event history:",
   "eventHistoryIntro": "{{Name}} is aware of the following recent events and conversations with the farmer.\nThese are historical conversations and the context of them will have been different.\nThe line should reference any events that are described as happening \"just now\" and is likely to reference any events that happened in the last day or so. The new line you are generating should reference older events, patterns of behaviour (repeated gifts or common / rare conversations) where they are relevant to the current context or the current context lacks conversation topics.\nYou should avoid {{Name}} repeating previous lines except where that is in character.",
   "eventHistorySubheading": "History:",

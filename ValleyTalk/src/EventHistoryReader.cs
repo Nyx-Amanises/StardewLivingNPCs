@@ -100,6 +100,8 @@ public class EventHistoryReader
         {
             _fileEventHistories[name] = eventHistory;
         }
+
+        ConversationTranscriptExporter.Export(name, eventHistory);
     }
 
     private static string GetSaveName(string name)
