@@ -1239,6 +1239,7 @@ internal sealed class BehaviorEngine
         }
 
         this.lastConversationMemoryTimeByNpc[npc.Name] = timeMarker;
+        this.TryRecordObservedRomanticInteraction(npc);
         if (heldGift != null)
         {
             var gift = this.BuildGiftMemoryDetails(npc, heldGift);
@@ -1273,6 +1274,45 @@ internal sealed class BehaviorEngine
 
         this.PushInteractionContext(npc, $"Recorded conversation start for {npc.Name}.");
         this.MarkCommitmentFollowUpsMentionedAfterPrompt(npc);
+    }
+
+    private void TryRecordObservedRomanticInteraction(NPC targetNpc)
+    {
+        if (Game1.currentLocation == null
+            || Game1.player == null
+            || !this.IsRomanticallyAttachedToFarmer(targetNpc))
+        {
+            return;
+        }
+
+        foreach (var observer in Game1.currentLocation.characters.Where(candidate =>
+                     candidate.Name != targetNpc.Name
+                     && !string.IsNullOrWhiteSpace(candidate.Name)
+                     && Vector2.Distance(candidate.Tile, Game1.player.Tile) <= 6
+                     && this.IsRomanticallyAttachedToFarmer(candidate)))
+        {
+            var state = this.memory.GetState(observer);
+            if (state?.CurrentEmotion == "Jealous"
+                && state.LastEmotionUpdatedTotalDays == Game1.Date.TotalDays)
+            {
+                continue;
+            }
+
+            this.memory.UpdateStateForObservedRomanticInteraction(observer, targetNpc);
+            this.memory.RecordNpcWorldAction(
+                observer,
+                "ObservedRomanticInteraction",
+                $"they noticed the farmer being close with {targetNpc.displayName}",
+                this.config.MaxMemoryEntriesPerNpc
+            );
+            this.PushInteractionContext(observer, $"Observed romantic interaction involving {targetNpc.Name}.");
+        }
+    }
+
+    private bool IsRomanticallyAttachedToFarmer(NPC npc)
+    {
+        return Game1.player.friendshipData.TryGetValue(npc.Name, out Friendship friendship)
+            && (friendship.IsDating() || friendship.IsEngaged() || friendship.IsMarried());
     }
 
     private void MarkCommitmentFollowUpsMentionedAfterPrompt(NPC npc)

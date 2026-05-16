@@ -306,7 +306,12 @@ internal sealed class BehaviorMemory
         if (analysis.EmotionImpact.HasEffect)
         {
             emotionChanged = this.ApplyDialogueEmotionImpact(state, analysis.EmotionImpact);
-            resolvedConflicts += this.ApplyConflictRepair(state, analysis.EmotionImpact.RepairDelta, analysis.EmotionImpact.Apology);
+            resolvedConflicts += this.ApplyConflictRepair(
+                state,
+                analysis.EmotionImpact.RepairDelta,
+                analysis.EmotionImpact.Apology,
+                specificRepairTalk: analysis.EmotionImpact.RepairDelta > 0
+            );
         }
 
         // Keep one deterministic fallback for nickname requests if the model forgets metadata.
@@ -497,12 +502,16 @@ internal sealed class BehaviorMemory
         {
             case 0:
                 this.ApplyEmotion(state, "Happy", 18, $"the farmer gave them a loved gift: {gift.ItemName}");
-                this.ApplyConflictRepair(state, 18, apology: false);
+                this.ApplyRelationshipTrustDelta(state, 4);
+                this.MarkRepairGiftReceived(state, gift.ItemName);
+                this.ApplyConflictRepair(state, 18, apology: false, specificRepairTalk: false);
                 break;
 
             case 2:
                 this.ApplyEmotion(state, "Happy", 10, $"the farmer gave them a liked gift: {gift.ItemName}");
-                this.ApplyConflictRepair(state, 10, apology: false);
+                this.ApplyRelationshipTrustDelta(state, 2);
+                this.MarkRepairGiftReceived(state, gift.ItemName);
+                this.ApplyConflictRepair(state, 10, apology: false, specificRepairTalk: false);
                 break;
 
             case 4:
@@ -567,8 +576,13 @@ internal sealed class BehaviorMemory
         state.Openness = LivingNpcState.ClampScore(state.Openness + 8);
         this.AddFamiliarity(state, amount: 2, dailyCap: 8);
         state.CommitmentTrust = LivingNpcState.ClampScore(state.CommitmentTrust + GetFulfilledCommitmentTrustGain(commitment.Type));
+        this.ApplyRelationshipTrustDelta(state, commitment.Type == "help_task" ? 6 : 4);
         state.ConsecutiveMissedCommitments = 0;
         this.StoreSharedExperience(state, commitment);
+        if (commitment.Type == "help_task")
+        {
+            this.ApplyEmotion(state, "Grateful", 18, $"the farmer helped keep a meaningful plan: {commitment.Summary}");
+        }
         this.ApplyWorldStateInfluence(state, world);
         state.LastInteraction = $"they fulfilled a plan with the farmer: {commitment.Summary}";
         state.LastUpdatedTotalDays = Game1.Date.TotalDays;
@@ -580,6 +594,7 @@ internal sealed class BehaviorMemory
     {
         int trustLoss = GetExpiredCommitmentTrustLoss(state.ConsecutiveMissedCommitments);
         state.CommitmentTrust = LivingNpcState.ClampScore(state.CommitmentTrust - trustLoss);
+        this.ApplyRelationshipTrustDelta(state, -System.Math.Max(4, trustLoss / 2));
         state.MissedCommitments += 1;
         state.ConsecutiveMissedCommitments += 1;
         state.LastMissedCommitmentTotalDays = Game1.Date.TotalDays;
@@ -589,8 +604,8 @@ internal sealed class BehaviorMemory
         state.Openness = LivingNpcState.ClampScore(state.Openness - System.Math.Min(16, 4 + trustLoss));
         this.ApplyEmotion(
             state,
-            state.ConsecutiveMissedCommitments >= 2 ? "Upset" : "Uneasy",
-            state.ConsecutiveMissedCommitments >= 2 ? 16 : 8,
+            "Disappointed",
+            state.ConsecutiveMissedCommitments >= 2 ? 18 : 10,
             $"the farmer missed an agreed plan: {commitment.Summary}"
         );
         this.StoreConflict(state, new ValleyTalkConflictCandidate
@@ -631,8 +646,27 @@ internal sealed class BehaviorMemory
         }
 
         this.ApplyConversationRhythmInfluence(state);
+        this.ApplyObservedConcern(state);
         this.ApplyWorldStateInfluence(state, world);
         state.LastInteraction = "the farmer started a conversation";
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        return state;
+    }
+
+    public LivingNpcState UpdateStateForObservedRomanticInteraction(NPC observer, NPC otherNpc)
+    {
+        var state = this.GetOrCreateState(observer);
+        this.ApplyEmotion(
+            state,
+            "Jealous",
+            state.RelationshipTrust >= 70 ? 10 : 6,
+            $"they noticed the farmer giving romantic attention to {otherNpc.displayName}"
+        );
+        state.Mood = "Guarded";
+        state.CurrentInclination = "Measured";
+        state.Openness = LivingNpcState.ClampScore(state.Openness - 4);
+        state.LastInteraction = $"they noticed the farmer being close with {otherNpc.displayName}";
         state.LastUpdatedTotalDays = Game1.Date.TotalDays;
         state.LastUpdatedTimeOfDay = Game1.timeOfDay;
         return state;
@@ -911,6 +945,40 @@ internal sealed class BehaviorMemory
         }
     }
 
+    private void ApplyObservedConcern(LivingNpcState state)
+    {
+        if (state.HasUnresolvedConflict && state.HighestUnresolvedConflictSeverity >= 45)
+        {
+            return;
+        }
+
+        bool canCareOpenly = state.RelationshipTrust >= 45 || state.InteractionComfortTier is "Friendly" or "Trusted" or "Intimate";
+        if (canCareOpenly
+            && state.LastConversationGapDays >= 7
+            && !(state.CurrentEmotion == "Worried" && state.LastEmotionUpdatedTotalDays == Game1.Date.TotalDays))
+        {
+            this.ApplyEmotion(
+                state,
+                "Worried",
+                System.Math.Min(20, 8 + state.LastConversationGapDays),
+                $"the farmer had not appeared for {state.LastConversationGapDays} days"
+            );
+        }
+
+        if (canCareOpenly
+            && Game1.player.maxHealth > 0
+            && Game1.player.health <= System.Math.Max(1, Game1.player.maxHealth / 3)
+            && !(state.CurrentEmotion == "Worried" && state.LastEmotionUpdatedTotalDays == Game1.Date.TotalDays))
+        {
+            this.ApplyEmotion(
+                state,
+                "Worried",
+                18,
+                "the farmer looked badly hurt"
+            );
+        }
+    }
+
     private void ApplyCrowdedConversationInfluence(LivingNpcState state)
     {
         int opennessPenalty = state.InteractionComfortTier switch
@@ -1074,6 +1142,8 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Mood: {state.Mood}; attention to farmer: {state.Attention}/100; response inclination: {state.CurrentInclination}.");
             prompt.AppendLine($"- Interpersonal emotion: {state.EmotionPromptLabel}.");
             prompt.AppendLine($"- Long-term familiarity with the farmer: {state.Familiarity}/100 ({state.FamiliarityPromptLabel}).");
+            prompt.AppendLine($"- Relationship trust in the farmer: {state.RelationshipTrustPromptLabel}.");
+            prompt.AppendLine($"- Secret-sharing depth: {state.SecretSharingPromptLabel}.");
             prompt.AppendLine($"- Relationship-aware interaction rhythm: {state.InteractionRhythmPromptLabel}; comfort tier: {state.InteractionComfortTierPromptLabel}.");
             prompt.AppendLine($"- Recent gift context: {state.LastGiftPromptLabel}.");
             prompt.AppendLine($"- Recent event context: {state.LastEventPromptLabel}.");
@@ -1232,6 +1302,15 @@ internal sealed class BehaviorMemory
                 yield return $"Plan reliability: the farmer has missed {state.ConsecutiveMissedCommitments} recent commitment(s); trust in keeping plans is {state.CommitmentTrust}/100. Let disappointment be proportionate, and allow sincere apology plus a new concrete plan to begin repair.";
             }
 
+            if (state.RelationshipTrust < 35)
+            {
+                yield return $"Relationship trust is only {state.RelationshipTrust}/100; keep disclosures surface-level and avoid sudden emotional intimacy.";
+            }
+            else if (state.RelationshipTrust >= 80)
+            {
+                yield return $"Relationship trust is {state.RelationshipTrust}/100; deeper private honesty is allowed when the moment genuinely supports it.";
+            }
+
             var activeConflict = state.Conflicts
                 .Where(conflict => conflict.Status is "Active" or "Recovering")
                 .OrderByDescending(conflict => conflict.Severity)
@@ -1240,6 +1319,10 @@ internal sealed class BehaviorMemory
             if (activeConflict != null)
             {
                 yield return $"Unresolved conflict: {activeConflict.PromptLabel}; while this remains unresolved, warmth should be reduced and the NPC may be brief, cool, or decline closeness.";
+                if (activeConflict.RequiresComplexRepair)
+                {
+                    yield return $"Complex repair chain: stage {activeConflict.RepairStage}; serious hurt may need apology, a meaningful gesture, time, and a specific restorative conversation before it is fully repaired.";
+                }
             }
 
             var recoveredConflict = state.Conflicts.FirstOrDefault(conflict =>
@@ -1298,6 +1381,7 @@ internal sealed class BehaviorMemory
 
         yield return $"Tone target: {this.BuildToneCue(state)}.";
         yield return $"Relationship pacing: {state.InteractionComfortTierPromptLabel}.";
+        yield return $"Disclosure pacing: {state.SecretSharingPromptLabel}.";
 
         if (!string.IsNullOrWhiteSpace(state.LastGiftName) && state.LastGiftTotalDays == Game1.Date.TotalDays)
         {
@@ -1350,6 +1434,10 @@ internal sealed class BehaviorMemory
         if (state.HasUnresolvedConflict)
         {
             yield return "An unresolved conflict is still shaping the relationship; do not answer with default warmth, and if the conflict is severe it is okay to keep the reply short or refuse a friendly invitation.";
+            if (state.Conflicts.Any(conflict => conflict.RequiresComplexRepair && conflict.Status is "Active" or "Recovering"))
+            {
+                yield return "For a serious conflict, let repair feel gradual: a single pleasant line should not erase hurt before apology, gesture, time, and a real repair conversation have accumulated.";
+            }
         }
 
         if (state.Conflicts.Any(conflict =>
@@ -1376,6 +1464,10 @@ internal sealed class BehaviorMemory
         string emotion = state.CurrentEmotion switch
         {
             "Happy" => "genuinely pleased",
+            "Jealous" => "a little jealous",
+            "Worried" => "worried",
+            "Grateful" => "grateful",
+            "Disappointed" => "disappointed",
             "Uneasy" => "slightly uneasy",
             "Upset" => "not entirely pleased",
             "Angry" => "angry",
@@ -1459,6 +1551,7 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 人际情绪：{state.EmotionLabel}");
             summary.AppendLine($"- 对玩家注意度：{state.AttentionLabel} ({state.Attention})");
             summary.AppendLine($"- 对玩家熟悉度：{state.FamiliarityLabel} ({state.Familiarity})");
+            summary.AppendLine($"- 关系信任：{state.RelationshipTrustDebugLabel}");
             summary.AppendLine($"- 互动节奏：{state.InteractionRhythmLabel}");
             summary.AppendLine($"- 互动舒适度：{state.InteractionComfortTierLabel}");
             summary.AppendLine($"- 最近礼物：{state.LastGiftLabel}");
@@ -1551,7 +1644,22 @@ internal sealed class BehaviorMemory
         }
 
         state.NpcName = npc.Name;
+        this.EnsureRelationshipTrustInitialized(state, npc);
         return state;
+    }
+
+    private void EnsureRelationshipTrustInitialized(LivingNpcState state, NPC npc)
+    {
+        if (state.RelationshipTrustInitialized)
+        {
+            return;
+        }
+
+        int hearts = WorldContext.For(npc).FriendshipHearts;
+        state.RelationshipTrust = LivingNpcState.ClampScore(20 + (hearts * 6) + (state.Familiarity / 5));
+        state.RelationshipTrustInitialized = true;
+        state.LastRelationshipTrustUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastRelationshipTrustUpdatedTimeOfDay = Game1.timeOfDay;
     }
 
     private string FormatPromptEntry(BehaviorMemoryEntry entry)
@@ -1735,6 +1843,18 @@ internal sealed class BehaviorMemory
         state.LastEmotionUpdatedTimeOfDay = Game1.timeOfDay;
     }
 
+    private void ApplyRelationshipTrustDelta(LivingNpcState state, int delta)
+    {
+        if (delta == 0)
+        {
+            return;
+        }
+
+        state.RelationshipTrust = LivingNpcState.ClampScore(state.RelationshipTrust + delta);
+        state.LastRelationshipTrustUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastRelationshipTrustUpdatedTimeOfDay = Game1.timeOfDay;
+    }
+
     private bool StoreConflict(LivingNpcState state, ValleyTalkConflictCandidate candidate)
     {
         string normalizedSummary = NormalizeMemorySummary(candidate.Summary);
@@ -1750,10 +1870,27 @@ internal sealed class BehaviorMemory
         {
             existing.CauseKind = candidate.CauseKind;
             existing.Severity = LivingNpcState.ClampScore(System.Math.Max(existing.Severity, candidate.Severity) + 8);
+            existing.PeakSeverity = System.Math.Max(existing.PeakSeverity, existing.Severity);
+            if (existing.PeakSeverity >= 60)
+            {
+                existing.RequiresComplexRepair = true;
+                existing.MinimumRepairTotalDays = System.Math.Max(
+                    existing.MinimumRepairTotalDays,
+                    Game1.Date.TotalDays + GetComplexRepairDelayDays(existing.PeakSeverity)
+                );
+                existing.SpecificRepairTalkReceived = false;
+                if (candidate.Severity >= 30)
+                {
+                    existing.MeaningfulGiftReceived = false;
+                }
+            }
+
+            this.RefreshComplexRepairStage(existing);
             existing.Status = GetConflictStatus(existing.Severity);
             existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
             existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
             existing.TimesReinforced += 1;
+            this.ApplyRelationshipTrustDelta(state, -System.Math.Max(2, GetConflictTrustLoss(candidate.Severity) / 2));
             this.ApplyEmotionForConflict(state, existing);
             return true;
         }
@@ -1763,13 +1900,19 @@ internal sealed class BehaviorMemory
             CauseKind = candidate.CauseKind,
             Summary = candidate.Summary.Trim(),
             Severity = LivingNpcState.ClampScore(candidate.Severity),
+            PeakSeverity = LivingNpcState.ClampScore(candidate.Severity),
             Status = GetConflictStatus(candidate.Severity),
             CreatedTotalDays = Game1.Date.TotalDays,
             CreatedTimeOfDay = Game1.timeOfDay,
             LastUpdatedTotalDays = Game1.Date.TotalDays,
             LastUpdatedTimeOfDay = Game1.timeOfDay,
+            RequiresComplexRepair = candidate.Severity >= 60,
+            MinimumRepairTotalDays = candidate.Severity >= 60
+                ? Game1.Date.TotalDays + GetComplexRepairDelayDays(candidate.Severity)
+                : -1,
             TimesReinforced = 1
         };
+        this.RefreshComplexRepairStage(conflict);
         state.Conflicts.Add(conflict);
         state.Conflicts = state.Conflicts
             .OrderBy(conflictEntry => ConflictStatusOrder(conflictEntry.Status))
@@ -1777,14 +1920,15 @@ internal sealed class BehaviorMemory
             .ThenByDescending(conflictEntry => conflictEntry.LastUpdatedTotalDays)
             .Take(12)
             .ToList();
+        this.ApplyRelationshipTrustDelta(state, -GetConflictTrustLoss(conflict.Severity));
         this.ApplyEmotionForConflict(state, conflict);
         return true;
     }
 
-    private int ApplyConflictRepair(LivingNpcState state, int repairDelta, bool apology)
+    private int ApplyConflictRepair(LivingNpcState state, int repairDelta, bool apology, bool specificRepairTalk)
     {
         int totalRepair = System.Math.Clamp(repairDelta + (apology ? 12 : 0), 0, 100);
-        if (totalRepair <= 0)
+        if (totalRepair <= 0 && !apology && !specificRepairTalk)
         {
             return 0;
         }
@@ -1793,17 +1937,44 @@ internal sealed class BehaviorMemory
         foreach (var conflict in state.Conflicts.Where(conflict => conflict.Status is "Active" or "Recovering"))
         {
             conflict.RepairScore = LivingNpcState.ClampScore(conflict.RepairScore + totalRepair);
-            conflict.Severity = LivingNpcState.ClampScore(conflict.Severity - totalRepair);
             conflict.LastUpdatedTotalDays = Game1.Date.TotalDays;
             conflict.LastUpdatedTimeOfDay = Game1.timeOfDay;
             if (apology)
             {
                 conflict.ApologyCount += 1;
+                conflict.ApologyReceived = true;
             }
 
+            if (specificRepairTalk)
+            {
+                conflict.SpecificRepairTalkReceived = true;
+            }
+
+            if (conflict.RequiresComplexRepair)
+            {
+                this.RefreshComplexRepairStage(conflict);
+                int floor = GetComplexRepairSeverityFloor(conflict);
+                conflict.Severity = LivingNpcState.ClampScore(System.Math.Max(floor, conflict.Severity - totalRepair));
+                this.RefreshComplexRepairStage(conflict);
+                if (CanResolveComplexConflict(conflict) && conflict.Severity == 0)
+                {
+                    this.ResolveConflict(state, conflict);
+                    resolved++;
+                }
+                else
+                {
+                    conflict.Status = conflict.RepairStage is "NeedsApology" or "NeedsGesture"
+                        ? "Active"
+                        : "Recovering";
+                }
+
+                continue;
+            }
+
+            conflict.Severity = LivingNpcState.ClampScore(conflict.Severity - totalRepair);
             if (conflict.Severity == 0)
             {
-                ResolveConflict(conflict);
+                this.ResolveConflict(state, conflict);
                 resolved++;
             }
             else
@@ -1818,6 +1989,20 @@ internal sealed class BehaviorMemory
         }
 
         return resolved;
+    }
+
+    private void MarkRepairGiftReceived(LivingNpcState state, string giftName)
+    {
+        foreach (var conflict in state.Conflicts.Where(conflict =>
+                     conflict.RequiresComplexRepair
+                     && conflict.Status is "Active" or "Recovering"))
+        {
+            conflict.MeaningfulGiftReceived = true;
+            conflict.LastRepairGiftName = giftName;
+            conflict.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            conflict.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            this.RefreshComplexRepairStage(conflict);
+        }
     }
 
     private void DecayEmotionAndConflicts(LivingNpcState state, int emotionDailyDecay, int conflictDailyDecay)
@@ -1838,12 +2023,37 @@ internal sealed class BehaviorMemory
 
         foreach (var conflict in state.Conflicts.Where(conflict => conflict.Status is "Active" or "Recovering"))
         {
+            if (conflict.RequiresComplexRepair)
+            {
+                this.RefreshComplexRepairStage(conflict);
+                int floor = GetComplexRepairSeverityFloor(conflict);
+                conflict.Severity = System.Math.Max(
+                    floor,
+                    LivingNpcState.MoveToward(conflict.Severity, 0, conflictDailyDecay)
+                );
+                conflict.LastUpdatedTotalDays = Game1.Date.TotalDays;
+                conflict.LastUpdatedTimeOfDay = Game1.timeOfDay;
+                this.RefreshComplexRepairStage(conflict);
+                if (CanResolveComplexConflict(conflict) && conflict.Severity == 0)
+                {
+                    this.ResolveConflict(state, conflict);
+                }
+                else
+                {
+                    conflict.Status = conflict.RepairStage is "NeedsApology" or "NeedsGesture"
+                        ? "Active"
+                        : "Recovering";
+                }
+
+                continue;
+            }
+
             conflict.Severity = LivingNpcState.MoveToward(conflict.Severity, 0, conflictDailyDecay);
             conflict.LastUpdatedTotalDays = Game1.Date.TotalDays;
             conflict.LastUpdatedTimeOfDay = Game1.timeOfDay;
             if (conflict.Severity == 0)
             {
-                ResolveConflict(conflict);
+                this.ResolveConflict(state, conflict);
             }
             else
             {
@@ -1854,7 +2064,9 @@ internal sealed class BehaviorMemory
 
     private void ApplyEmotionForConflict(LivingNpcState state, NpcConflictFact conflict)
     {
-        string emotion = conflict.Severity switch
+        string emotion = conflict.CauseKind == "promise"
+            ? "Disappointed"
+            : conflict.Severity switch
         {
             >= 70 => "Angry",
             >= 35 => "Upset",
@@ -1863,11 +2075,98 @@ internal sealed class BehaviorMemory
         this.ApplyEmotion(state, emotion, conflict.Severity / 2, conflict.Summary);
     }
 
-    private static void ResolveConflict(NpcConflictFact conflict)
+    private void ResolveConflict(LivingNpcState state, NpcConflictFact conflict)
     {
         conflict.Status = "Resolved";
         conflict.ResolvedTotalDays = Game1.Date.TotalDays;
         conflict.ResolvedTimeOfDay = Game1.timeOfDay;
+        conflict.RepairStage = "Resolved";
+        if (conflict.RequiresComplexRepair && !conflict.RepairGrowthGranted)
+        {
+            conflict.RepairGrowthGranted = true;
+            this.ApplyRelationshipTrustDelta(state, 8);
+            state.Familiarity = LivingNpcState.ClampScore(state.Familiarity + 2);
+        }
+    }
+
+    private void RefreshComplexRepairStage(NpcConflictFact conflict)
+    {
+        if (!conflict.RequiresComplexRepair)
+        {
+            conflict.RepairStage = conflict.Status == "Resolved" ? "Resolved" : "Simple";
+            return;
+        }
+
+        if (conflict.Status == "Resolved")
+        {
+            conflict.RepairStage = "Resolved";
+            return;
+        }
+
+        if (!conflict.ApologyReceived)
+        {
+            conflict.RepairStage = "NeedsApology";
+            return;
+        }
+
+        if (!conflict.MeaningfulGiftReceived)
+        {
+            conflict.RepairStage = "NeedsGesture";
+            return;
+        }
+
+        if (Game1.Date.TotalDays < conflict.MinimumRepairTotalDays)
+        {
+            conflict.RepairStage = "NeedsTime";
+            return;
+        }
+
+        if (!conflict.SpecificRepairTalkReceived)
+        {
+            conflict.RepairStage = "NeedsConversation";
+            return;
+        }
+
+        conflict.RepairStage = "ReadyToResolve";
+    }
+
+    private static bool CanResolveComplexConflict(NpcConflictFact conflict)
+    {
+        return !conflict.RequiresComplexRepair
+            || conflict.RepairStage == "ReadyToResolve";
+    }
+
+    private static int GetComplexRepairSeverityFloor(NpcConflictFact conflict)
+    {
+        if (!conflict.RequiresComplexRepair)
+        {
+            return 0;
+        }
+
+        return conflict.RepairStage switch
+        {
+            "NeedsApology" => 45,
+            "NeedsGesture" => 30,
+            "NeedsTime" => 20,
+            "NeedsConversation" => 10,
+            _ => 0
+        };
+    }
+
+    internal static int GetComplexRepairDelayDays(int severity)
+    {
+        return severity >= 80 ? 5 : 3;
+    }
+
+    private static int GetConflictTrustLoss(int severity)
+    {
+        return severity switch
+        {
+            >= 70 => 18,
+            >= 50 => 12,
+            >= 30 => 8,
+            _ => 4
+        };
     }
 
     private bool StorePlayerPreferenceMemory(LivingNpcState state, ValleyTalkMemoryCandidate candidate)
@@ -2087,6 +2386,13 @@ internal sealed class BehaviorMemory
             };
             this.AddFamiliarity(state, familiarityGain, dailyCap: 8);
             state.Openness = LivingNpcState.ClampScore(state.Openness + System.Math.Min(6, applied / 5));
+            this.ApplyRelationshipTrustDelta(state, applied switch
+            {
+                >= 25 => 5,
+                >= 16 => 3,
+                >= 10 => 2,
+                _ => 1
+            });
         }
 
         return applied;
@@ -2171,6 +2477,10 @@ internal sealed class BehaviorMemory
         {
             "happy" => "Happy",
             "calm" => "Calm",
+            "jealous" => "Jealous",
+            "worried" => "Worried",
+            "grateful" => "Grateful",
+            "disappointed" => "Disappointed",
             "uneasy" => "Uneasy",
             "upset" => "Upset",
             "angry" => "Angry",
@@ -2607,6 +2917,7 @@ internal sealed class NpcConflictFact
     public string CauseKind { get; set; } = "dialogue";
     public string Summary { get; set; } = string.Empty;
     public int Severity { get; set; }
+    public int PeakSeverity { get; set; }
     public string Status { get; set; } = "Active";
     public int CreatedTotalDays { get; set; } = -1;
     public int CreatedTimeOfDay { get; set; }
@@ -2618,9 +2929,17 @@ internal sealed class NpcConflictFact
     public int RecoveryMentionedTimeOfDay { get; set; }
     public int RepairScore { get; set; }
     public int ApologyCount { get; set; }
+    public bool RequiresComplexRepair { get; set; }
+    public string RepairStage { get; set; } = "Simple";
+    public bool ApologyReceived { get; set; }
+    public bool MeaningfulGiftReceived { get; set; }
+    public bool SpecificRepairTalkReceived { get; set; }
+    public int MinimumRepairTotalDays { get; set; } = -1;
+    public string LastRepairGiftName { get; set; } = string.Empty;
+    public bool RepairGrowthGranted { get; set; }
     public int TimesReinforced { get; set; }
 
-    public string PromptLabel => $"{this.Status.ToLowerInvariant()} conflict, severity {this.Severity}/100, cause {this.CauseKind}: {this.Summary}";
+    public string PromptLabel => $"{this.Status.ToLowerInvariant()} conflict, severity {this.Severity}/100, cause {this.CauseKind}, repair stage {this.RepairStage}: {this.Summary}";
     public string ResolvedPromptLabel => $"resolved conflict from total day {this.CreatedTotalDays}, cause {this.CauseKind}: {this.Summary}";
 }
 
@@ -2735,6 +3054,10 @@ internal sealed class LivingNpcState
     public List<NpcCommitmentFact> Commitments { get; set; } = new();
     public List<SharedExperienceFact> SharedExperiences { get; set; } = new();
     public List<NpcConflictFact> Conflicts { get; set; } = new();
+    public bool RelationshipTrustInitialized { get; set; }
+    public int RelationshipTrust { get; set; } = 20;
+    public int LastRelationshipTrustUpdatedTotalDays { get; set; } = -1;
+    public int LastRelationshipTrustUpdatedTimeOfDay { get; set; }
     public int CommitmentTrust { get; set; } = 50;
     public int MissedCommitments { get; set; }
     public int ConsecutiveMissedCommitments { get; set; }
@@ -2795,6 +3118,10 @@ internal sealed class LivingNpcState
     public string EmotionLabel => this.CurrentEmotion switch
     {
         "Happy" => $"开心（{this.EmotionIntensity}）",
+        "Jealous" => $"吃醋（{this.EmotionIntensity}）",
+        "Worried" => $"担心（{this.EmotionIntensity}）",
+        "Grateful" => $"感激（{this.EmotionIntensity}）",
+        "Disappointed" => $"失望（{this.EmotionIntensity}）",
         "Uneasy" => $"有些不自在（{this.EmotionIntensity}）",
         "Upset" => $"不悦（{this.EmotionIntensity}）",
         "Angry" => $"生气（{this.EmotionIntensity}）",
@@ -2805,6 +3132,10 @@ internal sealed class LivingNpcState
     public string EmotionPromptLabel => this.CurrentEmotion switch
     {
         "Happy" => $"happy, intensity {this.EmotionIntensity}/100; latest reason: {this.LastEmotionReason}",
+        "Jealous" => $"jealous, intensity {this.EmotionIntensity}/100; latest reason: {this.LastEmotionReason}",
+        "Worried" => $"worried, intensity {this.EmotionIntensity}/100; latest reason: {this.LastEmotionReason}",
+        "Grateful" => $"grateful, intensity {this.EmotionIntensity}/100; latest reason: {this.LastEmotionReason}",
+        "Disappointed" => $"disappointed, intensity {this.EmotionIntensity}/100; latest reason: {this.LastEmotionReason}",
         "Uneasy" => $"uneasy, intensity {this.EmotionIntensity}/100; latest reason: {this.LastEmotionReason}",
         "Upset" => $"upset, intensity {this.EmotionIntensity}/100; latest reason: {this.LastEmotionReason}",
         "Angry" => $"angry, intensity {this.EmotionIntensity}/100; latest reason: {this.LastEmotionReason}",
@@ -3031,6 +3362,24 @@ internal sealed class LivingNpcState
     public string CommitmentTrustDebugLabel =>
         $"{this.CommitmentTrust}/100，累计失约 {this.MissedCommitments} 次，连续失约 {this.ConsecutiveMissedCommitments} 次";
 
+    public string RelationshipTrustPromptLabel => this.RelationshipTrust switch
+    {
+        >= 80 => $"deep interpersonal trust ({this.RelationshipTrust}/100)",
+        >= 60 => $"steady interpersonal trust ({this.RelationshipTrust}/100)",
+        >= 35 => $"tentative interpersonal trust ({this.RelationshipTrust}/100)",
+        _ => $"low interpersonal trust ({this.RelationshipTrust}/100)"
+    };
+
+    public string RelationshipTrustDebugLabel => $"{this.RelationshipTrust}/100";
+
+    public string SecretSharingPromptLabel => this.RelationshipTrust switch
+    {
+        >= 80 => "deep trust; private hopes, fears, and history may surface naturally when the scene truly supports it",
+        >= 60 => "steady trust; some vulnerable personal details may be shared when relevant",
+        >= 35 => "limited trust; light personal details are fine, but deeper secrets should stay mostly guarded",
+        _ => "low trust; keep disclosures surface-level and avoid volunteering private secrets"
+    };
+
     public string CommitmentDebugLabel
     {
         get
@@ -3062,7 +3411,7 @@ internal sealed class LivingNpcState
             return conflicts.Count == 0
                 ? "暂无"
                 : string.Join("；", conflicts.Select(conflict =>
-                    $"{conflict.Summary}（{conflict.CauseKind}，严重度 {conflict.Severity}，{conflict.Status}）"));
+                    $"{conflict.Summary}（{conflict.CauseKind}，严重度 {conflict.Severity}，{conflict.Status}，修复阶段 {conflict.RepairStage}）"));
         }
     }
 
@@ -3136,6 +3485,7 @@ internal sealed class LivingNpcState
         this.Attention = ClampScore(this.Attention);
         this.Openness = ClampScore(this.Openness);
         this.Familiarity = ClampScore(this.Familiarity);
+        this.RelationshipTrust = ClampScore(this.RelationshipTrust);
         this.CurrentEmotion = BehaviorMemory.NormalizeEmotion(this.CurrentEmotion);
         if (this.CurrentEmotion == "none")
         {
@@ -3267,6 +3617,7 @@ internal sealed class LivingNpcState
                 conflict.CauseKind = BehaviorMemory.NormalizeConflictCauseKind(conflict.CauseKind);
                 conflict.Summary = conflict.Summary.Trim();
                 conflict.Severity = ClampScore(conflict.Severity);
+                conflict.PeakSeverity = System.Math.Max(conflict.Severity, ClampScore(conflict.PeakSeverity));
                 conflict.Status = conflict.Status switch
                 {
                     "Resolved" => "Resolved",
@@ -3275,6 +3626,20 @@ internal sealed class LivingNpcState
                 };
                 conflict.RepairScore = ClampScore(conflict.RepairScore);
                 conflict.ApologyCount = System.Math.Max(0, conflict.ApologyCount);
+                conflict.RepairStage = conflict.RepairStage switch
+                {
+                    "NeedsApology" => "NeedsApology",
+                    "NeedsGesture" => "NeedsGesture",
+                    "NeedsTime" => "NeedsTime",
+                    "NeedsConversation" => "NeedsConversation",
+                    "ReadyToResolve" => "ReadyToResolve",
+                    "Resolved" => "Resolved",
+                    _ => conflict.RequiresComplexRepair ? "NeedsApology" : "Simple"
+                };
+                if (conflict.RequiresComplexRepair && conflict.MinimumRepairTotalDays < 0)
+                {
+                    conflict.MinimumRepairTotalDays = conflict.CreatedTotalDays + BehaviorMemory.GetComplexRepairDelayDays(conflict.PeakSeverity);
+                }
                 conflict.TimesReinforced = System.Math.Max(0, conflict.TimesReinforced);
                 if (conflict.Status == "Resolved" && conflict.ResolvedTotalDays < 0)
                 {
@@ -3468,6 +3833,7 @@ internal sealed class LivingNpcState
                     CauseKind = conflict.CauseKind,
                     Summary = conflict.Summary,
                     Severity = conflict.Severity,
+                    PeakSeverity = conflict.PeakSeverity,
                     Status = conflict.Status,
                     CreatedTotalDays = conflict.CreatedTotalDays,
                     CreatedTimeOfDay = conflict.CreatedTimeOfDay,
@@ -3479,10 +3845,22 @@ internal sealed class LivingNpcState
                     RecoveryMentionedTimeOfDay = conflict.RecoveryMentionedTimeOfDay,
                     RepairScore = conflict.RepairScore,
                     ApologyCount = conflict.ApologyCount,
+                    RequiresComplexRepair = conflict.RequiresComplexRepair,
+                    RepairStage = conflict.RepairStage,
+                    ApologyReceived = conflict.ApologyReceived,
+                    MeaningfulGiftReceived = conflict.MeaningfulGiftReceived,
+                    SpecificRepairTalkReceived = conflict.SpecificRepairTalkReceived,
+                    MinimumRepairTotalDays = conflict.MinimumRepairTotalDays,
+                    LastRepairGiftName = conflict.LastRepairGiftName,
+                    RepairGrowthGranted = conflict.RepairGrowthGranted,
                     TimesReinforced = conflict.TimesReinforced
                 })
                 .ToList(),
             AiFriendshipGainedToday = this.AiFriendshipGainedToday,
+            RelationshipTrustInitialized = this.RelationshipTrustInitialized,
+            RelationshipTrust = this.RelationshipTrust,
+            LastRelationshipTrustUpdatedTotalDays = this.LastRelationshipTrustUpdatedTotalDays,
+            LastRelationshipTrustUpdatedTimeOfDay = this.LastRelationshipTrustUpdatedTimeOfDay,
             CommitmentTrust = this.CommitmentTrust,
             MissedCommitments = this.MissedCommitments,
             ConsecutiveMissedCommitments = this.ConsecutiveMissedCommitments,

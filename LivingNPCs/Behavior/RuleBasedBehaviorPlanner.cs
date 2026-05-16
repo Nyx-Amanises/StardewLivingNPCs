@@ -134,7 +134,7 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
 
         return state.CurrentInclination is "NeedsSpace" or "GentleBoundary" or "Reserved"
             || state.Mood is "Overloaded" or "CrowdedButWarm" or "Guarded"
-            || state.CurrentEmotion is "Upset" or "Angry"
+            || state.CurrentEmotion is "Jealous" or "Disappointed" or "Upset" or "Angry"
             || state.HighestUnresolvedConflictSeverity >= 25
             || state.RepeatedConversationPressure >= 40
             || state.Openness <= 25;
@@ -358,6 +358,33 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
                     approachBonus += 0.07;
                     emoteBonus += 0.04;
                     reasons.Add("happy emotion");
+                    break;
+
+                case "Jealous":
+                    approachBonus -= 0.08;
+                    pauseBonus += 0.04;
+                    stepAwayBonus += 0.08;
+                    reasons.Add("jealous emotion");
+                    break;
+
+                case "Worried":
+                    approachBonus += 0.03;
+                    emoteBonus += 0.03;
+                    pauseBonus += 0.05;
+                    reasons.Add("worried emotion");
+                    break;
+
+                case "Grateful":
+                    approachBonus += 0.08;
+                    emoteBonus += 0.05;
+                    reasons.Add("grateful emotion");
+                    break;
+
+                case "Disappointed":
+                    approachBonus -= 0.1;
+                    pauseBonus += 0.06;
+                    stepAwayBonus += 0.1;
+                    reasons.Add("disappointed emotion");
                     break;
 
                 case "Uneasy":

@@ -220,6 +220,10 @@ internal sealed class ConversationAnalysis
         {
             "happy" => "Happy",
             "calm" => "Calm",
+            "jealous" => "Jealous",
+            "worried" => "Worried",
+            "grateful" => "Grateful",
+            "disappointed" => "Disappointed",
             "uneasy" => "Uneasy",
             "upset" => "Upset",
             "angry" => "Angry",
