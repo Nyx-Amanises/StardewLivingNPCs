@@ -1076,6 +1076,7 @@ public class Prompts
         instructions.AppendLine(Util.GetString(Character,"instructionsSingleLine"));
         instructions.AppendLine(Util.GetString(Character,"instructionsResponses", new { Name= Name }));
         instructions.AppendLine(Util.GetString(Character,"instructionsLivingNpcMetadata"));
+        instructions.AppendLine(Util.GetString(Character,"instructionsLivingNpcCommitmentDepth"));
         if (!Character.Bio.ExtraPortraits.ContainsKey("!"))
         {
             var extraPortraits = new StringBuilder();

@@ -168,7 +168,7 @@ internal class LlmGemini : Llm, IGetModelNames
                     var text = textToken.ToString(); 
                     if (!string.IsNullOrWhiteSpace(text))
                     {
-                        return new LlmResponse(text);
+                        return new LlmResponse(text, usage: TokenUsage.FromGeminiUsage(responseJson["usageMetadata"] as JObject));
                     }
                     return new LlmResponse("Empty response", (int)response.StatusCode);
                 }

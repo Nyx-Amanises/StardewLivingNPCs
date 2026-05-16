@@ -133,6 +133,12 @@ namespace ValleyTalk
 
             // Initialize cross-platform compatible logging
             Log.Initialize(Monitor);
+            TokenUsageTracker.Instance.RegisterEvents();
+            helper.ConsoleCommands.Add(
+                "valleytalk_tokens",
+                "Show ValleyTalk token usage for this session and the current save. Usage: valleytalk_tokens [export|reset]",
+                this.OnTokenUsageCommand
+            );
 
 #if DEBUG
             if (Config.Debug)
@@ -159,6 +165,28 @@ namespace ValleyTalk
             harmony.PatchAll();
 
             Log.Debug($"[{DateTime.Now}] Mod loaded");
+        }
+
+        private void OnTokenUsageCommand(string command, string[] args)
+        {
+            string action = args.FirstOrDefault()?.Trim().ToLowerInvariant() ?? string.Empty;
+            switch (action)
+            {
+                case "":
+                    Monitor.Log(TokenUsageTracker.Instance.BuildConsoleSummary(), LogLevel.Info);
+                    return;
+                case "export":
+                    string path = TokenUsageTracker.Instance.ExportCurrentSave();
+                    Monitor.Log($"ValleyTalk token usage exported to: {path}", LogLevel.Info);
+                    return;
+                case "reset":
+                    TokenUsageTracker.Instance.ResetCurrentSave();
+                    Monitor.Log("ValleyTalk token usage for the current save has been reset.", LogLevel.Info);
+                    return;
+                default:
+                    Monitor.Log("Usage: valleytalk_tokens [export|reset]", LogLevel.Info);
+                    return;
+            }
         }
 
         private void CheckContentPacks()

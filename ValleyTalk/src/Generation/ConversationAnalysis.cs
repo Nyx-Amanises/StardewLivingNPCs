@@ -208,6 +208,8 @@ internal sealed class ConversationAnalysis
             "meet_again" => "meet_again",
             "go_together" => "go_together",
             "help_task" => "help_task",
+            "celebrate_together" => "celebrate_together",
+            "share_activity" => "share_activity",
             _ => "none"
         };
     }

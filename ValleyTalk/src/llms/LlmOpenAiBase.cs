@@ -93,7 +93,7 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
                     var text = contentToken.ToString();
                     if (!string.IsNullOrWhiteSpace(text))
                     {
-                        return new LlmResponse(text);
+                        return new LlmResponse(text, usage: TokenUsage.FromOpenAiUsage(responseJson["usage"] as JObject));
                     }
                     else
                     {
@@ -217,14 +217,28 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
 
                 if (fullText.Length > 0)
                 {
-                    return new LlmResponse(fullText.ToString());
+                    return new LlmResponse(
+                        fullText.ToString(),
+                        usage: TokenUsage.Estimate(
+                            string.Concat(systemPromptString, gameCacheString, npcCacheString, promptString, responseStart),
+                            fullText.ToString(),
+                            "stream estimate"
+                        )
+                    );
                 }
 
                 lastResponse = rawResponse.ToString();
                 if (TryExtractNonStreamingContent(lastResponse, out string fallbackText))
                 {
                     onToken?.Invoke(fallbackText);
-                    return new LlmResponse(fallbackText);
+                    return new LlmResponse(
+                        fallbackText,
+                        usage: TokenUsage.Estimate(
+                            string.Concat(systemPromptString, gameCacheString, npcCacheString, promptString, responseStart),
+                            fallbackText,
+                            "stream fallback estimate"
+                        )
+                    );
                 }
 
                 retry--;
@@ -261,7 +275,14 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
 
         if (TryExtractNonStreamingContent(lastResponse, out string text))
         {
-            return new LlmResponse(text);
+            return new LlmResponse(
+                text,
+                usage: TokenUsage.Estimate(
+                    string.Concat(systemPromptString, gameCacheString, npcCacheString, promptString, responseStart),
+                    text,
+                    "stream fallback estimate"
+                )
+            );
         }
 
         return new LlmResponse(lastResponse, apiResponseCode);

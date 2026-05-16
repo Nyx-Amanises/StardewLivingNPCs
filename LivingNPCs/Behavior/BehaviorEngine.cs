@@ -195,6 +195,8 @@ internal sealed class BehaviorEngine
 
         this.TryShowPendingAmbientRemarks();
         this.TryUpdatePendingWalks();
+        this.TryShowCommitmentMorningReminders();
+        this.TryShowSharedExperienceFollowUps();
         this.TryTriggerCommitmentArrivals();
     }
 
@@ -964,6 +966,17 @@ internal sealed class BehaviorEngine
                     commitment.Status = "Expired";
                     commitment.LastUpdatedTotalDays = Game1.Date.TotalDays;
                     commitment.LastUpdatedTimeOfDay = Game1.timeOfDay;
+                    this.memory.UpdateStateForExpiredCommitment(state, commitment);
+                    if (this.TryFindNpcInCurrentLocation(state.NpcName, out NPC? npc) && npc != null)
+                    {
+                        this.memory.RecordNpcWorldAction(
+                            npc,
+                            "ExpiredCommitment",
+                            $"the farmer missed an agreed plan: {commitment.Summary}",
+                            this.config.MaxMemoryEntriesPerNpc
+                        );
+                        this.PushInteractionContext(npc, $"Expired commitment for {npc.Name}: {commitment.Summary}.");
+                    }
                     continue;
                 }
 
@@ -1040,8 +1053,125 @@ internal sealed class BehaviorEngine
         {
             "go_together" => "你来了，我们按约定一起走吧。",
             "help_task" => "你来了，我记得答应过要帮你。",
+            "celebrate_together" => "你来了，正好一起庆祝。",
+            "share_activity" => "你来了，我们按说好的去做点什么吧。",
             _ => "你来了，我记得我们的约定。"
         };
+    }
+
+    private void TryShowCommitmentMorningReminders()
+    {
+        if (!this.config.EnableCommitments
+            || Game1.currentLocation == null
+            || Game1.player == null
+            || Game1.activeClickableMenu != null
+            || Game1.eventUp
+            || Game1.timeOfDay < 600
+            || Game1.timeOfDay > 1000)
+        {
+            return;
+        }
+
+        foreach (var npc in Game1.currentLocation.characters.Where(candidate => !string.IsNullOrWhiteSpace(candidate.Name)))
+        {
+            var state = this.memory.GetState(npc);
+            if (state == null)
+            {
+                continue;
+            }
+
+            var commitment = state.Commitments.FirstOrDefault(candidate =>
+                candidate.Status == "Pending"
+                && candidate.DueTotalDays == Game1.Date.TotalDays
+                && !candidate.MorningReminderShown
+                && this.ShouldShowMorningCommitmentReminder(candidate)
+            );
+            if (commitment == null
+                || Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles)
+            {
+                continue;
+            }
+
+            npc.showTextAboveHead(this.BuildCommitmentMorningReminder(commitment));
+            commitment.MorningReminderShown = true;
+            commitment.LastMentionedTotalDays = Game1.Date.TotalDays;
+            commitment.LastMentionedTimeOfDay = Game1.timeOfDay;
+        }
+    }
+
+    private void TryShowSharedExperienceFollowUps()
+    {
+        if (!this.config.EnableDialogueFollowUps
+            || Game1.currentLocation == null
+            || Game1.player == null
+            || Game1.activeClickableMenu != null
+            || Game1.eventUp)
+        {
+            return;
+        }
+
+        foreach (var npc in Game1.currentLocation.characters.Where(candidate => !string.IsNullOrWhiteSpace(candidate.Name)))
+        {
+            var state = this.memory.GetState(npc);
+            if (state == null
+                || Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles)
+            {
+                continue;
+            }
+
+            var experience = state.SharedExperiences.FirstOrDefault(candidate =>
+                candidate.FollowUpEligibleTotalDays <= Game1.Date.TotalDays
+                && candidate.FollowUpShownTotalDays < 0
+                && candidate.CreatedTotalDays >= Game1.Date.TotalDays - 7
+            );
+            if (experience == null)
+            {
+                continue;
+            }
+
+            npc.showTextAboveHead(this.BuildSharedExperienceFollowUp(experience));
+            experience.FollowUpShownTotalDays = Game1.Date.TotalDays;
+            experience.FollowUpShownTimeOfDay = Game1.timeOfDay;
+        }
+    }
+
+    private string BuildCommitmentMorningReminder(NpcCommitmentFact commitment)
+    {
+        return commitment.Type switch
+        {
+            "celebrate_together" => $"别忘了，我们今天要一起庆祝。",
+            "share_activity" => $"别忘了，我们今天还约好一起活动。",
+            "go_together" => $"别忘了，我们今天还约好一起去{commitment.LocationLabel}。",
+            "help_task" => "别忘了，我们今天还约好要一起处理那件事。",
+            _ => $"别忘了，我们今天还约好在{commitment.LocationLabel}见面。"
+        };
+    }
+
+    private string BuildSharedExperienceFollowUp(SharedExperienceFact experience)
+    {
+        return experience.Type switch
+        {
+            "celebrate_together" => "上次一起庆祝，我到现在还记得。",
+            "share_activity" => "上次一起做那件事，挺开心的。",
+            "go_together" => $"上次一起去{experience.LocationLabel}，感觉不错。",
+            "help_task" => "上次一起把事情做完，我很高兴。",
+            _ => "上次一起度过的时间，我还记得。"
+        };
+    }
+
+    private bool ShouldShowMorningCommitmentReminder(NpcCommitmentFact commitment)
+    {
+        unchecked
+        {
+            string seed = $"{commitment.Type}:{commitment.Summary}:{commitment.DueTotalDays}:{commitment.LocationName}";
+            int hash = 17;
+            foreach (char character in seed)
+            {
+                hash = (hash * 31) + character;
+            }
+
+            return System.Math.Abs(hash % 100) < 45;
+        }
     }
 
     private bool IsWithinCommitmentWindow(NpcCommitmentFact commitment)
@@ -1164,6 +1294,15 @@ internal sealed class BehaviorEngine
         {
             commitment.LastMentionedTotalDays = Game1.Date.TotalDays;
             commitment.LastMentionedTimeOfDay = Game1.timeOfDay;
+        }
+
+        foreach (var commitment in state.Commitments.Where(commitment =>
+                     commitment.Status == "Pending"
+                     && commitment.DueTotalDays == Game1.Date.TotalDays + 1
+                     && commitment.DayBeforeReminderMentionedTotalDays < Game1.Date.TotalDays))
+        {
+            commitment.DayBeforeReminderMentionedTotalDays = Game1.Date.TotalDays;
+            commitment.DayBeforeReminderMentionedTimeOfDay = Game1.timeOfDay;
         }
 
         foreach (var commitment in state.Commitments.Where(commitment =>

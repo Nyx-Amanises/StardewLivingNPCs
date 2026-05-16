@@ -108,7 +108,7 @@ internal class LlmLlamaCpp : Llm
                     var contentToken = responseJson["content"];
                     if (!string.IsNullOrWhiteSpace(contentToken?.ToString()))
                     {
-                        return new LlmResponse(contentToken.ToString());
+                        return new LlmResponse(contentToken.ToString(), usage: TokenUsage.FromLlamaCppTimings(token_stats));
                     }
                     else
                     {

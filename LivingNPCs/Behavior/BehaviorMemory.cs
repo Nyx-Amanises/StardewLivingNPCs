@@ -566,8 +566,40 @@ internal sealed class BehaviorMemory
         state.Attention = LivingNpcState.ClampScore(state.Attention + 10);
         state.Openness = LivingNpcState.ClampScore(state.Openness + 8);
         this.AddFamiliarity(state, amount: 2, dailyCap: 8);
+        state.CommitmentTrust = LivingNpcState.ClampScore(state.CommitmentTrust + GetFulfilledCommitmentTrustGain(commitment.Type));
+        state.ConsecutiveMissedCommitments = 0;
+        this.StoreSharedExperience(state, commitment);
         this.ApplyWorldStateInfluence(state, world);
         state.LastInteraction = $"they fulfilled a plan with the farmer: {commitment.Summary}";
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        return state;
+    }
+
+    public LivingNpcState UpdateStateForExpiredCommitment(LivingNpcState state, NpcCommitmentFact commitment)
+    {
+        int trustLoss = GetExpiredCommitmentTrustLoss(state.ConsecutiveMissedCommitments);
+        state.CommitmentTrust = LivingNpcState.ClampScore(state.CommitmentTrust - trustLoss);
+        state.MissedCommitments += 1;
+        state.ConsecutiveMissedCommitments += 1;
+        state.LastMissedCommitmentTotalDays = Game1.Date.TotalDays;
+        state.LastMissedCommitmentTimeOfDay = Game1.timeOfDay;
+        state.Mood = state.ConsecutiveMissedCommitments >= 2 ? "Guarded" : "Polite";
+        state.CurrentInclination = state.ConsecutiveMissedCommitments >= 2 ? "Reserved" : "Measured";
+        state.Openness = LivingNpcState.ClampScore(state.Openness - System.Math.Min(16, 4 + trustLoss));
+        this.ApplyEmotion(
+            state,
+            state.ConsecutiveMissedCommitments >= 2 ? "Upset" : "Uneasy",
+            state.ConsecutiveMissedCommitments >= 2 ? 16 : 8,
+            $"the farmer missed an agreed plan: {commitment.Summary}"
+        );
+        this.StoreConflict(state, new ValleyTalkConflictCandidate
+        {
+            CauseKind = "promise",
+            Summary = $"The farmer missed an agreed plan: {commitment.Summary}.",
+            Severity = state.ConsecutiveMissedCommitments >= 2 ? 30 : 16
+        });
+        state.LastInteraction = $"the farmer missed a plan: {commitment.Summary}";
         state.LastUpdatedTotalDays = Game1.Date.TotalDays;
         state.LastUpdatedTimeOfDay = Game1.timeOfDay;
         return state;
@@ -1048,6 +1080,8 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Long-term personal memory: {state.LongTermMemoryPromptLabel}.");
             prompt.AppendLine($"- Known farmer preferences: {state.PlayerPreferencePromptLabel}.");
             prompt.AppendLine($"- Commitments with the farmer: {state.CommitmentPromptLabel}.");
+            prompt.AppendLine($"- Shared experiences from fulfilled plans: {state.SharedExperiencePromptLabel}.");
+            prompt.AppendLine($"- Trust in keeping plans: {state.CommitmentTrustPromptLabel}.");
             prompt.AppendLine($"- Conflict memory: {state.ConflictPromptLabel}.");
             prompt.AppendLine($"- Personal memory context: {state.FarmerNicknamePromptLabel}.");
             prompt.AppendLine($"- Scene influence on mood: {state.LastSceneInfluenceReason}.");
@@ -1154,6 +1188,16 @@ internal sealed class BehaviorMemory
                 yield return $"Pending commitment: {urgentCommitment.PromptLabel}; if this is due now or today, let it matter naturally.";
             }
 
+            var tomorrowCommitment = state.Commitments.FirstOrDefault(commitment =>
+                commitment.Status == "Pending"
+                && commitment.DueTotalDays == Game1.Date.TotalDays + 1
+                && commitment.DayBeforeReminderMentionedTotalDays < Game1.Date.TotalDays
+            );
+            if (tomorrowCommitment != null)
+            {
+                yield return $"Upcoming commitment tomorrow: {tomorrowCommitment.PromptLabel}; if conversation allows, gently remind the farmer once rather than springing it on them tomorrow.";
+            }
+
             var expiredCommitment = state.Commitments.FirstOrDefault(commitment =>
                 commitment.Status == "Expired"
                 && commitment.LastMentionedTotalDays < Game1.Date.TotalDays
@@ -1171,6 +1215,21 @@ internal sealed class BehaviorMemory
             if (fulfilledCommitment != null)
             {
                 yield return $"Recently fulfilled commitment: {fulfilledCommitment.FulfilledPromptLabel}; this really happened, so the next conversation may briefly reflect on it as a shared experience.";
+            }
+
+            var sharedExperience = state.SharedExperiences.FirstOrDefault(experience =>
+                experience.FollowUpEligibleTotalDays <= Game1.Date.TotalDays
+                && experience.FollowUpShownTotalDays < 0
+                && experience.CreatedTotalDays >= Game1.Date.TotalDays - 7
+            );
+            if (sharedExperience != null)
+            {
+                yield return $"Shared experience milestone: {sharedExperience.PromptLabel}; if it fits, the NPC may warmly mention enjoying that time together and can be a little more open to a similar future plan.";
+            }
+
+            if (state.ConsecutiveMissedCommitments > 0)
+            {
+                yield return $"Plan reliability: the farmer has missed {state.ConsecutiveMissedCommitments} recent commitment(s); trust in keeping plans is {state.CommitmentTrust}/100. Let disappointment be proportionate, and allow sincere apology plus a new concrete plan to begin repair.";
             }
 
             var activeConflict = state.Conflicts
@@ -1255,6 +1314,14 @@ internal sealed class BehaviorMemory
             yield return "Treat pending commitments as future plans, not as completed history.";
         }
 
+        if (state.Commitments.Any(commitment =>
+                commitment.Status == "Pending"
+                && commitment.DueTotalDays == Game1.Date.TotalDays + 1
+                && commitment.DayBeforeReminderMentionedTotalDays < Game1.Date.TotalDays))
+        {
+            yield return "If a commitment is due tomorrow, the NPC may mention it once in a natural reminder rather than repeating it insistently.";
+        }
+
         if (state.Commitments.Any(commitment => commitment.Status == "Expired" && commitment.LastMentionedTotalDays < Game1.Date.TotalDays))
         {
             yield return "If there is an unmet commitment, mention it once with appropriate warmth, disappointment, or practicality instead of ignoring it.";
@@ -1266,6 +1333,18 @@ internal sealed class BehaviorMemory
                 && commitment.FollowUpMentionedTotalDays < 0))
         {
             yield return "If a recently fulfilled commitment is relevant, mention it as something the two of you actually did together, not as a future plan.";
+        }
+
+        if (state.SharedExperiences.Any(experience =>
+                experience.FollowUpEligibleTotalDays <= Game1.Date.TotalDays
+                && experience.FollowUpShownTotalDays < 0))
+        {
+            yield return "Shared experiences from completed plans can deepen continuity; after a pleasant one, the NPC may naturally be more open to proposing a similar plan later.";
+        }
+
+        if (state.ConsecutiveMissedCommitments > 0)
+        {
+            yield return "Missed commitments should affect trust more than ordinary awkwardness; sincere apology and a concrete rebooking can start repairing that trust.";
         }
 
         if (state.HasUnresolvedConflict)
@@ -1387,6 +1466,8 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 长期记忆：{state.LongTermMemoryDebugLabel}");
             summary.AppendLine($"- 玩家偏好记忆：{state.PlayerPreferenceDebugLabel}");
             summary.AppendLine($"- 长期约定：{state.CommitmentDebugLabel}");
+            summary.AppendLine($"- 共同经历：{state.SharedExperienceDebugLabel}");
+            summary.AppendLine($"- 履约信任：{state.CommitmentTrustDebugLabel}");
             summary.AppendLine($"- 冲突记忆：{state.ConflictDebugLabel}");
             summary.AppendLine($"- 长期称呼记忆：{state.FarmerNicknameLabel}");
             summary.AppendLine($"- 今日 AI 对话额外好感：{state.AiFriendshipGainedToday}");
@@ -1863,10 +1944,23 @@ internal sealed class BehaviorMemory
             if (existing.Status == "Expired")
             {
                 existing.Status = "Pending";
+                existing.RenewedAfterMiss = true;
+                existing.RenewedTotalDays = Game1.Date.TotalDays;
+                existing.RenewedTimeOfDay = Game1.timeOfDay;
+                state.CommitmentTrust = LivingNpcState.ClampScore(state.CommitmentTrust + 4);
             }
 
             return true;
         }
+
+        var recentMissedSimilar = state.Commitments
+            .Where(commitment => commitment.Status == "Expired"
+                && commitment.Type == candidate.Type
+                && commitment.LocationName == locationName
+                && commitment.LastUpdatedTotalDays >= Game1.Date.TotalDays - 7)
+            .OrderByDescending(commitment => commitment.LastUpdatedTotalDays)
+            .ThenByDescending(commitment => commitment.LastUpdatedTimeOfDay)
+            .FirstOrDefault();
 
         state.Commitments.Add(new NpcCommitmentFact
         {
@@ -1881,8 +1975,19 @@ internal sealed class BehaviorMemory
             CreatedTimeOfDay = Game1.timeOfDay,
             LastUpdatedTotalDays = Game1.Date.TotalDays,
             LastUpdatedTimeOfDay = Game1.timeOfDay,
+            RenewedAfterMiss = recentMissedSimilar != null,
+            RenewedTotalDays = recentMissedSimilar != null ? Game1.Date.TotalDays : -1,
+            RenewedTimeOfDay = recentMissedSimilar != null ? Game1.timeOfDay : 0,
             TimesReinforced = 1
         });
+        if (recentMissedSimilar != null)
+        {
+            recentMissedSimilar.RenewedAfterMiss = true;
+            recentMissedSimilar.RenewedTotalDays = Game1.Date.TotalDays;
+            recentMissedSimilar.RenewedTimeOfDay = Game1.timeOfDay;
+            state.CommitmentTrust = LivingNpcState.ClampScore(state.CommitmentTrust + 4);
+            state.ConsecutiveMissedCommitments = System.Math.Max(0, state.ConsecutiveMissedCommitments - 1);
+        }
 
         while (state.Commitments.Count(commitment => commitment.Status == "Pending") > maxPendingCommitmentsPerNpc)
         {
@@ -2093,8 +2198,81 @@ internal sealed class BehaviorMemory
             "meet_again" => "meet_again",
             "go_together" => "go_together",
             "help_task" => "help_task",
+            "celebrate_together" => "celebrate_together",
+            "share_activity" => "share_activity",
             _ => "none"
         };
+    }
+
+    private static int GetFulfilledCommitmentTrustGain(string type)
+    {
+        return NormalizeCommitmentType(type) switch
+        {
+            "celebrate_together" => 8,
+            "share_activity" => 7,
+            "go_together" => 6,
+            "help_task" => 6,
+            _ => 5
+        };
+    }
+
+    private static int GetExpiredCommitmentTrustLoss(int consecutiveMisses)
+    {
+        return consecutiveMisses switch
+        {
+            >= 2 => 14,
+            1 => 10,
+            _ => 6
+        };
+    }
+
+    private void StoreSharedExperience(LivingNpcState state, NpcCommitmentFact commitment)
+    {
+        string key = BuildSharedExperienceKey(commitment.Type, commitment.Summary, commitment.LocationName);
+        var existing = state.SharedExperiences.FirstOrDefault(experience => experience.Key == key);
+        if (existing != null)
+        {
+            existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            existing.TimesReinforced += 1;
+            existing.Importance = System.Math.Min(100, existing.Importance + 5);
+            return;
+        }
+
+        state.SharedExperiences.Add(new SharedExperienceFact
+        {
+            Key = key,
+            Type = commitment.Type,
+            Summary = commitment.Summary,
+            LocationName = commitment.LocationName,
+            LocationLabel = commitment.LocationLabel,
+            CreatedTotalDays = Game1.Date.TotalDays,
+            CreatedTimeOfDay = Game1.timeOfDay,
+            LastUpdatedTotalDays = Game1.Date.TotalDays,
+            LastUpdatedTimeOfDay = Game1.timeOfDay,
+            Importance = commitment.Type switch
+            {
+                "celebrate_together" => 80,
+                "share_activity" => 72,
+                "go_together" => 68,
+                "help_task" => 66,
+                _ => 60
+            },
+            TimesReinforced = 1,
+            FollowUpEligibleTotalDays = Game1.Date.TotalDays + 2
+        });
+
+        state.SharedExperiences = state.SharedExperiences
+            .OrderByDescending(experience => experience.Importance)
+            .ThenByDescending(experience => experience.LastUpdatedTotalDays)
+            .ThenByDescending(experience => experience.LastUpdatedTimeOfDay)
+            .Take(12)
+            .ToList();
+    }
+
+    private static string BuildSharedExperienceKey(string type, string summary, string locationName)
+    {
+        return $"{NormalizeCommitmentType(type)}:{NormalizeMemorySummary(summary)}:{NormalizeCommitmentLocation(locationName, string.Empty)}";
     }
 
     private static string NormalizeMemorySummary(string summary)
@@ -2391,10 +2569,37 @@ internal sealed class NpcCommitmentFact
     public int FulfilledTimeOfDay { get; set; }
     public int FollowUpMentionedTotalDays { get; set; } = -1;
     public int FollowUpMentionedTimeOfDay { get; set; }
+    public int DayBeforeReminderMentionedTotalDays { get; set; } = -1;
+    public int DayBeforeReminderMentionedTimeOfDay { get; set; }
+    public bool MorningReminderShown { get; set; }
+    public bool RenewedAfterMiss { get; set; }
+    public int RenewedTotalDays { get; set; } = -1;
+    public int RenewedTimeOfDay { get; set; }
     public int TimesReinforced { get; set; }
 
     public string PromptLabel => $"{this.Type} at {this.LocationLabel} on total day {this.DueTotalDays} around {this.TimeOfDay}; status: {this.Status}; summary: {this.Summary}";
     public string FulfilledPromptLabel => $"{this.Type} at {this.LocationLabel} was fulfilled on total day {this.FulfilledTotalDays} around {this.FulfilledTimeOfDay}; summary: {this.Summary}";
+}
+
+internal sealed class SharedExperienceFact
+{
+    public string Key { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
+    public string Summary { get; set; } = string.Empty;
+    public string LocationName { get; set; } = string.Empty;
+    public string LocationLabel { get; set; } = string.Empty;
+    public int CreatedTotalDays { get; set; } = -1;
+    public int CreatedTimeOfDay { get; set; }
+    public int LastUpdatedTotalDays { get; set; } = -1;
+    public int LastUpdatedTimeOfDay { get; set; }
+    public int Importance { get; set; }
+    public int TimesReinforced { get; set; }
+    public int FollowUpEligibleTotalDays { get; set; } = -1;
+    public int FollowUpShownTotalDays { get; set; } = -1;
+    public int FollowUpShownTimeOfDay { get; set; }
+
+    public string PromptLabel =>
+        $"{this.Type} at {this.LocationLabel}; shared on total day {this.CreatedTotalDays}; summary: {this.Summary}";
 }
 
 internal sealed class NpcConflictFact
@@ -2528,7 +2733,13 @@ internal sealed class LivingNpcState
     public List<LongTermMemoryFact> LongTermMemories { get; set; } = new();
     public List<PlayerPreferenceFact> PlayerPreferenceMemories { get; set; } = new();
     public List<NpcCommitmentFact> Commitments { get; set; } = new();
+    public List<SharedExperienceFact> SharedExperiences { get; set; } = new();
     public List<NpcConflictFact> Conflicts { get; set; } = new();
+    public int CommitmentTrust { get; set; } = 50;
+    public int MissedCommitments { get; set; }
+    public int ConsecutiveMissedCommitments { get; set; }
+    public int LastMissedCommitmentTotalDays { get; set; } = -1;
+    public int LastMissedCommitmentTimeOfDay { get; set; }
     public int AiFriendshipGainedToday { get; set; }
     public int LastAiFriendshipTotalDays { get; set; } = -1;
     public int LastAiSmallGiftTotalDays { get; set; } = -1;
@@ -2786,6 +2997,40 @@ internal sealed class LivingNpcState
         }
     }
 
+    public string SharedExperiencePromptLabel
+    {
+        get
+        {
+            var experiences = this.GetTopSharedExperiences(4).ToList();
+            return experiences.Count == 0
+                ? "no shared commitment-based experiences are recorded"
+                : string.Join("; ", experiences.Select(experience => experience.PromptLabel));
+        }
+    }
+
+    public string SharedExperienceDebugLabel
+    {
+        get
+        {
+            var experiences = this.GetTopSharedExperiences(4).ToList();
+            return experiences.Count == 0
+                ? "暂无"
+                : string.Join("；", experiences.Select(experience =>
+                    $"{experience.Summary}（{experience.Type}，{experience.LocationLabel}，第 {experience.CreatedTotalDays} 天）"));
+        }
+    }
+
+    public string CommitmentTrustPromptLabel => this.CommitmentTrust switch
+    {
+        >= 75 => $"high trust in keeping plans ({this.CommitmentTrust}/100)",
+        >= 55 => $"steady trust in keeping plans ({this.CommitmentTrust}/100)",
+        >= 35 => $"uncertain trust in keeping plans ({this.CommitmentTrust}/100)",
+        _ => $"low trust in keeping plans ({this.CommitmentTrust}/100)"
+    };
+
+    public string CommitmentTrustDebugLabel =>
+        $"{this.CommitmentTrust}/100，累计失约 {this.MissedCommitments} 次，连续失约 {this.ConsecutiveMissedCommitments} 次";
+
     public string CommitmentDebugLabel
     {
         get
@@ -2980,6 +3225,40 @@ internal sealed class LivingNpcState
             .ThenBy(commitment => commitment.TimeOfDay)
             .Take(12)
             .ToList();
+        this.SharedExperiences ??= new List<SharedExperienceFact>();
+        this.SharedExperiences = this.SharedExperiences
+            .Where(experience => experience != null && !string.IsNullOrWhiteSpace(experience.Summary))
+            .Select(experience =>
+            {
+                experience.Type = BehaviorMemory.NormalizeCommitmentType(experience.Type);
+                experience.Summary = experience.Summary.Trim();
+                experience.LocationName = BehaviorMemory.NormalizeCommitmentLocation(experience.LocationName, "Town");
+                experience.LocationLabel = string.IsNullOrWhiteSpace(experience.LocationLabel)
+                    ? experience.LocationName
+                    : experience.LocationLabel.Trim();
+                experience.Key = string.IsNullOrWhiteSpace(experience.Key)
+                    ? $"{experience.Type}:{experience.Summary}:{experience.LocationName}"
+                    : experience.Key;
+                experience.Importance = ClampScore(experience.Importance);
+                experience.TimesReinforced = System.Math.Max(0, experience.TimesReinforced);
+                return experience;
+            })
+            .Where(experience => experience.Type != "none")
+            .OrderByDescending(experience => experience.Importance)
+            .ThenByDescending(experience => experience.LastUpdatedTotalDays)
+            .ThenByDescending(experience => experience.LastUpdatedTimeOfDay)
+            .Take(12)
+            .ToList();
+        bool likelyLegacyCommitmentState = this.CommitmentTrust == 0
+            && this.MissedCommitments == 0
+            && this.ConsecutiveMissedCommitments == 0
+            && this.Commitments.Count == 0
+            && this.SharedExperiences.Count == 0;
+        this.CommitmentTrust = likelyLegacyCommitmentState
+            ? 50
+            : ClampScore(this.CommitmentTrust);
+        this.MissedCommitments = System.Math.Max(0, this.MissedCommitments);
+        this.ConsecutiveMissedCommitments = System.Math.Max(0, this.ConsecutiveMissedCommitments);
         this.Conflicts ??= new List<NpcConflictFact>();
         this.Conflicts = this.Conflicts
             .Where(conflict => conflict != null && !string.IsNullOrWhiteSpace(conflict.Summary))
@@ -3155,7 +3434,32 @@ internal sealed class LivingNpcState
                     FulfilledTimeOfDay = commitment.FulfilledTimeOfDay,
                     FollowUpMentionedTotalDays = commitment.FollowUpMentionedTotalDays,
                     FollowUpMentionedTimeOfDay = commitment.FollowUpMentionedTimeOfDay,
+                    DayBeforeReminderMentionedTotalDays = commitment.DayBeforeReminderMentionedTotalDays,
+                    DayBeforeReminderMentionedTimeOfDay = commitment.DayBeforeReminderMentionedTimeOfDay,
+                    MorningReminderShown = commitment.MorningReminderShown,
+                    RenewedAfterMiss = commitment.RenewedAfterMiss,
+                    RenewedTotalDays = commitment.RenewedTotalDays,
+                    RenewedTimeOfDay = commitment.RenewedTimeOfDay,
                     TimesReinforced = commitment.TimesReinforced
+                })
+                .ToList(),
+            SharedExperiences = this.SharedExperiences
+                .Select(experience => new SharedExperienceFact
+                {
+                    Key = experience.Key,
+                    Type = experience.Type,
+                    Summary = experience.Summary,
+                    LocationName = experience.LocationName,
+                    LocationLabel = experience.LocationLabel,
+                    CreatedTotalDays = experience.CreatedTotalDays,
+                    CreatedTimeOfDay = experience.CreatedTimeOfDay,
+                    LastUpdatedTotalDays = experience.LastUpdatedTotalDays,
+                    LastUpdatedTimeOfDay = experience.LastUpdatedTimeOfDay,
+                    Importance = experience.Importance,
+                    TimesReinforced = experience.TimesReinforced,
+                    FollowUpEligibleTotalDays = experience.FollowUpEligibleTotalDays,
+                    FollowUpShownTotalDays = experience.FollowUpShownTotalDays,
+                    FollowUpShownTimeOfDay = experience.FollowUpShownTimeOfDay
                 })
                 .ToList(),
             Conflicts = this.Conflicts
@@ -3179,6 +3483,11 @@ internal sealed class LivingNpcState
                 })
                 .ToList(),
             AiFriendshipGainedToday = this.AiFriendshipGainedToday,
+            CommitmentTrust = this.CommitmentTrust,
+            MissedCommitments = this.MissedCommitments,
+            ConsecutiveMissedCommitments = this.ConsecutiveMissedCommitments,
+            LastMissedCommitmentTotalDays = this.LastMissedCommitmentTotalDays,
+            LastMissedCommitmentTimeOfDay = this.LastMissedCommitmentTimeOfDay,
             LastAiFriendshipTotalDays = this.LastAiFriendshipTotalDays,
             LastAiSmallGiftTotalDays = this.LastAiSmallGiftTotalDays,
             LastAiMeaningfulGiftTotalDays = this.LastAiMeaningfulGiftTotalDays,
@@ -3229,6 +3538,15 @@ internal sealed class LivingNpcState
             })
             .ThenBy(commitment => commitment.DueTotalDays)
             .ThenBy(commitment => commitment.TimeOfDay)
+            .Take(count);
+    }
+
+    private IEnumerable<SharedExperienceFact> GetTopSharedExperiences(int count)
+    {
+        return this.SharedExperiences
+            .OrderByDescending(experience => experience.Importance)
+            .ThenByDescending(experience => experience.LastUpdatedTotalDays)
+            .ThenByDescending(experience => experience.LastUpdatedTimeOfDay)
             .Take(count);
     }
 

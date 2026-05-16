@@ -111,7 +111,7 @@ internal class LlmVolcEngine : Llm, IGetModelNames
                     var text = contentToken.ToString();
                     if (!string.IsNullOrWhiteSpace(text))
                     {
-                        return new LlmResponse(text);
+                        return new LlmResponse(text, usage: TokenUsage.FromOpenAiUsage(responseJson["usage"] as JObject));
                     }
                     else
                     {

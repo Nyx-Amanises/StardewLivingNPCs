@@ -118,7 +118,7 @@ internal class LlmClaude : Llm, IGetModelNames
                     var text = firstContentElement["text"].ToString();
                     if (!string.IsNullOrWhiteSpace(text))
                     {
-                        return new LlmResponse(text);
+                        return new LlmResponse(text, usage: TokenUsage.FromClaudeUsage(responseJson["usage"] as JObject));
                     }
                     else
                     {

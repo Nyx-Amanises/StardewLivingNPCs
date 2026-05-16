@@ -466,6 +466,19 @@ public class Character
                         inferenceMilliseconds += inferenceWatch.ElapsedMilliseconds;
                     }
                     responseCharacters = result.Text?.Length ?? 0;
+                    TokenUsage usage = result.Usage.HasAnyTokens
+                        ? result.Usage
+                        : TokenUsage.Estimate(
+                            string.Concat(systemPrompt, gameConstantContext, npcConstantContext, generatedPrompt, responseStart),
+                            result.Text ?? result.ErrorMessage ?? string.Empty
+                        );
+                    TokenUsageTracker.Instance.Record(
+                        Name,
+                        usage,
+                        ModEntry.Config.Provider,
+                        ModEntry.Config.ModelName,
+                        result.IsSuccess ? "success" : "failed"
+                    );
                     this.LastConversationAnalysis = ConversationAnalysis.Parse(result.Text);
 
                     if (result.IsSuccess)
