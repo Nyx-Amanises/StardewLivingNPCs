@@ -2654,6 +2654,7 @@ internal sealed class BehaviorMemory
                     action.Amount = System.Math.Clamp(action.Amount, 0, 250);
                     action.TileCount = System.Math.Clamp(action.TileCount, 0, 12);
                     action.DurationMinutes = System.Math.Clamp(action.DurationMinutes, 0, 20);
+                    action.DelayMinutes = System.Math.Clamp(action.DelayMinutes, 0, 20);
                     action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
                     action.QuestHint = action.QuestHint?.Trim() ?? string.Empty;
                     return action;
@@ -4850,6 +4851,7 @@ internal sealed class ValleyTalkWorldActionRequest
     public int Amount { get; set; }
     public int TileCount { get; set; }
     public int DurationMinutes { get; set; }
+    public int DelayMinutes { get; set; }
     public string Reason { get; set; } = string.Empty;
     public string TargetLocation { get; set; } = string.Empty;
     public string QuestHint { get; set; } = string.Empty;

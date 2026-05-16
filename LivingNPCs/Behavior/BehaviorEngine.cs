@@ -32,6 +32,7 @@ internal sealed class BehaviorEngine
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
     private readonly List<PendingAmbientRemark> pendingAmbientRemarks = new();
     private readonly List<PendingWalkTogether> pendingWalks = new();
+    private readonly List<PendingDelayedTravelAction> pendingDelayedTravelActions = new();
     private readonly Dictionary<string, int> lastConversationMemoryTimeByNpc = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
 
@@ -96,6 +97,7 @@ internal sealed class BehaviorEngine
         this.pendingRequests.Clear();
         this.pendingAmbientRemarks.Clear();
         this.pendingWalks.Clear();
+        this.pendingDelayedTravelActions.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
         this.SyncHelpRequestsToQuestLog();
     }
@@ -107,6 +109,7 @@ internal sealed class BehaviorEngine
         this.pendingRequests.Clear();
         this.pendingAmbientRemarks.Clear();
         this.pendingWalks.Clear();
+        this.pendingDelayedTravelActions.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
     }
 
@@ -200,6 +203,7 @@ internal sealed class BehaviorEngine
         }
 
         this.TryShowPendingAmbientRemarks();
+        this.TryStartPendingDelayedTravelActions();
         this.TryUpdatePendingWalks();
         this.TryShowCommitmentMorningReminders();
         this.TryShowHelpRequestFollowUps();
@@ -334,7 +338,7 @@ internal sealed class BehaviorEngine
             this.QueueAmbientRemark(npc, result.AmbientFollowUpText, result.AmbientFollowUpDelayMinutes);
         }
 
-        if (this.config.EnableAiWorldActions && result.Actions.Count > 0)
+        if (this.config.EnableAiWorldActions)
         {
             this.TryExecuteConversationActions(npc, result.Actions, playerText, npcResponse);
         }
@@ -416,8 +420,18 @@ internal sealed class BehaviorEngine
         string npcResponse
     )
     {
-        foreach (var action in actions.Take(1))
+        foreach (var action in this.BuildEffectiveConversationActions(npc, actions, playerText, npcResponse).Take(1))
         {
+            if (action.Type is "walk_together" or "escort_to_location")
+            {
+                action.DelayMinutes = System.Math.Max(action.DelayMinutes, this.DetectPreparationDelayMinutes(npcResponse));
+                if (action.DelayMinutes > 0)
+                {
+                    this.QueueDelayedTravelAction(npc, action);
+                    continue;
+                }
+            }
+
             bool executed = action.Type switch
             {
                 "give_small_gift" => this.TryGiveSmallGift(npc, action, playerText, npcResponse, out _),
@@ -446,6 +460,330 @@ internal sealed class BehaviorEngine
                     _ => "unknown request rejected"
                 };
                 this.monitor.Log($"Skipped AI world action {action.Type} for {npc.Name}: {reason}.", LogLevel.Debug);
+            }
+        }
+    }
+
+    private IReadOnlyList<ValleyTalkWorldActionRequest> BuildEffectiveConversationActions(
+        NPC npc,
+        IReadOnlyList<ValleyTalkWorldActionRequest> actions,
+        string playerText,
+        string npcResponse
+    )
+    {
+        if (actions.Count > 0)
+        {
+            return actions;
+        }
+
+        if (!this.TryBuildFallbackTravelAction(playerText, npcResponse, out ValleyTalkWorldActionRequest? action)
+            && !this.TryBuildImmediateTravelActionFromRecentCommitment(npc, npcResponse, out action)
+            || action == null)
+        {
+            return actions;
+        }
+
+        if (this.config.Debug)
+        {
+            this.monitor.Log(
+                $"Synthesized fallback AI travel action {action.Type} toward {action.TargetLocation} from visible dialogue.",
+                LogLevel.Debug
+            );
+        }
+
+        return new[] { action };
+    }
+
+    private bool TryBuildImmediateTravelActionFromRecentCommitment(
+        NPC npc,
+        string npcResponse,
+        out ValleyTalkWorldActionRequest? action
+    )
+    {
+        action = null;
+        var state = this.memory.GetState(npc);
+        if (state == null)
+        {
+            return false;
+        }
+
+        var commitment = state.Commitments.FirstOrDefault(candidate =>
+            candidate.Type == "go_together"
+            && candidate.Status == "Pending"
+            && candidate.CreatedTotalDays == Game1.Date.TotalDays
+            && candidate.CreatedTimeOfDay == Game1.timeOfDay
+            && candidate.DueTotalDays == Game1.Date.TotalDays
+            && System.Math.Abs(this.ToDayMinutes(candidate.TimeOfDay) - this.ToDayMinutes(Game1.timeOfDay)) <= 20
+        );
+        if (commitment == null)
+        {
+            return false;
+        }
+
+        action = new ValleyTalkWorldActionRequest
+        {
+            Type = string.IsNullOrWhiteSpace(commitment.LocationName) ? "walk_together" : "escort_to_location",
+            TargetLocation = commitment.LocationName,
+            DurationMinutes = string.IsNullOrWhiteSpace(commitment.LocationName) ? 10 : 15,
+            DelayMinutes = this.DetectPreparationDelayMinutes(npcResponse),
+            Reason = $"a just-made same-time plan to go together: {commitment.Summary}"
+        };
+        return true;
+    }
+
+    private bool TryBuildFallbackTravelAction(
+        string playerText,
+        string npcResponse,
+        out ValleyTalkWorldActionRequest? action
+    )
+    {
+        action = null;
+        string combinedText = $"{playerText} {npcResponse}";
+        if (!this.LooksLikeImmediateTravelInvitation(playerText, npcResponse)
+            || this.LooksLikeDeferredOrRejectedTravel(npcResponse))
+        {
+            return false;
+        }
+
+        string targetLocation = this.TryDetectTravelTargetLocation(combinedText);
+        action = new ValleyTalkWorldActionRequest
+        {
+            Type = string.IsNullOrWhiteSpace(targetLocation) ? "walk_together" : "escort_to_location",
+            TargetLocation = targetLocation,
+            DurationMinutes = string.IsNullOrWhiteSpace(targetLocation) ? 10 : 15,
+            DelayMinutes = this.DetectPreparationDelayMinutes(npcResponse),
+            Reason = "the visible conversation ended with an immediate shared travel plan"
+        };
+        return true;
+    }
+
+    private bool LooksLikeImmediateTravelInvitation(string playerText, string npcResponse)
+    {
+        bool farmerInvited = this.ContainsAny(
+            playerText,
+            "一起去",
+            "要不要去",
+            "陪我去",
+            "去我农场",
+            "来我农场",
+            "去农场看看",
+            "一起走",
+            "go with me",
+            "come to my farm",
+            "visit my farm",
+            "walk with me"
+        );
+        bool npcAccepted = this.ContainsAny(
+            npcResponse,
+            "一起去",
+            "我陪你",
+            "那我们",
+            "走吧",
+            "可以",
+            "当然",
+            "好啊",
+            "好呀",
+            "愿意",
+            "let's go",
+            "i'll go",
+            "i can go",
+            "sure"
+        );
+        return farmerInvited && npcAccepted;
+    }
+
+    private bool LooksLikeDeferredOrRejectedTravel(string npcResponse)
+    {
+        if (this.DetectPreparationDelayMinutes(npcResponse) > 0)
+        {
+            return false;
+        }
+
+        return this.ContainsAny(
+            npcResponse,
+            "下次",
+            "改天",
+            "晚点",
+            "以后",
+            "今天不行",
+            "不行",
+            "不可以",
+            "不能",
+            "没法",
+            "抱歉",
+            "later",
+            "another time",
+            "not now",
+            "can't"
+        );
+    }
+
+    private int DetectPreparationDelayMinutes(string npcResponse)
+    {
+        return this.ContainsAny(
+            npcResponse,
+            "等我一下",
+            "稍等",
+            "一会儿",
+            "准备一下",
+            "换件衣服",
+            "拿件衣服",
+            "拿衣服",
+            "雨衣",
+            "带把伞",
+            "拿把伞",
+            "wait a moment",
+            "get my coat",
+            "grab my coat",
+            "umbrella"
+        )
+            ? 10
+            : 0;
+    }
+
+    private string TryDetectTravelTargetLocation(string text)
+    {
+        if (this.ContainsAny(text, "农场", "farm"))
+        {
+            return "Farm";
+        }
+
+        if (this.ContainsAny(text, "海边", "海滩", "beach"))
+        {
+            return "Beach";
+        }
+
+        if (this.ContainsAny(text, "博物馆", "图书馆", "museum", "library"))
+        {
+            return "ArchaeologyHouse";
+        }
+
+        if (this.ContainsAny(text, "森林", "煤矿森林", "forest"))
+        {
+            return "Forest";
+        }
+
+        if (this.ContainsAny(text, "山上", "山地", "mountain"))
+        {
+            return "Mountain";
+        }
+
+        if (this.ContainsAny(text, "酒吧", "沙龙", "saloon"))
+        {
+            return "Saloon";
+        }
+
+        if (this.ContainsAny(text, "医院", "诊所", "clinic", "hospital"))
+        {
+            return "Hospital";
+        }
+
+        if (this.ContainsAny(text, "皮埃尔", "杂货店", "general store", "pierre"))
+        {
+            return "SeedShop";
+        }
+
+        if (this.ContainsAny(text, "巴士站", "bus stop"))
+        {
+            return "BusStop";
+        }
+
+        if (this.ContainsAny(text, "镇上", "鹈鹕镇", "town"))
+        {
+            return "Town";
+        }
+
+        return string.Empty;
+    }
+
+    private bool ContainsAny(string text, params string[] fragments)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        return fragments.Any(fragment => text.Contains(fragment, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void QueueDelayedTravelAction(NPC npc, ValleyTalkWorldActionRequest action)
+    {
+        int delayMinutes = System.Math.Clamp(action.DelayMinutes, 1, 20);
+        this.pendingDelayedTravelActions.RemoveAll(pending => pending.NpcName == npc.Name);
+        this.pendingDelayedTravelActions.Add(new PendingDelayedTravelAction(
+            npc.Name,
+            Game1.Date.TotalDays,
+            npc.currentLocation?.Name ?? string.Empty,
+            this.AddMinutesToTime(Game1.timeOfDay, delayMinutes),
+            action.Type,
+            action.TargetLocation,
+            action.DurationMinutes,
+            action.Reason
+        ));
+
+        var state = this.memory.GetState(npc);
+        if (state != null)
+        {
+            this.MarkStateAfterWorldAction(state, "they asked the farmer to wait briefly before leaving together");
+        }
+
+        if (this.config.Debug)
+        {
+            this.monitor.Log(
+                $"Queued delayed travel action {action.Type} for {npc.Name} in {delayMinutes} minutes toward {action.TargetLocation}.",
+                LogLevel.Debug
+            );
+        }
+    }
+
+    private void TryStartPendingDelayedTravelActions()
+    {
+        if (this.pendingDelayedTravelActions.Count == 0
+            || Game1.activeClickableMenu != null
+            || Game1.eventUp)
+        {
+            return;
+        }
+
+        foreach (var pending in this.pendingDelayedTravelActions.ToList())
+        {
+            if (pending.TotalDays != Game1.Date.TotalDays)
+            {
+                this.pendingDelayedTravelActions.Remove(pending);
+                continue;
+            }
+
+            if (Game1.timeOfDay < pending.NotBeforeTimeOfDay)
+            {
+                continue;
+            }
+
+            if (!this.TryFindNpcInCurrentLocation(pending.NpcName, out NPC? npc)
+                || npc == null
+                || npc.currentLocation?.Name != pending.LocationName
+                || Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles + 2)
+            {
+                this.pendingDelayedTravelActions.Remove(pending);
+                continue;
+            }
+
+            var action = new ValleyTalkWorldActionRequest
+            {
+                Type = pending.Type,
+                TargetLocation = pending.TargetLocation,
+                DurationMinutes = pending.DurationMinutes,
+                Reason = pending.Reason
+            };
+            bool started = pending.Type switch
+            {
+                "escort_to_location" => this.TryStartEscortToLocation(npc, action, out _),
+                _ => this.TryStartWalkTogether(npc, action, out _)
+            };
+            this.pendingDelayedTravelActions.Remove(pending);
+
+            if (started)
+            {
+                npc.showTextAboveHead("好了，我们走吧。");
             }
         }
     }
@@ -754,7 +1092,7 @@ internal sealed class BehaviorEngine
     private bool TryStartWalkTogether(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
     {
         reason = string.Empty;
-        if (!this.CanUseWorldAction(npc, "walk_together", requireFriendly: false, out reason))
+        if (!this.CanUseWorldAction(npc, "walk_together", requireFriendly: false, out reason, allowDistantWhenExplicit: true))
         {
             return false;
         }
@@ -911,7 +1249,14 @@ internal sealed class BehaviorEngine
         return true;
     }
 
-    private bool CanUseWorldAction(NPC npc, string actionName, bool requireFriendly, out string reason, bool allowDuringEvents = false)
+    private bool CanUseWorldAction(
+        NPC npc,
+        string actionName,
+        bool requireFriendly,
+        out string reason,
+        bool allowDuringEvents = false,
+        bool allowDistantWhenExplicit = false
+    )
     {
         reason = string.Empty;
         if (!this.config.EnableAiWorldActions)
@@ -941,7 +1286,7 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        if (requireFriendly ? !atLeastFriendly : !atLeastFamiliar)
+        if (!allowDistantWhenExplicit && (requireFriendly ? !atLeastFriendly : !atLeastFamiliar))
         {
             reason = $"{actionName} requires a closer relationship";
             return false;
@@ -2433,6 +2778,17 @@ internal sealed record PendingAmbientRemark(
     int NotBeforeTimeOfDay,
     string LocationName,
     Vector2 OriginTile
+);
+
+internal sealed record PendingDelayedTravelAction(
+    string NpcName,
+    int TotalDays,
+    string LocationName,
+    int NotBeforeTimeOfDay,
+    string Type,
+    string TargetLocation,
+    int DurationMinutes,
+    string Reason
 );
 
 internal sealed class PendingWalkTogether

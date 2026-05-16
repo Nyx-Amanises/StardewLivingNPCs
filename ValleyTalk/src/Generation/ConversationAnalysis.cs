@@ -143,6 +143,7 @@ internal sealed class ConversationAnalysis
                     action.Amount = Math.Clamp(action.Amount, 0, 250);
                     action.TileCount = Math.Clamp(action.TileCount, 0, 12);
                     action.DurationMinutes = Math.Clamp(action.DurationMinutes, 0, 20);
+                    action.DelayMinutes = Math.Clamp(action.DelayMinutes, 0, 20);
                     action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
                     action.QuestHint = action.QuestHint?.Trim() ?? string.Empty;
                     return action;
@@ -485,6 +486,9 @@ internal sealed class ConversationWorldActionRequest
 
     [JsonProperty("durationMinutes")]
     public int DurationMinutes { get; set; }
+
+    [JsonProperty("delayMinutes")]
+    public int DelayMinutes { get; set; }
 
     [JsonProperty("reason")]
     public string Reason { get; set; } = string.Empty;
