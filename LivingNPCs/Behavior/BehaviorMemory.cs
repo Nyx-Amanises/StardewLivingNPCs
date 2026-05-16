@@ -682,18 +682,17 @@ internal sealed class BehaviorMemory
 
         foreach (var request in fulfilled)
         {
-            request.Status = "Fulfilled";
-            request.Resolution = $"The farmer brought {gift.ItemName}.";
-            request.FulfilledTotalDays = Game1.Date.TotalDays;
-            request.FulfilledTimeOfDay = Game1.timeOfDay;
-            request.LastUpdatedTotalDays = Game1.Date.TotalDays;
-            request.LastUpdatedTimeOfDay = Game1.timeOfDay;
-            this.ApplyHelpRequestFulfillmentEffects(state, request);
+            this.CompleteHelpRequestCurrentStep(
+                state,
+                request,
+                $"The farmer brought {gift.ItemName}.",
+                out bool fullyFulfilled
+            );
 
             var entry = this.CreateEntry(
                 npc,
                 "HelpRequest",
-                "Fulfilled",
+                fullyFulfilled ? "Fulfilled" : "Advanced",
                 request.Resolution
             );
             this.AddEntry(entry, maxEntriesPerNpc);
@@ -779,19 +778,85 @@ internal sealed class BehaviorMemory
 
     public LivingNpcState UpdateStateForExpiredHelpRequest(LivingNpcState state, NpcHelpRequestFact request)
     {
-        state.Mood = "Polite";
-        state.CurrentInclination = "Measured";
-        state.Openness = LivingNpcState.ClampScore(state.Openness - 4);
+        bool acceptedThenMissed = request.AcceptedTotalDays >= 0;
+        request.FailureReaction = this.BuildHelpRequestFailureReaction(state, request, acceptedThenMissed);
+        state.Mood = acceptedThenMissed ? "Disappointed" : "Polite";
+        state.CurrentInclination = acceptedThenMissed ? "Reserved" : "Measured";
+        state.Openness = LivingNpcState.ClampScore(state.Openness - (acceptedThenMissed ? 8 : 3));
+        if (acceptedThenMissed)
+        {
+            this.ApplyRelationshipTrustDelta(state, -5);
+            state.CommitmentTrust = LivingNpcState.ClampScore(state.CommitmentTrust - 4);
+        }
+
         this.ApplyEmotion(
             state,
             "Disappointed",
-            8,
-            $"a personal help request went unanswered: {request.Summary}"
+            acceptedThenMissed ? 14 : 6,
+            $"{request.FailureReaction}: {request.Summary}"
         );
-        state.LastInteraction = $"a personal help request went unanswered: {request.Summary}";
+        state.LastInteraction = acceptedThenMissed
+            ? $"the farmer accepted but did not finish a personal help request: {request.Summary}"
+            : $"a personal help request went unanswered: {request.Summary}";
         state.LastUpdatedTotalDays = Game1.Date.TotalDays;
         state.LastUpdatedTimeOfDay = Game1.timeOfDay;
         return state;
+    }
+
+    private void ApplyHelpRequestDeclineEffects(LivingNpcState state, NpcHelpRequestFact request)
+    {
+        bool wasAccepted = request.AcceptedTotalDays >= 0;
+        state.Mood = wasAccepted ? "Disappointed" : "Polite";
+        state.CurrentInclination = wasAccepted ? "Reserved" : "Measured";
+        state.Openness = LivingNpcState.ClampScore(state.Openness - (wasAccepted ? 6 : 2));
+        this.ApplyRelationshipTrustDelta(state, wasAccepted ? -4 : -1);
+        this.ApplyEmotion(
+            state,
+            wasAccepted ? "Disappointed" : "Calm",
+            wasAccepted ? 10 : 2,
+            $"the farmer declined a personal help request: {request.Summary}"
+        );
+        state.LastInteraction = $"the farmer declined a personal help request: {request.Summary}";
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+    }
+
+    private string BuildHelpRequestFailureReaction(LivingNpcState state, NpcHelpRequestFact request, bool acceptedThenMissed)
+    {
+        string name = state.NpcName.ToLowerInvariant();
+        string baseline = acceptedThenMissed
+            ? "they feel let down because the farmer had accepted the request"
+            : "they let the unanswered request fade with mild disappointment";
+
+        if (ContainsAny(name, "shane", "george", "haley", "zayne", "maive", "morris"))
+        {
+            return acceptedThenMissed
+                ? "they respond bluntly and become more guarded"
+                : "they brush it off, but a little sharply";
+        }
+
+        if (ContainsAny(name, "penny", "sophia", "flor", "shiro", "harvey", "sebastian", "claire"))
+        {
+            return acceptedThenMissed
+                ? "they take it quietly and become more hesitant to ask again"
+                : "they assume the farmer was busy and withdraw the request softly";
+        }
+
+        if (ContainsAny(name, "gus", "emily", "evelyn", "marnie", "robin", "lenny", "keahi", "pika"))
+        {
+            return acceptedThenMissed
+                ? "they stay kind, but the missed help clearly matters"
+                : "they remain warm and do not press the matter";
+        }
+
+        if (request.Type == "question_request")
+        {
+            return acceptedThenMissed
+                ? "they are disappointed that the conversation never followed through"
+                : "they move on from the unanswered question";
+        }
+
+        return baseline;
     }
 
     public LivingNpcState UpdateStateForConversationStart(NPC npc)
@@ -1338,6 +1403,7 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Shared experiences from fulfilled plans: {state.SharedExperiencePromptLabel}.");
             prompt.AppendLine($"- Trust in keeping plans: {state.CommitmentTrustPromptLabel}.");
             prompt.AppendLine($"- Help requests involving the farmer: {state.HelpRequestPromptLabel}.");
+            prompt.AppendLine("- Help-request lifecycle: Offered means the NPC has asked but the farmer has not accepted; Pending means accepted and active; only Pending requests should be treated like tasks.");
             prompt.AppendLine($"- Help-request readiness: {this.BuildHelpRequestReadinessLabel(npc, state, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, minRelationshipTrustForHelpRequests)}.");
             prompt.AppendLine($"- Help-request fit: {HelpRequestAdvisor.BuildPromptLabel(npc)}");
             prompt.AppendLine($"- Conflict memory: {state.ConflictPromptLabel}.");
@@ -1440,10 +1506,13 @@ internal sealed class BehaviorMemory
                 yield return $"Relevant farmer preference memories for this reply: {this.FormatPlayerPreferencePromptLabel(recallPlan.PlayerPreferences)}; when a gift or topic naturally matches one, it is okay to acknowledge remembering it briefly.";
             }
 
-            var activeHelpRequest = state.HelpRequests.FirstOrDefault(request => request.Status == "Pending");
+            var activeHelpRequest = state.HelpRequests.FirstOrDefault(request => request.Status is "Offered" or "Pending");
             if (activeHelpRequest != null)
             {
-                yield return $"Active help request: {activeHelpRequest.PromptLabel}; remember that this is an unfinished ask, not a vague topic.";
+                string lifecycle = activeHelpRequest.Status == "Offered"
+                    ? "the NPC has asked, but the farmer has not clearly accepted or declined yet; do not treat it as an active task until accepted"
+                    : "the farmer accepted this ask; it is now an active personal task";
+                yield return $"Active help request: {activeHelpRequest.PromptLabel}; {lifecycle}; remember that this is an unfinished ask, not a vague topic.";
             }
 
             var recentlyFulfilledHelpRequest = state.HelpRequests.FirstOrDefault(request =>
@@ -1454,6 +1523,17 @@ internal sealed class BehaviorMemory
             if (recentlyFulfilledHelpRequest != null)
             {
                 yield return $"Recently fulfilled help request: {recentlyFulfilledHelpRequest.FulfilledPromptLabel}; if it fits, the NPC may briefly thank the farmer for following through.";
+            }
+
+            var expiredHelpRequest = state.HelpRequests.FirstOrDefault(request =>
+                request.Status == "Expired"
+                && request.LastMentionedTotalDays < Game1.Date.TotalDays);
+            if (expiredHelpRequest != null)
+            {
+                string reaction = string.IsNullOrWhiteSpace(expiredHelpRequest.FailureReaction)
+                    ? "the NPC noticed the request did not work out"
+                    : expiredHelpRequest.FailureReaction;
+                yield return $"Unfinished help request: {expiredHelpRequest.PromptLabel}; reaction: {reaction}; the next conversation may acknowledge this according to personality, without over-punishing if the farmer never accepted.";
             }
 
             var urgentCommitment = state.Commitments.FirstOrDefault(commitment =>
@@ -2572,6 +2652,21 @@ internal sealed class BehaviorMemory
                     request.QuestionTopic = request.QuestionTopic?.Trim() ?? string.Empty;
                     request.DueInDays = System.Math.Clamp(request.DueInDays, 1, 7);
                     request.Reason = request.Reason?.Trim() ?? string.Empty;
+                    request.FollowUpPotential = NormalizeHelpRequestFollowUpPotential(request.FollowUpPotential);
+                    request.Steps = (request.Steps ?? new List<ValleyTalkHelpRequestStepCandidate>())
+                        .Where(step => step != null)
+                        .Select(step =>
+                        {
+                            step.Type = NormalizeHelpRequestType(step.Type);
+                            step.Summary = step.Summary?.Trim() ?? string.Empty;
+                            step.RequestedItemId = step.RequestedItemId?.Trim() ?? string.Empty;
+                            step.RequestedItemLabel = step.RequestedItemLabel?.Trim() ?? string.Empty;
+                            step.QuestionTopic = step.QuestionTopic?.Trim() ?? string.Empty;
+                            return step;
+                        })
+                        .Where(step => step.Type != "none" && !string.IsNullOrWhiteSpace(step.Summary))
+                        .Take(3)
+                        .ToList();
                     return request;
                 })
                 .Where(request => request.Type != "none")
@@ -3161,29 +3256,16 @@ internal sealed class BehaviorMemory
             return false;
         }
 
-        string normalizedType = NormalizeHelpRequestType(candidate.Type);
-        if (normalizedType == "item_request")
-        {
-            if (!AllowedHelpRequestItemIds.Contains(candidate.RequestedItemId)
-                || !HelpRequestAdvisor.IsCurrentlyRequestableItem(candidate.RequestedItemId))
-            {
-                return false;
-            }
-        }
-        else if (normalizedType == "question_request")
-        {
-            if (string.IsNullOrWhiteSpace(candidate.QuestionTopic))
-            {
-                return false;
-            }
-        }
-        else
+        var steps = this.BuildHelpRequestSteps(candidate);
+        if (steps.Count == 0)
         {
             return false;
         }
 
+        var firstStep = steps[0];
+        string normalizedType = firstStep.Type;
         var existing = state.HelpRequests.FirstOrDefault(request =>
-            request.Status == "Pending"
+            request.Status is "Offered" or "Pending"
             && NormalizeMemorySummary(request.Summary) == normalizedSummary);
         if (existing != null)
         {
@@ -3199,14 +3281,19 @@ internal sealed class BehaviorMemory
             QuestLogId = System.Guid.NewGuid().ToString("N"),
             Type = normalizedType,
             Summary = candidate.Summary.Trim(),
-            RequestedItemId = candidate.RequestedItemId.Trim(),
-            RequestedItemLabel = candidate.RequestedItemLabel.Trim(),
-            QuestionTopic = candidate.QuestionTopic.Trim(),
+            Steps = steps,
+            CurrentStepIndex = 0,
+            RequestedItemId = firstStep.RequestedItemId,
+            RequestedItemLabel = firstStep.RequestedItemLabel,
+            QuestionTopic = firstStep.QuestionTopic,
             DueTotalDays = Game1.Date.TotalDays + candidate.DueInDays,
             Reason = candidate.Reason.Trim(),
-            Status = "Pending",
+            Status = candidate.RequiresAcceptance ? "Offered" : "Pending",
+            FollowUpPotential = NormalizeHelpRequestFollowUpPotential(candidate.FollowUpPotential),
             CreatedTotalDays = Game1.Date.TotalDays,
             CreatedTimeOfDay = Game1.timeOfDay,
+            AcceptedTotalDays = candidate.RequiresAcceptance ? -1 : Game1.Date.TotalDays,
+            AcceptedTimeOfDay = candidate.RequiresAcceptance ? 0 : Game1.timeOfDay,
             LastUpdatedTotalDays = Game1.Date.TotalDays,
             LastUpdatedTimeOfDay = Game1.timeOfDay,
             RewardFriendship = DetermineHelpRequestFriendshipReward(
@@ -3227,12 +3314,69 @@ internal sealed class BehaviorMemory
         return true;
     }
 
+    private List<NpcHelpRequestStepFact> BuildHelpRequestSteps(ValleyTalkHelpRequestCandidate candidate)
+    {
+        candidate.Steps ??= new List<ValleyTalkHelpRequestStepCandidate>();
+        var rawSteps = candidate.Steps.Count > 0
+            ? candidate.Steps
+            : new List<ValleyTalkHelpRequestStepCandidate>
+            {
+                new()
+                {
+                    Type = candidate.Type,
+                    Summary = candidate.Summary,
+                    RequestedItemId = candidate.RequestedItemId,
+                    RequestedItemLabel = candidate.RequestedItemLabel,
+                    QuestionTopic = candidate.QuestionTopic
+                }
+            };
+
+        var steps = new List<NpcHelpRequestStepFact>();
+        foreach (var rawStep in rawSteps.Take(3))
+        {
+            string type = NormalizeHelpRequestType(rawStep.Type);
+            if (type == "item_request")
+            {
+                if (!AllowedHelpRequestItemIds.Contains(rawStep.RequestedItemId)
+                    || !HelpRequestAdvisor.IsCurrentlyRequestableItem(rawStep.RequestedItemId))
+                {
+                    continue;
+                }
+            }
+            else if (type == "question_request")
+            {
+                if (string.IsNullOrWhiteSpace(rawStep.QuestionTopic))
+                {
+                    continue;
+                }
+            }
+            else
+            {
+                continue;
+            }
+
+            steps.Add(new NpcHelpRequestStepFact
+            {
+                Type = type,
+                Summary = string.IsNullOrWhiteSpace(rawStep.Summary)
+                    ? candidate.Summary.Trim()
+                    : rawStep.Summary.Trim(),
+                RequestedItemId = rawStep.RequestedItemId.Trim(),
+                RequestedItemLabel = rawStep.RequestedItemLabel.Trim(),
+                QuestionTopic = rawStep.QuestionTopic.Trim(),
+                Status = "Pending"
+            });
+        }
+
+        return steps;
+    }
+
     private bool ApplyHelpRequestUpdate(LivingNpcState state, ValleyTalkHelpRequestUpdateCandidate candidate, out NpcHelpRequestFact? fulfilledRequest)
     {
         fulfilledRequest = null;
         string normalizedSummary = NormalizeMemorySummary(candidate.Summary);
         var existing = state.HelpRequests
-            .Where(request => request.Status == "Pending")
+            .Where(request => request.Status is "Offered" or "Pending")
             .OrderBy(request => request.DueTotalDays)
             .FirstOrDefault(request => NormalizeMemorySummary(request.Summary) == normalizedSummary);
         if (existing == null)
@@ -3240,36 +3384,150 @@ internal sealed class BehaviorMemory
             return false;
         }
 
-        existing.Status = candidate.Status switch
+        switch (candidate.Status)
         {
-            "fulfilled" => "Fulfilled",
-            "declined" => "Declined",
-            _ => existing.Status
-        };
-        existing.Resolution = candidate.Resolution.Trim();
-        existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
-        existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
-        if (existing.Status == "Fulfilled")
-        {
-            existing.FulfilledTotalDays = Game1.Date.TotalDays;
-            existing.FulfilledTimeOfDay = Game1.timeOfDay;
-            this.ApplyHelpRequestFulfillmentEffects(state, existing);
-            fulfilledRequest = existing;
-        }
-        else if (existing.Status == "Declined")
-        {
-            this.ApplyEmotion(
-                state,
-                "Disappointed",
-                6,
-                $"the farmer declined a personal help request: {existing.Summary}"
-            );
-            state.LastInteraction = $"the farmer declined a personal help request: {existing.Summary}";
-            state.LastUpdatedTotalDays = Game1.Date.TotalDays;
-            state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            case "accepted":
+                this.AcceptHelpRequest(state, existing, candidate.Resolution);
+                break;
+
+            case "fulfilled":
+            case "advanced":
+                if (existing.Status == "Offered")
+                {
+                    this.AcceptHelpRequest(state, existing, "The farmer accepted and helped right away.");
+                }
+
+                if (this.CompleteHelpRequestCurrentStep(state, existing, candidate.Resolution, out bool fullyFulfilled)
+                    && fullyFulfilled)
+                {
+                    fulfilledRequest = existing;
+                }
+
+                break;
+
+            case "declined":
+                this.DeclineHelpRequest(state, existing, candidate.Resolution);
+                break;
         }
 
         return true;
+    }
+
+    private void AcceptHelpRequest(LivingNpcState state, NpcHelpRequestFact request, string resolution)
+    {
+        if (request.Status == "Pending")
+        {
+            return;
+        }
+
+        request.Status = "Pending";
+        request.AcceptedTotalDays = Game1.Date.TotalDays;
+        request.AcceptedTimeOfDay = Game1.timeOfDay;
+        request.Resolution = string.IsNullOrWhiteSpace(resolution)
+            ? "The farmer accepted the request."
+            : resolution.Trim();
+        request.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        request.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        state.Openness = LivingNpcState.ClampScore(state.Openness + 2);
+        this.ApplyRelationshipTrustDelta(state, 2);
+        state.LastInteraction = $"the farmer accepted a personal help request: {request.Summary}";
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+    }
+
+    private void DeclineHelpRequest(LivingNpcState state, NpcHelpRequestFact request, string resolution)
+    {
+        request.Status = "Declined";
+        request.Resolution = string.IsNullOrWhiteSpace(resolution)
+            ? "The farmer declined the request."
+            : resolution.Trim();
+        request.DeclinedTotalDays = Game1.Date.TotalDays;
+        request.DeclinedTimeOfDay = Game1.timeOfDay;
+        request.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        request.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        request.FailureReaction = this.BuildHelpRequestFailureReaction(state, request, acceptedThenMissed: false);
+        this.ApplyHelpRequestDeclineEffects(state, request);
+    }
+
+    private bool CompleteHelpRequestCurrentStep(
+        LivingNpcState state,
+        NpcHelpRequestFact request,
+        string resolution,
+        out bool fullyFulfilled)
+    {
+        fullyFulfilled = false;
+        if (request.Status != "Pending")
+        {
+            return false;
+        }
+
+        var step = this.GetCurrentHelpRequestStep(request);
+        if (step != null)
+        {
+            step.Status = "Fulfilled";
+            step.Resolution = string.IsNullOrWhiteSpace(resolution)
+                ? "The farmer completed this part of the request."
+                : resolution.Trim();
+            step.CompletedTotalDays = Game1.Date.TotalDays;
+            step.CompletedTimeOfDay = Game1.timeOfDay;
+        }
+
+        if (request.CurrentStepIndex + 1 < request.Steps.Count)
+        {
+            request.CurrentStepIndex += 1;
+            this.ApplyCurrentHelpRequestStep(request);
+            request.Resolution = string.IsNullOrWhiteSpace(resolution)
+                ? $"The farmer completed step {request.CurrentStepIndex}."
+                : resolution.Trim();
+            request.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            request.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            request.TimesReinforced += 1;
+            state.Mood = "Encouraged";
+            state.CurrentInclination = "OpenToTalk";
+            state.Attention = LivingNpcState.ClampScore(state.Attention + 4);
+            state.Openness = LivingNpcState.ClampScore(state.Openness + 3);
+            this.ApplyRelationshipTrustDelta(state, 2);
+            state.LastInteraction = $"the farmer completed part of a personal help request: {request.Summary}";
+            state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            return true;
+        }
+
+        request.Status = "Fulfilled";
+        request.Resolution = string.IsNullOrWhiteSpace(resolution)
+            ? "The farmer completed the request."
+            : resolution.Trim();
+        request.FulfilledTotalDays = Game1.Date.TotalDays;
+        request.FulfilledTimeOfDay = Game1.timeOfDay;
+        request.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        request.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        this.ApplyHelpRequestFulfillmentEffects(state, request);
+        fullyFulfilled = true;
+        return true;
+    }
+
+    private NpcHelpRequestStepFact? GetCurrentHelpRequestStep(NpcHelpRequestFact request)
+    {
+        if (request.Steps.Count == 0)
+        {
+            return null;
+        }
+
+        return request.Steps[System.Math.Clamp(request.CurrentStepIndex, 0, request.Steps.Count - 1)];
+    }
+
+    private void ApplyCurrentHelpRequestStep(NpcHelpRequestFact request)
+    {
+        var step = this.GetCurrentHelpRequestStep(request);
+        if (step == null)
+        {
+            return;
+        }
+
+        request.Type = step.Type;
+        request.RequestedItemId = step.RequestedItemId;
+        request.RequestedItemLabel = step.RequestedItemLabel;
+        request.QuestionTopic = step.QuestionTopic;
     }
 
     private void ApplyHelpRequestFulfillmentEffects(LivingNpcState state, NpcHelpRequestFact request)
@@ -3298,6 +3556,11 @@ internal sealed class BehaviorMemory
     private void StoreHelpRequestSharedExperience(LivingNpcState state, NpcHelpRequestFact request)
     {
         string summary = $"the farmer helped with a personal request: {request.Summary}";
+        if (request.FollowUpPotential != "none")
+        {
+            summary += $"; this could naturally grow into {request.FollowUpPotential.Replace('_', ' ')} if the next conversation supports it";
+        }
+
         string key = $"help_request:{NormalizeMemorySummary(summary)}";
         var existing = state.SharedExperiences.FirstOrDefault(experience => experience.Key == key);
         if (existing != null)
@@ -3320,7 +3583,7 @@ internal sealed class BehaviorMemory
             CreatedTimeOfDay = Game1.timeOfDay,
             LastUpdatedTotalDays = Game1.Date.TotalDays,
             LastUpdatedTimeOfDay = Game1.timeOfDay,
-            Importance = 70,
+            Importance = request.FollowUpPotential == "none" ? 70 : 82,
             TimesReinforced = 1,
             FollowUpEligibleTotalDays = Game1.Date.TotalDays + 2
         });
@@ -3365,7 +3628,7 @@ internal sealed class BehaviorMemory
             return false;
         }
 
-        if (state.HelpRequests.Count(request => request.Status == "Pending") >= maxPendingHelpRequestsPerNpc)
+        if (state.HelpRequests.Count(request => request.Status is "Offered" or "Pending") >= maxPendingHelpRequestsPerNpc)
         {
             reason = "an active help request is already pending";
             return false;
@@ -3646,8 +3909,21 @@ internal sealed class BehaviorMemory
     {
         return status?.Trim().ToLowerInvariant() switch
         {
+            "accepted" => "accepted",
             "fulfilled" => "fulfilled",
+            "advanced" => "advanced",
             "declined" => "declined",
+            _ => "none"
+        };
+    }
+
+    internal static string NormalizeHelpRequestFollowUpPotential(string value)
+    {
+        return value?.Trim().ToLowerInvariant() switch
+        {
+            "new_commitment" => "new_commitment",
+            "shared_activity" => "shared_activity",
+            "deeper_relationship" => "deeper_relationship",
             _ => "none"
         };
     }
@@ -3867,11 +4143,12 @@ internal sealed class BehaviorMemory
     {
         return status switch
         {
-            "Pending" => 0,
-            "Expired" => 1,
-            "Declined" => 2,
-            "Fulfilled" => 3,
-            _ => 4
+            "Offered" => 0,
+            "Pending" => 1,
+            "Expired" => 2,
+            "Declined" => 3,
+            "Fulfilled" => 4,
+            _ => 5
         };
     }
 
@@ -4152,6 +4429,8 @@ internal sealed class NpcHelpRequestFact
     public string QuestLogId { get; set; } = string.Empty;
     public string Type { get; set; } = "item_request";
     public string Summary { get; set; } = string.Empty;
+    public List<NpcHelpRequestStepFact> Steps { get; set; } = new();
+    public int CurrentStepIndex { get; set; }
     public string RequestedItemId { get; set; } = string.Empty;
     public string RequestedItemLabel { get; set; } = string.Empty;
     public string QuestionTopic { get; set; } = string.Empty;
@@ -4159,8 +4438,14 @@ internal sealed class NpcHelpRequestFact
     public string Reason { get; set; } = string.Empty;
     public string Status { get; set; } = "Pending";
     public string Resolution { get; set; } = string.Empty;
+    public string FollowUpPotential { get; set; } = "none";
+    public string FailureReaction { get; set; } = string.Empty;
     public int CreatedTotalDays { get; set; } = -1;
     public int CreatedTimeOfDay { get; set; }
+    public int AcceptedTotalDays { get; set; } = -1;
+    public int AcceptedTimeOfDay { get; set; }
+    public int DeclinedTotalDays { get; set; } = -1;
+    public int DeclinedTimeOfDay { get; set; }
     public int LastUpdatedTotalDays { get; set; } = -1;
     public int LastUpdatedTimeOfDay { get; set; }
     public int LastMentionedTotalDays { get; set; } = -1;
@@ -4176,10 +4461,45 @@ internal sealed class NpcHelpRequestFact
     public int TimesReinforced { get; set; }
 
     public string PromptLabel =>
-        $"{this.Type}, due on total day {this.DueTotalDays}, status {this.Status}; summary: {this.Summary}";
+        $"{this.Type}, due on total day {this.DueTotalDays}, status {this.Status}, step {System.Math.Min(this.CurrentStepIndex + 1, System.Math.Max(1, this.Steps.Count))}/{System.Math.Max(1, this.Steps.Count)}; current step: {this.CurrentStepPromptLabel}; summary: {this.Summary}";
 
     public string FulfilledPromptLabel =>
-        $"{this.Type} was fulfilled on total day {this.FulfilledTotalDays}; summary: {this.Summary}";
+        $"{this.Type} was fulfilled on total day {this.FulfilledTotalDays}; summary: {this.Summary}; follow-up potential: {this.FollowUpPotential}";
+
+    public string CurrentStepPromptLabel
+    {
+        get
+        {
+            var step = this.Steps.Count == 0
+                ? null
+                : this.Steps[System.Math.Clamp(this.CurrentStepIndex, 0, this.Steps.Count - 1)];
+            if (step == null)
+            {
+                return this.Type == "item_request"
+                    ? $"bring {this.RequestedItemLabel} {this.RequestedItemId}".Trim()
+                    : this.QuestionTopic;
+            }
+
+            return step.PromptLabel;
+        }
+    }
+}
+
+internal sealed class NpcHelpRequestStepFact
+{
+    public string Type { get; set; } = "item_request";
+    public string Summary { get; set; } = string.Empty;
+    public string RequestedItemId { get; set; } = string.Empty;
+    public string RequestedItemLabel { get; set; } = string.Empty;
+    public string QuestionTopic { get; set; } = string.Empty;
+    public string Status { get; set; } = "Pending";
+    public string Resolution { get; set; } = string.Empty;
+    public int CompletedTotalDays { get; set; } = -1;
+    public int CompletedTimeOfDay { get; set; }
+
+    public string PromptLabel => this.Type == "item_request"
+        ? $"item step: {this.Summary}; needs {this.RequestedItemLabel} {this.RequestedItemId}; status {this.Status}"
+        : $"conversation step: {this.Summary}; topic {this.QuestionTopic}; status {this.Status}";
 }
 
 internal sealed class NpcConflictFact
@@ -4258,11 +4578,23 @@ internal sealed class ValleyTalkHelpRequestCandidate
 {
     public string Type { get; set; } = "none";
     public string Summary { get; set; } = string.Empty;
+    public bool RequiresAcceptance { get; set; } = true;
+    public List<ValleyTalkHelpRequestStepCandidate> Steps { get; set; } = new();
     public string RequestedItemId { get; set; } = string.Empty;
     public string RequestedItemLabel { get; set; } = string.Empty;
     public string QuestionTopic { get; set; } = string.Empty;
     public int DueInDays { get; set; } = 3;
     public string Reason { get; set; } = string.Empty;
+    public string FollowUpPotential { get; set; } = "none";
+}
+
+internal sealed class ValleyTalkHelpRequestStepCandidate
+{
+    public string Type { get; set; } = "none";
+    public string Summary { get; set; } = string.Empty;
+    public string RequestedItemId { get; set; } = string.Empty;
+    public string RequestedItemLabel { get; set; } = string.Empty;
+    public string QuestionTopic { get; set; } = string.Empty;
 }
 
 internal sealed class ValleyTalkHelpRequestUpdateCandidate
@@ -4897,13 +5229,55 @@ internal sealed class LivingNpcState
                 request.RequestedItemLabel = request.RequestedItemLabel?.Trim() ?? string.Empty;
                 request.QuestionTopic = request.QuestionTopic?.Trim() ?? string.Empty;
                 request.Reason = request.Reason?.Trim() ?? string.Empty;
+                request.FollowUpPotential = BehaviorMemory.NormalizeHelpRequestFollowUpPotential(request.FollowUpPotential);
+                request.FailureReaction = request.FailureReaction?.Trim() ?? string.Empty;
+                request.Steps ??= new List<NpcHelpRequestStepFact>();
+                request.Steps = request.Steps
+                    .Where(step => step != null)
+                    .Select(step =>
+                    {
+                        step.Type = BehaviorMemory.NormalizeHelpRequestType(step.Type);
+                        step.Summary = step.Summary?.Trim() ?? string.Empty;
+                        step.RequestedItemId = step.RequestedItemId?.Trim() ?? string.Empty;
+                        step.RequestedItemLabel = step.RequestedItemLabel?.Trim() ?? string.Empty;
+                        step.QuestionTopic = step.QuestionTopic?.Trim() ?? string.Empty;
+                        step.Status = step.Status == "Fulfilled" ? "Fulfilled" : "Pending";
+                        step.Resolution = step.Resolution?.Trim() ?? string.Empty;
+                        return step;
+                    })
+                    .Where(step => step.Type != "none" && !string.IsNullOrWhiteSpace(step.Summary))
+                    .Take(3)
+                    .ToList();
                 request.Status = request.Status switch
                 {
+                    "Offered" => "Offered",
                     "Fulfilled" => "Fulfilled",
                     "Expired" => "Expired",
                     "Declined" => "Declined",
                     _ => "Pending"
                 };
+                request.CurrentStepIndex = System.Math.Clamp(request.CurrentStepIndex, 0, System.Math.Max(0, request.Steps.Count - 1));
+                if (request.Steps.Count == 0)
+                {
+                    request.Steps.Add(new NpcHelpRequestStepFact
+                    {
+                        Type = request.Type,
+                        Summary = request.Summary,
+                        RequestedItemId = request.RequestedItemId,
+                        RequestedItemLabel = request.RequestedItemLabel,
+                        QuestionTopic = request.QuestionTopic,
+                        Status = request.Status == "Fulfilled" ? "Fulfilled" : "Pending",
+                        Resolution = request.Resolution,
+                        CompletedTotalDays = request.FulfilledTotalDays,
+                        CompletedTimeOfDay = request.FulfilledTimeOfDay
+                    });
+                }
+
+                var currentStep = request.Steps[request.CurrentStepIndex];
+                request.Type = currentStep.Type;
+                request.RequestedItemId = currentStep.RequestedItemId;
+                request.RequestedItemLabel = currentStep.RequestedItemLabel;
+                request.QuestionTopic = currentStep.QuestionTopic;
                 request.TimesReinforced = System.Math.Max(0, request.TimesReinforced);
                 request.RewardFriendship = request.RewardFriendship <= 0
                     ? 50
@@ -5183,6 +5557,21 @@ internal sealed class LivingNpcState
                     QuestLogId = request.QuestLogId,
                     Type = request.Type,
                     Summary = request.Summary,
+                    Steps = request.Steps
+                        .Select(step => new NpcHelpRequestStepFact
+                        {
+                            Type = step.Type,
+                            Summary = step.Summary,
+                            RequestedItemId = step.RequestedItemId,
+                            RequestedItemLabel = step.RequestedItemLabel,
+                            QuestionTopic = step.QuestionTopic,
+                            Status = step.Status,
+                            Resolution = step.Resolution,
+                            CompletedTotalDays = step.CompletedTotalDays,
+                            CompletedTimeOfDay = step.CompletedTimeOfDay
+                        })
+                        .ToList(),
+                    CurrentStepIndex = request.CurrentStepIndex,
                     RequestedItemId = request.RequestedItemId,
                     RequestedItemLabel = request.RequestedItemLabel,
                     QuestionTopic = request.QuestionTopic,
@@ -5190,8 +5579,14 @@ internal sealed class LivingNpcState
                     Reason = request.Reason,
                     Status = request.Status,
                     Resolution = request.Resolution,
+                    FollowUpPotential = request.FollowUpPotential,
+                    FailureReaction = request.FailureReaction,
                     CreatedTotalDays = request.CreatedTotalDays,
                     CreatedTimeOfDay = request.CreatedTimeOfDay,
+                    AcceptedTotalDays = request.AcceptedTotalDays,
+                    AcceptedTimeOfDay = request.AcceptedTimeOfDay,
+                    DeclinedTotalDays = request.DeclinedTotalDays,
+                    DeclinedTimeOfDay = request.DeclinedTimeOfDay,
                     LastUpdatedTotalDays = request.LastUpdatedTotalDays,
                     LastUpdatedTimeOfDay = request.LastUpdatedTimeOfDay,
                     LastMentionedTotalDays = request.LastMentionedTotalDays,

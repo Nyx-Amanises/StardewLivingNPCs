@@ -1098,7 +1098,7 @@ internal sealed class BehaviorEngine
         bool changed = false;
         foreach (var state in this.memory.GetTrackedStates())
         {
-            foreach (var request in state.HelpRequests.Where(request => request.Status == "Pending"))
+            foreach (var request in state.HelpRequests.Where(request => request.Status is "Offered" or "Pending"))
             {
                 if (request.DueTotalDays >= Game1.Date.TotalDays)
                 {
@@ -1437,12 +1437,14 @@ internal sealed class BehaviorEngine
 
             if (this.config.EnableHelpRequests)
             {
-                IReadOnlyList<NpcHelpRequestFact> fulfilledHelpRequests = this.memory.TryCompleteItemHelpRequests(npc, gift, this.config.MaxMemoryEntriesPerNpc);
-                if (fulfilledHelpRequests.Count > 0)
+                IReadOnlyList<NpcHelpRequestFact> changedHelpRequests = this.memory.TryCompleteItemHelpRequests(npc, gift, this.config.MaxMemoryEntriesPerNpc);
+                if (changedHelpRequests.Count > 0)
                 {
-                    this.RewardFulfilledHelpRequests(npc, fulfilledHelpRequests);
+                    this.RewardFulfilledHelpRequests(npc, changedHelpRequests);
                     this.SyncHelpRequestsToQuestLog();
-                    this.PushInteractionContext(npc, $"Fulfilled {fulfilledHelpRequests.Count} help request(s) for {npc.Name} through a gifted item.");
+                    int fulfilledCount = changedHelpRequests.Count(request => request.Status == "Fulfilled");
+                    int advancedCount = changedHelpRequests.Count - fulfilledCount;
+                    this.PushInteractionContext(npc, $"Updated {changedHelpRequests.Count} help request(s) for {npc.Name} through a gifted item: {fulfilledCount} fulfilled, {advancedCount} advanced.");
                 }
             }
 
@@ -1558,6 +1560,14 @@ internal sealed class BehaviorEngine
         {
             conflict.RecoveryMentionedTotalDays = Game1.Date.TotalDays;
             conflict.RecoveryMentionedTimeOfDay = Game1.timeOfDay;
+        }
+
+        foreach (var request in state.HelpRequests.Where(request =>
+                     request.Status == "Expired"
+                     && request.LastMentionedTotalDays < Game1.Date.TotalDays))
+        {
+            request.LastMentionedTotalDays = Game1.Date.TotalDays;
+            request.LastMentionedTimeOfDay = Game1.timeOfDay;
         }
 
         foreach (var request in state.HelpRequests.Where(request =>
@@ -2091,13 +2101,26 @@ internal sealed class BehaviorEngine
             ? state.NpcName
             : request.NpcDisplayName;
         string due = this.BuildHelpRequestDueText(request);
+        string stepText = this.BuildHelpRequestStepProgressText(request);
         quest.questTitle = $"求助：{npcDisplayName}";
         quest.questDescription = request.Type == "item_request"
-            ? $"{npcDisplayName} 请你帮忙找一件东西。{this.BuildHelpRequestDetailText(request)}\n{due}"
-            : $"{npcDisplayName} 想就一件事请教你。{this.BuildHelpRequestDetailText(request)}\n{due}";
+            ? $"{npcDisplayName} 请你帮忙找一件东西。{stepText}{this.BuildHelpRequestDetailText(request)}\n{due}"
+            : $"{npcDisplayName} 想就一件事请教你。{stepText}{this.BuildHelpRequestDetailText(request)}\n{due}";
         quest.currentObjective = request.Type == "item_request"
-            ? $"把 {this.GetHelpRequestItemLabel(request)} 交给 {npcDisplayName}。{due}"
-            : $"和 {npcDisplayName} 继续聊聊：{this.GetHelpRequestQuestionLabel(request)}。{due}";
+            ? $"{stepText}把 {this.GetHelpRequestItemLabel(request)} 交给 {npcDisplayName}。{due}"
+            : $"{stepText}和 {npcDisplayName} 继续聊聊：{this.GetHelpRequestQuestionLabel(request)}。{due}";
+    }
+
+    private string BuildHelpRequestStepProgressText(NpcHelpRequestFact request)
+    {
+        int totalSteps = System.Math.Max(1, request.Steps.Count);
+        if (totalSteps <= 1)
+        {
+            return string.Empty;
+        }
+
+        int currentStep = System.Math.Clamp(request.CurrentStepIndex + 1, 1, totalSteps);
+        return $"第 {currentStep}/{totalSteps} 步：";
     }
 
     private string BuildHelpRequestDetailText(NpcHelpRequestFact request)
