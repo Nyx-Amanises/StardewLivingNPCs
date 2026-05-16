@@ -9,6 +9,9 @@ namespace LivingNPCs.Behavior;
 
 internal sealed class BehaviorMemory
 {
+    internal const int MaxLongTermMemoriesPerNpc = 24;
+    internal const int MaxPlayerPreferenceMemoriesPerNpc = 24;
+
     private static readonly HashSet<string> AllowedPlayerPreferenceTags = new(System.StringComparer.OrdinalIgnoreCase)
     {
         "food",
@@ -33,6 +36,44 @@ internal sealed class BehaviorMemory
         "morning",
         "night"
     };
+
+    private static readonly IReadOnlyDictionary<string, IReadOnlyCollection<string>> MemoryKeywordTags =
+        new Dictionary<string, IReadOnlyCollection<string>>(System.StringComparer.OrdinalIgnoreCase)
+        {
+            ["farm"] = ["farming", "work", "nature"],
+            ["农场"] = ["farming", "work", "nature"],
+            ["crop"] = ["farming", "work"],
+            ["作物"] = ["farming", "work"],
+            ["mine"] = ["mining", "adventurous", "mineral"],
+            ["mines"] = ["mining", "adventurous", "mineral"],
+            ["矿"] = ["mining", "adventurous", "mineral"],
+            ["fish"] = ["fishing", "nature"],
+            ["fishing"] = ["fishing", "nature"],
+            ["钓鱼"] = ["fishing", "nature"],
+            ["beach"] = ["fishing", "nature"],
+            ["海边"] = ["fishing", "nature"],
+            ["海滩"] = ["fishing", "nature"],
+            ["flower"] = ["flower", "nature", "artistic"],
+            ["花"] = ["flower", "nature", "artistic"],
+            ["food"] = ["food", "comfort"],
+            ["吃"] = ["food", "comfort"],
+            ["料理"] = ["food", "comfort"],
+            ["coffee"] = ["drink", "comfort", "work"],
+            ["咖啡"] = ["drink", "comfort", "work"],
+            ["book"] = ["scholarly"],
+            ["library"] = ["scholarly"],
+            ["书"] = ["scholarly"],
+            ["图书馆"] = ["scholarly"],
+            ["magic"] = ["magical"],
+            ["魔法"] = ["magical"],
+            ["art"] = ["artistic"],
+            ["画"] = ["artistic"],
+            ["艺术"] = ["artistic"],
+            ["morning"] = ["morning"],
+            ["早"] = ["morning"],
+            ["night"] = ["night"],
+            ["晚"] = ["night"]
+        };
 
     private static readonly Dictionary<string, string> CommitmentLocationAliases = new(System.StringComparer.OrdinalIgnoreCase)
     {
@@ -832,6 +873,7 @@ internal sealed class BehaviorMemory
                 state.GiftsToday = 0;
             }
 
+            this.RefreshMemoryStores(state);
             if (dailyDecay <= 0)
             {
                 this.DecayEmotionAndConflicts(state, emotionDailyDecay, conflictDailyDecay);
@@ -1245,6 +1287,10 @@ internal sealed class BehaviorMemory
             this.statesByNpc.TryGetValue(npc.Name, out state);
         }
 
+        MemoryRecallPlan recallPlan = state == null
+            ? MemoryRecallPlan.Empty
+            : this.BuildMemoryRecallPlan(state, world, recentEntries, longTermCount: 3, preferenceCount: 4);
+
         var prompt = new StringBuilder();
         prompt.AppendLine($"## LivingNPCs Context: {npc.displayName}");
         prompt.AppendLine("Purpose: hidden continuity for ValleyTalk's next in-character reply.");
@@ -1286,8 +1332,8 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Relationship-aware interaction rhythm: {state.InteractionRhythmPromptLabel}; comfort tier: {state.InteractionComfortTierPromptLabel}.");
             prompt.AppendLine($"- Recent gift context: {state.LastGiftPromptLabel}.");
             prompt.AppendLine($"- Recent event context: {state.LastEventPromptLabel}.");
-            prompt.AppendLine($"- Long-term personal memory: {state.LongTermMemoryPromptLabel}.");
-            prompt.AppendLine($"- Known farmer preferences: {state.PlayerPreferencePromptLabel}.");
+            prompt.AppendLine($"- Durable memory store: {state.LongTermMemories.Count} long-term memories tracked; recall focus for this reply: {this.FormatLongTermMemoryPromptLabel(recallPlan.LongTermMemories)}.");
+            prompt.AppendLine($"- Known farmer preferences: {this.FormatPlayerPreferencePromptLabel(recallPlan.PlayerPreferences)}.");
             prompt.AppendLine($"- Commitments with the farmer: {state.CommitmentPromptLabel}.");
             prompt.AppendLine($"- Shared experiences from fulfilled plans: {state.SharedExperiencePromptLabel}.");
             prompt.AppendLine($"- Trust in keeping plans: {state.CommitmentTrustPromptLabel}.");
@@ -1304,7 +1350,7 @@ internal sealed class BehaviorMemory
             prompt.AppendLine("- No persistent LivingNPCs state exists yet; use disposition and scene context conservatively.");
         }
 
-        var priorityContext = this.BuildPriorityPromptContext(state, world, recentEntries).ToList();
+        var priorityContext = this.BuildPriorityPromptContext(state, world, recentEntries, recallPlan).ToList();
         if (priorityContext.Count > 0)
         {
             prompt.AppendLine();
@@ -1332,6 +1378,8 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- {guidance}");
         }
 
+        this.MarkMemoriesRecalled(recallPlan);
+
         return prompt.ToString();
     }
 
@@ -1358,7 +1406,8 @@ internal sealed class BehaviorMemory
     private IEnumerable<string> BuildPriorityPromptContext(
         LivingNpcState? state,
         WorldContextSnapshot world,
-        IReadOnlyList<BehaviorMemoryEntry> recentEntries)
+        IReadOnlyList<BehaviorMemoryEntry> recentEntries,
+        MemoryRecallPlan recallPlan)
     {
         if (state != null)
         {
@@ -1381,14 +1430,14 @@ internal sealed class BehaviorMemory
                 yield return $"Personal name memory: {state.FarmerNicknamePromptLabel}.";
             }
 
-            if (state.LongTermMemories.Count > 0)
+            if (recallPlan.LongTermMemories.Count > 0)
             {
-                yield return $"Long-term memory: {state.LongTermMemoryPromptLabel}; use only if one detail naturally matters now.";
+                yield return $"Relevant long-term memories for this reply: {this.FormatLongTermMemoryPromptLabel(recallPlan.LongTermMemories)}; use at most one if it naturally matters now.";
             }
 
-            if (state.PlayerPreferenceMemories.Count > 0)
+            if (recallPlan.PlayerPreferences.Count > 0)
             {
-                yield return $"Farmer preference memory: {state.PlayerPreferencePromptLabel}; when a gift or topic naturally matches one of these, it is okay to acknowledge remembering it briefly.";
+                yield return $"Relevant farmer preference memories for this reply: {this.FormatPlayerPreferencePromptLabel(recallPlan.PlayerPreferences)}; when a gift or topic naturally matches one, it is okay to acknowledge remembering it briefly.";
             }
 
             var activeHelpRequest = state.HelpRequests.FirstOrDefault(request => request.Status == "Pending");
@@ -1685,6 +1734,585 @@ internal sealed class BehaviorMemory
         };
     }
 
+    private MemoryRecallPlan BuildMemoryRecallPlan(
+        LivingNpcState state,
+        WorldContextSnapshot world,
+        IReadOnlyList<BehaviorMemoryEntry> recentEntries,
+        int longTermCount,
+        int preferenceCount)
+    {
+        this.RefreshMemoryStores(state);
+        MemoryRecallContext context = this.BuildMemoryRecallContext(state, world, recentEntries);
+        var longTermMemories = state.LongTermMemories
+            .Select(memory => this.ScoreLongTermMemory(memory, context))
+            .Where(selection => selection.Score >= 45)
+            .OrderByDescending(selection => selection.Score)
+            .ThenByDescending(selection => selection.Memory.Importance)
+            .ThenByDescending(selection => selection.Memory.LastUpdatedTotalDays)
+            .ThenByDescending(selection => selection.Memory.LastUpdatedTimeOfDay)
+            .Take(System.Math.Max(0, longTermCount))
+            .ToList();
+        var playerPreferences = state.PlayerPreferenceMemories
+            .Select(memory => this.ScorePlayerPreferenceMemory(memory, context))
+            .Where(selection => selection.Score >= 45)
+            .OrderByDescending(selection => selection.Score)
+            .ThenByDescending(selection => selection.Memory.Importance)
+            .ThenByDescending(selection => selection.Memory.LastUpdatedTotalDays)
+            .ThenByDescending(selection => selection.Memory.LastUpdatedTimeOfDay)
+            .Take(System.Math.Max(0, preferenceCount))
+            .ToList();
+
+        return new MemoryRecallPlan(context, longTermMemories, playerPreferences);
+    }
+
+    private MemoryRecallContext BuildMemoryRecallContext(
+        LivingNpcState state,
+        WorldContextSnapshot world,
+        IReadOnlyList<BehaviorMemoryEntry> recentEntries)
+    {
+        var tags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+        var tokens = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+        this.AddWorldRecallTags(world, tags);
+        this.AddRecallSignals(world.LocationName, tags, tokens);
+        this.AddRecallSignals(world.LocationDisplayName, tags, tokens);
+        this.AddRecallSignals(world.PromptLabel, tags, tokens);
+        this.AddRecallSignals(state.LastGiftName, tags, tokens);
+        this.AddRecallSignals(state.LastEventContext, tags, tokens);
+        this.AddRecallSignals(state.LastInteraction, tags, tokens);
+        this.AddRecallSignals(state.LastEmotionReason, tags, tokens);
+
+        foreach (var entry in recentEntries.TakeLast(6))
+        {
+            this.AddRecallSignals(entry.Action, tags, tokens);
+            this.AddRecallSignals(entry.Reason, tags, tokens);
+        }
+
+        foreach (var request in state.HelpRequests.Where(request => request.Status == "Pending").Take(2))
+        {
+            this.AddRecallSignals(request.Summary, tags, tokens);
+            this.AddRecallSignals(request.QuestionTopic, tags, tokens);
+            this.AddRecallSignals(request.RequestedItemLabel, tags, tokens);
+        }
+
+        foreach (var commitment in state.Commitments.Where(commitment => commitment.Status == "Pending").Take(2))
+        {
+            this.AddRecallSignals(commitment.Summary, tags, tokens);
+            this.AddRecallSignals(commitment.LocationLabel, tags, tokens);
+        }
+
+        return new MemoryRecallContext(tags, tokens);
+    }
+
+    private void AddWorldRecallTags(WorldContextSnapshot world, ISet<string> tags)
+    {
+        switch (world.LocationName)
+        {
+            case "Farm":
+                tags.Add("farming");
+                tags.Add("work");
+                tags.Add("nature");
+                break;
+
+            case "Beach":
+                tags.Add("fishing");
+                tags.Add("nature");
+                break;
+
+            case "Mountain":
+                tags.Add("mining");
+                tags.Add("nature");
+                break;
+
+            case "ArchaeologyHouse":
+                tags.Add("scholarly");
+                break;
+
+            case "Saloon":
+                tags.Add("food");
+                tags.Add("drink");
+                tags.Add("comfort");
+                break;
+        }
+
+        if (world.TimeOfDay < 900)
+        {
+            tags.Add("morning");
+        }
+        else if (world.TimeOfDay >= 1800)
+        {
+            tags.Add("night");
+        }
+    }
+
+    private void AddRecallSignals(string? text, ISet<string> tags, ISet<string> tokens)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        foreach (string token in ExtractRecallTokens(text))
+        {
+            tokens.Add(token);
+        }
+
+        foreach (var pair in MemoryKeywordTags)
+        {
+            if (!text.Contains(pair.Key, System.StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            foreach (string tag in pair.Value)
+            {
+                tags.Add(tag);
+            }
+        }
+    }
+
+    private static IEnumerable<string> ExtractRecallTokens(string text)
+    {
+        return Regex.Matches(text.ToLowerInvariant(), @"[\p{L}\p{N}]+")
+            .Select(match => match.Value)
+            .Where(token => token.Length >= 2)
+            .Distinct(System.StringComparer.OrdinalIgnoreCase)
+            .Take(24);
+    }
+
+    private LongTermMemorySelection ScoreLongTermMemory(LongTermMemoryFact memory, MemoryRecallContext context)
+    {
+        var reasons = new List<string>();
+        int score = memory.Importance;
+        int reinforcementBonus = System.Math.Min(18, memory.TimesReinforced * 3);
+        score += reinforcementBonus;
+        if (reinforcementBonus > 0)
+        {
+            reasons.Add($"reinforced +{reinforcementBonus}");
+        }
+
+        int kindBonus = GetLongTermMemoryKindBonus(memory.Kind);
+        score += kindBonus;
+        if (kindBonus > 0)
+        {
+            reasons.Add($"{memory.Kind} +{kindBonus}");
+        }
+
+        int freshnessBonus = GetMemoryFreshnessBonus(memory.LastUpdatedTotalDays);
+        score += freshnessBonus;
+        if (freshnessBonus > 0)
+        {
+            reasons.Add($"fresh +{freshnessBonus}");
+        }
+
+        int tagOverlap = memory.Tags.Count(tag => context.Tags.Contains(tag));
+        if (tagOverlap > 0)
+        {
+            int tagBonus = tagOverlap * 14;
+            score += tagBonus;
+            reasons.Add($"tags +{tagBonus}");
+        }
+
+        int tokenOverlap = CountRecallTokenOverlap(memory.Subject, memory.Summary, context.Tokens);
+        if (tokenOverlap > 0)
+        {
+            int tokenBonus = tokenOverlap * 8;
+            score += tokenBonus;
+            reasons.Add($"topic +{tokenBonus}");
+        }
+
+        int recallPenalty = GetRecentRecallPenalty(memory.LastRecalledTotalDays);
+        score -= recallPenalty;
+        if (recallPenalty > 0)
+        {
+            reasons.Add($"recent recall -{recallPenalty}");
+        }
+
+        return new LongTermMemorySelection(memory, score, reasons.Count == 0 ? "base salience" : string.Join(", ", reasons));
+    }
+
+    private PlayerPreferenceSelection ScorePlayerPreferenceMemory(PlayerPreferenceFact memory, MemoryRecallContext context)
+    {
+        var reasons = new List<string>();
+        int score = memory.Importance;
+        int reinforcementBonus = System.Math.Min(18, memory.TimesReinforced * 3);
+        score += reinforcementBonus;
+        if (reinforcementBonus > 0)
+        {
+            reasons.Add($"reinforced +{reinforcementBonus}");
+        }
+
+        int freshnessBonus = GetMemoryFreshnessBonus(memory.LastUpdatedTotalDays);
+        score += freshnessBonus;
+        if (freshnessBonus > 0)
+        {
+            reasons.Add($"fresh +{freshnessBonus}");
+        }
+
+        int tagOverlap = memory.Tags.Count(tag => context.Tags.Contains(tag));
+        if (tagOverlap > 0)
+        {
+            int tagBonus = tagOverlap * 16;
+            score += tagBonus;
+            reasons.Add($"tags +{tagBonus}");
+        }
+
+        int tokenOverlap = CountRecallTokenOverlap(memory.Subject, memory.Summary, context.Tokens);
+        if (tokenOverlap > 0)
+        {
+            int tokenBonus = tokenOverlap * 10;
+            score += tokenBonus;
+            reasons.Add($"topic +{tokenBonus}");
+        }
+
+        int recallPenalty = GetRecentRecallPenalty(memory.LastRecalledTotalDays);
+        score -= recallPenalty;
+        if (recallPenalty > 0)
+        {
+            reasons.Add($"recent recall -{recallPenalty}");
+        }
+
+        return new PlayerPreferenceSelection(memory, score, reasons.Count == 0 ? "base salience" : string.Join(", ", reasons));
+    }
+
+    private static int CountRecallTokenOverlap(string subject, string summary, IReadOnlySet<string> contextTokens)
+    {
+        return ExtractRecallTokens($"{subject} {summary}")
+            .Count(contextTokens.Contains);
+    }
+
+    private static int GetMemoryFreshnessBonus(int totalDays)
+    {
+        return GetMemoryAge(totalDays) switch
+        {
+            0 => 18,
+            1 => 14,
+            <= 7 => 10,
+            <= 28 => 5,
+            _ => 0
+        };
+    }
+
+    private static int GetRecentRecallPenalty(int totalDays)
+    {
+        return GetMemoryAge(totalDays) switch
+        {
+            0 => 18,
+            1 => 10,
+            <= 3 => 4,
+            _ => 0
+        };
+    }
+
+    private static int GetLongTermMemoryKindBonus(string kind)
+    {
+        return NormalizeLongTermMemoryKind(kind) switch
+        {
+            "boundary" => 18,
+            "promise" => 16,
+            "relationship" => 12,
+            "preference" => 8,
+            _ => 0
+        };
+    }
+
+    private string FormatLongTermMemoryPromptLabel(IReadOnlyList<LongTermMemorySelection> selections)
+    {
+        return selections.Count == 0
+            ? "no durable personal memory is especially relevant right now"
+            : string.Join("; ", selections.Select(selection => selection.Memory.Summary));
+    }
+
+    private string FormatPlayerPreferencePromptLabel(IReadOnlyList<PlayerPreferenceSelection> selections)
+    {
+        return selections.Count == 0
+            ? "no durable farmer preference memory is especially relevant right now"
+            : string.Join("; ", selections.Select(selection => selection.Memory.Summary));
+    }
+
+    private string FormatLongTermMemoryDebugLabel(IReadOnlyList<LongTermMemorySelection> selections)
+    {
+        return selections.Count == 0
+            ? "暂无"
+            : string.Join("；", selections.Select(selection =>
+                $"{selection.Memory.Summary}（分数 {selection.Score}，{selection.Reason}）"));
+    }
+
+    private string FormatPlayerPreferenceDebugLabel(IReadOnlyList<PlayerPreferenceSelection> selections)
+    {
+        return selections.Count == 0
+            ? "暂无"
+            : string.Join("；", selections.Select(selection =>
+                $"{selection.Memory.Summary}（分数 {selection.Score}，{selection.Reason}）"));
+    }
+
+    private void MarkMemoriesRecalled(MemoryRecallPlan recallPlan)
+    {
+        foreach (var selection in recallPlan.LongTermMemories)
+        {
+            this.MarkMemoryRecalled(selection.Memory);
+        }
+
+        foreach (var selection in recallPlan.PlayerPreferences)
+        {
+            this.MarkMemoryRecalled(selection.Memory);
+        }
+    }
+
+    private void MarkMemoryRecalled(LongTermMemoryFact memory)
+    {
+        if (memory.LastRecalledTotalDays == Game1.Date.TotalDays
+            && memory.LastRecalledTimeOfDay == Game1.timeOfDay)
+        {
+            return;
+        }
+
+        memory.LastRecalledTotalDays = Game1.Date.TotalDays;
+        memory.LastRecalledTimeOfDay = Game1.timeOfDay;
+        memory.RecallCount += 1;
+    }
+
+    private void MarkMemoryRecalled(PlayerPreferenceFact memory)
+    {
+        if (memory.LastRecalledTotalDays == Game1.Date.TotalDays
+            && memory.LastRecalledTimeOfDay == Game1.timeOfDay)
+        {
+            return;
+        }
+
+        memory.LastRecalledTotalDays = Game1.Date.TotalDays;
+        memory.LastRecalledTimeOfDay = Game1.timeOfDay;
+        memory.RecallCount += 1;
+    }
+
+    private void RefreshMemoryStores(LivingNpcState state)
+    {
+        state.LongTermMemories ??= new List<LongTermMemoryFact>();
+        state.LongTermMemories = state.LongTermMemories
+            .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
+            .Select(NormalizeLongTermMemoryForStore)
+            .Where(memory => !string.IsNullOrWhiteSpace(BuildLongTermMemoryKey(memory.Kind, memory.Subject, memory.Summary)))
+            .GroupBy(
+                memory => BuildLongTermMemoryKey(memory.Kind, memory.Subject, memory.Summary),
+                System.StringComparer.OrdinalIgnoreCase)
+            .Select(MergeLongTermMemoryGroup)
+            .OrderByDescending(GetLongTermMemoryRetentionScore)
+            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+            .Take(MaxLongTermMemoriesPerNpc)
+            .ToList();
+
+        state.PlayerPreferenceMemories ??= new List<PlayerPreferenceFact>();
+        state.PlayerPreferenceMemories = state.PlayerPreferenceMemories
+            .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
+            .Select(NormalizePlayerPreferenceMemoryForStore)
+            .Where(memory => memory.PreferenceKind != "none"
+                && !string.IsNullOrWhiteSpace(BuildPlayerPreferenceKey(memory.PreferenceKind, memory.Subject, memory.Summary)))
+            .GroupBy(
+                memory => BuildPlayerPreferenceKey(memory.PreferenceKind, memory.Subject, memory.Summary),
+                System.StringComparer.OrdinalIgnoreCase)
+            .Select(MergePlayerPreferenceGroup)
+            .OrderByDescending(GetPlayerPreferenceRetentionScore)
+            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+            .Take(MaxPlayerPreferenceMemoriesPerNpc)
+            .ToList();
+    }
+
+    internal static LongTermMemoryFact NormalizeLongTermMemoryForStore(LongTermMemoryFact memory)
+    {
+        memory.Kind = NormalizeLongTermMemoryKind(memory.Kind);
+        memory.Subject = memory.Subject?.Trim() ?? string.Empty;
+        memory.Summary = memory.Summary.Trim();
+        memory.Tags = NormalizeMemoryTags(memory.Tags, memory.Subject, memory.Summary);
+        memory.Importance = System.Math.Clamp(memory.Importance, 0, 100);
+        memory.TimesReinforced = System.Math.Max(0, memory.TimesReinforced);
+        memory.RecallCount = System.Math.Max(0, memory.RecallCount);
+        if (memory.LastUpdatedTotalDays < 0)
+        {
+            memory.LastUpdatedTotalDays = memory.CreatedTotalDays;
+            memory.LastUpdatedTimeOfDay = memory.CreatedTimeOfDay;
+        }
+
+        return memory;
+    }
+
+    internal static PlayerPreferenceFact NormalizePlayerPreferenceMemoryForStore(PlayerPreferenceFact memory)
+    {
+        memory.PreferenceKind = NormalizePlayerPreferenceKind(memory.PreferenceKind);
+        memory.Subject = memory.Subject?.Trim() ?? string.Empty;
+        memory.Summary = memory.Summary.Trim();
+        memory.Tags = NormalizeMemoryTags(memory.Tags, memory.Subject, memory.Summary);
+        memory.Importance = System.Math.Clamp(memory.Importance, 0, 100);
+        memory.TimesReinforced = System.Math.Max(0, memory.TimesReinforced);
+        memory.RecallCount = System.Math.Max(0, memory.RecallCount);
+        if (memory.LastUpdatedTotalDays < 0)
+        {
+            memory.LastUpdatedTotalDays = memory.CreatedTotalDays;
+            memory.LastUpdatedTimeOfDay = memory.CreatedTimeOfDay;
+        }
+
+        return memory;
+    }
+
+    private static LongTermMemoryFact MergeLongTermMemoryGroup(IEnumerable<LongTermMemoryFact> group)
+    {
+        var memories = group
+            .OrderByDescending(GetLongTermMemoryRetentionScore)
+            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+            .ToList();
+        var primary = memories[0];
+        foreach (var memory in memories.Skip(1))
+        {
+            if (string.IsNullOrWhiteSpace(primary.Subject) && !string.IsNullOrWhiteSpace(memory.Subject))
+            {
+                primary.Subject = memory.Subject;
+            }
+
+            if (memory.Importance > primary.Importance || memory.Summary.Length > primary.Summary.Length)
+            {
+                primary.Summary = memory.Summary;
+            }
+
+            primary.Importance = System.Math.Max(primary.Importance, memory.Importance);
+            primary.Tags = NormalizeMemoryTags(
+                primary.Tags.Concat(memory.Tags),
+                primary.Subject,
+                primary.Summary,
+                memory.Subject,
+                memory.Summary);
+            primary.TimesReinforced += memory.TimesReinforced;
+            primary.RecallCount += memory.RecallCount;
+            if (IsOlderCreatedAt(memory.CreatedTotalDays, primary.CreatedTotalDays))
+            {
+                primary.CreatedTotalDays = memory.CreatedTotalDays;
+                primary.CreatedTimeOfDay = memory.CreatedTimeOfDay;
+            }
+
+            if (IsNewerAt(memory.LastUpdatedTotalDays, memory.LastUpdatedTimeOfDay, primary.LastUpdatedTotalDays, primary.LastUpdatedTimeOfDay))
+            {
+                primary.LastUpdatedTotalDays = memory.LastUpdatedTotalDays;
+                primary.LastUpdatedTimeOfDay = memory.LastUpdatedTimeOfDay;
+            }
+
+            if (IsNewerAt(memory.LastRecalledTotalDays, memory.LastRecalledTimeOfDay, primary.LastRecalledTotalDays, primary.LastRecalledTimeOfDay))
+            {
+                primary.LastRecalledTotalDays = memory.LastRecalledTotalDays;
+                primary.LastRecalledTimeOfDay = memory.LastRecalledTimeOfDay;
+            }
+        }
+
+        return NormalizeLongTermMemoryForStore(primary);
+    }
+
+    private static PlayerPreferenceFact MergePlayerPreferenceGroup(IEnumerable<PlayerPreferenceFact> group)
+    {
+        var memories = group
+            .OrderByDescending(GetPlayerPreferenceRetentionScore)
+            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+            .ToList();
+        var primary = memories[0];
+        foreach (var memory in memories.Skip(1))
+        {
+            if (string.IsNullOrWhiteSpace(primary.Subject) && !string.IsNullOrWhiteSpace(memory.Subject))
+            {
+                primary.Subject = memory.Subject;
+            }
+
+            if (memory.Importance > primary.Importance || memory.Summary.Length > primary.Summary.Length)
+            {
+                primary.Summary = memory.Summary;
+            }
+
+            primary.Importance = System.Math.Max(primary.Importance, memory.Importance);
+            primary.Tags = NormalizeMemoryTags(
+                primary.Tags.Concat(memory.Tags),
+                primary.Subject,
+                primary.Summary,
+                memory.Subject,
+                memory.Summary);
+            primary.TimesReinforced += memory.TimesReinforced;
+            primary.RecallCount += memory.RecallCount;
+            if (IsOlderCreatedAt(memory.CreatedTotalDays, primary.CreatedTotalDays))
+            {
+                primary.CreatedTotalDays = memory.CreatedTotalDays;
+                primary.CreatedTimeOfDay = memory.CreatedTimeOfDay;
+            }
+
+            if (IsNewerAt(memory.LastUpdatedTotalDays, memory.LastUpdatedTimeOfDay, primary.LastUpdatedTotalDays, primary.LastUpdatedTimeOfDay))
+            {
+                primary.LastUpdatedTotalDays = memory.LastUpdatedTotalDays;
+                primary.LastUpdatedTimeOfDay = memory.LastUpdatedTimeOfDay;
+            }
+
+            if (IsNewerAt(memory.LastRecalledTotalDays, memory.LastRecalledTimeOfDay, primary.LastRecalledTotalDays, primary.LastRecalledTimeOfDay))
+            {
+                primary.LastRecalledTotalDays = memory.LastRecalledTotalDays;
+                primary.LastRecalledTimeOfDay = memory.LastRecalledTimeOfDay;
+            }
+        }
+
+        return NormalizePlayerPreferenceMemoryForStore(primary);
+    }
+
+    private static bool IsOlderCreatedAt(int candidateTotalDays, int currentTotalDays)
+    {
+        return candidateTotalDays >= 0 && (currentTotalDays < 0 || candidateTotalDays < currentTotalDays);
+    }
+
+    private static bool IsNewerAt(int candidateTotalDays, int candidateTimeOfDay, int currentTotalDays, int currentTimeOfDay)
+    {
+        return candidateTotalDays > currentTotalDays
+            || (candidateTotalDays == currentTotalDays && candidateTimeOfDay > currentTimeOfDay);
+    }
+
+    internal static int GetLongTermMemoryRetentionScore(LongTermMemoryFact memory)
+    {
+        int score = memory.Importance;
+        score += System.Math.Min(24, memory.TimesReinforced * 4);
+        score += System.Math.Min(12, memory.RecallCount);
+        score += GetLongTermMemoryKindBonus(memory.Kind);
+        score += GetMemoryAge(memory.LastUpdatedTotalDays) switch
+        {
+            0 => 12,
+            1 => 9,
+            <= 7 => 6,
+            <= 28 => 3,
+            >= 112 => -12,
+            >= 56 => -6,
+            _ => 0
+        };
+        return score;
+    }
+
+    internal static int GetPlayerPreferenceRetentionScore(PlayerPreferenceFact memory)
+    {
+        int score = memory.Importance;
+        score += System.Math.Min(24, memory.TimesReinforced * 4);
+        score += System.Math.Min(12, memory.RecallCount);
+        score += memory.PreferenceKind switch
+        {
+            "goal" => 14,
+            "value" => 12,
+            "habit" => 10,
+            "liked_item_category" => 8,
+            "disliked_item" => 8,
+            _ => 0
+        };
+        score += GetMemoryAge(memory.LastUpdatedTotalDays) switch
+        {
+            0 => 12,
+            1 => 9,
+            <= 7 => 6,
+            <= 28 => 3,
+            >= 112 => -12,
+            >= 56 => -6,
+            _ => 0
+        };
+        return score;
+    }
+
     public string BuildDebugSummary(NPC npc, int maxEntries, bool includeState)
     {
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
@@ -1704,6 +2332,13 @@ internal sealed class BehaviorMemory
         var summary = new StringBuilder();
         if (state != null)
         {
+            MemoryRecallPlan recallPlan = this.BuildMemoryRecallPlan(
+                state,
+                world,
+                entries?.TakeLast(System.Math.Max(maxEntries, 0)).ToList() ?? new List<BehaviorMemoryEntry>(),
+                longTermCount: 3,
+                preferenceCount: 4
+            );
             summary.AppendLine($"{npc.displayName} 当前 LivingNPCs 状态：");
             summary.AppendLine($"- 心情：{state.MoodLabel}");
             summary.AppendLine($"- 人际情绪：{state.EmotionLabel}");
@@ -1715,7 +2350,9 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 最近礼物：{state.LastGiftLabel}");
             summary.AppendLine($"- 最近事件：{state.LastEventLabel}");
             summary.AppendLine($"- 长期记忆：{state.LongTermMemoryDebugLabel}");
+            summary.AppendLine($"- 当前检索长期记忆：{this.FormatLongTermMemoryDebugLabel(recallPlan.LongTermMemories)}");
             summary.AppendLine($"- 玩家偏好记忆：{state.PlayerPreferenceDebugLabel}");
+            summary.AppendLine($"- 当前检索玩家偏好：{this.FormatPlayerPreferenceDebugLabel(recallPlan.PlayerPreferences)}");
             summary.AppendLine($"- 长期约定：{state.CommitmentDebugLabel}");
             summary.AppendLine($"- 共同经历：{state.SharedExperienceDebugLabel}");
             summary.AppendLine($"- 履约信任：{state.CommitmentTrustDebugLabel}");
@@ -1887,7 +2524,7 @@ internal sealed class BehaviorMemory
                     memory.Importance = System.Math.Clamp(memory.Importance, 0, 100);
                     memory.PlayerPreferenceKind = NormalizePlayerPreferenceKind(memory.PlayerPreferenceKind);
                     memory.Subject = memory.Subject?.Trim() ?? string.Empty;
-                    memory.Tags = NormalizePlayerPreferenceTags(memory.Tags);
+                    memory.Tags = NormalizeMemoryTags(memory.Tags, memory.Subject, memory.Summary);
                     memory.PlayerPreference = memory.PlayerPreference && memory.PlayerPreferenceKind != "none";
                     return memory;
                 })
@@ -2370,14 +3007,11 @@ internal sealed class BehaviorMemory
             BuildPlayerPreferenceKey(memory.PreferenceKind, memory.Subject, memory.Summary) == normalizedKey);
         if (existing != null)
         {
+            existing.PreferenceKind = NormalizePlayerPreferenceKind(candidate.PlayerPreferenceKind);
+            existing.Subject = candidate.Subject.Trim();
             existing.Summary = candidate.Summary.Trim();
             existing.Importance = System.Math.Max(existing.Importance, candidate.Importance);
-            existing.Tags = existing.Tags
-                .Concat(candidate.Tags)
-                .Where(tag => !string.IsNullOrWhiteSpace(tag))
-                .Distinct(System.StringComparer.OrdinalIgnoreCase)
-                .Take(6)
-                .ToList();
+            existing.Tags = NormalizeMemoryTags(existing.Tags.Concat(candidate.Tags), existing.Subject, existing.Summary);
             existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
             existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
             existing.TimesReinforced += 1;
@@ -2386,10 +3020,10 @@ internal sealed class BehaviorMemory
 
         state.PlayerPreferenceMemories.Add(new PlayerPreferenceFact
         {
-            PreferenceKind = candidate.PlayerPreferenceKind,
+            PreferenceKind = NormalizePlayerPreferenceKind(candidate.PlayerPreferenceKind),
             Subject = candidate.Subject.Trim(),
             Summary = candidate.Summary.Trim(),
-            Tags = candidate.Tags.ToList(),
+            Tags = NormalizeMemoryTags(candidate.Tags, candidate.Subject, candidate.Summary),
             Importance = candidate.Importance,
             CreatedTotalDays = Game1.Date.TotalDays,
             CreatedTimeOfDay = Game1.timeOfDay,
@@ -2399,10 +3033,10 @@ internal sealed class BehaviorMemory
         });
 
         state.PlayerPreferenceMemories = state.PlayerPreferenceMemories
-            .OrderByDescending(memory => memory.Importance)
+            .OrderByDescending(GetPlayerPreferenceRetentionScore)
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
-            .Take(16)
+            .Take(MaxPlayerPreferenceMemoriesPerNpc)
             .ToList();
         return true;
     }
@@ -2789,18 +3423,25 @@ internal sealed class BehaviorMemory
 
     private bool StoreLongTermMemory(LivingNpcState state, ValleyTalkMemoryCandidate candidate)
     {
-        string normalizedSummary = NormalizeMemorySummary(candidate.Summary);
-        if (string.IsNullOrWhiteSpace(normalizedSummary))
+        string normalizedKey = BuildLongTermMemoryKey(candidate.Kind, candidate.Subject, candidate.Summary);
+        if (string.IsNullOrWhiteSpace(normalizedKey))
         {
             return false;
         }
 
         var existing = state.LongTermMemories.FirstOrDefault(memory =>
-            NormalizeMemorySummary(memory.Summary) == normalizedSummary);
+            BuildLongTermMemoryKey(memory.Kind, memory.Subject, memory.Summary) == normalizedKey);
         if (existing != null)
         {
-            existing.Kind = candidate.Kind;
+            existing.Kind = NormalizeLongTermMemoryKind(candidate.Kind);
+            existing.Subject = candidate.Subject.Trim();
+            if (candidate.Importance >= existing.Importance || existing.Summary.Length < candidate.Summary.Trim().Length)
+            {
+                existing.Summary = candidate.Summary.Trim();
+            }
+
             existing.Importance = System.Math.Max(existing.Importance, candidate.Importance);
+            existing.Tags = NormalizeMemoryTags(existing.Tags.Concat(candidate.Tags), existing.Subject, existing.Summary);
             existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
             existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
             existing.TimesReinforced += 1;
@@ -2810,8 +3451,10 @@ internal sealed class BehaviorMemory
 
         state.LongTermMemories.Add(new LongTermMemoryFact
         {
-            Kind = candidate.Kind,
+            Kind = NormalizeLongTermMemoryKind(candidate.Kind),
+            Subject = candidate.Subject.Trim(),
             Summary = candidate.Summary.Trim(),
+            Tags = NormalizeMemoryTags(candidate.Tags, candidate.Subject, candidate.Summary),
             Importance = candidate.Importance,
             CreatedTotalDays = Game1.Date.TotalDays,
             CreatedTimeOfDay = Game1.timeOfDay,
@@ -2821,14 +3464,14 @@ internal sealed class BehaviorMemory
         });
 
         state.LongTermMemories = state.LongTermMemories
-            .OrderByDescending(memory => memory.Importance)
+            .OrderByDescending(GetLongTermMemoryRetentionScore)
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
-            .Take(12)
+            .Take(MaxLongTermMemoriesPerNpc)
             .ToList();
 
         this.TryUpdateNicknameStateFromMemory(state, state.LongTermMemories.LastOrDefault(memory =>
-            NormalizeMemorySummary(memory.Summary) == normalizedSummary));
+            BuildLongTermMemoryKey(memory.Kind, memory.Subject, memory.Summary) == normalizedKey));
         return true;
     }
 
@@ -3097,6 +3740,35 @@ internal sealed class BehaviorMemory
             ?? new List<string>();
     }
 
+    private static List<string> NormalizeMemoryTags(IEnumerable<string>? tags, params string?[] texts)
+    {
+        var allTags = new List<string>();
+        if (tags != null)
+        {
+            allTags.AddRange(tags);
+        }
+
+        foreach (string? text in texts)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                continue;
+            }
+
+            foreach (var pair in MemoryKeywordTags)
+            {
+                if (!text.Contains(pair.Key, System.StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                allTags.AddRange(pair.Value);
+            }
+        }
+
+        return NormalizePlayerPreferenceTags(allTags);
+    }
+
     private static string NormalizePlayerPreferenceKey(ValleyTalkMemoryCandidate candidate)
     {
         return BuildPlayerPreferenceKey(candidate.PlayerPreferenceKind, candidate.Subject, candidate.Summary);
@@ -3111,6 +3783,19 @@ internal sealed class BehaviorMemory
             ? normalizedSummary
             : normalizedSubject;
         return normalizedKind == "none" || string.IsNullOrWhiteSpace(identity)
+            ? string.Empty
+            : $"{normalizedKind}:{identity}";
+    }
+
+    private static string BuildLongTermMemoryKey(string kind, string subject, string summary)
+    {
+        string normalizedKind = NormalizeLongTermMemoryKind(kind);
+        string normalizedSubject = NormalizeMemorySummary(subject);
+        string normalizedSummary = NormalizeMemorySummary(summary);
+        string identity = string.IsNullOrWhiteSpace(normalizedSubject)
+            ? normalizedSummary
+            : normalizedSubject;
+        return string.IsNullOrWhiteSpace(identity)
             ? string.Empty
             : $"{normalizedKind}:{identity}";
     }
@@ -3318,6 +4003,37 @@ internal sealed record GiftMemoryDetails(
     int TasteScore
 );
 
+internal sealed record MemoryRecallContext(
+    IReadOnlySet<string> Tags,
+    IReadOnlySet<string> Tokens
+);
+
+internal sealed record LongTermMemorySelection(
+    LongTermMemoryFact Memory,
+    int Score,
+    string Reason
+);
+
+internal sealed record PlayerPreferenceSelection(
+    PlayerPreferenceFact Memory,
+    int Score,
+    string Reason
+);
+
+internal sealed record MemoryRecallPlan(
+    MemoryRecallContext Context,
+    IReadOnlyList<LongTermMemorySelection> LongTermMemories,
+    IReadOnlyList<PlayerPreferenceSelection> PlayerPreferences
+)
+{
+    public static MemoryRecallPlan Empty { get; } = new(
+        new MemoryRecallContext(
+            new HashSet<string>(System.StringComparer.OrdinalIgnoreCase),
+            new HashSet<string>(System.StringComparer.OrdinalIgnoreCase)),
+        System.Array.Empty<LongTermMemorySelection>(),
+        System.Array.Empty<PlayerPreferenceSelection>());
+}
+
 internal sealed class ValleyTalkExchangeAnalysis
 {
     public int RapportDelta { get; set; }
@@ -3346,12 +4062,17 @@ internal sealed class ValleyTalkMemoryCandidate
 internal sealed class LongTermMemoryFact
 {
     public string Kind { get; set; } = "fact";
+    public string Subject { get; set; } = string.Empty;
     public string Summary { get; set; } = string.Empty;
+    public List<string> Tags { get; set; } = new();
     public int Importance { get; set; }
     public int CreatedTotalDays { get; set; } = -1;
     public int CreatedTimeOfDay { get; set; }
     public int LastUpdatedTotalDays { get; set; } = -1;
     public int LastUpdatedTimeOfDay { get; set; }
+    public int LastRecalledTotalDays { get; set; } = -1;
+    public int LastRecalledTimeOfDay { get; set; }
+    public int RecallCount { get; set; }
     public int TimesReinforced { get; set; }
 }
 
@@ -3366,6 +4087,9 @@ internal sealed class PlayerPreferenceFact
     public int CreatedTimeOfDay { get; set; }
     public int LastUpdatedTotalDays { get; set; } = -1;
     public int LastUpdatedTimeOfDay { get; set; }
+    public int LastRecalledTotalDays { get; set; } = -1;
+    public int LastRecalledTimeOfDay { get; set; }
+    public int RecallCount { get; set; }
     public int TimesReinforced { get; set; }
 }
 
@@ -4103,37 +4827,21 @@ internal sealed class LivingNpcState
         this.LongTermMemories ??= new List<LongTermMemoryFact>();
         this.LongTermMemories = this.LongTermMemories
             .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
-            .Select(memory =>
-            {
-                memory.Kind = string.IsNullOrWhiteSpace(memory.Kind) ? "fact" : memory.Kind;
-                memory.Summary = memory.Summary.Trim();
-                memory.Importance = System.Math.Clamp(memory.Importance, 0, 100);
-                memory.TimesReinforced = System.Math.Max(0, memory.TimesReinforced);
-                return memory;
-            })
-            .OrderByDescending(memory => memory.Importance)
+            .Select(BehaviorMemory.NormalizeLongTermMemoryForStore)
+            .OrderByDescending(BehaviorMemory.GetLongTermMemoryRetentionScore)
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
-            .Take(12)
+            .Take(BehaviorMemory.MaxLongTermMemoriesPerNpc)
             .ToList();
         this.PlayerPreferenceMemories ??= new List<PlayerPreferenceFact>();
         this.PlayerPreferenceMemories = this.PlayerPreferenceMemories
             .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
-            .Select(memory =>
-            {
-                memory.PreferenceKind = BehaviorMemory.NormalizePlayerPreferenceKind(memory.PreferenceKind);
-                memory.Subject = memory.Subject?.Trim() ?? string.Empty;
-                memory.Summary = memory.Summary.Trim();
-                memory.Tags = BehaviorMemory.NormalizePlayerPreferenceTags(memory.Tags);
-                memory.Importance = System.Math.Clamp(memory.Importance, 0, 100);
-                memory.TimesReinforced = System.Math.Max(0, memory.TimesReinforced);
-                return memory;
-            })
+            .Select(BehaviorMemory.NormalizePlayerPreferenceMemoryForStore)
             .Where(memory => memory.PreferenceKind != "none")
-            .OrderByDescending(memory => memory.Importance)
+            .OrderByDescending(BehaviorMemory.GetPlayerPreferenceRetentionScore)
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
-            .Take(16)
+            .Take(BehaviorMemory.MaxPlayerPreferenceMemoriesPerNpc)
             .ToList();
         this.Commitments ??= new List<NpcCommitmentFact>();
         this.Commitments = this.Commitments
@@ -4387,12 +5095,17 @@ internal sealed class LivingNpcState
                 .Select(memory => new LongTermMemoryFact
                 {
                     Kind = memory.Kind,
+                    Subject = memory.Subject,
                     Summary = memory.Summary,
+                    Tags = memory.Tags.ToList(),
                     Importance = memory.Importance,
                     CreatedTotalDays = memory.CreatedTotalDays,
                     CreatedTimeOfDay = memory.CreatedTimeOfDay,
                     LastUpdatedTotalDays = memory.LastUpdatedTotalDays,
                     LastUpdatedTimeOfDay = memory.LastUpdatedTimeOfDay,
+                    LastRecalledTotalDays = memory.LastRecalledTotalDays,
+                    LastRecalledTimeOfDay = memory.LastRecalledTimeOfDay,
+                    RecallCount = memory.RecallCount,
                     TimesReinforced = memory.TimesReinforced
                 })
                 .ToList(),
@@ -4408,6 +5121,9 @@ internal sealed class LivingNpcState
                     CreatedTimeOfDay = memory.CreatedTimeOfDay,
                     LastUpdatedTotalDays = memory.LastUpdatedTotalDays,
                     LastUpdatedTimeOfDay = memory.LastUpdatedTimeOfDay,
+                    LastRecalledTotalDays = memory.LastRecalledTotalDays,
+                    LastRecalledTimeOfDay = memory.LastRecalledTimeOfDay,
+                    RecallCount = memory.RecallCount,
                     TimesReinforced = memory.TimesReinforced
                 })
                 .ToList(),
