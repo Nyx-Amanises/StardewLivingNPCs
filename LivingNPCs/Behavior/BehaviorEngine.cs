@@ -873,6 +873,12 @@ internal sealed class BehaviorEngine
             );
             this.QueueAmbientRemark(npc, "谢谢你，真的帮上忙了。", 0);
             this.ShowFeedback($"LivingNPCs：完成 {npc.displayName} 的求助，额外好感 +{friendshipReward}。");
+            this.SpreadCommunityRipple(
+                npc,
+                "helped",
+                $"the farmer helped {npc.displayName} with a personal request",
+                importance: 78
+            );
         }
 
         if (!request.RewardGiftGiven)
@@ -1732,6 +1738,12 @@ internal sealed class BehaviorEngine
                 this.config.MaxMemoryEntriesPerNpc
             );
             this.PushInteractionContext(npc, $"Fulfilled commitment for {npc.Name}: {commitment.Summary}.");
+            this.SpreadCommunityRipple(
+                npc,
+                "shared_experience",
+                $"the farmer kept a plan with {npc.displayName}: {commitment.Summary}",
+                importance: 72
+            );
         }
     }
 
@@ -2017,7 +2029,8 @@ internal sealed class BehaviorEngine
         this.memory.RecordConversationStart(npc, this.config.MaxMemoryEntriesPerNpc);
         if (this.config.EnableNpcState)
         {
-            this.memory.UpdateStateForConversationStart(npc);
+            LivingNpcState state = this.memory.UpdateStateForConversationStart(npc);
+            this.TrySpreadConversationSocialRipple(npc, state);
         }
 
         this.PushInteractionContext(npc, $"Recorded conversation start for {npc.Name}.");
@@ -2054,6 +2067,106 @@ internal sealed class BehaviorEngine
                 this.config.MaxMemoryEntriesPerNpc
             );
             this.PushInteractionContext(observer, $"Observed romantic interaction involving {targetNpc.Name}.");
+        }
+
+        this.SpreadCommunityRipple(
+            targetNpc,
+            "romantic_attention",
+            $"the farmer has been giving romantic attention to {targetNpc.displayName}",
+            importance: 70
+        );
+    }
+
+    private void TrySpreadConversationSocialRipple(NPC npc, LivingNpcState state)
+    {
+        bool relationshipIsNoticeable = state.ConsecutiveConversationDays >= 3
+            || state.ConversationsToday >= 2
+            || state.InteractionComfortTier is "Friendly" or "Trusted" or "Intimate";
+        if (!relationshipIsNoticeable)
+        {
+            return;
+        }
+
+        int importance = state.InteractionComfortTier switch
+        {
+            "Intimate" => 74,
+            "Trusted" => 68,
+            "Friendly" => 60,
+            _ when state.ConsecutiveConversationDays >= 5 => 56,
+            _ => 48
+        };
+        this.SpreadCommunityRipple(
+            npc,
+            "relationship_trend",
+            $"the farmer has been speaking with {npc.displayName} more often lately",
+            importance
+        );
+    }
+
+    private void SpreadCommunityRipple(NPC subject, string kind, string summary, int importance)
+    {
+        if (Game1.currentLocation == null)
+        {
+            return;
+        }
+
+        var directWitnesses = Game1.currentLocation.characters
+            .Where(candidate =>
+                candidate.Name != subject.Name
+                && !string.IsNullOrWhiteSpace(candidate.Name)
+                && Vector2.Distance(candidate.Tile, subject.Tile) <= 8f)
+            .ToList();
+
+        var directWitnessNames = directWitnesses
+            .Select(candidate => candidate.Name)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        int stored = 0;
+
+        foreach (var witness in directWitnesses)
+        {
+            if (this.memory.RecordCommunityImpression(
+                    witness,
+                    subject,
+                    kind,
+                    summary,
+                    directlyWitnessed: true,
+                    importance: importance,
+                    maxEntriesPerNpc: this.config.MaxMemoryEntriesPerNpc))
+            {
+                stored++;
+            }
+        }
+
+        foreach (string connectionName in NpcSocialGraph.GetCloseConnections(subject.Name))
+        {
+            if (directWitnessNames.Contains(connectionName))
+            {
+                continue;
+            }
+
+            NPC? connection = Game1.getCharacterFromName(connectionName);
+            if (connection == null
+                || string.Equals(connection.Name, subject.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            if (this.memory.RecordCommunityImpression(
+                    connection,
+                    subject,
+                    kind,
+                    summary,
+                    directlyWitnessed: false,
+                    importance: System.Math.Max(40, importance - 14),
+                    maxEntriesPerNpc: this.config.MaxMemoryEntriesPerNpc))
+            {
+                stored++;
+            }
+        }
+
+        if (stored > 0 && this.config.Debug)
+        {
+            this.monitor.Log($"Spread community ripple for {subject.Name}: {summary} -> {stored} observer memory record(s).", LogLevel.Debug);
         }
     }
 

@@ -12,6 +12,7 @@ internal sealed class BehaviorMemory
     internal const int MaxLongTermMemoriesPerNpc = 24;
     internal const int MaxPlayerPreferenceMemoriesPerNpc = 24;
     internal const int MaxDialogueBehaviorInfluencesPerNpc = 12;
+    internal const int MaxCommunityImpressionsPerNpc = 16;
 
     private static readonly HashSet<string> AllowedPlayerPreferenceTags = new(System.StringComparer.OrdinalIgnoreCase)
     {
@@ -284,6 +285,70 @@ internal sealed class BehaviorMemory
 
         this.AddEntry(entry, maxEntriesPerNpc);
         return entry;
+    }
+
+    public bool RecordCommunityImpression(
+        NPC observer,
+        NPC subject,
+        string kind,
+        string summary,
+        bool directlyWitnessed,
+        int importance,
+        int maxEntriesPerNpc)
+    {
+        if (string.Equals(observer.Name, subject.Name, System.StringComparison.OrdinalIgnoreCase)
+            || string.IsNullOrWhiteSpace(summary))
+        {
+            return false;
+        }
+
+        var state = this.GetOrCreateState(observer);
+        string normalizedKind = NormalizeCommunityImpressionKind(kind);
+        string normalizedSummary = NormalizeMemorySummary(summary);
+        string source = directlyWitnessed ? "Witnessed" : "Heard";
+        int confidence = directlyWitnessed ? 95 : 68;
+        var existing = state.CommunityImpressions.FirstOrDefault(memory =>
+            string.Equals(memory.SubjectNpcName, subject.Name, System.StringComparison.OrdinalIgnoreCase)
+            && string.Equals(memory.Kind, normalizedKind, System.StringComparison.OrdinalIgnoreCase)
+            && NormalizeMemorySummary(memory.Summary) == normalizedSummary);
+
+        if (existing != null)
+        {
+            existing.SubjectDisplayName = subject.displayName;
+            existing.Source = directlyWitnessed ? "Witnessed" : existing.Source;
+            existing.Confidence = System.Math.Max(existing.Confidence, confidence);
+            existing.Importance = System.Math.Min(100, System.Math.Max(existing.Importance, importance) + 3);
+            existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            existing.TimesReinforced += 1;
+            return true;
+        }
+
+        state.CommunityImpressions.Add(new CommunityImpressionFact
+        {
+            SubjectNpcName = subject.Name,
+            SubjectDisplayName = subject.displayName,
+            Kind = normalizedKind,
+            Summary = summary.Trim(),
+            Source = source,
+            Confidence = confidence,
+            Importance = System.Math.Clamp(importance, 0, 100),
+            CreatedTotalDays = Game1.Date.TotalDays,
+            CreatedTimeOfDay = Game1.timeOfDay,
+            LastUpdatedTotalDays = Game1.Date.TotalDays,
+            LastUpdatedTimeOfDay = Game1.timeOfDay,
+            TimesReinforced = 1
+        });
+        state.CommunityImpressions = state.CommunityImpressions
+            .OrderByDescending(memory => memory.Importance)
+            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+            .Take(MaxCommunityImpressionsPerNpc)
+            .ToList();
+
+        var entry = this.CreateEntry(observer, "SocialMemory", normalizedKind, summary);
+        this.AddEntry(entry, maxEntriesPerNpc);
+        return true;
     }
 
     public ValleyTalkExchangeResult RecordValleyTalkExchange(
@@ -1382,6 +1447,9 @@ internal sealed class BehaviorMemory
         MemoryRecallPlan recallPlan = state == null
             ? MemoryRecallPlan.Empty
             : this.BuildMemoryRecallPlan(state, world, recentEntries, longTermCount: 3, preferenceCount: 4);
+        IReadOnlyList<CommunityImpressionSelection> communityImpressions = state == null
+            ? System.Array.Empty<CommunityImpressionSelection>()
+            : this.BuildCommunityImpressionRecallPlan(state, maxCount: 2);
 
         var prompt = new StringBuilder();
         prompt.AppendLine($"## LivingNPCs Context: {npc.displayName}");
@@ -1431,6 +1499,7 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Shared experiences from fulfilled plans: {state.SharedExperiencePromptLabel}.");
             prompt.AppendLine($"- Trust in keeping plans: {state.CommitmentTrustPromptLabel}.");
             prompt.AppendLine($"- Help requests involving the farmer: {state.HelpRequestPromptLabel}.");
+            prompt.AppendLine($"- Community impressions about the farmer's ties with other NPCs: {this.FormatCommunityImpressionPromptLabel(communityImpressions)}.");
             prompt.AppendLine("- Help-request lifecycle: Offered means the NPC has asked but the farmer has not accepted; Pending means accepted and active; only Pending requests should be treated like tasks.");
             prompt.AppendLine($"- Help-request readiness: {this.BuildHelpRequestReadinessLabel(npc, state, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, minRelationshipTrustForHelpRequests)}.");
             prompt.AppendLine($"- Help-request fit: {HelpRequestAdvisor.BuildPromptLabel(npc)}");
@@ -1444,7 +1513,7 @@ internal sealed class BehaviorMemory
             prompt.AppendLine("- No persistent LivingNPCs state exists yet; use disposition and scene context conservatively.");
         }
 
-        var priorityContext = this.BuildPriorityPromptContext(state, world, recentEntries, recallPlan).ToList();
+        var priorityContext = this.BuildPriorityPromptContext(state, world, recentEntries, recallPlan, communityImpressions).ToList();
         if (priorityContext.Count > 0)
         {
             prompt.AppendLine();
@@ -1473,6 +1542,7 @@ internal sealed class BehaviorMemory
         }
 
         this.MarkMemoriesRecalled(recallPlan);
+        this.MarkCommunityImpressionsRecalled(communityImpressions);
 
         return prompt.ToString();
     }
@@ -1501,7 +1571,8 @@ internal sealed class BehaviorMemory
         LivingNpcState? state,
         WorldContextSnapshot world,
         IReadOnlyList<BehaviorMemoryEntry> recentEntries,
-        MemoryRecallPlan recallPlan)
+        MemoryRecallPlan recallPlan,
+        IReadOnlyList<CommunityImpressionSelection> communityImpressions)
     {
         if (state != null)
         {
@@ -1532,6 +1603,11 @@ internal sealed class BehaviorMemory
             if (recallPlan.PlayerPreferences.Count > 0)
             {
                 yield return $"Relevant farmer preference memories for this reply: {this.FormatPlayerPreferencePromptLabel(recallPlan.PlayerPreferences)}; when a gift or topic naturally matches one, it is okay to acknowledge remembering it briefly.";
+            }
+
+            if (communityImpressions.Count > 0)
+            {
+                yield return $"Community impressions: {this.FormatCommunityImpressionPromptLabel(communityImpressions)}; use at most one, keep hearsay tentative, and do not reveal knowledge the NPC would not plausibly have.";
             }
 
             var activeBehaviorInfluence = state.ActiveDialogueBehaviorInfluences.FirstOrDefault();
@@ -1895,6 +1971,43 @@ internal sealed class BehaviorMemory
         return new MemoryRecallPlan(context, longTermMemories, playerPreferences);
     }
 
+    private IReadOnlyList<CommunityImpressionSelection> BuildCommunityImpressionRecallPlan(
+        LivingNpcState state,
+        int maxCount)
+    {
+        this.RefreshMemoryStores(state);
+        return state.CommunityImpressions
+            .Select(this.ScoreCommunityImpression)
+            .Where(selection => selection.Score >= 45)
+            .OrderByDescending(selection => selection.Score)
+            .ThenByDescending(selection => selection.Memory.Importance)
+            .ThenByDescending(selection => selection.Memory.LastUpdatedTotalDays)
+            .ThenByDescending(selection => selection.Memory.LastUpdatedTimeOfDay)
+            .Take(System.Math.Max(0, maxCount))
+            .ToList();
+    }
+
+    private CommunityImpressionSelection ScoreCommunityImpression(CommunityImpressionFact memory)
+    {
+        int age = GetMemoryAge(memory.LastUpdatedTotalDays);
+        int freshnessScore = age switch
+        {
+            0 => 30,
+            1 => 24,
+            <= 3 => 18,
+            <= 7 => 10,
+            <= 14 => 4,
+            _ => -20
+        };
+        int sourceScore = memory.Source == "Witnessed" ? 12 : 4;
+        int recentRecallPenalty = memory.LastRecalledTotalDays == Game1.Date.TotalDays ? 18 : 0;
+        int score = memory.Importance + (memory.Confidence / 5) + freshnessScore + sourceScore + (memory.TimesReinforced * 2) - recentRecallPenalty;
+        string reason = memory.Source == "Witnessed"
+            ? $"目击，{FormatMemoryAge(memory.LastUpdatedTotalDays)}"
+            : $"听说，{FormatMemoryAge(memory.LastUpdatedTotalDays)}";
+        return new CommunityImpressionSelection(memory, score, reason);
+    }
+
     private MemoryRecallContext BuildMemoryRecallContext(
         LivingNpcState state,
         WorldContextSnapshot world,
@@ -2159,6 +2272,13 @@ internal sealed class BehaviorMemory
             : string.Join("; ", selections.Select(selection => selection.Memory.Summary));
     }
 
+    private string FormatCommunityImpressionPromptLabel(IReadOnlyList<CommunityImpressionSelection> selections)
+    {
+        return selections.Count == 0
+            ? "no community impression is especially relevant right now"
+            : string.Join("; ", selections.Select(selection => selection.Memory.PromptLabel));
+    }
+
     private string FormatLongTermMemoryDebugLabel(IReadOnlyList<LongTermMemorySelection> selections)
     {
         return selections.Count == 0
@@ -2175,6 +2295,14 @@ internal sealed class BehaviorMemory
                 $"{selection.Memory.Summary}（分数 {selection.Score}，{selection.Reason}）"));
     }
 
+    private string FormatCommunityImpressionDebugLabel(IReadOnlyList<CommunityImpressionSelection> selections)
+    {
+        return selections.Count == 0
+            ? "暂无"
+            : string.Join("；", selections.Select(selection =>
+                $"{selection.Memory.Summary}（{selection.Memory.Source}，分数 {selection.Score}，{selection.Reason}）"));
+    }
+
     private void MarkMemoriesRecalled(MemoryRecallPlan recallPlan)
     {
         foreach (var selection in recallPlan.LongTermMemories)
@@ -2185,6 +2313,23 @@ internal sealed class BehaviorMemory
         foreach (var selection in recallPlan.PlayerPreferences)
         {
             this.MarkMemoryRecalled(selection.Memory);
+        }
+    }
+
+    private void MarkCommunityImpressionsRecalled(IReadOnlyList<CommunityImpressionSelection> selections)
+    {
+        foreach (var selection in selections)
+        {
+            var memory = selection.Memory;
+            if (memory.LastRecalledTotalDays == Game1.Date.TotalDays
+                && memory.LastRecalledTimeOfDay == Game1.timeOfDay)
+            {
+                continue;
+            }
+
+            memory.LastRecalledTotalDays = Game1.Date.TotalDays;
+            memory.LastRecalledTimeOfDay = Game1.timeOfDay;
+            memory.RecallCount += 1;
         }
     }
 
@@ -2246,6 +2391,22 @@ internal sealed class BehaviorMemory
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
             .Take(MaxPlayerPreferenceMemoriesPerNpc)
             .ToList();
+
+        state.CommunityImpressions ??= new List<CommunityImpressionFact>();
+        state.CommunityImpressions = state.CommunityImpressions
+            .Where(memory => memory != null
+                && !string.IsNullOrWhiteSpace(memory.SubjectNpcName)
+                && !string.IsNullOrWhiteSpace(memory.Summary))
+            .Select(NormalizeCommunityImpressionForStore)
+            .GroupBy(
+                memory => BuildCommunityImpressionKey(memory.SubjectNpcName, memory.Kind, memory.Summary),
+                System.StringComparer.OrdinalIgnoreCase)
+            .Select(MergeCommunityImpressionGroup)
+            .OrderByDescending(GetCommunityImpressionRetentionScore)
+            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+            .Take(MaxCommunityImpressionsPerNpc)
+            .ToList();
     }
 
     internal static LongTermMemoryFact NormalizeLongTermMemoryForStore(LongTermMemoryFact memory)
@@ -2272,6 +2433,28 @@ internal sealed class BehaviorMemory
         memory.Subject = memory.Subject?.Trim() ?? string.Empty;
         memory.Summary = memory.Summary.Trim();
         memory.Tags = NormalizeMemoryTags(memory.Tags, memory.Subject, memory.Summary);
+        memory.Importance = System.Math.Clamp(memory.Importance, 0, 100);
+        memory.TimesReinforced = System.Math.Max(0, memory.TimesReinforced);
+        memory.RecallCount = System.Math.Max(0, memory.RecallCount);
+        if (memory.LastUpdatedTotalDays < 0)
+        {
+            memory.LastUpdatedTotalDays = memory.CreatedTotalDays;
+            memory.LastUpdatedTimeOfDay = memory.CreatedTimeOfDay;
+        }
+
+        return memory;
+    }
+
+    internal static CommunityImpressionFact NormalizeCommunityImpressionForStore(CommunityImpressionFact memory)
+    {
+        memory.SubjectNpcName = memory.SubjectNpcName?.Trim() ?? string.Empty;
+        memory.SubjectDisplayName = string.IsNullOrWhiteSpace(memory.SubjectDisplayName)
+            ? memory.SubjectNpcName
+            : memory.SubjectDisplayName.Trim();
+        memory.Kind = NormalizeCommunityImpressionKind(memory.Kind);
+        memory.Summary = memory.Summary.Trim();
+        memory.Source = memory.Source == "Witnessed" ? "Witnessed" : "Heard";
+        memory.Confidence = System.Math.Clamp(memory.Confidence, 0, 100);
         memory.Importance = System.Math.Clamp(memory.Importance, 0, 100);
         memory.TimesReinforced = System.Math.Max(0, memory.TimesReinforced);
         memory.RecallCount = System.Math.Max(0, memory.RecallCount);
@@ -2386,6 +2569,57 @@ internal sealed class BehaviorMemory
         return NormalizePlayerPreferenceMemoryForStore(primary);
     }
 
+    private static CommunityImpressionFact MergeCommunityImpressionGroup(IEnumerable<CommunityImpressionFact> group)
+    {
+        var memories = group
+            .OrderByDescending(GetCommunityImpressionRetentionScore)
+            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+            .ToList();
+        var primary = memories[0];
+        foreach (var memory in memories.Skip(1))
+        {
+            if (memory.Source == "Witnessed")
+            {
+                primary.Source = "Witnessed";
+            }
+
+            if (memory.Importance > primary.Importance || memory.Summary.Length > primary.Summary.Length)
+            {
+                primary.Summary = memory.Summary;
+            }
+
+            if (string.IsNullOrWhiteSpace(primary.SubjectDisplayName) && !string.IsNullOrWhiteSpace(memory.SubjectDisplayName))
+            {
+                primary.SubjectDisplayName = memory.SubjectDisplayName;
+            }
+
+            primary.Confidence = System.Math.Max(primary.Confidence, memory.Confidence);
+            primary.Importance = System.Math.Max(primary.Importance, memory.Importance);
+            primary.TimesReinforced += memory.TimesReinforced;
+            primary.RecallCount += memory.RecallCount;
+            if (IsOlderCreatedAt(memory.CreatedTotalDays, primary.CreatedTotalDays))
+            {
+                primary.CreatedTotalDays = memory.CreatedTotalDays;
+                primary.CreatedTimeOfDay = memory.CreatedTimeOfDay;
+            }
+
+            if (IsNewerAt(memory.LastUpdatedTotalDays, memory.LastUpdatedTimeOfDay, primary.LastUpdatedTotalDays, primary.LastUpdatedTimeOfDay))
+            {
+                primary.LastUpdatedTotalDays = memory.LastUpdatedTotalDays;
+                primary.LastUpdatedTimeOfDay = memory.LastUpdatedTimeOfDay;
+            }
+
+            if (IsNewerAt(memory.LastRecalledTotalDays, memory.LastRecalledTimeOfDay, primary.LastRecalledTotalDays, primary.LastRecalledTimeOfDay))
+            {
+                primary.LastRecalledTotalDays = memory.LastRecalledTotalDays;
+                primary.LastRecalledTimeOfDay = memory.LastRecalledTimeOfDay;
+            }
+        }
+
+        return NormalizeCommunityImpressionForStore(primary);
+    }
+
     private static bool IsOlderCreatedAt(int candidateTotalDays, int currentTotalDays)
     {
         return candidateTotalDays >= 0 && (currentTotalDays < 0 || candidateTotalDays < currentTotalDays);
@@ -2443,6 +2677,27 @@ internal sealed class BehaviorMemory
         return score;
     }
 
+    internal static int GetCommunityImpressionRetentionScore(CommunityImpressionFact memory)
+    {
+        int age = GetMemoryAge(memory.LastUpdatedTotalDays);
+        int freshness = age switch
+        {
+            0 => 20,
+            1 => 16,
+            <= 3 => 12,
+            <= 7 => 6,
+            <= 14 => 2,
+            _ => -12
+        };
+
+        return memory.Importance
+            + (memory.Confidence / 5)
+            + freshness
+            + (memory.Source == "Witnessed" ? 8 : 0)
+            + System.Math.Min(memory.TimesReinforced * 3, 15)
+            - System.Math.Min(memory.RecallCount * 2, 12);
+    }
+
     public string BuildDebugSummary(NPC npc, int maxEntries, bool includeState)
     {
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
@@ -2469,6 +2724,7 @@ internal sealed class BehaviorMemory
                 longTermCount: 3,
                 preferenceCount: 4
             );
+            IReadOnlyList<CommunityImpressionSelection> communityImpressions = this.BuildCommunityImpressionRecallPlan(state, maxCount: 2);
             summary.AppendLine($"{npc.displayName} 当前 LivingNPCs 状态：");
             summary.AppendLine($"- 心情：{state.MoodLabel}");
             summary.AppendLine($"- 人际情绪：{state.EmotionLabel}");
@@ -2483,6 +2739,8 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 当前检索长期记忆：{this.FormatLongTermMemoryDebugLabel(recallPlan.LongTermMemories)}");
             summary.AppendLine($"- 玩家偏好记忆：{state.PlayerPreferenceDebugLabel}");
             summary.AppendLine($"- 当前检索玩家偏好：{this.FormatPlayerPreferenceDebugLabel(recallPlan.PlayerPreferences)}");
+            summary.AppendLine($"- 社区印象：{state.CommunityImpressionDebugLabel}");
+            summary.AppendLine($"- 当前检索社区印象：{this.FormatCommunityImpressionDebugLabel(communityImpressions)}");
             summary.AppendLine($"- 对话驱动行为：{state.DialogueBehaviorInfluenceDebugLabel}");
             summary.AppendLine($"- 长期约定：{state.CommitmentDebugLabel}");
             summary.AppendLine($"- 共同经历：{state.SharedExperienceDebugLabel}");
@@ -2601,6 +2859,7 @@ internal sealed class BehaviorMemory
             "longtermmemory" => "long-term memory",
             "conflict" => "conflict",
             "npcaction" => "npc action",
+            "socialmemory" => "social memory",
             _ => "behavior"
         };
 
@@ -2619,6 +2878,7 @@ internal sealed class BehaviorMemory
             "helprequestupdate" => "[求助更新]",
             "conflict" => "[冲突]",
             "npcaction" => "[NPC动作]",
+            "socialmemory" => "[社区印象]",
             _ => "[行为]"
         };
     }
@@ -4031,6 +4291,18 @@ internal sealed class BehaviorMemory
         };
     }
 
+    internal static string NormalizeCommunityImpressionKind(string kind)
+    {
+        return kind?.Trim().ToLowerInvariant() switch
+        {
+            "helped" => "helped",
+            "shared_experience" => "shared_experience",
+            "relationship_trend" => "relationship_trend",
+            "romantic_attention" => "romantic_attention",
+            _ => "community_fact"
+        };
+    }
+
     private static string NormalizeWorldActionType(string type)
     {
         return type?.Trim().ToLowerInvariant() switch
@@ -4350,6 +4622,16 @@ internal sealed class BehaviorMemory
             : $"{normalizedKind}:{identity}";
     }
 
+    private static string BuildCommunityImpressionKey(string subjectNpcName, string kind, string summary)
+    {
+        string normalizedSubject = NormalizeMemorySummary(subjectNpcName);
+        string normalizedKind = NormalizeCommunityImpressionKind(kind);
+        string normalizedSummary = NormalizeMemorySummary(summary);
+        return string.IsNullOrWhiteSpace(normalizedSubject) || string.IsNullOrWhiteSpace(normalizedSummary)
+            ? string.Empty
+            : $"{normalizedSubject}:{normalizedKind}:{normalizedSummary}";
+    }
+
     internal static int NormalizeTimeOfDay(int value)
     {
         if (value <= 0)
@@ -4581,6 +4863,12 @@ internal sealed record PlayerPreferenceSelection(
     string Reason
 );
 
+internal sealed record CommunityImpressionSelection(
+    CommunityImpressionFact Memory,
+    int Score,
+    string Reason
+);
+
 internal sealed record MemoryRecallPlan(
     MemoryRecallContext Context,
     IReadOnlyList<LongTermMemorySelection> LongTermMemories,
@@ -4653,6 +4941,30 @@ internal sealed class PlayerPreferenceFact
     public int LastRecalledTimeOfDay { get; set; }
     public int RecallCount { get; set; }
     public int TimesReinforced { get; set; }
+}
+
+internal sealed class CommunityImpressionFact
+{
+    public string SubjectNpcName { get; set; } = string.Empty;
+    public string SubjectDisplayName { get; set; } = string.Empty;
+    public string Kind { get; set; } = "relationship_trend";
+    public string Summary { get; set; } = string.Empty;
+    public string Source { get; set; } = "Heard";
+    public int Confidence { get; set; }
+    public int Importance { get; set; }
+    public int CreatedTotalDays { get; set; } = -1;
+    public int CreatedTimeOfDay { get; set; }
+    public int LastUpdatedTotalDays { get; set; } = -1;
+    public int LastUpdatedTimeOfDay { get; set; }
+    public int LastRecalledTotalDays { get; set; } = -1;
+    public int LastRecalledTimeOfDay { get; set; }
+    public int RecallCount { get; set; }
+    public int TimesReinforced { get; set; }
+
+    public string PromptLabel =>
+        this.Source == "Witnessed"
+            ? $"witnessed: {this.Summary}"
+            : $"heard secondhand: {this.Summary}";
 }
 
 internal sealed class NpcCommitmentFact
@@ -4999,6 +5311,7 @@ internal sealed class LivingNpcState
     public int LastEventTimeOfDay { get; set; }
     public List<LongTermMemoryFact> LongTermMemories { get; set; } = new();
     public List<PlayerPreferenceFact> PlayerPreferenceMemories { get; set; } = new();
+    public List<CommunityImpressionFact> CommunityImpressions { get; set; } = new();
     public List<NpcCommitmentFact> Commitments { get; set; } = new();
     public List<SharedExperienceFact> SharedExperiences { get; set; } = new();
     public List<DialogueBehaviorInfluenceFact> DialogueBehaviorInfluences { get; set; } = new();
@@ -5269,6 +5582,29 @@ internal sealed class LivingNpcState
         }
     }
 
+    public string CommunityImpressionPromptLabel
+    {
+        get
+        {
+            var memories = this.GetTopCommunityImpressions(4).ToList();
+            return memories.Count == 0
+                ? "no community impression about the farmer has been recorded"
+                : string.Join("; ", memories.Select(memory => memory.PromptLabel));
+        }
+    }
+
+    public string CommunityImpressionDebugLabel
+    {
+        get
+        {
+            var memories = this.GetTopCommunityImpressions(4).ToList();
+            return memories.Count == 0
+                ? "暂无"
+                : string.Join("；", memories.Select(memory =>
+                    $"{memory.Summary}（{memory.Source}，重要度 {memory.Importance}）"));
+        }
+    }
+
     public string CommitmentPromptLabel
     {
         get
@@ -5530,6 +5866,17 @@ internal sealed class LivingNpcState
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
             .Take(BehaviorMemory.MaxPlayerPreferenceMemoriesPerNpc)
+            .ToList();
+        this.CommunityImpressions ??= new List<CommunityImpressionFact>();
+        this.CommunityImpressions = this.CommunityImpressions
+            .Where(memory => memory != null
+                && !string.IsNullOrWhiteSpace(memory.SubjectNpcName)
+                && !string.IsNullOrWhiteSpace(memory.Summary))
+            .Select(BehaviorMemory.NormalizeCommunityImpressionForStore)
+            .OrderByDescending(BehaviorMemory.GetCommunityImpressionRetentionScore)
+            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+            .Take(BehaviorMemory.MaxCommunityImpressionsPerNpc)
             .ToList();
         this.Commitments ??= new List<NpcCommitmentFact>();
         this.Commitments = this.Commitments
@@ -5892,6 +6239,26 @@ internal sealed class LivingNpcState
                     TimesReinforced = memory.TimesReinforced
                 })
                 .ToList(),
+            CommunityImpressions = this.CommunityImpressions
+                .Select(memory => new CommunityImpressionFact
+                {
+                    SubjectNpcName = memory.SubjectNpcName,
+                    SubjectDisplayName = memory.SubjectDisplayName,
+                    Kind = memory.Kind,
+                    Summary = memory.Summary,
+                    Source = memory.Source,
+                    Confidence = memory.Confidence,
+                    Importance = memory.Importance,
+                    CreatedTotalDays = memory.CreatedTotalDays,
+                    CreatedTimeOfDay = memory.CreatedTimeOfDay,
+                    LastUpdatedTotalDays = memory.LastUpdatedTotalDays,
+                    LastUpdatedTimeOfDay = memory.LastUpdatedTimeOfDay,
+                    LastRecalledTotalDays = memory.LastRecalledTotalDays,
+                    LastRecalledTimeOfDay = memory.LastRecalledTimeOfDay,
+                    RecallCount = memory.RecallCount,
+                    TimesReinforced = memory.TimesReinforced
+                })
+                .ToList(),
             Commitments = this.Commitments
                 .Select(commitment => new NpcCommitmentFact
                 {
@@ -6088,6 +6455,15 @@ internal sealed class LivingNpcState
     {
         return this.PlayerPreferenceMemories
             .OrderByDescending(memory => memory.Importance)
+            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+            .Take(count);
+    }
+
+    private IEnumerable<CommunityImpressionFact> GetTopCommunityImpressions(int count)
+    {
+        return this.CommunityImpressions
+            .OrderByDescending(memory => BehaviorMemory.GetCommunityImpressionRetentionScore(memory))
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
             .Take(count);
