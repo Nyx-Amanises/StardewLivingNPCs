@@ -17,6 +17,10 @@ internal sealed class ModConfig
     public bool EnableCommitments { get; set; } = true;
     public int MaxPendingCommitmentsPerNpc { get; set; } = 4;
     public int CommitmentGraceMinutes { get; set; } = 120;
+    public bool EnableHelpRequests { get; set; } = true;
+    public int MaxPendingHelpRequestsPerNpc { get; set; } = 1;
+    public int HelpRequestCooldownDays { get; set; } = 3;
+    public int MinRelationshipTrustForHelpRequests { get; set; } = 35;
     public bool EnableAiDialogueFriendship { get; set; } = true;
     public int MaxAiDialogueFriendshipPerNpcPerDay { get; set; } = 30;
     public bool EnableDialogueFollowUps { get; set; } = true;
@@ -79,6 +83,10 @@ internal sealed class ModConfig
         this.EnableCommitments = defaults.EnableCommitments;
         this.MaxPendingCommitmentsPerNpc = defaults.MaxPendingCommitmentsPerNpc;
         this.CommitmentGraceMinutes = defaults.CommitmentGraceMinutes;
+        this.EnableHelpRequests = defaults.EnableHelpRequests;
+        this.MaxPendingHelpRequestsPerNpc = defaults.MaxPendingHelpRequestsPerNpc;
+        this.HelpRequestCooldownDays = defaults.HelpRequestCooldownDays;
+        this.MinRelationshipTrustForHelpRequests = defaults.MinRelationshipTrustForHelpRequests;
         this.EnableAiDialogueFriendship = defaults.EnableAiDialogueFriendship;
         this.MaxAiDialogueFriendshipPerNpcPerDay = defaults.MaxAiDialogueFriendshipPerNpcPerDay;
         this.EnableDialogueFollowUps = defaults.EnableDialogueFollowUps;

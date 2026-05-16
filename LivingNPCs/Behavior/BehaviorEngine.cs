@@ -149,6 +149,7 @@ internal sealed class BehaviorEngine
         }
 
         this.TryUpdateCommitmentTimers();
+        this.TryUpdateHelpRequestTimers();
 
         if (!this.config.EnablePassiveBehaviors || Game1.activeClickableMenu != null)
         {
@@ -291,6 +292,9 @@ internal sealed class BehaviorEngine
             analysisJson,
             this.config.MaxMemoryEntriesPerNpc,
             this.config.EnableCommitments ? this.config.MaxPendingCommitmentsPerNpc : 0,
+            this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
+            this.config.HelpRequestCooldownDays,
+            this.config.MinRelationshipTrustForHelpRequests,
             this.config.EnableAiDialogueFriendship ? this.config.MaxAiDialogueFriendshipPerNpcPerDay : 0
         );
 
@@ -316,7 +320,7 @@ internal sealed class BehaviorEngine
 
         this.PushInteractionContext(
             npc,
-            $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, {result.PlayerPreferencesStored} player preferences, {result.CommitmentsStored} commitments, {result.ConflictsStored} conflicts, {result.ConflictsResolved} resolved conflicts, +{result.AppliedFriendshipDelta} extra friendship."
+            $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, {result.PlayerPreferencesStored} player preferences, {result.CommitmentsStored} commitments, {result.HelpRequestsStored} help requests, {result.HelpRequestsUpdated} help request updates, {result.ConflictsStored} conflicts, {result.ConflictsResolved} resolved conflicts, +{result.AppliedFriendshipDelta} extra friendship."
         );
         return true;
     }
@@ -990,6 +994,40 @@ internal sealed class BehaviorEngine
         }
     }
 
+    private void TryUpdateHelpRequestTimers()
+    {
+        if (!this.config.EnableHelpRequests)
+        {
+            return;
+        }
+
+        foreach (var state in this.memory.GetTrackedStates())
+        {
+            foreach (var request in state.HelpRequests.Where(request => request.Status == "Pending"))
+            {
+                if (request.DueTotalDays >= Game1.Date.TotalDays)
+                {
+                    continue;
+                }
+
+                request.Status = "Expired";
+                request.LastUpdatedTotalDays = Game1.Date.TotalDays;
+                request.LastUpdatedTimeOfDay = Game1.timeOfDay;
+                this.memory.UpdateStateForExpiredHelpRequest(state, request);
+                if (this.TryFindNpcInCurrentLocation(state.NpcName, out NPC? npc) && npc != null)
+                {
+                    this.memory.RecordNpcWorldAction(
+                        npc,
+                        "ExpiredHelpRequest",
+                        $"a personal help request went unanswered: {request.Summary}",
+                        this.config.MaxMemoryEntriesPerNpc
+                    );
+                    this.PushInteractionContext(npc, $"Expired help request for {npc.Name}: {request.Summary}.");
+                }
+            }
+        }
+    }
+
     private void TryTriggerCommitmentArrivals()
     {
         if (!this.config.EnableCommitments
@@ -1249,6 +1287,15 @@ internal sealed class BehaviorEngine
                 this.memory.UpdateStateForGift(npc, gift);
             }
 
+            if (this.config.EnableHelpRequests)
+            {
+                int fulfilledHelpRequests = this.memory.TryCompleteItemHelpRequests(npc, gift, this.config.MaxMemoryEntriesPerNpc);
+                if (fulfilledHelpRequests > 0)
+                {
+                    this.PushInteractionContext(npc, $"Fulfilled {fulfilledHelpRequests} help request(s) for {npc.Name} through a gifted item.");
+                }
+            }
+
             this.PushInteractionContext(npc, $"Recorded gift interaction for {npc.Name}: {gift.ItemName} ({gift.TastePromptLabel}).");
             return;
         }
@@ -1362,11 +1409,27 @@ internal sealed class BehaviorEngine
             conflict.RecoveryMentionedTotalDays = Game1.Date.TotalDays;
             conflict.RecoveryMentionedTimeOfDay = Game1.timeOfDay;
         }
+
+        foreach (var request in state.HelpRequests.Where(request =>
+                     request.Status == "Fulfilled"
+                     && request.FulfilledTotalDays >= Game1.Date.TotalDays - 3
+                     && request.LastMentionedTotalDays < 0))
+        {
+            request.LastMentionedTotalDays = Game1.Date.TotalDays;
+            request.LastMentionedTimeOfDay = Game1.timeOfDay;
+        }
     }
 
     private void PushInteractionContext(NPC npc, string debugMessage)
     {
-        string promptContext = this.memory.BuildPromptContext(npc, this.config.PromptMemoryEntries, this.config.EnableNpcState);
+        string promptContext = this.memory.BuildPromptContext(
+            npc,
+            this.config.PromptMemoryEntries,
+            this.config.EnableNpcState,
+            this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
+            this.config.HelpRequestCooldownDays,
+            this.config.MinRelationshipTrustForHelpRequests
+        );
         bool pushedToValleyTalk = this.valleyTalkBridge.PushBehaviorContext(npc, promptContext);
 
         if (this.config.Debug)
@@ -1385,7 +1448,7 @@ internal sealed class BehaviorEngine
         int taste = this.TryGetGiftTaste(npc, gift);
         var labels = this.DescribeGiftTaste(taste);
         string itemName = string.IsNullOrWhiteSpace(gift.DisplayName) ? gift.Name : gift.DisplayName;
-        return new GiftMemoryDetails(itemName, labels.DebugLabel, labels.PromptLabel, taste);
+        return new GiftMemoryDetails(gift.QualifiedItemId, itemName, labels.DebugLabel, labels.PromptLabel, taste);
     }
 
     private int TryGetGiftTaste(NPC npc, SObject gift)
@@ -1503,7 +1566,14 @@ internal sealed class BehaviorEngine
             this.memory.UpdateStateForBehavior(npc, intent, source);
         }
 
-        string promptContext = this.memory.BuildPromptContext(npc, this.config.PromptMemoryEntries, this.config.EnableNpcState);
+        string promptContext = this.memory.BuildPromptContext(
+            npc,
+            this.config.PromptMemoryEntries,
+            this.config.EnableNpcState,
+            this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
+            this.config.HelpRequestCooldownDays,
+            this.config.MinRelationshipTrustForHelpRequests
+        );
         bool pushedToValleyTalk = this.valleyTalkBridge.PushBehaviorContext(npc, promptContext);
 
         if (this.config.Debug)

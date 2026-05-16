@@ -73,6 +73,30 @@ internal sealed class BehaviorMemory
         ["医院"] = "Hospital"
     };
 
+    private static readonly HashSet<string> AllowedHelpRequestItemIds = new(System.StringComparer.OrdinalIgnoreCase)
+    {
+        "(O)16",
+        "(O)18",
+        "(O)20",
+        "(O)22",
+        "(O)66",
+        "(O)80",
+        "(O)216",
+        "(O)223",
+        "(O)395",
+        "(O)396",
+        "(O)398",
+        "(O)402",
+        "(O)404",
+        "(O)406",
+        "(O)408",
+        "(O)410",
+        "(O)412",
+        "(O)414",
+        "(O)416",
+        "(O)418"
+    };
+
     private readonly Dictionary<string, List<BehaviorMemoryEntry>> entriesByNpc = new();
     private readonly Dictionary<string, int> dailyCountsByNpc = new();
     private readonly Dictionary<string, LivingNpcState> statesByNpc = new();
@@ -227,6 +251,9 @@ internal sealed class BehaviorMemory
         string analysisJson,
         int maxEntriesPerNpc,
         int maxPendingCommitmentsPerNpc,
+        int maxPendingHelpRequestsPerNpc,
+        int helpRequestCooldownDays,
+        int minRelationshipTrustForHelpRequests,
         int maxExtraFriendshipPerDay)
     {
         var analysis = ParseExchangeAnalysis(analysisJson);
@@ -234,6 +261,8 @@ internal sealed class BehaviorMemory
         int storedMemories = 0;
         int storedPlayerPreferences = 0;
         int storedCommitments = 0;
+        int storedHelpRequests = 0;
+        int updatedHelpRequests = 0;
         int storedConflicts = 0;
         int resolvedConflicts = 0;
         bool emotionChanged = false;
@@ -286,6 +315,46 @@ internal sealed class BehaviorMemory
             }
         }
 
+        foreach (var candidate in analysis.HelpRequests
+                     .Where(request => maxPendingHelpRequestsPerNpc > 0 && !string.IsNullOrWhiteSpace(request.Summary))
+                     .Take(1))
+        {
+            if (this.StoreHelpRequest(
+                    npc,
+                    state,
+                    candidate,
+                    maxPendingHelpRequestsPerNpc,
+                    helpRequestCooldownDays,
+                    minRelationshipTrustForHelpRequests))
+            {
+                storedHelpRequests++;
+                var entry = this.CreateEntry(
+                    npc,
+                    "HelpRequest",
+                    candidate.Type,
+                    candidate.Summary
+                );
+                this.AddEntry(entry, maxEntriesPerNpc);
+            }
+        }
+
+        foreach (var candidate in analysis.HelpRequestUpdates
+                     .Where(update => !string.IsNullOrWhiteSpace(update.Summary))
+                     .Take(2))
+        {
+            if (this.ApplyHelpRequestUpdate(state, candidate))
+            {
+                updatedHelpRequests++;
+                var entry = this.CreateEntry(
+                    npc,
+                    "HelpRequestUpdate",
+                    candidate.Status,
+                    string.IsNullOrWhiteSpace(candidate.Resolution) ? candidate.Summary : candidate.Resolution
+                );
+                this.AddEntry(entry, maxEntriesPerNpc);
+            }
+        }
+
         foreach (var candidate in analysis.Conflicts
                      .Where(conflict => !string.IsNullOrWhiteSpace(conflict.Summary) && conflict.Severity > 0)
                      .Take(2))
@@ -318,6 +387,8 @@ internal sealed class BehaviorMemory
         if (storedMemories == 0
             && storedPlayerPreferences == 0
             && storedCommitments == 0
+            && storedHelpRequests == 0
+            && updatedHelpRequests == 0
             && storedConflicts == 0
             && TryExtractNicknameRequest(playerText, out string nickname))
         {
@@ -346,14 +417,20 @@ internal sealed class BehaviorMemory
         if (storedMemories > 0
             || storedPlayerPreferences > 0
             || storedCommitments > 0
+            || storedHelpRequests > 0
+            || updatedHelpRequests > 0
             || storedConflicts > 0
             || resolvedConflicts > 0
             || emotionChanged
             || appliedFriendship > 0)
         {
-            if (storedMemories > 0 || storedPlayerPreferences > 0 || storedCommitments > 0)
+            if (storedMemories > 0 || storedPlayerPreferences > 0 || storedCommitments > 0 || storedHelpRequests > 0)
             {
                 state.LastInteraction = "the farmer shared something worth remembering";
+            }
+            else if (updatedHelpRequests > 0)
+            {
+                state.LastInteraction = "they updated a personal help request with the farmer";
             }
             else if (storedConflicts > 0)
             {
@@ -376,6 +453,8 @@ internal sealed class BehaviorMemory
             storedMemories,
             storedPlayerPreferences,
             storedCommitments,
+            storedHelpRequests,
+            updatedHelpRequests,
             storedConflicts,
             resolvedConflicts,
             emotionChanged,
@@ -545,6 +624,37 @@ internal sealed class BehaviorMemory
         return state;
     }
 
+    public int TryCompleteItemHelpRequests(NPC npc, GiftMemoryDetails gift, int maxEntriesPerNpc)
+    {
+        var state = this.GetOrCreateState(npc);
+        var fulfilled = state.HelpRequests
+            .Where(request => request.Status == "Pending"
+                && request.Type == "item_request"
+                && string.Equals(request.RequestedItemId, gift.ItemId, System.StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (var request in fulfilled)
+        {
+            request.Status = "Fulfilled";
+            request.Resolution = $"The farmer brought {gift.ItemName}.";
+            request.FulfilledTotalDays = Game1.Date.TotalDays;
+            request.FulfilledTimeOfDay = Game1.timeOfDay;
+            request.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            request.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            this.ApplyHelpRequestFulfillmentEffects(state, request);
+
+            var entry = this.CreateEntry(
+                npc,
+                "HelpRequest",
+                "Fulfilled",
+                request.Resolution
+            );
+            this.AddEntry(entry, maxEntriesPerNpc);
+        }
+
+        return fulfilled.Count;
+    }
+
     public LivingNpcState UpdateStateForEventInteraction(NPC npc, string eventContext)
     {
         var state = this.GetOrCreateState(npc);
@@ -615,6 +725,23 @@ internal sealed class BehaviorMemory
             Severity = state.ConsecutiveMissedCommitments >= 2 ? 30 : 16
         });
         state.LastInteraction = $"the farmer missed a plan: {commitment.Summary}";
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        return state;
+    }
+
+    public LivingNpcState UpdateStateForExpiredHelpRequest(LivingNpcState state, NpcHelpRequestFact request)
+    {
+        state.Mood = "Polite";
+        state.CurrentInclination = "Measured";
+        state.Openness = LivingNpcState.ClampScore(state.Openness - 4);
+        this.ApplyEmotion(
+            state,
+            "Disappointed",
+            8,
+            $"a personal help request went unanswered: {request.Summary}"
+        );
+        state.LastInteraction = $"a personal help request went unanswered: {request.Summary}";
         state.LastUpdatedTotalDays = Game1.Date.TotalDays;
         state.LastUpdatedTimeOfDay = Game1.timeOfDay;
         return state;
@@ -1091,7 +1218,13 @@ internal sealed class BehaviorMemory
         }
     }
 
-    public string BuildPromptContext(NPC npc, int maxEntries, bool includeState)
+    public string BuildPromptContext(
+        NPC npc,
+        int maxEntries,
+        bool includeState,
+        int maxPendingHelpRequestsPerNpc,
+        int helpRequestCooldownDays,
+        int minRelationshipTrustForHelpRequests)
     {
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
         var disposition = NpcDisposition.For(npc);
@@ -1152,6 +1285,8 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Commitments with the farmer: {state.CommitmentPromptLabel}.");
             prompt.AppendLine($"- Shared experiences from fulfilled plans: {state.SharedExperiencePromptLabel}.");
             prompt.AppendLine($"- Trust in keeping plans: {state.CommitmentTrustPromptLabel}.");
+            prompt.AppendLine($"- Help requests involving the farmer: {state.HelpRequestPromptLabel}.");
+            prompt.AppendLine($"- Help-request readiness: {this.BuildHelpRequestReadinessLabel(npc, state, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, minRelationshipTrustForHelpRequests)}.");
             prompt.AppendLine($"- Conflict memory: {state.ConflictPromptLabel}.");
             prompt.AppendLine($"- Personal memory context: {state.FarmerNicknamePromptLabel}.");
             prompt.AppendLine($"- Scene influence on mood: {state.LastSceneInfluenceReason}.");
@@ -1247,6 +1382,22 @@ internal sealed class BehaviorMemory
             if (state.PlayerPreferenceMemories.Count > 0)
             {
                 yield return $"Farmer preference memory: {state.PlayerPreferencePromptLabel}; when a gift or topic naturally matches one of these, it is okay to acknowledge remembering it briefly.";
+            }
+
+            var activeHelpRequest = state.HelpRequests.FirstOrDefault(request => request.Status == "Pending");
+            if (activeHelpRequest != null)
+            {
+                yield return $"Active help request: {activeHelpRequest.PromptLabel}; remember that this is an unfinished ask, not a vague topic.";
+            }
+
+            var recentlyFulfilledHelpRequest = state.HelpRequests.FirstOrDefault(request =>
+                request.Status == "Fulfilled"
+                && request.FulfilledTotalDays >= Game1.Date.TotalDays - 3
+                && request.LastMentionedTotalDays < 0
+            );
+            if (recentlyFulfilledHelpRequest != null)
+            {
+                yield return $"Recently fulfilled help request: {recentlyFulfilledHelpRequest.FulfilledPromptLabel}; if it fits, the NPC may briefly thank the farmer for following through.";
             }
 
             var urgentCommitment = state.Commitments.FirstOrDefault(commitment =>
@@ -1561,6 +1712,7 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 长期约定：{state.CommitmentDebugLabel}");
             summary.AppendLine($"- 共同经历：{state.SharedExperienceDebugLabel}");
             summary.AppendLine($"- 履约信任：{state.CommitmentTrustDebugLabel}");
+            summary.AppendLine($"- 主动求助：{state.HelpRequestDebugLabel}");
             summary.AppendLine($"- 冲突记忆：{state.ConflictDebugLabel}");
             summary.AppendLine($"- 长期称呼记忆：{state.FarmerNicknameLabel}");
             summary.AppendLine($"- 今日 AI 对话额外好感：{state.AiFriendshipGainedToday}");
@@ -1688,6 +1840,8 @@ internal sealed class BehaviorMemory
             "gift" => "[礼物]",
             "event" => "[事件]",
             "longtermmemory" => "[长期记忆]",
+            "helprequest" => "[求助]",
+            "helprequestupdate" => "[求助更新]",
             "conflict" => "[冲突]",
             "npcaction" => "[NPC动作]",
             _ => "[行为]"
@@ -1761,6 +1915,34 @@ internal sealed class BehaviorMemory
                     return commitment;
                 })
                 .Where(commitment => commitment.Type != "none")
+                .Take(2)
+                .ToList();
+            analysis.HelpRequests = analysis.HelpRequests
+                .Where(request => request != null && !string.IsNullOrWhiteSpace(request.Summary))
+                .Select(request =>
+                {
+                    request.Type = NormalizeHelpRequestType(request.Type);
+                    request.Summary = request.Summary.Trim();
+                    request.RequestedItemId = request.RequestedItemId?.Trim() ?? string.Empty;
+                    request.RequestedItemLabel = request.RequestedItemLabel?.Trim() ?? string.Empty;
+                    request.QuestionTopic = request.QuestionTopic?.Trim() ?? string.Empty;
+                    request.DueInDays = System.Math.Clamp(request.DueInDays, 1, 7);
+                    request.Reason = request.Reason?.Trim() ?? string.Empty;
+                    return request;
+                })
+                .Where(request => request.Type != "none")
+                .Take(1)
+                .ToList();
+            analysis.HelpRequestUpdates = analysis.HelpRequestUpdates
+                .Where(update => update != null && !string.IsNullOrWhiteSpace(update.Summary))
+                .Select(update =>
+                {
+                    update.Summary = update.Summary.Trim();
+                    update.Status = NormalizeHelpRequestUpdateStatus(update.Status);
+                    update.Resolution = update.Resolution?.Trim() ?? string.Empty;
+                    return update;
+                })
+                .Where(update => update.Status != "none")
                 .Take(2)
                 .ToList();
             analysis.Conflicts = analysis.Conflicts
@@ -2313,6 +2495,221 @@ internal sealed class BehaviorMemory
         return true;
     }
 
+    private bool StoreHelpRequest(
+        NPC npc,
+        LivingNpcState state,
+        ValleyTalkHelpRequestCandidate candidate,
+        int maxPendingHelpRequestsPerNpc,
+        int helpRequestCooldownDays,
+        int minRelationshipTrustForHelpRequests)
+    {
+        if (!this.CanOpenHelpRequest(
+                npc,
+                state,
+                maxPendingHelpRequestsPerNpc,
+                helpRequestCooldownDays,
+                minRelationshipTrustForHelpRequests,
+                out _))
+        {
+            return false;
+        }
+
+        string normalizedSummary = NormalizeMemorySummary(candidate.Summary);
+        if (string.IsNullOrWhiteSpace(normalizedSummary))
+        {
+            return false;
+        }
+
+        string normalizedType = NormalizeHelpRequestType(candidate.Type);
+        if (normalizedType == "item_request")
+        {
+            if (!AllowedHelpRequestItemIds.Contains(candidate.RequestedItemId))
+            {
+                return false;
+            }
+        }
+        else if (normalizedType == "question_request")
+        {
+            if (string.IsNullOrWhiteSpace(candidate.QuestionTopic))
+            {
+                return false;
+            }
+        }
+        else
+        {
+            return false;
+        }
+
+        var existing = state.HelpRequests.FirstOrDefault(request =>
+            request.Status == "Pending"
+            && NormalizeMemorySummary(request.Summary) == normalizedSummary);
+        if (existing != null)
+        {
+            existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            existing.TimesReinforced += 1;
+            return true;
+        }
+
+        state.HelpRequests.Add(new NpcHelpRequestFact
+        {
+            Type = normalizedType,
+            Summary = candidate.Summary.Trim(),
+            RequestedItemId = candidate.RequestedItemId.Trim(),
+            RequestedItemLabel = candidate.RequestedItemLabel.Trim(),
+            QuestionTopic = candidate.QuestionTopic.Trim(),
+            DueTotalDays = Game1.Date.TotalDays + candidate.DueInDays,
+            Reason = candidate.Reason.Trim(),
+            Status = "Pending",
+            CreatedTotalDays = Game1.Date.TotalDays,
+            CreatedTimeOfDay = Game1.timeOfDay,
+            LastUpdatedTotalDays = Game1.Date.TotalDays,
+            LastUpdatedTimeOfDay = Game1.timeOfDay,
+            TimesReinforced = 1
+        });
+        state.LastHelpRequestTotalDays = Game1.Date.TotalDays;
+        state.LastHelpRequestTimeOfDay = Game1.timeOfDay;
+        state.HelpRequests = state.HelpRequests
+            .OrderBy(request => BehaviorMemory.HelpRequestStatusOrder(request.Status))
+            .ThenBy(request => request.DueTotalDays)
+            .ThenByDescending(request => request.LastUpdatedTotalDays)
+            .Take(12)
+            .ToList();
+        return true;
+    }
+
+    private bool ApplyHelpRequestUpdate(LivingNpcState state, ValleyTalkHelpRequestUpdateCandidate candidate)
+    {
+        string normalizedSummary = NormalizeMemorySummary(candidate.Summary);
+        var existing = state.HelpRequests
+            .Where(request => request.Status == "Pending")
+            .OrderBy(request => request.DueTotalDays)
+            .FirstOrDefault(request => NormalizeMemorySummary(request.Summary) == normalizedSummary);
+        if (existing == null)
+        {
+            return false;
+        }
+
+        existing.Status = candidate.Status switch
+        {
+            "fulfilled" => "Fulfilled",
+            "declined" => "Declined",
+            _ => existing.Status
+        };
+        existing.Resolution = candidate.Resolution.Trim();
+        existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        if (existing.Status == "Fulfilled")
+        {
+            existing.FulfilledTotalDays = Game1.Date.TotalDays;
+            existing.FulfilledTimeOfDay = Game1.timeOfDay;
+            this.ApplyHelpRequestFulfillmentEffects(state, existing);
+        }
+        else if (existing.Status == "Declined")
+        {
+            this.ApplyEmotion(
+                state,
+                "Disappointed",
+                6,
+                $"the farmer declined a personal help request: {existing.Summary}"
+            );
+            state.LastInteraction = $"the farmer declined a personal help request: {existing.Summary}";
+            state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        }
+
+        return true;
+    }
+
+    private void ApplyHelpRequestFulfillmentEffects(LivingNpcState state, NpcHelpRequestFact request)
+    {
+        state.Mood = "Pleased";
+        state.CurrentInclination = "OpenToTalk";
+        state.Attention = LivingNpcState.ClampScore(state.Attention + 8);
+        state.Openness = LivingNpcState.ClampScore(state.Openness + 6);
+        this.AddFamiliarity(state, amount: 2, dailyCap: 8);
+        this.ApplyRelationshipTrustDelta(state, 6);
+        this.ApplyEmotion(
+            state,
+            "Grateful",
+            16,
+            $"the farmer helped with a personal request: {request.Summary}"
+        );
+        state.LastInteraction = $"the farmer helped with a personal request: {request.Summary}";
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+    }
+
+    private bool CanOpenHelpRequest(
+        NPC npc,
+        LivingNpcState state,
+        int maxPendingHelpRequestsPerNpc,
+        int helpRequestCooldownDays,
+        int minRelationshipTrustForHelpRequests,
+        out string reason)
+    {
+        if (maxPendingHelpRequestsPerNpc <= 0)
+        {
+            reason = "help requests are disabled";
+            return false;
+        }
+
+        if (state.HelpRequests.Count(request => request.Status == "Pending") >= maxPendingHelpRequestsPerNpc)
+        {
+            reason = "an active help request is already pending";
+            return false;
+        }
+
+        if (state.HighestUnresolvedConflictSeverity >= 30)
+        {
+            reason = "unresolved conflict makes asking for help feel wrong";
+            return false;
+        }
+
+        var world = WorldContext.For(npc);
+        bool enoughTrust = state.RelationshipTrust >= minRelationshipTrustForHelpRequests;
+        bool enoughFamiliarity = state.Familiarity >= 20 || world.FriendshipHearts >= 2;
+        if (!enoughTrust || !enoughFamiliarity)
+        {
+            reason = "the relationship is not close enough yet";
+            return false;
+        }
+
+        if (state.CurrentEmotion is "Angry" or "Upset")
+        {
+            reason = "their current emotion is too strained";
+            return false;
+        }
+
+        if (state.LastHelpRequestTotalDays >= 0
+            && Game1.Date.TotalDays - state.LastHelpRequestTotalDays < helpRequestCooldownDays)
+        {
+            reason = "a recent help request is still too fresh";
+            return false;
+        }
+
+        reason = "one modest favor would be natural if the conversation genuinely leads there";
+        return true;
+    }
+
+    private string BuildHelpRequestReadinessLabel(
+        NPC npc,
+        LivingNpcState state,
+        int maxPendingHelpRequestsPerNpc,
+        int helpRequestCooldownDays,
+        int minRelationshipTrustForHelpRequests)
+    {
+        return this.CanOpenHelpRequest(
+                npc,
+                state,
+                maxPendingHelpRequestsPerNpc,
+                helpRequestCooldownDays,
+                minRelationshipTrustForHelpRequests,
+                out string reason)
+            ? $"may naturally ask for one modest favor now; {reason}"
+            : $"should not open a new help request now; {reason}";
+    }
+
     private bool StoreLongTermMemory(LivingNpcState state, ValleyTalkMemoryCandidate candidate)
     {
         string normalizedSummary = NormalizeMemorySummary(candidate.Summary);
@@ -2514,6 +2911,26 @@ internal sealed class BehaviorMemory
         };
     }
 
+    internal static string NormalizeHelpRequestType(string type)
+    {
+        return type?.Trim().ToLowerInvariant() switch
+        {
+            "item_request" => "item_request",
+            "question_request" => "question_request",
+            _ => "none"
+        };
+    }
+
+    internal static string NormalizeHelpRequestUpdateStatus(string status)
+    {
+        return status?.Trim().ToLowerInvariant() switch
+        {
+            "fulfilled" => "fulfilled",
+            "declined" => "declined",
+            _ => "none"
+        };
+    }
+
     private static int GetFulfilledCommitmentTrustGain(string type)
     {
         return NormalizeCommitmentType(type) switch
@@ -2683,6 +3100,18 @@ internal sealed class BehaviorMemory
         };
     }
 
+    internal static int HelpRequestStatusOrder(string status)
+    {
+        return status switch
+        {
+            "Pending" => 0,
+            "Expired" => 1,
+            "Declined" => 2,
+            "Fulfilled" => 3,
+            _ => 4
+        };
+    }
+
     private static string GetConflictStatus(int severity)
     {
         return severity switch
@@ -2804,6 +3233,7 @@ internal sealed class BehaviorMemoryEntry
 }
 
 internal sealed record GiftMemoryDetails(
+    string ItemId,
     string ItemName,
     string TasteLabel,
     string TastePromptLabel,
@@ -2818,6 +3248,8 @@ internal sealed class ValleyTalkExchangeAnalysis
     public ValleyTalkEmotionImpact EmotionImpact { get; set; } = new();
     public List<ValleyTalkWorldActionRequest> Actions { get; set; } = new();
     public List<ValleyTalkCommitmentCandidate> Commitments { get; set; } = new();
+    public List<ValleyTalkHelpRequestCandidate> HelpRequests { get; set; } = new();
+    public List<ValleyTalkHelpRequestUpdateCandidate> HelpRequestUpdates { get; set; } = new();
     public List<ValleyTalkConflictCandidate> Conflicts { get; set; } = new();
     public List<ValleyTalkMemoryCandidate> Memories { get; set; } = new();
 }
@@ -2912,6 +3344,34 @@ internal sealed class SharedExperienceFact
         $"{this.Type} at {this.LocationLabel}; shared on total day {this.CreatedTotalDays}; summary: {this.Summary}";
 }
 
+internal sealed class NpcHelpRequestFact
+{
+    public string Type { get; set; } = "item_request";
+    public string Summary { get; set; } = string.Empty;
+    public string RequestedItemId { get; set; } = string.Empty;
+    public string RequestedItemLabel { get; set; } = string.Empty;
+    public string QuestionTopic { get; set; } = string.Empty;
+    public int DueTotalDays { get; set; } = -1;
+    public string Reason { get; set; } = string.Empty;
+    public string Status { get; set; } = "Pending";
+    public string Resolution { get; set; } = string.Empty;
+    public int CreatedTotalDays { get; set; } = -1;
+    public int CreatedTimeOfDay { get; set; }
+    public int LastUpdatedTotalDays { get; set; } = -1;
+    public int LastUpdatedTimeOfDay { get; set; }
+    public int LastMentionedTotalDays { get; set; } = -1;
+    public int LastMentionedTimeOfDay { get; set; }
+    public int FulfilledTotalDays { get; set; } = -1;
+    public int FulfilledTimeOfDay { get; set; }
+    public int TimesReinforced { get; set; }
+
+    public string PromptLabel =>
+        $"{this.Type}, due on total day {this.DueTotalDays}, status {this.Status}; summary: {this.Summary}";
+
+    public string FulfilledPromptLabel =>
+        $"{this.Type} was fulfilled on total day {this.FulfilledTotalDays}; summary: {this.Summary}";
+}
+
 internal sealed class NpcConflictFact
 {
     public string CauseKind { get; set; } = "dialogue";
@@ -2984,6 +3444,24 @@ internal sealed class ValleyTalkCommitmentCandidate
     public string LocationLabel { get; set; } = string.Empty;
 }
 
+internal sealed class ValleyTalkHelpRequestCandidate
+{
+    public string Type { get; set; } = "none";
+    public string Summary { get; set; } = string.Empty;
+    public string RequestedItemId { get; set; } = string.Empty;
+    public string RequestedItemLabel { get; set; } = string.Empty;
+    public string QuestionTopic { get; set; } = string.Empty;
+    public int DueInDays { get; set; } = 3;
+    public string Reason { get; set; } = string.Empty;
+}
+
+internal sealed class ValleyTalkHelpRequestUpdateCandidate
+{
+    public string Summary { get; set; } = string.Empty;
+    public string Status { get; set; } = "none";
+    public string Resolution { get; set; } = string.Empty;
+}
+
 internal sealed class ValleyTalkConflictCandidate
 {
     public string CauseKind { get; set; } = "dialogue";
@@ -2995,6 +3473,8 @@ internal sealed record ValleyTalkExchangeResult(
     int LongTermMemoriesStored,
     int PlayerPreferencesStored,
     int CommitmentsStored,
+    int HelpRequestsStored,
+    int HelpRequestsUpdated,
     int ConflictsStored,
     int ConflictsResolved,
     bool EmotionChanged,
@@ -3009,6 +3489,8 @@ internal sealed record ValleyTalkExchangeResult(
     public bool HasEffect => this.LongTermMemoriesStored > 0
         || this.PlayerPreferencesStored > 0
         || this.CommitmentsStored > 0
+        || this.HelpRequestsStored > 0
+        || this.HelpRequestsUpdated > 0
         || this.ConflictsStored > 0
         || this.ConflictsResolved > 0
         || this.EmotionChanged
@@ -3053,6 +3535,7 @@ internal sealed class LivingNpcState
     public List<PlayerPreferenceFact> PlayerPreferenceMemories { get; set; } = new();
     public List<NpcCommitmentFact> Commitments { get; set; } = new();
     public List<SharedExperienceFact> SharedExperiences { get; set; } = new();
+    public List<NpcHelpRequestFact> HelpRequests { get; set; } = new();
     public List<NpcConflictFact> Conflicts { get; set; } = new();
     public bool RelationshipTrustInitialized { get; set; }
     public int RelationshipTrust { get; set; } = 20;
@@ -3070,6 +3553,8 @@ internal sealed class LivingNpcState
     public int LastAiMoneyGiftTotalDays { get; set; } = -1;
     public int LastAiFarmHelpTotalDays { get; set; } = -1;
     public int LastAiWalkTogetherTotalDays { get; set; } = -1;
+    public int LastHelpRequestTotalDays { get; set; } = -1;
+    public int LastHelpRequestTimeOfDay { get; set; }
     public string LastSceneContext { get; set; } = "none";
     public string LastSceneInfluence { get; set; } = "none";
     public string LastSceneInfluenceReason { get; set; } = "none";
@@ -3362,6 +3847,29 @@ internal sealed class LivingNpcState
     public string CommitmentTrustDebugLabel =>
         $"{this.CommitmentTrust}/100，累计失约 {this.MissedCommitments} 次，连续失约 {this.ConsecutiveMissedCommitments} 次";
 
+    public string HelpRequestPromptLabel
+    {
+        get
+        {
+            var requests = this.GetTopHelpRequests(4).ToList();
+            return requests.Count == 0
+                ? "no durable help requests are recorded"
+                : string.Join("; ", requests.Select(request => request.PromptLabel));
+        }
+    }
+
+    public string HelpRequestDebugLabel
+    {
+        get
+        {
+            var requests = this.GetTopHelpRequests(4).ToList();
+            return requests.Count == 0
+                ? "暂无"
+                : string.Join("；", requests.Select(request =>
+                    $"{request.Summary}（{request.Type}，截止第 {request.DueTotalDays} 天，{request.Status}）"));
+        }
+    }
+
     public string RelationshipTrustPromptLabel => this.RelationshipTrust switch
     {
         >= 80 => $"deep interpersonal trust ({this.RelationshipTrust}/100)",
@@ -3459,6 +3967,9 @@ internal sealed class LivingNpcState
         "the farmer started a conversation" => "玩家刚主动开始对话",
         "the farmer caused interpersonal friction" => "玩家刚造成了一次关系摩擦",
         "the farmer helped repair a conflict" => "玩家刚缓和了一次冲突",
+        _ when this.LastInteraction.StartsWith("the farmer helped with a personal request", System.StringComparison.Ordinal) => "玩家刚帮忙完成了一次主动求助",
+        _ when this.LastInteraction.StartsWith("the farmer declined a personal help request", System.StringComparison.Ordinal) => "玩家刚拒绝了一次主动求助",
+        _ when this.LastInteraction.StartsWith("a personal help request went unanswered", System.StringComparison.Ordinal) => "一次主动求助没有得到回应",
         "time passed" => "时间过去，状态回落",
         _ => this.LastInteraction
     };
@@ -3573,6 +4084,33 @@ internal sealed class LivingNpcState
             })
             .ThenBy(commitment => commitment.DueTotalDays)
             .ThenBy(commitment => commitment.TimeOfDay)
+            .Take(12)
+            .ToList();
+        this.HelpRequests ??= new List<NpcHelpRequestFact>();
+        this.HelpRequests = this.HelpRequests
+            .Where(request => request != null && !string.IsNullOrWhiteSpace(request.Summary))
+            .Select(request =>
+            {
+                request.Type = BehaviorMemory.NormalizeHelpRequestType(request.Type);
+                request.Summary = request.Summary.Trim();
+                request.RequestedItemId = request.RequestedItemId?.Trim() ?? string.Empty;
+                request.RequestedItemLabel = request.RequestedItemLabel?.Trim() ?? string.Empty;
+                request.QuestionTopic = request.QuestionTopic?.Trim() ?? string.Empty;
+                request.Reason = request.Reason?.Trim() ?? string.Empty;
+                request.Status = request.Status switch
+                {
+                    "Fulfilled" => "Fulfilled",
+                    "Expired" => "Expired",
+                    "Declined" => "Declined",
+                    _ => "Pending"
+                };
+                request.TimesReinforced = System.Math.Max(0, request.TimesReinforced);
+                return request;
+            })
+            .Where(request => request.Type != "none")
+            .OrderBy(request => BehaviorMemory.HelpRequestStatusOrder(request.Status))
+            .ThenBy(request => request.DueTotalDays)
+            .ThenByDescending(request => request.LastUpdatedTotalDays)
             .Take(12)
             .ToList();
         this.SharedExperiences ??= new List<SharedExperienceFact>();
@@ -3827,6 +4365,29 @@ internal sealed class LivingNpcState
                     FollowUpShownTimeOfDay = experience.FollowUpShownTimeOfDay
                 })
                 .ToList(),
+            HelpRequests = this.HelpRequests
+                .Select(request => new NpcHelpRequestFact
+                {
+                    Type = request.Type,
+                    Summary = request.Summary,
+                    RequestedItemId = request.RequestedItemId,
+                    RequestedItemLabel = request.RequestedItemLabel,
+                    QuestionTopic = request.QuestionTopic,
+                    DueTotalDays = request.DueTotalDays,
+                    Reason = request.Reason,
+                    Status = request.Status,
+                    Resolution = request.Resolution,
+                    CreatedTotalDays = request.CreatedTotalDays,
+                    CreatedTimeOfDay = request.CreatedTimeOfDay,
+                    LastUpdatedTotalDays = request.LastUpdatedTotalDays,
+                    LastUpdatedTimeOfDay = request.LastUpdatedTimeOfDay,
+                    LastMentionedTotalDays = request.LastMentionedTotalDays,
+                    LastMentionedTimeOfDay = request.LastMentionedTimeOfDay,
+                    FulfilledTotalDays = request.FulfilledTotalDays,
+                    FulfilledTimeOfDay = request.FulfilledTimeOfDay,
+                    TimesReinforced = request.TimesReinforced
+                })
+                .ToList(),
             Conflicts = this.Conflicts
                 .Select(conflict => new NpcConflictFact
                 {
@@ -3872,6 +4433,8 @@ internal sealed class LivingNpcState
             LastAiMoneyGiftTotalDays = this.LastAiMoneyGiftTotalDays,
             LastAiFarmHelpTotalDays = this.LastAiFarmHelpTotalDays,
             LastAiWalkTogetherTotalDays = this.LastAiWalkTogetherTotalDays,
+            LastHelpRequestTotalDays = this.LastHelpRequestTotalDays,
+            LastHelpRequestTimeOfDay = this.LastHelpRequestTimeOfDay,
             LastSceneContext = this.LastSceneContext,
             LastSceneInfluence = this.LastSceneInfluence,
             LastSceneInfluenceReason = this.LastSceneInfluenceReason,
@@ -3925,6 +4488,15 @@ internal sealed class LivingNpcState
             .OrderByDescending(experience => experience.Importance)
             .ThenByDescending(experience => experience.LastUpdatedTotalDays)
             .ThenByDescending(experience => experience.LastUpdatedTimeOfDay)
+            .Take(count);
+    }
+
+    private IEnumerable<NpcHelpRequestFact> GetTopHelpRequests(int count)
+    {
+        return this.HelpRequests
+            .OrderBy(request => BehaviorMemory.HelpRequestStatusOrder(request.Status))
+            .ThenBy(request => request.DueTotalDays)
+            .ThenByDescending(request => request.LastUpdatedTotalDays)
             .Take(count);
     }
 

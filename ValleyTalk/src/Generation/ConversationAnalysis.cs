@@ -56,6 +56,12 @@ internal sealed class ConversationAnalysis
     [JsonProperty("commitments")]
     public List<ConversationCommitmentCandidate> Commitments { get; set; } = new();
 
+    [JsonProperty("helpRequests")]
+    public List<ConversationHelpRequestCandidate> HelpRequests { get; set; } = new();
+
+    [JsonProperty("helpRequestUpdates")]
+    public List<ConversationHelpRequestUpdateCandidate> HelpRequestUpdates { get; set; } = new();
+
     [JsonProperty("conflicts")]
     public List<ConversationConflictCandidate> Conflicts { get; set; } = new();
 
@@ -66,6 +72,8 @@ internal sealed class ConversationAnalysis
         || this.EmotionImpact.HasContent
         || this.Actions.Count > 0
         || this.Commitments.Count > 0
+        || this.HelpRequests.Count > 0
+        || this.HelpRequestUpdates.Count > 0
         || this.Conflicts.Count > 0;
 
     public string ToJson()
@@ -153,6 +161,34 @@ internal sealed class ConversationAnalysis
                 .Where(commitment => commitment.Type != "none")
                 .Take(2)
                 .ToList();
+            analysis.HelpRequests = analysis.HelpRequests
+                .Where(request => request != null && !string.IsNullOrWhiteSpace(request.Summary))
+                .Select(request =>
+                {
+                    request.Type = NormalizeHelpRequestType(request.Type);
+                    request.Summary = request.Summary.Trim();
+                    request.RequestedItemId = request.RequestedItemId?.Trim() ?? string.Empty;
+                    request.RequestedItemLabel = request.RequestedItemLabel?.Trim() ?? string.Empty;
+                    request.QuestionTopic = request.QuestionTopic?.Trim() ?? string.Empty;
+                    request.DueInDays = Math.Clamp(request.DueInDays, 1, 7);
+                    request.Reason = request.Reason?.Trim() ?? string.Empty;
+                    return request;
+                })
+                .Where(request => request.Type != "none")
+                .Take(1)
+                .ToList();
+            analysis.HelpRequestUpdates = analysis.HelpRequestUpdates
+                .Where(update => update != null && !string.IsNullOrWhiteSpace(update.Summary))
+                .Select(update =>
+                {
+                    update.Summary = update.Summary.Trim();
+                    update.Status = NormalizeHelpRequestUpdateStatus(update.Status);
+                    update.Resolution = update.Resolution?.Trim() ?? string.Empty;
+                    return update;
+                })
+                .Where(update => update.Status != "none")
+                .Take(2)
+                .ToList();
             analysis.Conflicts = analysis.Conflicts
                 .Where(conflict => conflict != null && !string.IsNullOrWhiteSpace(conflict.Summary))
                 .Select(conflict =>
@@ -210,6 +246,26 @@ internal sealed class ConversationAnalysis
             "help_task" => "help_task",
             "celebrate_together" => "celebrate_together",
             "share_activity" => "share_activity",
+            _ => "none"
+        };
+    }
+
+    private static string NormalizeHelpRequestType(string type)
+    {
+        return type?.Trim().ToLowerInvariant() switch
+        {
+            "item_request" => "item_request",
+            "question_request" => "question_request",
+            _ => "none"
+        };
+    }
+
+    private static string NormalizeHelpRequestUpdateStatus(string status)
+    {
+        return status?.Trim().ToLowerInvariant() switch
+        {
+            "fulfilled" => "fulfilled",
+            "declined" => "declined",
             _ => "none"
         };
     }
@@ -389,6 +445,42 @@ internal sealed class ConversationCommitmentCandidate
 
     [JsonProperty("locationLabel")]
     public string LocationLabel { get; set; } = string.Empty;
+}
+
+internal sealed class ConversationHelpRequestCandidate
+{
+    [JsonProperty("type")]
+    public string Type { get; set; } = "none";
+
+    [JsonProperty("summary")]
+    public string Summary { get; set; } = string.Empty;
+
+    [JsonProperty("requestedItemId")]
+    public string RequestedItemId { get; set; } = string.Empty;
+
+    [JsonProperty("requestedItemLabel")]
+    public string RequestedItemLabel { get; set; } = string.Empty;
+
+    [JsonProperty("questionTopic")]
+    public string QuestionTopic { get; set; } = string.Empty;
+
+    [JsonProperty("dueInDays")]
+    public int DueInDays { get; set; } = 3;
+
+    [JsonProperty("reason")]
+    public string Reason { get; set; } = string.Empty;
+}
+
+internal sealed class ConversationHelpRequestUpdateCandidate
+{
+    [JsonProperty("summary")]
+    public string Summary { get; set; } = string.Empty;
+
+    [JsonProperty("status")]
+    public string Status { get; set; } = "none";
+
+    [JsonProperty("resolution")]
+    public string Resolution { get; set; } = string.Empty;
 }
 
 internal sealed class ConversationConflictCandidate

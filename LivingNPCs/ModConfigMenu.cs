@@ -176,6 +176,47 @@ internal static class ModConfigMenu
 
         configMenu.AddBoolOption(
             mod: manifest,
+            name: () => "启用 NPC 主动求助",
+            tooltip: () => "允许关系足够自然时，NPC 在 AI 对话中向玩家提出一个轻量小忙，例如找一件物品或回答一个问题。",
+            getValue: () => config.EnableHelpRequests,
+            setValue: value => config.EnableHelpRequests = value
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "每个 NPC 最多待完成求助",
+            tooltip: () => "限制同一个 NPC 同时最多保留多少条尚未完成的主动求助。",
+            getValue: () => config.MaxPendingHelpRequestsPerNpc,
+            setValue: value => config.MaxPendingHelpRequestsPerNpc = value,
+            min: 0,
+            max: 4,
+            interval: 1
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "主动求助冷却天数",
+            tooltip: () => "同一个 NPC 两次新求助之间至少相隔多少天。",
+            getValue: () => config.HelpRequestCooldownDays,
+            setValue: value => config.HelpRequestCooldownDays = value,
+            min: 0,
+            max: 14,
+            interval: 1
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "主动求助最低关系信任",
+            tooltip: () => "NPC 只有在关系信任达到这个值后，才可能自然地向玩家开口求助。",
+            getValue: () => config.MinRelationshipTrustForHelpRequests,
+            setValue: value => config.MinRelationshipTrustForHelpRequests = value,
+            min: 0,
+            max: 100,
+            interval: 5
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
             name: () => "AI 对话额外好感",
             tooltip: () => "让 AI 对话按聊天质量在原版对话好感之外额外增加好感，每个 NPC 每天受上限约束。",
             getValue: () => config.EnableAiDialogueFriendship,
