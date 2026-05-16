@@ -26,6 +26,8 @@ internal sealed class ModConfig
     public bool EnableAiDialogueFriendship { get; set; } = true;
     public int MaxAiDialogueFriendshipPerNpcPerDay { get; set; } = 30;
     public bool EnableDialogueFollowUps { get; set; } = true;
+    public bool EnableDialogueDrivenBehaviors { get; set; } = true;
+    public int MaxDialogueBehaviorInfluenceDays { get; set; } = 3;
     public bool EnableAiWorldActions { get; set; } = true;
     public bool AllowAiSmallGifts { get; set; } = true;
     public bool AllowAiMeaningfulGifts { get; set; } = true;
@@ -94,6 +96,8 @@ internal sealed class ModConfig
         this.EnableAiDialogueFriendship = defaults.EnableAiDialogueFriendship;
         this.MaxAiDialogueFriendshipPerNpcPerDay = defaults.MaxAiDialogueFriendshipPerNpcPerDay;
         this.EnableDialogueFollowUps = defaults.EnableDialogueFollowUps;
+        this.EnableDialogueDrivenBehaviors = defaults.EnableDialogueDrivenBehaviors;
+        this.MaxDialogueBehaviorInfluenceDays = defaults.MaxDialogueBehaviorInfluenceDays;
         this.EnableAiWorldActions = defaults.EnableAiWorldActions;
         this.AllowAiSmallGifts = defaults.AllowAiSmallGifts;
         this.AllowAiMeaningfulGifts = defaults.AllowAiMeaningfulGifts;

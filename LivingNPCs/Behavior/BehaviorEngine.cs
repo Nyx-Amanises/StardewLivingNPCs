@@ -205,6 +205,10 @@ internal sealed class BehaviorEngine
         this.TryShowHelpRequestFollowUps();
         this.TryShowSharedExperienceFollowUps();
         this.TryTriggerCommitmentArrivals();
+        if (e.IsMultipleOf(120))
+        {
+            this.TryApplyDialogueBehaviorInfluences();
+        }
     }
 
     private bool TryFindNearestNpc(out NPC? nearest)
@@ -301,7 +305,8 @@ internal sealed class BehaviorEngine
             this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
             this.config.HelpRequestCooldownDays,
             this.config.MinRelationshipTrustForHelpRequests,
-            this.config.EnableAiDialogueFriendship ? this.config.MaxAiDialogueFriendshipPerNpcPerDay : 0
+            this.config.EnableAiDialogueFriendship ? this.config.MaxAiDialogueFriendshipPerNpcPerDay : 0,
+            this.config.MaxDialogueBehaviorInfluenceDays
         );
 
         if (!result.HasEffect)
@@ -336,7 +341,7 @@ internal sealed class BehaviorEngine
 
         this.PushInteractionContext(
             npc,
-            $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, {result.PlayerPreferencesStored} player preferences, {result.CommitmentsStored} commitments, {result.HelpRequestsStored} help requests, {result.HelpRequestsUpdated} help request updates, {result.ConflictsStored} conflicts, {result.ConflictsResolved} resolved conflicts, +{result.AppliedFriendshipDelta} extra friendship."
+            $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, {result.PlayerPreferencesStored} player preferences, {result.CommitmentsStored} commitments, {result.HelpRequestsStored} help requests, {result.HelpRequestsUpdated} help request updates, {result.ConflictsStored} conflicts, {result.BehaviorInfluencesStored} dialogue behavior influences, {result.ConflictsResolved} resolved conflicts, +{result.AppliedFriendshipDelta} extra friendship."
         );
         return true;
     }
@@ -1046,6 +1051,205 @@ internal sealed class BehaviorEngine
             walk.LastPlayerTile = Game1.player.TilePoint;
             walk.LastAssignedController = npc.controller;
         }
+    }
+
+    private void TryApplyDialogueBehaviorInfluences()
+    {
+        if (!this.config.EnableDialogueDrivenBehaviors
+            || Game1.currentLocation == null
+            || Game1.player == null
+            || Game1.activeClickableMenu != null
+            || Game1.eventUp)
+        {
+            return;
+        }
+
+        foreach (var npc in Game1.currentLocation.characters.Where(candidate => !string.IsNullOrWhiteSpace(candidate.Name)))
+        {
+            var state = this.memory.GetState(npc);
+            if (state == null)
+            {
+                continue;
+            }
+
+            foreach (var influence in state.DialogueBehaviorInfluences.Where(influence => influence.Status == "Active").ToList())
+            {
+                if (influence.ExpiresTotalDays < Game1.Date.TotalDays)
+                {
+                    influence.Status = "Expired";
+                    influence.LastUpdatedTotalDays = Game1.Date.TotalDays;
+                    influence.LastUpdatedTimeOfDay = Game1.timeOfDay;
+                }
+            }
+
+            var activeInfluence = state.ActiveDialogueBehaviorInfluences
+                .Where(influence => influence.LastTriggeredTotalDays != Game1.Date.TotalDays)
+                .OrderByDescending(influence => influence.Intensity)
+                .ThenBy(influence => influence.CreatedTotalDays)
+                .FirstOrDefault();
+            if (activeInfluence == null || !this.CanTryDialogueBehaviorInfluence(npc, activeInfluence))
+            {
+                continue;
+            }
+
+            if (!this.TryApplyDialogueBehaviorInfluence(npc, state, activeInfluence))
+            {
+                continue;
+            }
+
+            activeInfluence.TriggerCount += 1;
+            activeInfluence.LastTriggeredTotalDays = Game1.Date.TotalDays;
+            activeInfluence.LastTriggeredTimeOfDay = Game1.timeOfDay;
+            activeInfluence.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            activeInfluence.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            if (activeInfluence.TriggerCount >= activeInfluence.MaxTriggers)
+            {
+                activeInfluence.Status = "Spent";
+            }
+
+            this.memory.RecordNpcWorldAction(
+                npc,
+                "DialogueDrivenBehavior",
+                $"a recent conversation shaped later behavior: {activeInfluence.Type}; {activeInfluence.Summary}",
+                this.config.MaxMemoryEntriesPerNpc
+            );
+            this.PushInteractionContext(npc, $"Applied dialogue-driven behavior for {npc.Name}: {activeInfluence.PromptLabel}.");
+        }
+    }
+
+    private bool CanTryDialogueBehaviorInfluence(NPC npc, DialogueBehaviorInfluenceFact influence)
+    {
+        float distance = Vector2.Distance(npc.Tile, Game1.player.Tile);
+        return influence.Type switch
+        {
+            "visit_location" => this.IsDialogueInfluenceTargetLocationCurrent(influence)
+                && distance <= this.config.MaxInteractionDistanceTiles + 2,
+            "offended" or "give_space" => distance <= 2.5f && npc.controller == null,
+            "companion_walk" => distance <= this.config.MaxInteractionDistanceTiles && npc.controller == null,
+            "stay_near" or "comforted" or "pause_to_talk" => distance <= this.config.MaxInteractionDistanceTiles && npc.controller == null,
+            _ => false
+        };
+    }
+
+    private bool TryApplyDialogueBehaviorInfluence(NPC npc, LivingNpcState state, DialogueBehaviorInfluenceFact influence)
+    {
+        bool executed = influence.Type switch
+        {
+            "companion_walk" => this.TryStartWalkTogether(
+                npc,
+                new ValleyTalkWorldActionRequest
+                {
+                    Type = "walk_together",
+                    DurationMinutes = System.Math.Clamp(8 + (influence.Intensity / 15), 5, this.config.MaxAiWalkTogetherMinutes),
+                    Reason = influence.Summary
+                },
+                out _
+            ),
+            "visit_location" => this.TryReactAtDialogueInfluenceLocation(npc, influence),
+            "comforted" => this.TryApplyComfortedInfluence(npc, state),
+            "stay_near" => this.TryApplyStayNearInfluence(npc, state),
+            "offended" => this.TryApplyDistanceInfluence(npc, state, "they kept more distance after the conversation"),
+            "give_space" => this.TryApplyDistanceInfluence(npc, state, "they gave the farmer a little more room after the conversation"),
+            "pause_to_talk" => this.TryApplyPauseInfluence(npc, state),
+            _ => false
+        };
+
+        if (!executed)
+        {
+            return false;
+        }
+
+        state.LastInteraction = $"a recent conversation shaped their later behavior: {influence.Summary}";
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        return true;
+    }
+
+    private bool TryApplyComfortedInfluence(NPC npc, LivingNpcState state)
+    {
+        bool moved = Vector2.Distance(npc.Tile, Game1.player.Tile) > 2.25f && this.TryApproachPlayer(npc);
+        if (!moved)
+        {
+            this.TryFacePlayer(npc);
+            if (this.config.AllowEmotes)
+            {
+                npc.doEmote(20);
+            }
+        }
+
+        state.Mood = "Comfortable";
+        state.CurrentInclination = "OpenToTalk";
+        return moved || this.config.AllowFacePlayer;
+    }
+
+    private bool TryApplyStayNearInfluence(NPC npc, LivingNpcState state)
+    {
+        bool moved = Vector2.Distance(npc.Tile, Game1.player.Tile) > 2.25f && this.TryApproachPlayer(npc);
+        if (!moved)
+        {
+            this.TryFacePlayer(npc);
+        }
+
+        state.Mood = "Engaged";
+        state.CurrentInclination = "OpenToTalk";
+        return moved || this.config.AllowFacePlayer;
+    }
+
+    private bool TryApplyDistanceInfluence(NPC npc, LivingNpcState state, string lastInteraction)
+    {
+        bool moved = this.TryStepAway(npc);
+        if (!moved)
+        {
+            return false;
+        }
+
+        state.Mood = "Guarded";
+        state.CurrentInclination = "GentleBoundary";
+        state.LastInteraction = lastInteraction;
+        return true;
+    }
+
+    private bool TryApplyPauseInfluence(NPC npc, LivingNpcState state)
+    {
+        if (!this.TryPause(npc))
+        {
+            return false;
+        }
+
+        state.Mood = "Attentive";
+        state.CurrentInclination = "Acknowledging";
+        return true;
+    }
+
+    private bool TryReactAtDialogueInfluenceLocation(NPC npc, DialogueBehaviorInfluenceFact influence)
+    {
+        if (!this.IsDialogueInfluenceTargetLocationCurrent(influence))
+        {
+            return false;
+        }
+
+        this.TryFacePlayer(npc);
+        npc.showTextAboveHead(this.BuildDialogueInfluenceLocationRemark(influence));
+        return true;
+    }
+
+    private bool IsDialogueInfluenceTargetLocationCurrent(DialogueBehaviorInfluenceFact influence)
+    {
+        string currentLocation = BehaviorMemory.NormalizeCommitmentLocation(Game1.currentLocation?.Name ?? string.Empty, string.Empty);
+        return !string.IsNullOrWhiteSpace(influence.TargetLocation)
+            && influence.TargetLocation == currentLocation;
+    }
+
+    private string BuildDialogueInfluenceLocationRemark(DialogueBehaviorInfluenceFact influence)
+    {
+        return influence.TargetLocation switch
+        {
+            "Beach" => "你提到海边后，我也想来看看。",
+            "ArchaeologyHouse" => "你提到这里后，我就想顺路来看看。",
+            "Forest" => "刚才聊到森林，我就想来走走。",
+            "Mountain" => "你提到山上后，我也有点在意这里。",
+            _ => $"你刚才提到{influence.TargetLocationLabel}，我后来还想着这件事。"
+        };
     }
 
     private void TryUpdateCommitmentTimers()

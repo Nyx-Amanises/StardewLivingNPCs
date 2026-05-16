@@ -264,6 +264,25 @@ internal static class ModConfigMenu
             setValue: value => config.EnableDialogueFollowUps = value
         );
 
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "对话驱动行为",
+            tooltip: () => "允许 AI 对话在严格限制下影响 NPC 之后几分钟到几天内的小行为，例如更愿意靠近、保持距离、短暂同行或在目标地点自然回应。",
+            getValue: () => config.EnableDialogueDrivenBehaviors,
+            setValue: value => config.EnableDialogueDrivenBehaviors = value
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "行为影响最长天数",
+            tooltip: () => "对话产生的行为影响最多保留多少天。过期后不会继续影响 NPC 行为。",
+            getValue: () => config.MaxDialogueBehaviorInfluenceDays,
+            setValue: value => config.MaxDialogueBehaviorInfluenceDays = value,
+            min: 1,
+            max: 7,
+            interval: 1
+        );
+
         configMenu.AddSectionTitle(
             mod: manifest,
             text: () => "AI 影响世界"

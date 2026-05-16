@@ -11,6 +11,7 @@ internal sealed class BehaviorMemory
 {
     internal const int MaxLongTermMemoriesPerNpc = 24;
     internal const int MaxPlayerPreferenceMemoriesPerNpc = 24;
+    internal const int MaxDialogueBehaviorInfluencesPerNpc = 12;
 
     private static readonly HashSet<string> AllowedPlayerPreferenceTags = new(System.StringComparer.OrdinalIgnoreCase)
     {
@@ -295,7 +296,8 @@ internal sealed class BehaviorMemory
         int maxPendingHelpRequestsPerNpc,
         int helpRequestCooldownDays,
         int minRelationshipTrustForHelpRequests,
-        int maxExtraFriendshipPerDay)
+        int maxExtraFriendshipPerDay,
+        int maxDialogueBehaviorInfluenceDays)
     {
         var analysis = ParseExchangeAnalysis(analysisJson);
         var state = this.GetOrCreateState(npc);
@@ -305,6 +307,7 @@ internal sealed class BehaviorMemory
         int storedHelpRequests = 0;
         int updatedHelpRequests = 0;
         int storedConflicts = 0;
+        int storedBehaviorInfluences = 0;
         int resolvedConflicts = 0;
         bool emotionChanged = false;
         var fulfilledHelpRequests = new List<NpcHelpRequestFact>();
@@ -418,6 +421,23 @@ internal sealed class BehaviorMemory
             }
         }
 
+        foreach (var candidate in analysis.BehaviorInfluences
+                     .Where(influence => !string.IsNullOrWhiteSpace(influence.Summary))
+                     .Take(2))
+        {
+            if (this.StoreDialogueBehaviorInfluence(npc, state, candidate, maxDialogueBehaviorInfluenceDays))
+            {
+                storedBehaviorInfluences++;
+                var entry = this.CreateEntry(
+                    npc,
+                    "DialogueBehavior",
+                    candidate.Type,
+                    candidate.Summary
+                );
+                this.AddEntry(entry, maxEntriesPerNpc);
+            }
+        }
+
         if (analysis.EmotionImpact.HasEffect)
         {
             emotionChanged = this.ApplyDialogueEmotionImpact(state, analysis.EmotionImpact);
@@ -436,6 +456,7 @@ internal sealed class BehaviorMemory
             && storedHelpRequests == 0
             && updatedHelpRequests == 0
             && storedConflicts == 0
+            && storedBehaviorInfluences == 0
             && TryExtractNicknameRequest(playerText, out string nickname))
         {
             string status = DetermineNicknameStatus(nickname, npcResponse);
@@ -466,6 +487,7 @@ internal sealed class BehaviorMemory
             || storedHelpRequests > 0
             || updatedHelpRequests > 0
             || storedConflicts > 0
+            || storedBehaviorInfluences > 0
             || resolvedConflicts > 0
             || emotionChanged
             || appliedFriendship > 0)
@@ -481,6 +503,10 @@ internal sealed class BehaviorMemory
             else if (storedConflicts > 0)
             {
                 state.LastInteraction = "the farmer caused interpersonal friction";
+            }
+            else if (storedBehaviorInfluences > 0)
+            {
+                state.LastInteraction = "the latest conversation changed how they may behave around the farmer";
             }
             else if (resolvedConflicts > 0)
             {
@@ -502,6 +528,7 @@ internal sealed class BehaviorMemory
             storedHelpRequests,
             updatedHelpRequests,
             storedConflicts,
+            storedBehaviorInfluences,
             resolvedConflicts,
             emotionChanged,
             appliedFriendship,
@@ -1399,6 +1426,7 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Recent event context: {state.LastEventPromptLabel}.");
             prompt.AppendLine($"- Durable memory store: {state.LongTermMemories.Count} long-term memories tracked; recall focus for this reply: {this.FormatLongTermMemoryPromptLabel(recallPlan.LongTermMemories)}.");
             prompt.AppendLine($"- Known farmer preferences: {this.FormatPlayerPreferencePromptLabel(recallPlan.PlayerPreferences)}.");
+            prompt.AppendLine($"- Conversation-driven behavior tendencies: {state.DialogueBehaviorInfluencePromptLabel}.");
             prompt.AppendLine($"- Commitments with the farmer: {state.CommitmentPromptLabel}.");
             prompt.AppendLine($"- Shared experiences from fulfilled plans: {state.SharedExperiencePromptLabel}.");
             prompt.AppendLine($"- Trust in keeping plans: {state.CommitmentTrustPromptLabel}.");
@@ -1504,6 +1532,12 @@ internal sealed class BehaviorMemory
             if (recallPlan.PlayerPreferences.Count > 0)
             {
                 yield return $"Relevant farmer preference memories for this reply: {this.FormatPlayerPreferencePromptLabel(recallPlan.PlayerPreferences)}; when a gift or topic naturally matches one, it is okay to acknowledge remembering it briefly.";
+            }
+
+            var activeBehaviorInfluence = state.ActiveDialogueBehaviorInfluences.FirstOrDefault();
+            if (activeBehaviorInfluence != null)
+            {
+                yield return $"Conversation-driven behavior tendency: {activeBehaviorInfluence.PromptLabel}; this should shape body language and follow-through, not be quoted as dialogue.";
             }
 
             var activeHelpRequest = state.HelpRequests.FirstOrDefault(request => request.Status is "Offered" or "Pending");
@@ -2433,6 +2467,7 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 当前检索长期记忆：{this.FormatLongTermMemoryDebugLabel(recallPlan.LongTermMemories)}");
             summary.AppendLine($"- 玩家偏好记忆：{state.PlayerPreferenceDebugLabel}");
             summary.AppendLine($"- 当前检索玩家偏好：{this.FormatPlayerPreferenceDebugLabel(recallPlan.PlayerPreferences)}");
+            summary.AppendLine($"- 对话驱动行为：{state.DialogueBehaviorInfluenceDebugLabel}");
             summary.AppendLine($"- 长期约定：{state.CommitmentDebugLabel}");
             summary.AppendLine($"- 共同经历：{state.SharedExperienceDebugLabel}");
             summary.AppendLine($"- 履约信任：{state.CommitmentTrustDebugLabel}");
@@ -2625,6 +2660,22 @@ internal sealed class BehaviorMemory
                 })
                 .Where(action => action.Type != "none")
                 .Take(1)
+                .ToList();
+            analysis.BehaviorInfluences = analysis.BehaviorInfluences
+                .Where(influence => influence != null && !string.IsNullOrWhiteSpace(influence.Summary))
+                .Select(influence =>
+                {
+                    influence.Type = NormalizeDialogueBehaviorInfluenceType(influence.Type);
+                    influence.Summary = influence.Summary.Trim();
+                    influence.TargetLocation = NormalizeCommitmentLocation(influence.TargetLocation, string.Empty);
+                    influence.TargetLocationLabel = influence.TargetLocationLabel?.Trim() ?? string.Empty;
+                    influence.DurationDays = System.Math.Clamp(influence.DurationDays, 0, 7);
+                    influence.Intensity = System.Math.Clamp(influence.Intensity, 0, 100);
+                    influence.MaxTriggers = System.Math.Clamp(influence.MaxTriggers, 0, 4);
+                    return influence;
+                })
+                .Where(influence => influence.Type != "none")
+                .Take(2)
                 .ToList();
             analysis.Commitments = analysis.Commitments
                 .Where(commitment => commitment != null && !string.IsNullOrWhiteSpace(commitment.Summary))
@@ -3134,6 +3185,134 @@ internal sealed class BehaviorMemory
             .Take(MaxPlayerPreferenceMemoriesPerNpc)
             .ToList();
         return true;
+    }
+
+    private bool StoreDialogueBehaviorInfluence(
+        NPC npc,
+        LivingNpcState state,
+        ValleyTalkBehaviorInfluenceCandidate candidate,
+        int maxDialogueBehaviorInfluenceDays)
+    {
+        string type = NormalizeDialogueBehaviorInfluenceType(candidate.Type);
+        if (type == "none" || string.IsNullOrWhiteSpace(candidate.Summary))
+        {
+            return false;
+        }
+
+        string fallbackLocation = npc.currentLocation?.Name ?? Game1.currentLocation?.Name ?? string.Empty;
+        string targetLocation = NormalizeCommitmentLocation(candidate.TargetLocation, fallbackLocation);
+        string targetLabel = string.IsNullOrWhiteSpace(candidate.TargetLocationLabel)
+            ? GetCommitmentLocationLabel(targetLocation)
+            : candidate.TargetLocationLabel.Trim();
+        int durationDays = candidate.DurationDays <= 0
+            ? GetDefaultDialogueBehaviorDurationDays(type)
+            : candidate.DurationDays;
+        durationDays = System.Math.Clamp(
+            durationDays,
+            0,
+            System.Math.Clamp(maxDialogueBehaviorInfluenceDays, 1, 7)
+        );
+        int maxTriggers = candidate.MaxTriggers <= 0
+            ? GetDefaultDialogueBehaviorMaxTriggers(type)
+            : candidate.MaxTriggers;
+        string normalizedKey = BuildDialogueBehaviorInfluenceKey(type, candidate.Summary, targetLocation);
+
+        var existing = state.DialogueBehaviorInfluences.FirstOrDefault(influence =>
+            BuildDialogueBehaviorInfluenceKey(influence.Type, influence.Summary, influence.TargetLocation) == normalizedKey
+            && influence.Status == "Active");
+        if (existing != null)
+        {
+            existing.Summary = candidate.Summary.Trim();
+            existing.TargetLocation = targetLocation;
+            existing.TargetLocationLabel = targetLabel;
+            existing.Intensity = System.Math.Max(existing.Intensity, candidate.Intensity);
+            existing.ExpiresTotalDays = System.Math.Max(existing.ExpiresTotalDays, Game1.Date.TotalDays + durationDays);
+            existing.MaxTriggers = System.Math.Max(existing.MaxTriggers, maxTriggers);
+            existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            existing.TimesReinforced += 1;
+            this.ApplyDialogueBehaviorStateEffect(state, existing);
+            return true;
+        }
+
+        var influence = new DialogueBehaviorInfluenceFact
+        {
+            Type = type,
+            Summary = candidate.Summary.Trim(),
+            TargetLocation = targetLocation,
+            TargetLocationLabel = targetLabel,
+            Intensity = System.Math.Clamp(candidate.Intensity <= 0 ? GetDefaultDialogueBehaviorIntensity(type) : candidate.Intensity, 1, 100),
+            CreatedTotalDays = Game1.Date.TotalDays,
+            CreatedTimeOfDay = Game1.timeOfDay,
+            LastUpdatedTotalDays = Game1.Date.TotalDays,
+            LastUpdatedTimeOfDay = Game1.timeOfDay,
+            ExpiresTotalDays = Game1.Date.TotalDays + durationDays,
+            MaxTriggers = System.Math.Clamp(maxTriggers, 1, 4),
+            Status = "Active",
+            TimesReinforced = 1
+        };
+
+        state.DialogueBehaviorInfluences.Add(influence);
+        state.DialogueBehaviorInfluences = state.DialogueBehaviorInfluences
+            .OrderBy(influence => DialogueBehaviorInfluenceStatusOrder(influence.Status))
+            .ThenBy(influence => influence.ExpiresTotalDays)
+            .ThenByDescending(influence => influence.LastUpdatedTotalDays)
+            .ThenByDescending(influence => influence.LastUpdatedTimeOfDay)
+            .Take(MaxDialogueBehaviorInfluencesPerNpc)
+            .ToList();
+        this.ApplyDialogueBehaviorStateEffect(state, influence);
+        return true;
+    }
+
+    private void ApplyDialogueBehaviorStateEffect(LivingNpcState state, DialogueBehaviorInfluenceFact influence)
+    {
+        switch (influence.Type)
+        {
+            case "companion_walk":
+            case "stay_near":
+                state.Mood = state.Mood == "Guarded" ? "Polite" : "Engaged";
+                state.CurrentInclination = "OpenToTalk";
+                state.Attention = LivingNpcState.ClampScore(state.Attention + 8);
+                state.Openness = LivingNpcState.ClampScore(state.Openness + 6);
+                break;
+
+            case "comforted":
+                state.Mood = "Comfortable";
+                state.CurrentInclination = "OpenToTalk";
+                state.Attention = LivingNpcState.ClampScore(state.Attention + 5);
+                state.Openness = LivingNpcState.ClampScore(state.Openness + 8);
+                this.ApplyRelationshipTrustDelta(state, 2);
+                break;
+
+            case "offended":
+                state.Mood = "Guarded";
+                state.CurrentInclination = "Reserved";
+                state.Attention = LivingNpcState.ClampScore(state.Attention + 3);
+                state.Openness = LivingNpcState.ClampScore(state.Openness - 10);
+                break;
+
+            case "give_space":
+                state.Mood = "Careful";
+                state.CurrentInclination = "GentleBoundary";
+                state.Openness = LivingNpcState.ClampScore(state.Openness - 6);
+                break;
+
+            case "visit_location":
+                state.Mood = state.Mood == "Guarded" ? "Polite" : "Curious";
+                state.CurrentInclination = "Aware";
+                state.Attention = LivingNpcState.ClampScore(state.Attention + 3);
+                break;
+
+            case "pause_to_talk":
+                state.Mood = state.Mood == "Guarded" ? "Polite" : "Attentive";
+                state.CurrentInclination = "Acknowledging";
+                state.Attention = LivingNpcState.ClampScore(state.Attention + 5);
+                break;
+        }
+
+        state.LastInteraction = $"the latest conversation created a behavior tendency: {influence.Summary}";
+        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
     }
 
     private bool StoreCommitment(NPC npc, LivingNpcState state, ValleyTalkCommitmentCandidate candidate, int maxPendingCommitmentsPerNpc)
@@ -3851,6 +4030,28 @@ internal sealed class BehaviorMemory
         };
     }
 
+    internal static string NormalizeDialogueBehaviorInfluenceType(string type)
+    {
+        return type?.Trim().ToLowerInvariant() switch
+        {
+            "companion_walk" => "companion_walk",
+            "walk_together" => "companion_walk",
+            "visit_location" => "visit_location",
+            "go_to_location" => "visit_location",
+            "comforted" => "comforted",
+            "reassured" => "comforted",
+            "offended" => "offended",
+            "hurt" => "offended",
+            "give_space" => "give_space",
+            "needs_space" => "give_space",
+            "stay_near" => "stay_near",
+            "approach" => "stay_near",
+            "pause_to_talk" => "pause_to_talk",
+            "stop_to_talk" => "pause_to_talk",
+            _ => "none"
+        };
+    }
+
     internal static string NormalizeEmotion(string emotion)
     {
         return emotion?.Trim().ToLowerInvariant() switch
@@ -3925,6 +4126,62 @@ internal sealed class BehaviorMemory
             "shared_activity" => "shared_activity",
             "deeper_relationship" => "deeper_relationship",
             _ => "none"
+        };
+    }
+
+    private static int GetDefaultDialogueBehaviorDurationDays(string type)
+    {
+        return NormalizeDialogueBehaviorInfluenceType(type) switch
+        {
+            "companion_walk" => 0,
+            "pause_to_talk" => 1,
+            "visit_location" => 3,
+            "comforted" => 2,
+            "offended" => 3,
+            "give_space" => 2,
+            "stay_near" => 1,
+            _ => 1
+        };
+    }
+
+    private static int GetDefaultDialogueBehaviorMaxTriggers(string type)
+    {
+        return NormalizeDialogueBehaviorInfluenceType(type) switch
+        {
+            "companion_walk" => 1,
+            "pause_to_talk" => 1,
+            "visit_location" => 2,
+            "comforted" => 2,
+            "offended" => 2,
+            "give_space" => 2,
+            "stay_near" => 2,
+            _ => 1
+        };
+    }
+
+    private static int GetDefaultDialogueBehaviorIntensity(string type)
+    {
+        return NormalizeDialogueBehaviorInfluenceType(type) switch
+        {
+            "companion_walk" => 65,
+            "visit_location" => 45,
+            "comforted" => 55,
+            "offended" => 70,
+            "give_space" => 60,
+            "stay_near" => 55,
+            "pause_to_talk" => 45,
+            _ => 40
+        };
+    }
+
+    internal static int DialogueBehaviorInfluenceStatusOrder(string status)
+    {
+        return status switch
+        {
+            "Active" => 0,
+            "Spent" => 1,
+            "Expired" => 2,
+            _ => 3
         };
     }
 
@@ -4128,6 +4385,16 @@ internal sealed class BehaviorMemory
             : $"{normalizedType}:{normalizedSummary}:{dueTotalDays}:{timeOfDay}:{normalizedLocation}";
     }
 
+    private static string BuildDialogueBehaviorInfluenceKey(string type, string summary, string targetLocation)
+    {
+        string normalizedType = NormalizeDialogueBehaviorInfluenceType(type);
+        string normalizedSummary = NormalizeMemorySummary(summary);
+        string normalizedLocation = NormalizeCommitmentLocation(targetLocation, string.Empty);
+        return normalizedType == "none" || string.IsNullOrWhiteSpace(normalizedSummary)
+            ? string.Empty
+            : $"{normalizedType}:{normalizedSummary}:{normalizedLocation}";
+    }
+
     private static int CommitmentStatusOrder(string status)
     {
         return status switch
@@ -4318,6 +4585,7 @@ internal sealed class ValleyTalkExchangeAnalysis
     public ValleyTalkAmbientFollowUp AmbientFollowUp { get; set; } = new();
     public ValleyTalkEmotionImpact EmotionImpact { get; set; } = new();
     public List<ValleyTalkWorldActionRequest> Actions { get; set; } = new();
+    public List<ValleyTalkBehaviorInfluenceCandidate> BehaviorInfluences { get; set; } = new();
     public List<ValleyTalkCommitmentCandidate> Commitments { get; set; } = new();
     public List<ValleyTalkHelpRequestCandidate> HelpRequests { get; set; } = new();
     public List<ValleyTalkHelpRequestUpdateCandidate> HelpRequestUpdates { get; set; } = new();
@@ -4421,6 +4689,29 @@ internal sealed class SharedExperienceFact
 
     public string PromptLabel =>
         $"{this.Type} at {this.LocationLabel}; shared on total day {this.CreatedTotalDays}; summary: {this.Summary}";
+}
+
+internal sealed class DialogueBehaviorInfluenceFact
+{
+    public string Type { get; set; } = "none";
+    public string Summary { get; set; } = string.Empty;
+    public string TargetLocation { get; set; } = string.Empty;
+    public string TargetLocationLabel { get; set; } = string.Empty;
+    public int Intensity { get; set; }
+    public string Status { get; set; } = "Active";
+    public int CreatedTotalDays { get; set; } = -1;
+    public int CreatedTimeOfDay { get; set; }
+    public int LastUpdatedTotalDays { get; set; } = -1;
+    public int LastUpdatedTimeOfDay { get; set; }
+    public int ExpiresTotalDays { get; set; } = -1;
+    public int LastTriggeredTotalDays { get; set; } = -1;
+    public int LastTriggeredTimeOfDay { get; set; }
+    public int TriggerCount { get; set; }
+    public int MaxTriggers { get; set; } = 1;
+    public int TimesReinforced { get; set; }
+
+    public string PromptLabel =>
+        $"{this.Type}, intensity {this.Intensity}/100, target {this.TargetLocationLabel}, status {this.Status}, expires total day {this.ExpiresTotalDays}; summary: {this.Summary}";
 }
 
 internal sealed class NpcHelpRequestFact
@@ -4564,6 +4855,17 @@ internal sealed class ValleyTalkWorldActionRequest
     public string QuestHint { get; set; } = string.Empty;
 }
 
+internal sealed class ValleyTalkBehaviorInfluenceCandidate
+{
+    public string Type { get; set; } = "none";
+    public string Summary { get; set; } = string.Empty;
+    public string TargetLocation { get; set; } = string.Empty;
+    public string TargetLocationLabel { get; set; } = string.Empty;
+    public int DurationDays { get; set; }
+    public int Intensity { get; set; }
+    public int MaxTriggers { get; set; }
+}
+
 internal sealed class ValleyTalkCommitmentCandidate
 {
     public string Type { get; set; } = "none";
@@ -4618,6 +4920,7 @@ internal sealed record ValleyTalkExchangeResult(
     int HelpRequestsStored,
     int HelpRequestsUpdated,
     int ConflictsStored,
+    int BehaviorInfluencesStored,
     int ConflictsResolved,
     bool EmotionChanged,
     int AppliedFriendshipDelta,
@@ -4635,6 +4938,7 @@ internal sealed record ValleyTalkExchangeResult(
         || this.HelpRequestsStored > 0
         || this.HelpRequestsUpdated > 0
         || this.ConflictsStored > 0
+        || this.BehaviorInfluencesStored > 0
         || this.ConflictsResolved > 0
         || this.EmotionChanged
         || this.AppliedFriendshipDelta > 0
@@ -4679,6 +4983,7 @@ internal sealed class LivingNpcState
     public List<PlayerPreferenceFact> PlayerPreferenceMemories { get; set; } = new();
     public List<NpcCommitmentFact> Commitments { get; set; } = new();
     public List<SharedExperienceFact> SharedExperiences { get; set; } = new();
+    public List<DialogueBehaviorInfluenceFact> DialogueBehaviorInfluences { get; set; } = new();
     public List<NpcHelpRequestFact> HelpRequests { get; set; } = new();
     public List<NpcConflictFact> Conflicts { get; set; } = new();
     public bool RelationshipTrustInitialized { get; set; }
@@ -4977,6 +5282,39 @@ internal sealed class LivingNpcState
                 ? "暂无"
                 : string.Join("；", experiences.Select(experience =>
                     $"{experience.Summary}（{experience.Type}，{experience.LocationLabel}，第 {experience.CreatedTotalDays} 天）"));
+        }
+    }
+
+    public IEnumerable<DialogueBehaviorInfluenceFact> ActiveDialogueBehaviorInfluences =>
+        this.DialogueBehaviorInfluences.Where(influence =>
+            influence.Status == "Active"
+            && influence.ExpiresTotalDays >= Game1.Date.TotalDays
+            && influence.TriggerCount < System.Math.Max(1, influence.MaxTriggers));
+
+    public string DialogueBehaviorInfluencePromptLabel
+    {
+        get
+        {
+            var influences = this.ActiveDialogueBehaviorInfluences.Take(4).ToList();
+            return influences.Count == 0
+                ? "no active conversation-driven behavior tendency"
+                : string.Join("; ", influences.Select(influence => influence.PromptLabel));
+        }
+    }
+
+    public string DialogueBehaviorInfluenceDebugLabel
+    {
+        get
+        {
+            var influences = this.DialogueBehaviorInfluences
+                .OrderBy(influence => BehaviorMemory.DialogueBehaviorInfluenceStatusOrder(influence.Status))
+                .ThenBy(influence => influence.ExpiresTotalDays)
+                .Take(4)
+                .ToList();
+            return influences.Count == 0
+                ? "暂无"
+                : string.Join("；", influences.Select(influence =>
+                    $"{influence.Summary}（{influence.Type}，{influence.Status}，触发 {influence.TriggerCount}/{influence.MaxTriggers}，到第 {influence.ExpiresTotalDays} 天）"));
         }
     }
 
@@ -5314,6 +5652,41 @@ internal sealed class LivingNpcState
             .ThenByDescending(experience => experience.LastUpdatedTimeOfDay)
             .Take(12)
             .ToList();
+        this.DialogueBehaviorInfluences ??= new List<DialogueBehaviorInfluenceFact>();
+        this.DialogueBehaviorInfluences = this.DialogueBehaviorInfluences
+            .Where(influence => influence != null && !string.IsNullOrWhiteSpace(influence.Summary))
+            .Select(influence =>
+            {
+                influence.Type = BehaviorMemory.NormalizeDialogueBehaviorInfluenceType(influence.Type);
+                influence.Summary = influence.Summary.Trim();
+                influence.TargetLocation = BehaviorMemory.NormalizeCommitmentLocation(influence.TargetLocation, "Town");
+                influence.TargetLocationLabel = string.IsNullOrWhiteSpace(influence.TargetLocationLabel)
+                    ? influence.TargetLocation
+                    : influence.TargetLocationLabel.Trim();
+                influence.Intensity = ClampScore(influence.Intensity);
+                influence.Status = influence.Status switch
+                {
+                    "Spent" => "Spent",
+                    "Expired" => "Expired",
+                    _ => "Active"
+                };
+                if (influence.Status == "Active" && influence.ExpiresTotalDays < Game1.Date.TotalDays)
+                {
+                    influence.Status = "Expired";
+                }
+
+                influence.TriggerCount = System.Math.Max(0, influence.TriggerCount);
+                influence.MaxTriggers = System.Math.Clamp(influence.MaxTriggers <= 0 ? 1 : influence.MaxTriggers, 1, 4);
+                influence.TimesReinforced = System.Math.Max(0, influence.TimesReinforced);
+                return influence;
+            })
+            .Where(influence => influence.Type != "none")
+            .OrderBy(influence => BehaviorMemory.DialogueBehaviorInfluenceStatusOrder(influence.Status))
+            .ThenBy(influence => influence.ExpiresTotalDays)
+            .ThenByDescending(influence => influence.LastUpdatedTotalDays)
+            .ThenByDescending(influence => influence.LastUpdatedTimeOfDay)
+            .Take(BehaviorMemory.MaxDialogueBehaviorInfluencesPerNpc)
+            .ToList();
         bool likelyLegacyCommitmentState = this.CommitmentTrust == 0
             && this.MissedCommitments == 0
             && this.ConsecutiveMissedCommitments == 0
@@ -5548,6 +5921,27 @@ internal sealed class LivingNpcState
                     FollowUpEligibleTotalDays = experience.FollowUpEligibleTotalDays,
                     FollowUpShownTotalDays = experience.FollowUpShownTotalDays,
                     FollowUpShownTimeOfDay = experience.FollowUpShownTimeOfDay
+                })
+                .ToList(),
+            DialogueBehaviorInfluences = this.DialogueBehaviorInfluences
+                .Select(influence => new DialogueBehaviorInfluenceFact
+                {
+                    Type = influence.Type,
+                    Summary = influence.Summary,
+                    TargetLocation = influence.TargetLocation,
+                    TargetLocationLabel = influence.TargetLocationLabel,
+                    Intensity = influence.Intensity,
+                    Status = influence.Status,
+                    CreatedTotalDays = influence.CreatedTotalDays,
+                    CreatedTimeOfDay = influence.CreatedTimeOfDay,
+                    LastUpdatedTotalDays = influence.LastUpdatedTotalDays,
+                    LastUpdatedTimeOfDay = influence.LastUpdatedTimeOfDay,
+                    ExpiresTotalDays = influence.ExpiresTotalDays,
+                    LastTriggeredTotalDays = influence.LastTriggeredTotalDays,
+                    LastTriggeredTimeOfDay = influence.LastTriggeredTimeOfDay,
+                    TriggerCount = influence.TriggerCount,
+                    MaxTriggers = influence.MaxTriggers,
+                    TimesReinforced = influence.TimesReinforced
                 })
                 .ToList(),
             HelpRequests = this.HelpRequests

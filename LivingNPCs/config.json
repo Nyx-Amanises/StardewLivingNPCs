@@ -11,6 +11,8 @@
   "EnableAiDialogueFriendship": true,
   "MaxAiDialogueFriendshipPerNpcPerDay": 30,
   "EnableDialogueFollowUps": true,
+  "EnableDialogueDrivenBehaviors": true,
+  "MaxDialogueBehaviorInfluenceDays": 3,
   "EnableAiWorldActions": true,
   "AllowAiSmallGifts": true,
   "AllowAiMeaningfulGifts": true,

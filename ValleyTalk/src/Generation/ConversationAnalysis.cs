@@ -53,6 +53,9 @@ internal sealed class ConversationAnalysis
     [JsonProperty("actions")]
     public List<ConversationWorldActionRequest> Actions { get; set; } = new();
 
+    [JsonProperty("behaviorInfluences")]
+    public List<ConversationBehaviorInfluenceCandidate> BehaviorInfluences { get; set; } = new();
+
     [JsonProperty("commitments")]
     public List<ConversationCommitmentCandidate> Commitments { get; set; } = new();
 
@@ -71,6 +74,7 @@ internal sealed class ConversationAnalysis
         || this.AmbientFollowUp.HasContent
         || this.EmotionImpact.HasContent
         || this.Actions.Count > 0
+        || this.BehaviorInfluences.Count > 0
         || this.Commitments.Count > 0
         || this.HelpRequests.Count > 0
         || this.HelpRequestUpdates.Count > 0
@@ -146,6 +150,22 @@ internal sealed class ConversationAnalysis
                 .Where(action => action.Type != "none")
                 .Take(1)
                 .ToList();
+            analysis.BehaviorInfluences = analysis.BehaviorInfluences
+                .Where(influence => influence != null && !string.IsNullOrWhiteSpace(influence.Summary))
+                .Select(influence =>
+                {
+                    influence.Type = NormalizeBehaviorInfluenceType(influence.Type);
+                    influence.Summary = influence.Summary.Trim();
+                    influence.TargetLocation = influence.TargetLocation?.Trim() ?? string.Empty;
+                    influence.TargetLocationLabel = influence.TargetLocationLabel?.Trim() ?? string.Empty;
+                    influence.DurationDays = Math.Clamp(influence.DurationDays, 0, 7);
+                    influence.Intensity = Math.Clamp(influence.Intensity, 0, 100);
+                    influence.MaxTriggers = Math.Clamp(influence.MaxTriggers, 0, 4);
+                    return influence;
+                })
+                .Where(influence => influence.Type != "none")
+                .Take(2)
+                .ToList();
             analysis.Commitments = analysis.Commitments
                 .Where(commitment => commitment != null && !string.IsNullOrWhiteSpace(commitment.Summary))
                 .Select(commitment =>
@@ -172,6 +192,21 @@ internal sealed class ConversationAnalysis
                     request.QuestionTopic = request.QuestionTopic?.Trim() ?? string.Empty;
                     request.DueInDays = Math.Clamp(request.DueInDays, 1, 7);
                     request.Reason = request.Reason?.Trim() ?? string.Empty;
+                    request.FollowUpPotential = NormalizeHelpRequestFollowUpPotential(request.FollowUpPotential);
+                    request.Steps = (request.Steps ?? new List<ConversationHelpRequestStepCandidate>())
+                        .Where(step => step != null)
+                        .Select(step =>
+                        {
+                            step.Type = NormalizeHelpRequestType(step.Type);
+                            step.Summary = step.Summary?.Trim() ?? string.Empty;
+                            step.RequestedItemId = step.RequestedItemId?.Trim() ?? string.Empty;
+                            step.RequestedItemLabel = step.RequestedItemLabel?.Trim() ?? string.Empty;
+                            step.QuestionTopic = step.QuestionTopic?.Trim() ?? string.Empty;
+                            return step;
+                        })
+                        .Where(step => step.Type != "none" && !string.IsNullOrWhiteSpace(step.Summary))
+                        .Take(3)
+                        .ToList();
                     return request;
                 })
                 .Where(request => request.Type != "none")
@@ -237,6 +272,28 @@ internal sealed class ConversationAnalysis
         };
     }
 
+    private static string NormalizeBehaviorInfluenceType(string type)
+    {
+        return type?.Trim().ToLowerInvariant() switch
+        {
+            "companion_walk" => "companion_walk",
+            "walk_together" => "companion_walk",
+            "visit_location" => "visit_location",
+            "go_to_location" => "visit_location",
+            "comforted" => "comforted",
+            "reassured" => "comforted",
+            "offended" => "offended",
+            "hurt" => "offended",
+            "give_space" => "give_space",
+            "needs_space" => "give_space",
+            "stay_near" => "stay_near",
+            "approach" => "stay_near",
+            "pause_to_talk" => "pause_to_talk",
+            "stop_to_talk" => "pause_to_talk",
+            _ => "none"
+        };
+    }
+
     private static string NormalizeCommitmentType(string type)
     {
         return type?.Trim().ToLowerInvariant() switch
@@ -264,8 +321,21 @@ internal sealed class ConversationAnalysis
     {
         return status?.Trim().ToLowerInvariant() switch
         {
+            "accepted" => "accepted",
             "fulfilled" => "fulfilled",
+            "advanced" => "advanced",
             "declined" => "declined",
+            _ => "none"
+        };
+    }
+
+    private static string NormalizeHelpRequestFollowUpPotential(string value)
+    {
+        return value?.Trim().ToLowerInvariant() switch
+        {
+            "new_commitment" => "new_commitment",
+            "shared_activity" => "shared_activity",
+            "deeper_relationship" => "deeper_relationship",
             _ => "none"
         };
     }
@@ -426,6 +496,30 @@ internal sealed class ConversationWorldActionRequest
     public string QuestHint { get; set; } = string.Empty;
 }
 
+internal sealed class ConversationBehaviorInfluenceCandidate
+{
+    [JsonProperty("type")]
+    public string Type { get; set; } = "none";
+
+    [JsonProperty("summary")]
+    public string Summary { get; set; } = string.Empty;
+
+    [JsonProperty("targetLocation")]
+    public string TargetLocation { get; set; } = string.Empty;
+
+    [JsonProperty("targetLocationLabel")]
+    public string TargetLocationLabel { get; set; } = string.Empty;
+
+    [JsonProperty("durationDays")]
+    public int DurationDays { get; set; }
+
+    [JsonProperty("intensity")]
+    public int Intensity { get; set; }
+
+    [JsonProperty("maxTriggers")]
+    public int MaxTriggers { get; set; }
+}
+
 internal sealed class ConversationCommitmentCandidate
 {
     [JsonProperty("type")]
@@ -455,6 +549,12 @@ internal sealed class ConversationHelpRequestCandidate
     [JsonProperty("summary")]
     public string Summary { get; set; } = string.Empty;
 
+    [JsonProperty("requiresAcceptance")]
+    public bool RequiresAcceptance { get; set; } = true;
+
+    [JsonProperty("steps")]
+    public List<ConversationHelpRequestStepCandidate> Steps { get; set; } = new();
+
     [JsonProperty("requestedItemId")]
     public string RequestedItemId { get; set; } = string.Empty;
 
@@ -469,6 +569,27 @@ internal sealed class ConversationHelpRequestCandidate
 
     [JsonProperty("reason")]
     public string Reason { get; set; } = string.Empty;
+
+    [JsonProperty("followUpPotential")]
+    public string FollowUpPotential { get; set; } = "none";
+}
+
+internal sealed class ConversationHelpRequestStepCandidate
+{
+    [JsonProperty("type")]
+    public string Type { get; set; } = "none";
+
+    [JsonProperty("summary")]
+    public string Summary { get; set; } = string.Empty;
+
+    [JsonProperty("requestedItemId")]
+    public string RequestedItemId { get; set; } = string.Empty;
+
+    [JsonProperty("requestedItemLabel")]
+    public string RequestedItemLabel { get; set; } = string.Empty;
+
+    [JsonProperty("questionTopic")]
+    public string QuestionTopic { get; set; } = string.Empty;
 }
 
 internal sealed class ConversationHelpRequestUpdateCandidate

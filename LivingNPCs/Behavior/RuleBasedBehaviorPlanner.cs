@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using Microsoft.Xna.Framework;
 using StardewValley;
 
@@ -226,6 +227,50 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
 
             if (state != null)
             {
+                foreach (var influence in state.ActiveDialogueBehaviorInfluences.Take(2))
+                {
+                    double weight = Math.Clamp(influence.Intensity / 100d, 0.1, 1);
+                    switch (influence.Type)
+                    {
+                        case "companion_walk":
+                        case "stay_near":
+                            approachBonus += 0.08 + (0.14 * weight);
+                            emoteBonus += 0.02 + (0.04 * weight);
+                            reasons.Add("recent conversation invited closeness");
+                            break;
+
+                        case "comforted":
+                            approachBonus += 0.06 + (0.12 * weight);
+                            emoteBonus += 0.03 + (0.05 * weight);
+                            reasons.Add("recent reassurance");
+                            break;
+
+                        case "visit_location":
+                            pauseBonus += 0.02 + (0.05 * weight);
+                            lookAroundBonus += 0.05 + (0.08 * weight);
+                            reasons.Add("recent place-focused conversation");
+                            break;
+
+                        case "offended":
+                            approachBonus -= 0.1 + (0.18 * weight);
+                            pauseBonus += 0.04 + (0.04 * weight);
+                            stepAwayBonus += 0.12 + (0.18 * weight);
+                            reasons.Add("recent hurtful conversation");
+                            break;
+
+                        case "give_space":
+                            approachBonus -= 0.07 + (0.12 * weight);
+                            stepAwayBonus += 0.1 + (0.14 * weight);
+                            reasons.Add("recent request for space");
+                            break;
+
+                        case "pause_to_talk":
+                            pauseBonus += 0.08 + (0.08 * weight);
+                            reasons.Add("recent invitation to linger");
+                            break;
+                    }
+                }
+
                 if (state.HighestUnresolvedConflictSeverity > 0)
                 {
                     double conflictPressure = Math.Clamp(state.HighestUnresolvedConflictSeverity / 100d, 0.05, 1);
