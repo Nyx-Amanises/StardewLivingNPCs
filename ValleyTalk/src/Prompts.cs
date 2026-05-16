@@ -639,7 +639,10 @@ public class Prompts
         var schedule = Character.StardewNpc.Schedule;
         if (schedule != null)
         {
-            var remainderOfSchedule = schedule.Where(x => x.Key > Game1.timeOfDay);
+            var remainderOfSchedule = schedule
+                .Where(x => x.Key > Game1.timeOfDay)
+                .OrderBy(x => x.Key)
+                .ToList();
             var remainingLocations = remainderOfSchedule
                     .Select(x => x.Value.targetLocationName)
                     .Distinct()
@@ -649,7 +652,34 @@ public class Prompts
                 var displayNames = remainingLocations.Select(x => GetLocationDisplayNameIfAvailable(x));
                 prompt.AppendLine(Util.GetString(Character,"locationFuturePlans", new { Name= Name, Locations= string.Join(", ", displayNames) }));
             }
+
+            var nextSchedule = remainderOfSchedule.FirstOrDefault();
+            if (nextSchedule.Value != null)
+            {
+                int minutesUntilNextSchedule = Math.Max(0, ToDayMinutes(nextSchedule.Key) - ToDayMinutes(Game1.timeOfDay));
+                string destinationName = GetLocationDisplayNameIfAvailable(nextSchedule.Value.targetLocationName);
+                string key = minutesUntilNextSchedule <= 30
+                    ? "locationNextScheduleSoon"
+                    : "locationScheduleWindow";
+                prompt.AppendLine(Util.GetString(Character, key, new
+                {
+                    Name,
+                    Minutes = minutesUntilNextSchedule,
+                    Destination = destinationName
+                }));
+            }
+            else
+            {
+                prompt.AppendLine(Util.GetString(Character, "locationNoUpcomingSchedule", new { Name }));
+            }
         }
+    }
+
+    private int ToDayMinutes(int timeOfDay)
+    {
+        int hours = timeOfDay / 100;
+        int minutes = timeOfDay % 100;
+        return (hours * 60) + minutes;
     }
 
     private string GetLocationDisplayNameIfAvailable(string location)

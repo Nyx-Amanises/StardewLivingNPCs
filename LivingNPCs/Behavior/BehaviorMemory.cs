@@ -1703,6 +1703,7 @@ internal sealed class BehaviorMemory
         yield return $"Tone target: {this.BuildToneCue(state)}.";
         yield return $"Relationship pacing: {state.InteractionComfortTierPromptLabel}.";
         yield return $"Disclosure pacing: {state.SecretSharingPromptLabel}.";
+        yield return $"Invitation policy: {this.BuildTravelInvitationPolicyPromptLabel(state)}.";
 
         if (!string.IsNullOrWhiteSpace(state.LastGiftName) && state.LastGiftTotalDays == Game1.Date.TotalDays)
         {
@@ -1778,6 +1779,21 @@ internal sealed class BehaviorMemory
         {
             yield return $"Let the scene nudge tone through {world.StateInfluence.Reason}, without explicitly explaining the scene mechanics.";
         }
+    }
+
+    private string BuildTravelInvitationPolicyPromptLabel(LivingNpcState state)
+    {
+        return state.InteractionComfortTier switch
+        {
+            "Intimate" or "Trusted" =>
+                "shared outings and private visits may be accepted when the scene and schedule allow",
+            "Friendly" =>
+                "public outings are natural; private invitations such as visiting the farmer's farm should still need a good in-character reason",
+            "Familiar" =>
+                "brief public company may be acceptable, but private or extended outings should usually be declined or deferred",
+            _ =>
+                "the relationship is still distant, so private invitations such as visiting the farmer's farm or home should usually be declined politely; at most, brief public company may fit"
+        };
     }
 
     private string BuildToneCue(LivingNpcState state)
