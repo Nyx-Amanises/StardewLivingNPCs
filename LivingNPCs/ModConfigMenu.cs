@@ -66,6 +66,14 @@ internal static class ModConfigMenu
             setValue: value => config.InspectMemoryHotkey = value
         );
 
+        configMenu.AddKeybindList(
+            mod: manifest,
+            name: () => "查看求助列表快捷键",
+            tooltip: () => "打开当前存档里所有待完成 NPC 求助的游戏内列表。",
+            getValue: () => config.HelpRequestLogHotkey,
+            setValue: value => config.HelpRequestLogHotkey = value
+        );
+
         configMenu.AddBoolOption(
             mod: manifest,
             name: () => "调试日志",
@@ -210,6 +218,28 @@ internal static class ModConfigMenu
             tooltip: () => "NPC 只有在关系信任达到这个值后，才可能自然地向玩家开口求助。",
             getValue: () => config.MinRelationshipTrustForHelpRequests,
             setValue: value => config.MinRelationshipTrustForHelpRequests = value,
+            min: 0,
+            max: 100,
+            interval: 5
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "求助完成最少好感奖励",
+            tooltip: () => "完成一次 NPC 主动求助时，至少额外增加多少好感。",
+            getValue: () => config.MinHelpRequestFriendshipReward,
+            setValue: value => config.MinHelpRequestFriendshipReward = value,
+            min: 0,
+            max: 100,
+            interval: 5
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "求助完成最多好感奖励",
+            tooltip: () => "完成一次 NPC 主动求助时，最多额外增加多少好感。",
+            getValue: () => config.MaxHelpRequestFriendshipReward,
+            setValue: value => config.MaxHelpRequestFriendshipReward = value,
             min: 0,
             max: 100,
             interval: 5

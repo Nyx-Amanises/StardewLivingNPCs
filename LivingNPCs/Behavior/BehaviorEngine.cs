@@ -9,6 +9,7 @@ using StardewValley;
 using StardewValley.Locations;
 using StardewValley.Pathfinding;
 using StardewValley.TerrainFeatures;
+using LivingNPCs.UI;
 using SObject = StardewValley.Object;
 
 namespace LivingNPCs.Behavior;
@@ -119,6 +120,13 @@ internal sealed class BehaviorEngine
             return;
         }
 
+        if (this.config.HelpRequestLogHotkey.JustPressed())
+        {
+            this.helper.Input.Suppress(e.Button);
+            this.ShowHelpRequestLog();
+            return;
+        }
+
         if (!this.config.BehaviorHotkey.JustPressed())
         {
             this.TryRecordConversationStart(e);
@@ -197,6 +205,7 @@ internal sealed class BehaviorEngine
         this.TryShowPendingAmbientRemarks();
         this.TryUpdatePendingWalks();
         this.TryShowCommitmentMorningReminders();
+        this.TryShowHelpRequestFollowUps();
         this.TryShowSharedExperienceFollowUps();
         this.TryTriggerCommitmentArrivals();
     }
@@ -306,6 +315,11 @@ internal sealed class BehaviorEngine
         if (result.AppliedFriendshipDelta > 0)
         {
             Game1.player.changeFriendship(result.AppliedFriendshipDelta, npc);
+        }
+
+        if (result.FulfilledHelpRequests.Count > 0)
+        {
+            this.RewardFulfilledHelpRequests(npc, result.FulfilledHelpRequests);
         }
 
         if (this.config.EnableDialogueFollowUps && !string.IsNullOrWhiteSpace(result.AmbientFollowUpText))
@@ -484,6 +498,84 @@ internal sealed class BehaviorEngine
         }
 
         this.ShowFeedback($"LivingNPCs：{npc.displayName} 给了你 {gift.DisplayName}。");
+        return true;
+    }
+
+    private void RewardFulfilledHelpRequests(NPC npc, IReadOnlyList<NpcHelpRequestFact> requests)
+    {
+        foreach (var request in requests.Where(request => request.Status == "Fulfilled"))
+        {
+            this.RewardFulfilledHelpRequest(npc, request);
+        }
+    }
+
+    private void RewardFulfilledHelpRequest(NPC npc, NpcHelpRequestFact request)
+    {
+        if (!request.RewardGranted)
+        {
+            int minReward = System.Math.Min(this.config.MinHelpRequestFriendshipReward, this.config.MaxHelpRequestFriendshipReward);
+            int maxReward = System.Math.Max(this.config.MinHelpRequestFriendshipReward, this.config.MaxHelpRequestFriendshipReward);
+            int friendshipReward = System.Math.Clamp(request.RewardFriendship, minReward, maxReward);
+            Game1.player.changeFriendship(friendshipReward, npc);
+            request.RewardFriendship = friendshipReward;
+            request.RewardGranted = true;
+
+            this.memory.RecordNpcWorldAction(
+                npc,
+                "CompletedHelpRequest",
+                $"the farmer completed a personal help request and earned {friendshipReward} friendship: {request.Summary}",
+                this.config.MaxMemoryEntriesPerNpc
+            );
+            this.QueueAmbientRemark(npc, "谢谢你，真的帮上忙了。", 0);
+            this.ShowFeedback($"LivingNPCs：完成 {npc.displayName} 的求助，额外好感 +{friendshipReward}。");
+        }
+
+        if (!request.RewardGiftGiven)
+        {
+            this.TryGiveHelpRequestRewardGift(npc, request);
+        }
+    }
+
+    private bool TryGiveHelpRequestRewardGift(NPC npc, NpcHelpRequestFact request)
+    {
+        if (!this.config.AllowAiSmallGifts)
+        {
+            return false;
+        }
+
+        var state = this.memory.GetState(npc);
+        if (state == null)
+        {
+            return false;
+        }
+
+        GiftSelection selection = this.giftSelector.Choose(npc, state, request.Summary, request.Resolution);
+        SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
+        if (!Game1.player.addItemToInventoryBool(gift))
+        {
+            return false;
+        }
+
+        request.RewardGiftGiven = true;
+        this.memory.RecordNpcWorldAction(
+            npc,
+            "GaveHelpRequestRewardGift",
+            this.BuildGiftSelectionReason(
+                $"they gave the farmer {gift.DisplayName} after a fulfilled personal help request",
+                selection
+            ),
+            this.config.MaxMemoryEntriesPerNpc
+        );
+        this.MarkStateAfterWorldAction(state, "they thanked the farmer with a small gift");
+        if (this.config.Debug)
+        {
+            this.monitor.Log(
+                $"Selected help request reward gift for {npc.Name}: {selection.DebugName} ({selection.ItemId}); {selection.Reason}.",
+                LogLevel.Debug
+            );
+        }
+
+        this.ShowFeedback($"LivingNPCs：{npc.displayName} 又送了你 {gift.DisplayName} 作为谢礼。");
         return true;
     }
 
@@ -1173,6 +1265,43 @@ internal sealed class BehaviorEngine
         }
     }
 
+    private void TryShowHelpRequestFollowUps()
+    {
+        if (!this.config.EnableDialogueFollowUps
+            || Game1.currentLocation == null
+            || Game1.player == null
+            || Game1.activeClickableMenu != null
+            || Game1.eventUp)
+        {
+            return;
+        }
+
+        foreach (var npc in Game1.currentLocation.characters.Where(candidate => !string.IsNullOrWhiteSpace(candidate.Name)))
+        {
+            var state = this.memory.GetState(npc);
+            if (state == null
+                || Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles)
+            {
+                continue;
+            }
+
+            var request = state.HelpRequests.FirstOrDefault(candidate =>
+                candidate.Status == "Fulfilled"
+                && candidate.FollowUpEligibleTotalDays <= Game1.Date.TotalDays
+                && candidate.FollowUpShownTotalDays < 0
+                && candidate.FulfilledTotalDays >= Game1.Date.TotalDays - 7
+            );
+            if (request == null)
+            {
+                continue;
+            }
+
+            npc.showTextAboveHead(this.BuildHelpRequestFollowUp(request));
+            request.FollowUpShownTotalDays = Game1.Date.TotalDays;
+            request.FollowUpShownTimeOfDay = Game1.timeOfDay;
+        }
+    }
+
     private string BuildCommitmentMorningReminder(NpcCommitmentFact commitment)
     {
         return commitment.Type switch
@@ -1193,7 +1322,17 @@ internal sealed class BehaviorEngine
             "share_activity" => "上次一起做那件事，挺开心的。",
             "go_together" => $"上次一起去{experience.LocationLabel}，感觉不错。",
             "help_task" => "上次一起把事情做完，我很高兴。",
+            "help_request" => "上次你愿意帮我，我一直记得。",
             _ => "上次一起度过的时间，我还记得。"
+        };
+    }
+
+    private string BuildHelpRequestFollowUp(NpcHelpRequestFact request)
+    {
+        return request.Type switch
+        {
+            "question_request" => "上次你说的那些，我后来还想了想。",
+            _ => "上次你带来的东西，正好派上了用场。"
         };
     }
 
@@ -1289,10 +1428,11 @@ internal sealed class BehaviorEngine
 
             if (this.config.EnableHelpRequests)
             {
-                int fulfilledHelpRequests = this.memory.TryCompleteItemHelpRequests(npc, gift, this.config.MaxMemoryEntriesPerNpc);
-                if (fulfilledHelpRequests > 0)
+                IReadOnlyList<NpcHelpRequestFact> fulfilledHelpRequests = this.memory.TryCompleteItemHelpRequests(npc, gift, this.config.MaxMemoryEntriesPerNpc);
+                if (fulfilledHelpRequests.Count > 0)
                 {
-                    this.PushInteractionContext(npc, $"Fulfilled {fulfilledHelpRequests} help request(s) for {npc.Name} through a gifted item.");
+                    this.RewardFulfilledHelpRequests(npc, fulfilledHelpRequests);
+                    this.PushInteractionContext(npc, $"Fulfilled {fulfilledHelpRequests.Count} help request(s) for {npc.Name} through a gifted item.");
                 }
             }
 
@@ -1877,6 +2017,59 @@ internal sealed class BehaviorEngine
         string summary = this.memory.BuildDebugSummary(npc, this.config.PromptMemoryEntries, this.config.EnableNpcState);
         this.monitor.Log(summary, LogLevel.Info);
         this.ShowFeedback($"LivingNPCs：已在 SMAPI 控制台输出 {npc.displayName} 的状态和记忆。");
+    }
+
+    private void ShowHelpRequestLog()
+    {
+        var rows = this.memory.GetTrackedStates()
+            .SelectMany(state => state.HelpRequests
+                .Where(request => request.Status == "Pending")
+                .Select(request => new
+                {
+                    State = state,
+                    Request = request
+                }))
+            .OrderBy(pair => pair.Request.DueTotalDays)
+            .ThenBy(pair => pair.State.NpcName)
+            .Select(pair => this.BuildHelpRequestLogEntry(pair.State, pair.Request))
+            .ToList();
+
+        Game1.activeClickableMenu = new HelpRequestLogMenu(rows);
+    }
+
+    private HelpRequestLogEntry BuildHelpRequestLogEntry(LivingNpcState state, NpcHelpRequestFact request)
+    {
+        string npcDisplayName = string.IsNullOrWhiteSpace(request.NpcDisplayName)
+            ? state.NpcName
+            : request.NpcDisplayName;
+        string typeLabel = request.Type switch
+        {
+            "question_request" => "请教问题",
+            _ => "需要物品"
+        };
+        string detail = request.Type == "item_request"
+            ? string.IsNullOrWhiteSpace(request.RequestedItemLabel)
+                ? request.Summary
+                : $"需要：{request.RequestedItemLabel}"
+            : string.IsNullOrWhiteSpace(request.QuestionTopic)
+                ? request.Summary
+                : $"问题：{request.QuestionTopic}";
+        int daysRemaining = request.DueTotalDays - Game1.Date.TotalDays;
+        string due = daysRemaining switch
+        {
+            < 0 => $"已逾期 {-daysRemaining} 天",
+            0 => $"今天到期",
+            1 => $"明天到期",
+            _ => $"还剩 {daysRemaining} 天"
+        };
+
+        return new HelpRequestLogEntry(
+            npcDisplayName,
+            typeLabel,
+            detail,
+            due,
+            daysRemaining < 0
+        );
     }
 
     private bool TryFindNearestNpcIgnoringDailyBudget(out NPC? nearest)

@@ -9,6 +9,7 @@ internal sealed class ModConfig
     public bool Debug { get; set; } = false;
     public KeybindList BehaviorHotkey { get; set; } = KeybindList.Parse("LeftShift + H");
     public KeybindList InspectMemoryHotkey { get; set; } = KeybindList.Parse("LeftShift + J");
+    public KeybindList HelpRequestLogHotkey { get; set; } = KeybindList.Parse("LeftShift + K");
     public string ManualBehaviorMode { get; set; } = "Auto";
     public int ManualEmoteId { get; set; } = 16;
     public int MaxMemoryEntriesPerNpc { get; set; } = 20;
@@ -21,6 +22,8 @@ internal sealed class ModConfig
     public int MaxPendingHelpRequestsPerNpc { get; set; } = 1;
     public int HelpRequestCooldownDays { get; set; } = 3;
     public int MinRelationshipTrustForHelpRequests { get; set; } = 35;
+    public int MinHelpRequestFriendshipReward { get; set; } = 50;
+    public int MaxHelpRequestFriendshipReward { get; set; } = 100;
     public bool EnableAiDialogueFriendship { get; set; } = true;
     public int MaxAiDialogueFriendshipPerNpcPerDay { get; set; } = 30;
     public bool EnableDialogueFollowUps { get; set; } = true;
@@ -75,6 +78,7 @@ internal sealed class ModConfig
         this.Debug = defaults.Debug;
         this.BehaviorHotkey = defaults.BehaviorHotkey;
         this.InspectMemoryHotkey = defaults.InspectMemoryHotkey;
+        this.HelpRequestLogHotkey = defaults.HelpRequestLogHotkey;
         this.ManualBehaviorMode = defaults.ManualBehaviorMode;
         this.ManualEmoteId = defaults.ManualEmoteId;
         this.MaxMemoryEntriesPerNpc = defaults.MaxMemoryEntriesPerNpc;
@@ -87,6 +91,8 @@ internal sealed class ModConfig
         this.MaxPendingHelpRequestsPerNpc = defaults.MaxPendingHelpRequestsPerNpc;
         this.HelpRequestCooldownDays = defaults.HelpRequestCooldownDays;
         this.MinRelationshipTrustForHelpRequests = defaults.MinRelationshipTrustForHelpRequests;
+        this.MinHelpRequestFriendshipReward = defaults.MinHelpRequestFriendshipReward;
+        this.MaxHelpRequestFriendshipReward = defaults.MaxHelpRequestFriendshipReward;
         this.EnableAiDialogueFriendship = defaults.EnableAiDialogueFriendship;
         this.MaxAiDialogueFriendshipPerNpcPerDay = defaults.MaxAiDialogueFriendshipPerNpcPerDay;
         this.EnableDialogueFollowUps = defaults.EnableDialogueFollowUps;
