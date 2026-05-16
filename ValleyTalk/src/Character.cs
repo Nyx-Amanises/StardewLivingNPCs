@@ -704,6 +704,9 @@ public class Character
 
     private string DialogueLineCleanup(string line,bool relaxedValidation = false)
     {
+        // Normalize common invalid break tokens emitted by smaller models.
+        line = line.Replace("#b#", "#$b#", StringComparison.OrdinalIgnoreCase);
+        line = line.Replace("#e#", "#$e#", StringComparison.OrdinalIgnoreCase);
         // If the string contains $e or $b without a # before them, add a #
         line = line.Replace("$e", "#$e").Replace("$b", "#$b");
         line = line.Replace("##$e", "#$e").Replace("##$b", "#$b");

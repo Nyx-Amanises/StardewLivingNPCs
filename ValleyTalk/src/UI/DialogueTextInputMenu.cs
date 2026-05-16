@@ -24,9 +24,9 @@ namespace ValleyTalk
         private readonly string _npcName;
 
         // Menu dimensions
-        private const int MenuWidth = 1200;
-        private const int MenuHeight = 600;
-        private const int TextBoxHeight = 240;
+        private const int MaxMenuWidth = 1200;
+        private const int MenuHeight = 420;
+        private const int TextBoxHeight = 180;
         private const int ButtonSize = 64;
         private const int Margin = 24;
 
@@ -36,25 +36,24 @@ namespace ValleyTalk
 
         public DialogueTextInputMenu(string title, TextSubmittedDelegate callback, NPC currentNpc)
         {
-            _title = title ?? "Enter your response";
+            _title = title ?? "你的回复";
             var titleSize = Game1.dialogueFont.MeasureString(_title);
             _onTextSubmitted = callback;
             _npcName = currentNpc.Name;
 
-            var totalHeight = Margin * 8 + titleSize.Y + TextBoxHeight + ButtonSize * 2;
-            // Center the menu
+            int menuWidth = Math.Min(Game1.uiViewport.Width - (Margin * 2), MaxMenuWidth);
             _menuPosition = new Vector2(
-                (Game1.uiViewport.Width - MenuWidth) / 2,
-                (Game1.uiViewport.Height - totalHeight) / 2
+                (Game1.uiViewport.Width - menuWidth) / 2,
+                Game1.uiViewport.Height - MenuHeight - Margin
             );
 
-            _menuBounds = new Rectangle((int)_menuPosition.X, (int)_menuPosition.Y, MenuWidth, MenuHeight);
+            _menuBounds = new Rectangle((int)_menuPosition.X, (int)_menuPosition.Y, menuWidth, MenuHeight);
 
             // Create text input box
             _inputTextBox = new DialogueTextInputBox(500)
             {
-                Position = new Vector2(_menuPosition.X + Margin * 2, _menuPosition.Y + titleSize.Y + Margin * 5),
-                Extent = new Vector2(MenuWidth - 4 * Margin, TextBoxHeight),
+                Position = new Vector2(_menuPosition.X + Margin * 2, _menuPosition.Y + titleSize.Y + Margin * 4),
+                Extent = new Vector2(menuWidth - 4 * Margin, TextBoxHeight),
                 Font = Game1.dialogueFont,
                 TextColor = Game1.textColor,
                 Selected = true
@@ -67,7 +66,7 @@ namespace ValleyTalk
             // Create OK button
             _okButton = new ClickableTextureComponent(
                 new Rectangle(
-                    (int)_menuPosition.X + MenuWidth - 2 * Margin - ButtonSize,
+                    (int)_menuPosition.X + menuWidth - 2 * Margin - ButtonSize,
                     (int)_menuPosition.Y + MenuHeight - 2 * Margin - ButtonSize,
                     ButtonSize, ButtonSize),
                 Game1.mouseCursors,
@@ -77,7 +76,7 @@ namespace ValleyTalk
             // Create Cancel button
             _cancelButton = new ClickableTextureComponent(
                 new Rectangle(
-                    (int)_menuPosition.X + MenuWidth - 3 * Margin - 2 * ButtonSize,
+                    (int)_menuPosition.X + menuWidth - 3 * Margin - 2 * ButtonSize,
                     (int)_menuPosition.Y + MenuHeight - 2 * Margin - ButtonSize,
                     ButtonSize, ButtonSize),
                 Game1.mouseCursors,
@@ -104,17 +103,14 @@ namespace ValleyTalk
 
         public void Draw(SpriteBatch spriteBatch)
         {
-            // Draw semi-transparent background
-            spriteBatch.Draw(Game1.fadeToBlackRect, Game1.graphics.GraphicsDevice.Viewport.Bounds, Color.Black * 0.4f);
-
             // Draw menu background
             Game1.drawDialogueBox(_menuBounds.X, _menuBounds.Y, _menuBounds.Width, _menuBounds.Height, false, true);
 
             // Draw title
             var titleSize = Game1.dialogueFont.MeasureString(_title);
             var titlePos = new Vector2(
-                _menuPosition.X + (MenuWidth - titleSize.X) / 2,
-                _menuPosition.Y + 2 * Margin + titleSize.Y
+                _menuPosition.X + 2 * Margin,
+                _menuPosition.Y + 2 * Margin
             );
             spriteBatch.DrawString(Game1.dialogueFont, _title, titlePos, Game1.textColor);
 
@@ -122,10 +118,10 @@ namespace ValleyTalk
             _inputTextBox.Draw(spriteBatch);
 
             // Draw instruction text
-            var instruction = Util.GetString("uiDialogueInstructions") ?? "Press Enter to submit or click OK. Press Escape to cancel.";
+            var instruction = Util.GetString("uiDialogueInstructions") ?? "按 Enter 提交，按 Esc 取消。";
             var instructionSize = Game1.smallFont.MeasureString(instruction);
             var instructionPos = new Vector2(
-                _menuPosition.X + (MenuWidth - instructionSize.X) / 2,
+                _menuPosition.X + 2 * Margin,
                 _inputTextBox.Position.Y + _inputTextBox.Extent.Y + Margin * 1.5f
             );
             spriteBatch.DrawString(Game1.smallFont, instruction, instructionPos, Color.Gray);

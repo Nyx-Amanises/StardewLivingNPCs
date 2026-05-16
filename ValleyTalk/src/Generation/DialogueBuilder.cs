@@ -183,7 +183,6 @@ namespace ValleyTalk
             }
 
             var sb = new StringBuilder();
-            sb.Append(Util.GetString("outputRespond"));
             sb.Append($"#$q {responseIndex++} {SldConstants.DialogueKeyPrefix}Default#{Util.GetString("outputRespond")}");
             sb.Append($"#$r -999999 0 {SldConstants.DialogueKeyPrefix}Silent#{Util.GetString("outputStaySilent")}");
 
@@ -337,8 +336,13 @@ namespace ValleyTalk
             {
                 return new();
             }
-            // Remove any lines just just contain Respond:
-            return dialogues.Where(d => !d.Text.StartsWith("Respond:")).ToList();
+            // Remove the synthetic response prompt from persisted history.
+            string respondPrompt = Util.GetString("outputRespond");
+            return dialogues.Where(d =>
+                !d.Text.StartsWith("Respond:", StringComparison.Ordinal)
+                && !(!string.IsNullOrWhiteSpace(respondPrompt)
+                    && d.Text.StartsWith(respondPrompt, StringComparison.Ordinal))
+            ).ToList();
         }
 
         internal void AddEventLine(NPC instance, IEnumerable<NPC> actors, string festivalName, List<StardewValley.DialogueLine> dialogues)

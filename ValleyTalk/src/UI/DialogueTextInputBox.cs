@@ -81,35 +81,28 @@ namespace ValleyTalk
         private string[] WrapText(string text, int maxWidth, SpriteFont font)
         {
             var lines = new System.Collections.Generic.List<string>();
-            var words = text.Split(' ');
-            var currentLine = "";
-            
-            foreach (var word in words)
+            var paragraphs = text.Replace("\r", string.Empty).Split('\n');
+
+            foreach (var paragraph in paragraphs)
             {
-                var testLine = string.IsNullOrEmpty(currentLine) ? word : currentLine + " " + word;
-                if (font.MeasureString(testLine).X <= maxWidth)
+                var currentLine = "";
+                foreach (char character in paragraph)
                 {
-                    currentLine = testLine;
-                }
-                else
-                {
-                    if (!string.IsNullOrEmpty(currentLine))
+                    var testLine = currentLine + character;
+                    if (font.MeasureString(testLine).X <= maxWidth || string.IsNullOrEmpty(currentLine))
                     {
-                        lines.Add(currentLine);
-                        currentLine = word;
+                        currentLine = testLine;
                     }
                     else
                     {
-                        lines.Add(word); // Word is too long, add it anyway
+                        lines.Add(currentLine);
+                        currentLine = character.ToString();
                     }
                 }
-            }
-            
-            if (!string.IsNullOrEmpty(currentLine))
-            {
+
                 lines.Add(currentLine);
             }
-            
+
             return lines.ToArray();
         }
 

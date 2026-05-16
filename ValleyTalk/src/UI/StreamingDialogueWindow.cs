@@ -14,7 +14,7 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
     private const int OuterMargin = 16;
     private const int InnerMargin = 28;
     private const int PortraitSize = 256;
-    private const int NameBandHeight = 44;
+    private const float RevealMillisecondsPerCharacter = 54f;
 
     private readonly object sync = new();
     private readonly NPC npc;
@@ -24,7 +24,9 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
     private Action onFinished;
     private int currentPageIndex;
     private int animationFrame;
+    private int visibleCharacterCount;
     private float animationTimer;
+    private float revealTimer;
 
     public StreamingDialogueWindow(NPC npc)
     {
@@ -72,6 +74,30 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
             this.animationFrame = (this.animationFrame + 1) % 4;
             this.animationTimer = 0f;
         }
+
+        lock (this.sync)
+        {
+            if (this.pages.Count == 0)
+            {
+                return;
+            }
+
+            string currentPage = this.pages[Math.Clamp(this.currentPageIndex, 0, this.pages.Count - 1)];
+            if (this.visibleCharacterCount >= currentPage.Length)
+            {
+                return;
+            }
+
+            this.revealTimer += (float)time.ElapsedGameTime.TotalMilliseconds;
+            int charactersToReveal = (int)(this.revealTimer / RevealMillisecondsPerCharacter);
+            if (charactersToReveal <= 0)
+            {
+                return;
+            }
+
+            this.visibleCharacterCount = Math.Min(currentPage.Length, this.visibleCharacterCount + charactersToReveal);
+            this.revealTimer %= RevealMillisecondsPerCharacter;
+        }
     }
 
     public override void draw(SpriteBatch b)
@@ -89,21 +115,14 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
             );
         }
 
-        Rectangle nameBounds = new(
-            portraitBounds.X,
-            portraitBounds.Bottom + 6,
-            portraitBounds.Width,
-            NameBandHeight
-        );
-        Game1.drawDialogueBox(nameBounds.X, nameBounds.Y, nameBounds.Width, nameBounds.Height, false, true);
         string name = this.npc?.displayName ?? string.Empty;
         Vector2 nameSize = Game1.dialogueFont.MeasureString(name);
         b.DrawString(
             Game1.dialogueFont,
             name,
             new Vector2(
-                nameBounds.X + ((nameBounds.Width - nameSize.X) / 2),
-                nameBounds.Y + ((nameBounds.Height - nameSize.Y) / 2) + 6
+                portraitBounds.X + ((portraitBounds.Width - nameSize.X) / 2),
+                portraitBounds.Bottom - nameSize.Y - 10
             ),
             Game1.textColor
         );
@@ -112,10 +131,22 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
         bool canAdvance;
         lock (this.sync)
         {
-            pageText = this.pages.Count > 0
-                ? this.pages[Math.Clamp(this.currentPageIndex, 0, this.pages.Count - 1)]
-                : this.GetAnimatedDots();
-            canAdvance = this.currentPageIndex < this.pages.Count - 1 || this.generationComplete;
+            if (this.pages.Count > 0)
+            {
+                string currentPage = this.pages[Math.Clamp(this.currentPageIndex, 0, this.pages.Count - 1)];
+                pageText = currentPage[..Math.Min(this.visibleCharacterCount, currentPage.Length)];
+                if (string.IsNullOrEmpty(pageText) && !this.generationComplete)
+                {
+                    pageText = this.GetAnimatedDots();
+                }
+                canAdvance = this.visibleCharacterCount >= currentPage.Length
+                    && (this.currentPageIndex < this.pages.Count - 1 || this.generationComplete);
+            }
+            else
+            {
+                pageText = this.GetAnimatedDots();
+                canAdvance = false;
+            }
         }
 
         Rectangle textBounds = this.GetTextBounds();
@@ -177,9 +208,22 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
         Action finished = null;
         lock (this.sync)
         {
+            if (this.pages.Count > 0)
+            {
+                string currentPage = this.pages[Math.Clamp(this.currentPageIndex, 0, this.pages.Count - 1)];
+                if (this.visibleCharacterCount < currentPage.Length)
+                {
+                    this.visibleCharacterCount = currentPage.Length;
+                    this.revealTimer = 0f;
+                    return;
+                }
+            }
+
             if (this.currentPageIndex < this.pages.Count - 1)
             {
                 this.currentPageIndex++;
+                this.visibleCharacterCount = 0;
+                this.revealTimer = 0f;
                 Game1.playSound("smallSelect");
                 return;
             }
@@ -214,6 +258,15 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
         this.pages.Clear();
         this.pages.AddRange(rebuilt.Where(page => !string.IsNullOrWhiteSpace(page)));
         this.currentPageIndex = Math.Clamp(this.currentPageIndex, 0, Math.Max(this.pages.Count - 1, 0));
+        if (this.pages.Count == 0)
+        {
+            this.visibleCharacterCount = 0;
+        }
+        else
+        {
+            string currentPage = this.pages[this.currentPageIndex];
+            this.visibleCharacterCount = Math.Min(this.visibleCharacterCount, currentPage.Length);
+        }
     }
 
     private string GetAnimatedDots()
@@ -225,7 +278,7 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
     {
         return new Rectangle(
             this.xPositionOnScreen + this.width - InnerMargin - PortraitSize,
-            this.yPositionOnScreen + InnerMargin - 2,
+            this.yPositionOnScreen + InnerMargin,
             PortraitSize,
             PortraitSize
         );
@@ -236,9 +289,9 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
         Rectangle portraitBounds = this.GetPortraitBounds();
         return new Rectangle(
             this.xPositionOnScreen + InnerMargin,
-            this.yPositionOnScreen + InnerMargin + 8,
+            this.yPositionOnScreen + InnerMargin + 4,
             portraitBounds.X - this.xPositionOnScreen - (InnerMargin * 2),
-            this.height - (InnerMargin * 2) - 8
+            this.height - (InnerMargin * 2) - 4
         );
     }
 }

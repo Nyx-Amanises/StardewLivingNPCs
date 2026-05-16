@@ -46,6 +46,8 @@ internal static class StreamingDialoguePreview
         }
 
         string display = text.Trim().TrimStart('-', ' ', '"').TrimEnd('"');
+        display = display.Replace("#b#", "#$b#", StringComparison.OrdinalIgnoreCase);
+        display = display.Replace("#e#", "#$e#", StringComparison.OrdinalIgnoreCase);
         display = display.Replace("#$b#", "\f", StringComparison.Ordinal);
         display = display.Replace("#$e#", "\f", StringComparison.Ordinal);
         display = display.Replace("@", Game1.player?.Name ?? string.Empty, StringComparison.Ordinal);

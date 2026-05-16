@@ -31,7 +31,7 @@ namespace ValleyTalk
         public static void RequestTextInput(string title, NPC npc, string dialogueKey = "", List<ConversationElement> dialogueHistory = null)
         {
             _awaitingTextInput = true;
-            _inputTitle = title ?? "Enter your response";
+            _inputTitle = title ?? "你的回复";
             _currentNpc = npc;
             _currentDialogueKey = dialogueKey;
             _currentResponse = dialogueHistory ?? new List<ConversationElement>();
