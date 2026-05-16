@@ -66,14 +66,6 @@ internal static class ModConfigMenu
             setValue: value => config.InspectMemoryHotkey = value
         );
 
-        configMenu.AddKeybindList(
-            mod: manifest,
-            name: () => "查看求助列表快捷键",
-            tooltip: () => "打开当前存档里所有待完成 NPC 求助的游戏内列表。",
-            getValue: () => config.HelpRequestLogHotkey,
-            setValue: value => config.HelpRequestLogHotkey = value
-        );
-
         configMenu.AddBoolOption(
             mod: manifest,
             name: () => "调试日志",

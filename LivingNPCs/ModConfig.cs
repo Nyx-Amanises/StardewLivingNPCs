@@ -9,7 +9,6 @@ internal sealed class ModConfig
     public bool Debug { get; set; } = false;
     public KeybindList BehaviorHotkey { get; set; } = KeybindList.Parse("LeftShift + H");
     public KeybindList InspectMemoryHotkey { get; set; } = KeybindList.Parse("LeftShift + J");
-    public KeybindList HelpRequestLogHotkey { get; set; } = KeybindList.Parse("LeftShift + K");
     public string ManualBehaviorMode { get; set; } = "Auto";
     public int ManualEmoteId { get; set; } = 16;
     public int MaxMemoryEntriesPerNpc { get; set; } = 20;
@@ -78,7 +77,6 @@ internal sealed class ModConfig
         this.Debug = defaults.Debug;
         this.BehaviorHotkey = defaults.BehaviorHotkey;
         this.InspectMemoryHotkey = defaults.InspectMemoryHotkey;
-        this.HelpRequestLogHotkey = defaults.HelpRequestLogHotkey;
         this.ManualBehaviorMode = defaults.ManualBehaviorMode;
         this.ManualEmoteId = defaults.ManualEmoteId;
         this.MaxMemoryEntriesPerNpc = defaults.MaxMemoryEntriesPerNpc;

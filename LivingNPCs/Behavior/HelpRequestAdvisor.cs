@@ -33,13 +33,10 @@ internal static class HelpRequestAdvisor
             ["June"] = new("performance and taste", ["flower", "artistic"], ["a flower", "an opinion about style or mood"])
         };
 
-    private static readonly IReadOnlyList<HelpRequestItem> GenericItems =
+    private static readonly IReadOnlyList<HelpRequestItem> ProgressionItems =
     [
-        new("(O)216", "Bread", ["food", "comfort", "practical"]),
-        new("(O)223", "Cookie", ["food", "comfort", "sweet"]),
-        new("(O)395", "Coffee", ["drink", "practical", "scholarly"]),
-        new("(O)66", "Amethyst", ["mineral", "adventurous", "magical", "artistic"]),
-        new("(O)80", "Quartz", ["mineral", "scholarly", "magical"])
+        new("(O)80", "Quartz", ["mineral", "scholarly", "magical"], HelpRequestAvailability.MinesOpen),
+        new("(O)66", "Amethyst", ["mineral", "adventurous", "magical", "artistic"], HelpRequestAvailability.MineLevel40)
     ];
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<HelpRequestItem>> SeasonalItems =
@@ -82,21 +79,28 @@ internal static class HelpRequestAdvisor
             .Where(item => item.Tags.Any(tags.Contains))
             .Take(3)
             .ToList();
-        var generic = GenericItems
+        var progression = GetProgressionItems()
             .Where(item => item.Tags.Any(tags.Contains))
             .Take(2)
             .ToList();
         var preferredItems = seasonal
-            .Concat(generic)
+            .Concat(progression)
             .DistinctBy(item => item.ItemId)
             .ToList();
 
         string itemText = preferredItems.Count == 0
-            ? "no strong item preference; prefer a question request if the current conversation supports one"
+            ? "no currently reasonable item request; prefer a question request if the current conversation supports one"
             : string.Join(", ", preferredItems.Select(item => $"{item.Label} {item.ItemId}"));
         string questionText = string.Join(", ", profile.QuestionPrompts);
 
-        return $"theme {profile.Theme}; fitting item requests: {itemText}; fitting question requests: {questionText}; only ask if the current conversation naturally creates a reason.";
+        return $"theme {profile.Theme}; currently reasonable item requests: {itemText}; fitting question requests: {questionText}; only ask if the current conversation naturally creates a reason.";
+    }
+
+    public static bool IsCurrentlyRequestableItem(string itemId)
+    {
+        return GetSeasonalItems()
+            .Concat(GetProgressionItems())
+            .Any(item => item.ItemId.Equals(itemId, StringComparison.OrdinalIgnoreCase));
     }
 
     private static HelpRequestProfile GetProfile(NPC npc)
@@ -144,6 +148,33 @@ internal static class HelpRequestAdvisor
             : Array.Empty<HelpRequestItem>();
     }
 
+    private static IEnumerable<HelpRequestItem> GetProgressionItems()
+    {
+        return ProgressionItems.Where(item => IsAvailable(item.Availability));
+    }
+
+    private static bool IsAvailable(HelpRequestAvailability availability)
+    {
+        return availability switch
+        {
+            HelpRequestAvailability.MinesOpen => AreMinesOpen(),
+            HelpRequestAvailability.MineLevel40 => Game1.player?.deepestMineLevel >= 40,
+            _ => true
+        };
+    }
+
+    private static bool AreMinesOpen()
+    {
+        if (Game1.player?.deepestMineLevel > 0)
+        {
+            return true;
+        }
+
+        return Game1.year > 1
+            || Game1.currentSeason != "spring"
+            || Game1.dayOfMonth >= 5;
+    }
+
     private static bool ContainsAny(string text, params string[] values)
     {
         return values.Any(value => text.Contains(value, StringComparison.OrdinalIgnoreCase));
@@ -158,6 +189,14 @@ internal static class HelpRequestAdvisor
     private sealed record HelpRequestItem(
         string ItemId,
         string Label,
-        IReadOnlyCollection<string> Tags
+        IReadOnlyCollection<string> Tags,
+        HelpRequestAvailability Availability = HelpRequestAvailability.CurrentSeason
     );
+
+    private enum HelpRequestAvailability
+    {
+        CurrentSeason,
+        MinesOpen,
+        MineLevel40
+    }
 }

@@ -2530,7 +2530,8 @@ internal sealed class BehaviorMemory
         string normalizedType = NormalizeHelpRequestType(candidate.Type);
         if (normalizedType == "item_request")
         {
-            if (!AllowedHelpRequestItemIds.Contains(candidate.RequestedItemId))
+            if (!AllowedHelpRequestItemIds.Contains(candidate.RequestedItemId)
+                || !HelpRequestAdvisor.IsCurrentlyRequestableItem(candidate.RequestedItemId))
             {
                 return false;
             }
@@ -2561,6 +2562,7 @@ internal sealed class BehaviorMemory
         state.HelpRequests.Add(new NpcHelpRequestFact
         {
             NpcDisplayName = npc.displayName,
+            QuestLogId = System.Guid.NewGuid().ToString("N"),
             Type = normalizedType,
             Summary = candidate.Summary.Trim(),
             RequestedItemId = candidate.RequestedItemId.Trim(),
@@ -3423,6 +3425,7 @@ internal sealed class SharedExperienceFact
 internal sealed class NpcHelpRequestFact
 {
     public string NpcDisplayName { get; set; } = string.Empty;
+    public string QuestLogId { get; set; } = string.Empty;
     public string Type { get; set; } = "item_request";
     public string Summary { get; set; } = string.Empty;
     public string RequestedItemId { get; set; } = string.Empty;
@@ -4178,6 +4181,9 @@ internal sealed class LivingNpcState
             {
                 request.Type = BehaviorMemory.NormalizeHelpRequestType(request.Type);
                 request.NpcDisplayName = request.NpcDisplayName?.Trim() ?? string.Empty;
+                request.QuestLogId = string.IsNullOrWhiteSpace(request.QuestLogId)
+                    ? System.Guid.NewGuid().ToString("N")
+                    : request.QuestLogId.Trim();
                 request.Summary = request.Summary.Trim();
                 request.RequestedItemId = request.RequestedItemId?.Trim() ?? string.Empty;
                 request.RequestedItemLabel = request.RequestedItemLabel?.Trim() ?? string.Empty;
@@ -4458,6 +4464,7 @@ internal sealed class LivingNpcState
                 .Select(request => new NpcHelpRequestFact
                 {
                     NpcDisplayName = request.NpcDisplayName,
+                    QuestLogId = request.QuestLogId,
                     Type = request.Type,
                     Summary = request.Summary,
                     RequestedItemId = request.RequestedItemId,

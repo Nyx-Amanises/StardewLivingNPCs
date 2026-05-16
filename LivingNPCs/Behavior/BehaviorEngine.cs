@@ -8,8 +8,8 @@ using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Locations;
 using StardewValley.Pathfinding;
+using StardewValley.Quests;
 using StardewValley.TerrainFeatures;
-using LivingNPCs.UI;
 using SObject = StardewValley.Object;
 
 namespace LivingNPCs.Behavior;
@@ -17,6 +17,8 @@ namespace LivingNPCs.Behavior;
 internal sealed class BehaviorEngine
 {
     private const string SaveDataKey = "behavior-memory";
+    private const string HelpRequestQuestMarkerKey = "LivingNPCs/HelpRequestQuest";
+    private const string HelpRequestQuestIdKey = "LivingNPCs/HelpRequestQuestId";
 
     private readonly IModHelper helper;
     private readonly IMonitor monitor;
@@ -61,6 +63,7 @@ internal sealed class BehaviorEngine
         this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
         this.lastConversationMemoryTimeByNpc.Clear();
         this.valleyTalkBridge.TryInitialize();
+        this.SyncHelpRequestsToQuestLog();
 
         if (this.config.Debug)
         {
@@ -94,6 +97,7 @@ internal sealed class BehaviorEngine
         this.pendingAmbientRemarks.Clear();
         this.pendingWalks.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
+        this.SyncHelpRequestsToQuestLog();
     }
 
     private void OnReturnedToTitle(object? sender, ReturnedToTitleEventArgs e)
@@ -117,13 +121,6 @@ internal sealed class BehaviorEngine
         {
             this.helper.Input.Suppress(e.Button);
             this.ShowNearestNpcMemory();
-            return;
-        }
-
-        if (this.config.HelpRequestLogHotkey.JustPressed())
-        {
-            this.helper.Input.Suppress(e.Button);
-            this.ShowHelpRequestLog();
             return;
         }
 
@@ -320,6 +317,11 @@ internal sealed class BehaviorEngine
         if (result.FulfilledHelpRequests.Count > 0)
         {
             this.RewardFulfilledHelpRequests(npc, result.FulfilledHelpRequests);
+        }
+
+        if (result.HelpRequestsStored > 0 || result.HelpRequestsUpdated > 0)
+        {
+            this.SyncHelpRequestsToQuestLog();
         }
 
         if (this.config.EnableDialogueFollowUps && !string.IsNullOrWhiteSpace(result.AmbientFollowUpText))
@@ -1093,6 +1095,7 @@ internal sealed class BehaviorEngine
             return;
         }
 
+        bool changed = false;
         foreach (var state in this.memory.GetTrackedStates())
         {
             foreach (var request in state.HelpRequests.Where(request => request.Status == "Pending"))
@@ -1105,6 +1108,7 @@ internal sealed class BehaviorEngine
                 request.Status = "Expired";
                 request.LastUpdatedTotalDays = Game1.Date.TotalDays;
                 request.LastUpdatedTimeOfDay = Game1.timeOfDay;
+                changed = true;
                 this.memory.UpdateStateForExpiredHelpRequest(state, request);
                 if (this.TryFindNpcInCurrentLocation(state.NpcName, out NPC? npc) && npc != null)
                 {
@@ -1117,6 +1121,11 @@ internal sealed class BehaviorEngine
                     this.PushInteractionContext(npc, $"Expired help request for {npc.Name}: {request.Summary}.");
                 }
             }
+        }
+
+        if (changed)
+        {
+            this.SyncHelpRequestsToQuestLog();
         }
     }
 
@@ -1432,6 +1441,7 @@ internal sealed class BehaviorEngine
                 if (fulfilledHelpRequests.Count > 0)
                 {
                     this.RewardFulfilledHelpRequests(npc, fulfilledHelpRequests);
+                    this.SyncHelpRequestsToQuestLog();
                     this.PushInteractionContext(npc, $"Fulfilled {fulfilledHelpRequests.Count} help request(s) for {npc.Name} through a gifted item.");
                 }
             }
@@ -2019,9 +2029,14 @@ internal sealed class BehaviorEngine
         this.ShowFeedback($"LivingNPCs：已在 SMAPI 控制台输出 {npc.displayName} 的状态和记忆。");
     }
 
-    private void ShowHelpRequestLog()
+    private void SyncHelpRequestsToQuestLog()
     {
-        var rows = this.memory.GetTrackedStates()
+        if (!Context.IsWorldReady || Game1.player?.questLog == null)
+        {
+            return;
+        }
+
+        var pendingRequests = this.memory.GetTrackedStates()
             .SelectMany(state => state.HelpRequests
                 .Where(request => request.Status == "Pending")
                 .Select(request => new
@@ -2029,47 +2044,93 @@ internal sealed class BehaviorEngine
                     State = state,
                     Request = request
                 }))
-            .OrderBy(pair => pair.Request.DueTotalDays)
-            .ThenBy(pair => pair.State.NpcName)
-            .Select(pair => this.BuildHelpRequestLogEntry(pair.State, pair.Request))
+            .ToList();
+        var pendingQuestIds = pendingRequests
+            .Select(pair => pair.Request.QuestLogId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.Ordinal);
+        var proxyQuests = Game1.player.questLog
+            .OfType<Quest>()
+            .Where(quest => quest.modData.TryGetValue(HelpRequestQuestMarkerKey, out string? marker)
+                && marker == "true")
             .ToList();
 
-        Game1.activeClickableMenu = new HelpRequestLogMenu(rows);
+        foreach (var quest in proxyQuests)
+        {
+            if (!quest.modData.TryGetValue(HelpRequestQuestIdKey, out string? questId)
+                || string.IsNullOrWhiteSpace(questId)
+                || !pendingQuestIds.Contains(questId))
+            {
+                Game1.player.questLog.Remove(quest);
+            }
+        }
+
+        foreach (var pair in pendingRequests)
+        {
+            Quest? quest = Game1.player.questLog
+                .OfType<Quest>()
+                .FirstOrDefault(candidate =>
+                    candidate.modData.TryGetValue(HelpRequestQuestIdKey, out string? questId)
+                    && questId == pair.Request.QuestLogId);
+            if (quest == null)
+            {
+                quest = new Quest();
+                quest.accept();
+                quest.modData[HelpRequestQuestMarkerKey] = "true";
+                quest.modData[HelpRequestQuestIdKey] = pair.Request.QuestLogId;
+                Game1.player.questLog.Add(quest);
+            }
+
+            this.UpdateHelpRequestQuestText(quest, pair.State, pair.Request);
+        }
     }
 
-    private HelpRequestLogEntry BuildHelpRequestLogEntry(LivingNpcState state, NpcHelpRequestFact request)
+    private void UpdateHelpRequestQuestText(Quest quest, LivingNpcState state, NpcHelpRequestFact request)
     {
         string npcDisplayName = string.IsNullOrWhiteSpace(request.NpcDisplayName)
             ? state.NpcName
             : request.NpcDisplayName;
-        string typeLabel = request.Type switch
-        {
-            "question_request" => "请教问题",
-            _ => "需要物品"
-        };
-        string detail = request.Type == "item_request"
-            ? string.IsNullOrWhiteSpace(request.RequestedItemLabel)
-                ? request.Summary
-                : $"需要：{request.RequestedItemLabel}"
-            : string.IsNullOrWhiteSpace(request.QuestionTopic)
-                ? request.Summary
-                : $"问题：{request.QuestionTopic}";
-        int daysRemaining = request.DueTotalDays - Game1.Date.TotalDays;
-        string due = daysRemaining switch
-        {
-            < 0 => $"已逾期 {-daysRemaining} 天",
-            0 => $"今天到期",
-            1 => $"明天到期",
-            _ => $"还剩 {daysRemaining} 天"
-        };
+        string due = this.BuildHelpRequestDueText(request);
+        quest.questTitle = $"求助：{npcDisplayName}";
+        quest.questDescription = request.Type == "item_request"
+            ? $"{npcDisplayName} 请你帮忙找一件东西。{this.BuildHelpRequestDetailText(request)}\n{due}"
+            : $"{npcDisplayName} 想就一件事请教你。{this.BuildHelpRequestDetailText(request)}\n{due}";
+        quest.currentObjective = request.Type == "item_request"
+            ? $"把 {this.GetHelpRequestItemLabel(request)} 交给 {npcDisplayName}。{due}"
+            : $"和 {npcDisplayName} 继续聊聊：{this.GetHelpRequestQuestionLabel(request)}。{due}";
+    }
 
-        return new HelpRequestLogEntry(
-            npcDisplayName,
-            typeLabel,
-            detail,
-            due,
-            daysRemaining < 0
-        );
+    private string BuildHelpRequestDetailText(NpcHelpRequestFact request)
+    {
+        return request.Type == "item_request"
+            ? $"需要：{this.GetHelpRequestItemLabel(request)}。"
+            : $"问题：{this.GetHelpRequestQuestionLabel(request)}。";
+    }
+
+    private string GetHelpRequestItemLabel(NpcHelpRequestFact request)
+    {
+        return string.IsNullOrWhiteSpace(request.RequestedItemLabel)
+            ? request.Summary
+            : request.RequestedItemLabel;
+    }
+
+    private string GetHelpRequestQuestionLabel(NpcHelpRequestFact request)
+    {
+        return string.IsNullOrWhiteSpace(request.QuestionTopic)
+            ? request.Summary
+            : request.QuestionTopic;
+    }
+
+    private string BuildHelpRequestDueText(NpcHelpRequestFact request)
+    {
+        int daysRemaining = request.DueTotalDays - Game1.Date.TotalDays;
+        return daysRemaining switch
+        {
+            < 0 => $"已逾期 {-daysRemaining} 天。",
+            0 => "今天到期。",
+            1 => "明天到期。",
+            _ => $"还剩 {daysRemaining} 天。"
+        };
     }
 
     private bool TryFindNearestNpcIgnoringDailyBudget(out NPC? nearest)
