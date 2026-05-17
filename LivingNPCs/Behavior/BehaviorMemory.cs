@@ -292,7 +292,8 @@ internal sealed class BehaviorMemory
         NPC subject,
         string kind,
         string summary,
-        bool directlyWitnessed,
+        string source,
+        string visibility,
         int importance,
         int maxEntriesPerNpc)
     {
@@ -305,8 +306,14 @@ internal sealed class BehaviorMemory
         var state = this.GetOrCreateState(observer);
         string normalizedKind = NormalizeCommunityImpressionKind(kind);
         string normalizedSummary = NormalizeMemorySummary(summary);
-        string source = directlyWitnessed ? "Witnessed" : "Heard";
-        int confidence = directlyWitnessed ? 95 : 68;
+        string normalizedSource = NormalizeCommunityImpressionSource(source);
+        string normalizedVisibility = NormalizeCommunityImpressionVisibility(visibility);
+        int confidence = normalizedSource switch
+        {
+            "Witnessed" => 95,
+            "CloseCircle" => 68,
+            _ => 42
+        };
         var existing = state.CommunityImpressions.FirstOrDefault(memory =>
             string.Equals(memory.SubjectNpcName, subject.Name, System.StringComparison.OrdinalIgnoreCase)
             && string.Equals(memory.Kind, normalizedKind, System.StringComparison.OrdinalIgnoreCase)
@@ -315,7 +322,14 @@ internal sealed class BehaviorMemory
         if (existing != null)
         {
             existing.SubjectDisplayName = subject.displayName;
-            existing.Source = directlyWitnessed ? "Witnessed" : existing.Source;
+            existing.Source = normalizedSource switch
+            {
+                "Witnessed" => "Witnessed",
+                "CloseCircle" when existing.Source == "PublicRumor" => "CloseCircle",
+                _ => existing.Source
+            };
+            existing.Visibility = NormalizeCommunityImpressionVisibility(existing.Visibility);
+            existing.Visibility = GetMoreRestrictiveCommunityVisibility(existing.Visibility, normalizedVisibility);
             existing.Confidence = System.Math.Max(existing.Confidence, confidence);
             existing.Importance = System.Math.Min(100, System.Math.Max(existing.Importance, importance) + 3);
             existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
@@ -330,7 +344,8 @@ internal sealed class BehaviorMemory
             SubjectDisplayName = subject.displayName,
             Kind = normalizedKind,
             Summary = summary.Trim(),
-            Source = source,
+            Source = normalizedSource,
+            Visibility = normalizedVisibility,
             Confidence = confidence,
             Importance = System.Math.Clamp(importance, 0, 100),
             CreatedTotalDays = Game1.Date.TotalDays,
@@ -1499,7 +1514,7 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Shared experiences from fulfilled plans: {state.SharedExperiencePromptLabel}.");
             prompt.AppendLine($"- Trust in keeping plans: {state.CommitmentTrustPromptLabel}.");
             prompt.AppendLine($"- Help requests involving the farmer: {state.HelpRequestPromptLabel}.");
-            prompt.AppendLine($"- Community impressions about the farmer's ties with other NPCs: {this.FormatCommunityImpressionPromptLabel(communityImpressions)}.");
+        prompt.AppendLine($"- Community impressions about the farmer's ties with other NPCs: {this.FormatCommunityImpressionPromptLabel(npc, communityImpressions)}.");
             prompt.AppendLine("- Help-request lifecycle: Offered means the NPC has asked but the farmer has not accepted; Pending means accepted and active; only Pending requests should be treated like tasks.");
             prompt.AppendLine($"- Help-request readiness: {this.BuildHelpRequestReadinessLabel(npc, state, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, minRelationshipTrustForHelpRequests)}.");
             prompt.AppendLine($"- Help-request fit: {HelpRequestAdvisor.BuildPromptLabel(npc)}");
@@ -1513,7 +1528,7 @@ internal sealed class BehaviorMemory
             prompt.AppendLine("- No persistent LivingNPCs state exists yet; use disposition and scene context conservatively.");
         }
 
-        var priorityContext = this.BuildPriorityPromptContext(state, world, recentEntries, recallPlan, communityImpressions).ToList();
+        var priorityContext = this.BuildPriorityPromptContext(npc, state, world, recentEntries, recallPlan, communityImpressions).ToList();
         if (priorityContext.Count > 0)
         {
             prompt.AppendLine();
@@ -1568,6 +1583,7 @@ internal sealed class BehaviorMemory
     }
 
     private IEnumerable<string> BuildPriorityPromptContext(
+        NPC npc,
         LivingNpcState? state,
         WorldContextSnapshot world,
         IReadOnlyList<BehaviorMemoryEntry> recentEntries,
@@ -1607,7 +1623,7 @@ internal sealed class BehaviorMemory
 
             if (communityImpressions.Count > 0)
             {
-                yield return $"Community impressions: {this.FormatCommunityImpressionPromptLabel(communityImpressions)}; use at most one, keep hearsay tentative, and do not reveal knowledge the NPC would not plausibly have.";
+                yield return $"Community impressions: {this.FormatCommunityImpressionPromptLabel(npc, communityImpressions)}; use at most one, keep indirect reports tentative, and do not reveal knowledge the NPC would not plausibly have.";
             }
 
             var activeBehaviorInfluence = state.ActiveDialogueBehaviorInfluences.FirstOrDefault();
@@ -1999,12 +2015,20 @@ internal sealed class BehaviorMemory
             <= 14 => 4,
             _ => -20
         };
-        int sourceScore = memory.Source == "Witnessed" ? 12 : 4;
+        int sourceScore = memory.Source switch
+        {
+            "Witnessed" => 12,
+            "CloseCircle" => 5,
+            _ => 1
+        };
         int recentRecallPenalty = memory.LastRecalledTotalDays == Game1.Date.TotalDays ? 18 : 0;
         int score = memory.Importance + (memory.Confidence / 5) + freshnessScore + sourceScore + (memory.TimesReinforced * 2) - recentRecallPenalty;
-        string reason = memory.Source == "Witnessed"
-            ? $"目击，{FormatMemoryAge(memory.LastUpdatedTotalDays)}"
-            : $"听说，{FormatMemoryAge(memory.LastUpdatedTotalDays)}";
+        string reason = memory.Source switch
+        {
+            "Witnessed" => $"目击，{FormatMemoryAge(memory.LastUpdatedTotalDays)}",
+            "CloseCircle" => $"熟人转述，{FormatMemoryAge(memory.LastUpdatedTotalDays)}",
+            _ => $"公共场所里听到一点，{FormatMemoryAge(memory.LastUpdatedTotalDays)}"
+        };
         return new CommunityImpressionSelection(memory, score, reason);
     }
 
@@ -2272,11 +2296,12 @@ internal sealed class BehaviorMemory
             : string.Join("; ", selections.Select(selection => selection.Memory.Summary));
     }
 
-    private string FormatCommunityImpressionPromptLabel(IReadOnlyList<CommunityImpressionSelection> selections)
+    private string FormatCommunityImpressionPromptLabel(NPC npc, IReadOnlyList<CommunityImpressionSelection> selections)
     {
+        CommunityReactionCue reaction = CommunityReactionStyle.For(npc);
         return selections.Count == 0
             ? "no community impression is especially relevant right now"
-            : string.Join("; ", selections.Select(selection => selection.Memory.PromptLabel));
+            : $"observer tendency: {reaction.PromptLabel}; {string.Join("; ", selections.Select(selection => selection.Memory.PromptLabel))}";
     }
 
     private string FormatLongTermMemoryDebugLabel(IReadOnlyList<LongTermMemorySelection> selections)
@@ -2300,7 +2325,7 @@ internal sealed class BehaviorMemory
         return selections.Count == 0
             ? "暂无"
             : string.Join("；", selections.Select(selection =>
-                $"{selection.Memory.Summary}（{selection.Memory.Source}，分数 {selection.Score}，{selection.Reason}）"));
+                $"{selection.Memory.Summary}（{selection.Memory.Source}/{selection.Memory.Visibility}，分数 {selection.Score}，{selection.Reason}）"));
     }
 
     private void MarkMemoriesRecalled(MemoryRecallPlan recallPlan)
@@ -2453,7 +2478,8 @@ internal sealed class BehaviorMemory
             : memory.SubjectDisplayName.Trim();
         memory.Kind = NormalizeCommunityImpressionKind(memory.Kind);
         memory.Summary = memory.Summary.Trim();
-        memory.Source = memory.Source == "Witnessed" ? "Witnessed" : "Heard";
+        memory.Source = NormalizeCommunityImpressionSource(memory.Source);
+        memory.Visibility = NormalizeCommunityImpressionVisibility(memory.Visibility);
         memory.Confidence = System.Math.Clamp(memory.Confidence, 0, 100);
         memory.Importance = System.Math.Clamp(memory.Importance, 0, 100);
         memory.TimesReinforced = System.Math.Max(0, memory.TimesReinforced);
@@ -2583,6 +2609,10 @@ internal sealed class BehaviorMemory
             {
                 primary.Source = "Witnessed";
             }
+            else if (primary.Source != "Witnessed" && memory.Source == "CloseCircle")
+            {
+                primary.Source = "CloseCircle";
+            }
 
             if (memory.Importance > primary.Importance || memory.Summary.Length > primary.Summary.Length)
             {
@@ -2596,6 +2626,7 @@ internal sealed class BehaviorMemory
 
             primary.Confidence = System.Math.Max(primary.Confidence, memory.Confidence);
             primary.Importance = System.Math.Max(primary.Importance, memory.Importance);
+            primary.Visibility = GetMoreRestrictiveCommunityVisibility(primary.Visibility, memory.Visibility);
             primary.TimesReinforced += memory.TimesReinforced;
             primary.RecallCount += memory.RecallCount;
             if (IsOlderCreatedAt(memory.CreatedTotalDays, primary.CreatedTotalDays))
@@ -2693,7 +2724,12 @@ internal sealed class BehaviorMemory
         return memory.Importance
             + (memory.Confidence / 5)
             + freshness
-            + (memory.Source == "Witnessed" ? 8 : 0)
+            + (memory.Source switch
+            {
+                "Witnessed" => 8,
+                "CloseCircle" => 3,
+                _ => 0
+            })
             + System.Math.Min(memory.TimesReinforced * 3, 15)
             - System.Math.Min(memory.RecallCount * 2, 12);
     }
@@ -2739,6 +2775,7 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 当前检索长期记忆：{this.FormatLongTermMemoryDebugLabel(recallPlan.LongTermMemories)}");
             summary.AppendLine($"- 玩家偏好记忆：{state.PlayerPreferenceDebugLabel}");
             summary.AppendLine($"- 当前检索玩家偏好：{this.FormatPlayerPreferenceDebugLabel(recallPlan.PlayerPreferences)}");
+            summary.AppendLine($"- 社区消息口吻：{CommunityReactionStyle.For(npc).DebugLabel}");
             summary.AppendLine($"- 社区印象：{state.CommunityImpressionDebugLabel}");
             summary.AppendLine($"- 当前检索社区印象：{this.FormatCommunityImpressionDebugLabel(communityImpressions)}");
             summary.AppendLine($"- 对话驱动行为：{state.DialogueBehaviorInfluenceDebugLabel}");
@@ -4303,6 +4340,47 @@ internal sealed class BehaviorMemory
         };
     }
 
+    internal static string NormalizeCommunityImpressionSource(string source)
+    {
+        return source?.Trim() switch
+        {
+            "Witnessed" => "Witnessed",
+            "CloseCircle" => "CloseCircle",
+            "Heard" => "CloseCircle",
+            "PublicRumor" => "PublicRumor",
+            _ => "PublicRumor"
+        };
+    }
+
+    internal static string NormalizeCommunityImpressionVisibility(string visibility)
+    {
+        return visibility?.Trim() switch
+        {
+            "Private" => "Private",
+            "Personal" => "Personal",
+            _ => "Public"
+        };
+    }
+
+    private static string GetMoreRestrictiveCommunityVisibility(string first, string second)
+    {
+        int firstRank = GetCommunityVisibilityRank(first);
+        int secondRank = GetCommunityVisibilityRank(second);
+        return firstRank >= secondRank
+            ? NormalizeCommunityImpressionVisibility(first)
+            : NormalizeCommunityImpressionVisibility(second);
+    }
+
+    private static int GetCommunityVisibilityRank(string visibility)
+    {
+        return NormalizeCommunityImpressionVisibility(visibility) switch
+        {
+            "Private" => 2,
+            "Personal" => 1,
+            _ => 0
+        };
+    }
+
     private static string NormalizeWorldActionType(string type)
     {
         return type?.Trim().ToLowerInvariant() switch
@@ -4949,7 +5027,8 @@ internal sealed class CommunityImpressionFact
     public string SubjectDisplayName { get; set; } = string.Empty;
     public string Kind { get; set; } = "relationship_trend";
     public string Summary { get; set; } = string.Empty;
-    public string Source { get; set; } = "Heard";
+    public string Source { get; set; } = "CloseCircle";
+    public string Visibility { get; set; } = "Public";
     public int Confidence { get; set; }
     public int Importance { get; set; }
     public int CreatedTotalDays { get; set; } = -1;
@@ -4961,10 +5040,12 @@ internal sealed class CommunityImpressionFact
     public int RecallCount { get; set; }
     public int TimesReinforced { get; set; }
 
-    public string PromptLabel =>
-        this.Source == "Witnessed"
-            ? $"witnessed: {this.Summary}"
-            : $"heard secondhand: {this.Summary}";
+    public string PromptLabel => this.Source switch
+    {
+        "Witnessed" => $"directly witnessed ({this.Visibility.ToLowerInvariant()}): {this.Summary}",
+        "CloseCircle" => $"heard through a close connection ({this.Visibility.ToLowerInvariant()}): {this.Summary}",
+        _ => $"picked up as a faint public impression ({this.Visibility.ToLowerInvariant()}): {this.Summary}"
+    };
 }
 
 internal sealed class NpcCommitmentFact
@@ -5601,7 +5682,7 @@ internal sealed class LivingNpcState
             return memories.Count == 0
                 ? "暂无"
                 : string.Join("；", memories.Select(memory =>
-                    $"{memory.Summary}（{memory.Source}，重要度 {memory.Importance}）"));
+                    $"{memory.Summary}（{memory.Source}/{memory.Visibility}，重要度 {memory.Importance}）"));
         }
     }
 
@@ -6247,6 +6328,7 @@ internal sealed class LivingNpcState
                     Kind = memory.Kind,
                     Summary = memory.Summary,
                     Source = memory.Source,
+                    Visibility = memory.Visibility,
                     Confidence = memory.Confidence,
                     Importance = memory.Importance,
                     CreatedTotalDays = memory.CreatedTotalDays,

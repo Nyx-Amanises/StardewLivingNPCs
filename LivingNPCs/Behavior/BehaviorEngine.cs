@@ -2110,6 +2110,8 @@ internal sealed class BehaviorEngine
             return;
         }
 
+        string visibility = this.GetCommunityRippleVisibility(kind);
+        LivingNpcState? subjectState = this.memory.GetState(subject);
         var directWitnesses = Game1.currentLocation.characters
             .Where(candidate =>
                 candidate.Name != subject.Name
@@ -2129,7 +2131,8 @@ internal sealed class BehaviorEngine
                     subject,
                     kind,
                     summary,
-                    directlyWitnessed: true,
+                    source: "Witnessed",
+                    visibility: visibility,
                     importance: importance,
                     maxEntriesPerNpc: this.config.MaxMemoryEntriesPerNpc))
             {
@@ -2137,30 +2140,65 @@ internal sealed class BehaviorEngine
             }
         }
 
-        foreach (string connectionName in NpcSocialGraph.GetCloseConnections(subject.Name))
+        IEnumerable<string> closeConnections = NpcSocialGraph.GetCloseConnections(subject.Name);
+        if (visibility == "Private")
         {
-            if (directWitnessNames.Contains(connectionName))
-            {
-                continue;
-            }
+            closeConnections = closeConnections.Take(2);
+        }
 
-            NPC? connection = Game1.getCharacterFromName(connectionName);
-            if (connection == null
-                || string.Equals(connection.Name, subject.Name, StringComparison.OrdinalIgnoreCase))
+        if (this.CanSpreadToCloseCircle(visibility, subjectState))
+        {
+            foreach (string connectionName in closeConnections)
             {
-                continue;
-            }
+                if (directWitnessNames.Contains(connectionName))
+                {
+                    continue;
+                }
 
-            if (this.memory.RecordCommunityImpression(
-                    connection,
-                    subject,
-                    kind,
-                    summary,
-                    directlyWitnessed: false,
-                    importance: System.Math.Max(40, importance - 14),
-                    maxEntriesPerNpc: this.config.MaxMemoryEntriesPerNpc))
+                NPC? connection = Game1.getCharacterFromName(connectionName);
+                if (connection == null
+                    || string.Equals(connection.Name, subject.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (this.memory.RecordCommunityImpression(
+                        connection,
+                        subject,
+                        kind,
+                        summary,
+                        source: "CloseCircle",
+                        visibility: visibility,
+                        importance: System.Math.Max(40, importance - 14),
+                        maxEntriesPerNpc: this.config.MaxMemoryEntriesPerNpc))
+                {
+                    stored++;
+                }
+            }
+        }
+
+        if (visibility == "Public" && this.IsPublicRumorHub(Game1.currentLocation.Name))
+        {
+            foreach (var observer in Game1.currentLocation.characters
+                         .Where(candidate =>
+                             candidate.Name != subject.Name
+                             && !string.IsNullOrWhiteSpace(candidate.Name)
+                             && !directWitnessNames.Contains(candidate.Name))
+                         .OrderBy(candidate => Vector2.Distance(candidate.Tile, subject.Tile))
+                         .Take(4))
             {
-                stored++;
+                if (this.memory.RecordCommunityImpression(
+                        observer,
+                        subject,
+                        kind,
+                        summary,
+                        source: "PublicRumor",
+                        visibility: visibility,
+                        importance: System.Math.Max(28, importance - 24),
+                        maxEntriesPerNpc: this.config.MaxMemoryEntriesPerNpc))
+                {
+                    stored++;
+                }
             }
         }
 
@@ -2168,6 +2206,35 @@ internal sealed class BehaviorEngine
         {
             this.monitor.Log($"Spread community ripple for {subject.Name}: {summary} -> {stored} observer memory record(s).", LogLevel.Debug);
         }
+    }
+
+    private string GetCommunityRippleVisibility(string kind)
+    {
+        return BehaviorMemory.NormalizeCommunityImpressionKind(kind) switch
+        {
+            "romantic_attention" => "Private",
+            "helped" or "shared_experience" => "Personal",
+            _ => "Public"
+        };
+    }
+
+    private bool CanSpreadToCloseCircle(string visibility, LivingNpcState? subjectState)
+    {
+        return visibility switch
+        {
+            "Private" => subjectState != null
+                && subjectState.RelationshipTrust >= 75
+                && subjectState.InteractionComfortTier is "Trusted" or "Intimate",
+            "Personal" => subjectState != null
+                && (subjectState.RelationshipTrust >= 45
+                    || subjectState.InteractionComfortTier is "Friendly" or "Trusted" or "Intimate"),
+            _ => true
+        };
+    }
+
+    private bool IsPublicRumorHub(string locationName)
+    {
+        return locationName is "Town" or "Saloon";
     }
 
     private bool IsRomanticallyAttachedToFarmer(NPC npc)
