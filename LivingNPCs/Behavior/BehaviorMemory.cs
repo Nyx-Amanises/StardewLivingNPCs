@@ -227,6 +227,27 @@ internal sealed class BehaviorMemory
         return this.statesByNpc.Values;
     }
 
+    public IReadOnlyList<CommunityImpressionFact> GetRetellableCommunityImpressions(LivingNpcState state, int maxCount)
+    {
+        this.RefreshMemoryStores(state);
+        return state.CommunityImpressions
+            .Where(memory => memory.ExpiresTotalDays < 0 || memory.ExpiresTotalDays >= Game1.Date.TotalDays)
+            .Where(memory => memory.FreshnessStage is "fresh" or "settled")
+            .Where(memory => memory.Confidence >= 35)
+            .OrderByDescending(GetCommunityImpressionRetentionScore)
+            .ThenBy(memory => memory.LastSharedTotalDays < 0 ? -1 : memory.LastSharedTotalDays)
+            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+            .Take(System.Math.Max(0, maxCount))
+            .ToList();
+    }
+
+    public void MarkCommunityImpressionShared(CommunityImpressionFact memory)
+    {
+        memory.LastSharedTotalDays = Game1.Date.TotalDays;
+        memory.LastSharedTimeOfDay = Game1.timeOfDay;
+        memory.ShareCount += 1;
+    }
+
     public BehaviorMemoryEntry Record(NPC npc, BehaviorIntent intent, int maxEntriesPerNpc)
     {
         var entry = this.CreateEntry(npc, "Behavior", intent.Type.ToString(), intent.Reason);
@@ -294,6 +315,10 @@ internal sealed class BehaviorMemory
         string summary,
         string source,
         string visibility,
+        int transmissionDepth,
+        int distortionLevel,
+        string heardFromNpcName,
+        string circleKey,
         int importance,
         int maxEntriesPerNpc)
     {
@@ -314,6 +339,8 @@ internal sealed class BehaviorMemory
             "CloseCircle" => 68,
             _ => 42
         };
+        int normalizedDepth = System.Math.Clamp(transmissionDepth, 0, 8);
+        int normalizedDistortion = System.Math.Clamp(distortionLevel, 0, 100);
         var existing = state.CommunityImpressions.FirstOrDefault(memory =>
             string.Equals(memory.SubjectNpcName, subject.Name, System.StringComparison.OrdinalIgnoreCase)
             && string.Equals(memory.Kind, normalizedKind, System.StringComparison.OrdinalIgnoreCase)
@@ -331,6 +358,14 @@ internal sealed class BehaviorMemory
             existing.Visibility = NormalizeCommunityImpressionVisibility(existing.Visibility);
             existing.Visibility = GetMoreRestrictiveCommunityVisibility(existing.Visibility, normalizedVisibility);
             existing.Confidence = System.Math.Max(existing.Confidence, confidence);
+            existing.TransmissionDepth = System.Math.Min(existing.TransmissionDepth, normalizedDepth);
+            existing.DistortionLevel = System.Math.Min(existing.DistortionLevel, normalizedDistortion);
+            existing.HeardFromNpcName = string.IsNullOrWhiteSpace(existing.HeardFromNpcName)
+                ? heardFromNpcName?.Trim() ?? string.Empty
+                : existing.HeardFromNpcName;
+            existing.CircleKey = string.IsNullOrWhiteSpace(existing.CircleKey)
+                ? circleKey?.Trim() ?? string.Empty
+                : existing.CircleKey;
             existing.Importance = System.Math.Min(100, System.Math.Max(existing.Importance, importance) + 3);
             existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
             existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
@@ -347,11 +382,21 @@ internal sealed class BehaviorMemory
             Source = normalizedSource,
             Visibility = normalizedVisibility,
             Confidence = confidence,
+            TransmissionDepth = normalizedDepth,
+            DistortionLevel = normalizedDistortion,
+            HeardFromNpcName = heardFromNpcName?.Trim() ?? string.Empty,
+            CircleKey = circleKey?.Trim() ?? string.Empty,
             Importance = System.Math.Clamp(importance, 0, 100),
             CreatedTotalDays = Game1.Date.TotalDays,
             CreatedTimeOfDay = Game1.timeOfDay,
             LastUpdatedTotalDays = Game1.Date.TotalDays,
             LastUpdatedTimeOfDay = Game1.timeOfDay,
+            ExpiresTotalDays = DetermineCommunityImpressionExpiry(
+                normalizedSource,
+                normalizedVisibility,
+                normalizedDepth,
+                Game1.Date.TotalDays
+            ),
             TimesReinforced = 1
         });
         state.CommunityImpressions = state.CommunityImpressions
@@ -1046,6 +1091,7 @@ internal sealed class BehaviorMemory
             }
 
             this.RefreshMemoryStores(state);
+            this.FadeCommunityImpressions(state);
             if (dailyDecay <= 0)
             {
                 this.DecayEmotionAndConflicts(state, emotionDailyDecay, conflictDailyDecay);
@@ -1061,6 +1107,38 @@ internal sealed class BehaviorMemory
             state.LastUpdatedTimeOfDay = Game1.timeOfDay;
             this.DecayEmotionAndConflicts(state, emotionDailyDecay, conflictDailyDecay);
         }
+    }
+
+    private void FadeCommunityImpressions(LivingNpcState state)
+    {
+        foreach (var memory in state.CommunityImpressions)
+        {
+            int age = GetMemoryAge(memory.LastUpdatedTotalDays);
+            if (age <= 0)
+            {
+                continue;
+            }
+
+            int sourceDecay = memory.Source switch
+            {
+                "Witnessed" => 1,
+                "CloseCircle" => 3,
+                _ => 5
+            };
+            int distortionDecay = memory.TransmissionDepth + (memory.DistortionLevel / 25);
+            int decay = System.Math.Max(1, sourceDecay + distortionDecay);
+            memory.Confidence = System.Math.Max(0, memory.Confidence - decay);
+            memory.Importance = System.Math.Max(0, memory.Importance - System.Math.Max(1, decay / 2));
+        }
+
+        state.CommunityImpressions = state.CommunityImpressions
+            .Where(memory => memory.ExpiresTotalDays < 0 || memory.ExpiresTotalDays >= Game1.Date.TotalDays)
+            .Where(memory => memory.Confidence >= 18)
+            .OrderByDescending(GetCommunityImpressionRetentionScore)
+            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+            .Take(MaxCommunityImpressionsPerNpc)
+            .ToList();
     }
 
     private void AddFamiliarity(LivingNpcState state, int amount, int dailyCap)
@@ -1514,7 +1592,8 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Shared experiences from fulfilled plans: {state.SharedExperiencePromptLabel}.");
             prompt.AppendLine($"- Trust in keeping plans: {state.CommitmentTrustPromptLabel}.");
             prompt.AppendLine($"- Help requests involving the farmer: {state.HelpRequestPromptLabel}.");
-        prompt.AppendLine($"- Community impressions about the farmer's ties with other NPCs: {this.FormatCommunityImpressionPromptLabel(npc, communityImpressions)}.");
+            prompt.AppendLine($"- Community impressions about the farmer's ties with other NPCs: {this.FormatCommunityImpressionPromptLabel(npc, communityImpressions)}.");
+            prompt.AppendLine($"- Stable community circles this NPC belongs to: {this.FormatSocialCirclePromptLabel(npc)}.");
             prompt.AppendLine("- Help-request lifecycle: Offered means the NPC has asked but the farmer has not accepted; Pending means accepted and active; only Pending requests should be treated like tasks.");
             prompt.AppendLine($"- Help-request readiness: {this.BuildHelpRequestReadinessLabel(npc, state, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, minRelationshipTrustForHelpRequests)}.");
             prompt.AppendLine($"- Help-request fit: {HelpRequestAdvisor.BuildPromptLabel(npc)}");
@@ -2021,8 +2100,22 @@ internal sealed class BehaviorMemory
             "CloseCircle" => 5,
             _ => 1
         };
+        int lifecycleScore = memory.FreshnessStage switch
+        {
+            "fresh" => 10,
+            "settled" => 2,
+            "fading" => -8,
+            _ => -20
+        };
         int recentRecallPenalty = memory.LastRecalledTotalDays == Game1.Date.TotalDays ? 18 : 0;
-        int score = memory.Importance + (memory.Confidence / 5) + freshnessScore + sourceScore + (memory.TimesReinforced * 2) - recentRecallPenalty;
+        int score = memory.Importance
+            + (memory.Confidence / 5)
+            + freshnessScore
+            + sourceScore
+            + lifecycleScore
+            + (memory.TimesReinforced * 2)
+            - recentRecallPenalty
+            - (memory.DistortionLevel / 8);
         string reason = memory.Source switch
         {
             "Witnessed" => $"目击，{FormatMemoryAge(memory.LastUpdatedTotalDays)}",
@@ -2301,7 +2394,7 @@ internal sealed class BehaviorMemory
         CommunityReactionCue reaction = CommunityReactionStyle.For(npc);
         return selections.Count == 0
             ? "no community impression is especially relevant right now"
-            : $"observer tendency: {reaction.PromptLabel}; {string.Join("; ", selections.Select(selection => selection.Memory.PromptLabel))}";
+            : $"observer tendency: {reaction.PromptLabel}; retelling tendency: {reaction.RetellingPromptLabel}; {string.Join("; ", selections.Select(selection => selection.Memory.PromptLabel))}";
     }
 
     private string FormatLongTermMemoryDebugLabel(IReadOnlyList<LongTermMemorySelection> selections)
@@ -2421,7 +2514,8 @@ internal sealed class BehaviorMemory
         state.CommunityImpressions = state.CommunityImpressions
             .Where(memory => memory != null
                 && !string.IsNullOrWhiteSpace(memory.SubjectNpcName)
-                && !string.IsNullOrWhiteSpace(memory.Summary))
+                && !string.IsNullOrWhiteSpace(memory.Summary)
+                && (memory.ExpiresTotalDays < 0 || memory.ExpiresTotalDays >= Game1.Date.TotalDays))
             .Select(NormalizeCommunityImpressionForStore)
             .GroupBy(
                 memory => BuildCommunityImpressionKey(memory.SubjectNpcName, memory.Kind, memory.Summary),
@@ -2482,6 +2576,21 @@ internal sealed class BehaviorMemory
         memory.Visibility = NormalizeCommunityImpressionVisibility(memory.Visibility);
         memory.Confidence = System.Math.Clamp(memory.Confidence, 0, 100);
         memory.Importance = System.Math.Clamp(memory.Importance, 0, 100);
+        memory.TransmissionDepth = System.Math.Clamp(memory.TransmissionDepth, 0, 8);
+        memory.DistortionLevel = System.Math.Clamp(memory.DistortionLevel, 0, 100);
+        memory.HeardFromNpcName = memory.HeardFromNpcName?.Trim() ?? string.Empty;
+        memory.CircleKey = memory.CircleKey?.Trim() ?? string.Empty;
+        memory.ShareCount = System.Math.Max(0, memory.ShareCount);
+        if (memory.ExpiresTotalDays < 0)
+        {
+            memory.ExpiresTotalDays = DetermineCommunityImpressionExpiry(
+                memory.Source,
+                memory.Visibility,
+                memory.TransmissionDepth,
+                memory.LastUpdatedTotalDays >= 0 ? memory.LastUpdatedTotalDays : Game1.Date.TotalDays
+            );
+        }
+
         memory.TimesReinforced = System.Math.Max(0, memory.TimesReinforced);
         memory.RecallCount = System.Math.Max(0, memory.RecallCount);
         if (memory.LastUpdatedTotalDays < 0)
@@ -2627,6 +2736,26 @@ internal sealed class BehaviorMemory
             primary.Confidence = System.Math.Max(primary.Confidence, memory.Confidence);
             primary.Importance = System.Math.Max(primary.Importance, memory.Importance);
             primary.Visibility = GetMoreRestrictiveCommunityVisibility(primary.Visibility, memory.Visibility);
+            primary.TransmissionDepth = System.Math.Min(primary.TransmissionDepth, memory.TransmissionDepth);
+            primary.DistortionLevel = System.Math.Min(primary.DistortionLevel, memory.DistortionLevel);
+            if (string.IsNullOrWhiteSpace(primary.HeardFromNpcName))
+            {
+                primary.HeardFromNpcName = memory.HeardFromNpcName;
+            }
+
+            if (string.IsNullOrWhiteSpace(primary.CircleKey))
+            {
+                primary.CircleKey = memory.CircleKey;
+            }
+
+            primary.ShareCount += memory.ShareCount;
+            if (IsNewerAt(memory.LastSharedTotalDays, memory.LastSharedTimeOfDay, primary.LastSharedTotalDays, primary.LastSharedTimeOfDay))
+            {
+                primary.LastSharedTotalDays = memory.LastSharedTotalDays;
+                primary.LastSharedTimeOfDay = memory.LastSharedTimeOfDay;
+            }
+
+            primary.ExpiresTotalDays = System.Math.Max(primary.ExpiresTotalDays, memory.ExpiresTotalDays);
             primary.TimesReinforced += memory.TimesReinforced;
             primary.RecallCount += memory.RecallCount;
             if (IsOlderCreatedAt(memory.CreatedTotalDays, primary.CreatedTotalDays))
@@ -2730,6 +2859,8 @@ internal sealed class BehaviorMemory
                 "CloseCircle" => 3,
                 _ => 0
             })
+            - (memory.TransmissionDepth * 3)
+            - (memory.DistortionLevel / 10)
             + System.Math.Min(memory.TimesReinforced * 3, 15)
             - System.Math.Min(memory.RecallCount * 2, 12);
     }
@@ -2776,6 +2907,7 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 玩家偏好记忆：{state.PlayerPreferenceDebugLabel}");
             summary.AppendLine($"- 当前检索玩家偏好：{this.FormatPlayerPreferenceDebugLabel(recallPlan.PlayerPreferences)}");
             summary.AppendLine($"- 社区消息口吻：{CommunityReactionStyle.For(npc).DebugLabel}");
+            summary.AppendLine($"- 社区圈层：{this.FormatSocialCircleDebugLabel(npc)}");
             summary.AppendLine($"- 社区印象：{state.CommunityImpressionDebugLabel}");
             summary.AppendLine($"- 当前检索社区印象：{this.FormatCommunityImpressionDebugLabel(communityImpressions)}");
             summary.AppendLine($"- 对话驱动行为：{state.DialogueBehaviorInfluenceDebugLabel}");
@@ -2901,6 +3033,22 @@ internal sealed class BehaviorMemory
         };
 
         return $"{entry.Season} {entry.Day}, {entry.TimeOfDay}{locationSuffix}: {kind} - {entry.Action}; reason: {entry.Reason}";
+    }
+
+    private string FormatSocialCircleDebugLabel(NPC npc)
+    {
+        var labels = NpcSocialGraph.GetStableCircleLabels(npc.Name);
+        return labels.Count == 0
+            ? "暂无稳定圈层"
+            : string.Join("、", labels);
+    }
+
+    private string FormatSocialCirclePromptLabel(NPC npc)
+    {
+        var labels = NpcSocialGraph.GetStableCircleLabels(npc.Name);
+        return labels.Count == 0
+            ? "no stable small-circle affiliation is currently tracked"
+            : string.Join(", ", labels);
     }
 
     private string FormatDebugKind(BehaviorMemoryEntry entry)
@@ -4381,6 +4529,24 @@ internal sealed class BehaviorMemory
         };
     }
 
+    private static int DetermineCommunityImpressionExpiry(string source, string visibility, int transmissionDepth, int baseTotalDays)
+    {
+        int baseLifetime = NormalizeCommunityImpressionSource(source) switch
+        {
+            "Witnessed" => 14,
+            "CloseCircle" => 10,
+            _ => 6
+        };
+        int visibilityAdjustment = NormalizeCommunityImpressionVisibility(visibility) switch
+        {
+            "Private" => -2,
+            "Personal" => -1,
+            _ => 0
+        };
+        int depthPenalty = System.Math.Min(4, System.Math.Max(0, transmissionDepth));
+        return baseTotalDays + System.Math.Max(3, baseLifetime + visibilityAdjustment - depthPenalty);
+    }
+
     private static string NormalizeWorldActionType(string type)
     {
         return type?.Trim().ToLowerInvariant() switch
@@ -5031,20 +5197,57 @@ internal sealed class CommunityImpressionFact
     public string Visibility { get; set; } = "Public";
     public int Confidence { get; set; }
     public int Importance { get; set; }
+    public int TransmissionDepth { get; set; }
+    public int DistortionLevel { get; set; }
+    public string HeardFromNpcName { get; set; } = string.Empty;
+    public string CircleKey { get; set; } = string.Empty;
     public int CreatedTotalDays { get; set; } = -1;
     public int CreatedTimeOfDay { get; set; }
     public int LastUpdatedTotalDays { get; set; } = -1;
     public int LastUpdatedTimeOfDay { get; set; }
     public int LastRecalledTotalDays { get; set; } = -1;
     public int LastRecalledTimeOfDay { get; set; }
+    public int LastSharedTotalDays { get; set; } = -1;
+    public int LastSharedTimeOfDay { get; set; }
+    public int ShareCount { get; set; }
+    public int ExpiresTotalDays { get; set; } = -1;
     public int RecallCount { get; set; }
     public int TimesReinforced { get; set; }
 
+    public string FreshnessStage
+    {
+        get
+        {
+            int age = this.LastUpdatedTotalDays < 0
+                ? int.MaxValue
+                : System.Math.Max(0, Game1.Date.TotalDays - this.LastUpdatedTotalDays);
+            int remaining = this.ExpiresTotalDays < 0
+                ? int.MaxValue
+                : this.ExpiresTotalDays - Game1.Date.TotalDays;
+            if (remaining < 0)
+            {
+                return "expired";
+            }
+
+            if (age <= 1)
+            {
+                return "fresh";
+            }
+
+            if (age <= 5 && remaining >= 2)
+            {
+                return "settled";
+            }
+
+            return "fading";
+        }
+    }
+
     public string PromptLabel => this.Source switch
     {
-        "Witnessed" => $"directly witnessed ({this.Visibility.ToLowerInvariant()}): {this.Summary}",
-        "CloseCircle" => $"heard through a close connection ({this.Visibility.ToLowerInvariant()}): {this.Summary}",
-        _ => $"picked up as a faint public impression ({this.Visibility.ToLowerInvariant()}): {this.Summary}"
+        "Witnessed" => $"directly witnessed, {this.FreshnessStage} ({this.Visibility.ToLowerInvariant()}): {this.Summary}",
+        "CloseCircle" => $"heard through a close connection after {this.TransmissionDepth} retelling(s), {this.FreshnessStage} ({this.Visibility.ToLowerInvariant()}): {this.Summary}",
+        _ => $"picked up as a faint public impression after {this.TransmissionDepth} retelling(s), {this.FreshnessStage} ({this.Visibility.ToLowerInvariant()}): {this.Summary}"
     };
 }
 
@@ -5682,7 +5885,7 @@ internal sealed class LivingNpcState
             return memories.Count == 0
                 ? "暂无"
                 : string.Join("；", memories.Select(memory =>
-                    $"{memory.Summary}（{memory.Source}/{memory.Visibility}，重要度 {memory.Importance}）"));
+                    $"{memory.Summary}（{memory.Source}/{memory.Visibility}，{memory.FreshnessStage}，转述 {memory.TransmissionDepth} 次，失真 {memory.DistortionLevel}，重要度 {memory.Importance}）"));
         }
     }
 
@@ -5952,7 +6155,8 @@ internal sealed class LivingNpcState
         this.CommunityImpressions = this.CommunityImpressions
             .Where(memory => memory != null
                 && !string.IsNullOrWhiteSpace(memory.SubjectNpcName)
-                && !string.IsNullOrWhiteSpace(memory.Summary))
+                && !string.IsNullOrWhiteSpace(memory.Summary)
+                && (memory.ExpiresTotalDays < 0 || memory.ExpiresTotalDays >= Game1.Date.TotalDays))
             .Select(BehaviorMemory.NormalizeCommunityImpressionForStore)
             .OrderByDescending(BehaviorMemory.GetCommunityImpressionRetentionScore)
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
@@ -6330,6 +6534,10 @@ internal sealed class LivingNpcState
                     Source = memory.Source,
                     Visibility = memory.Visibility,
                     Confidence = memory.Confidence,
+                    TransmissionDepth = memory.TransmissionDepth,
+                    DistortionLevel = memory.DistortionLevel,
+                    HeardFromNpcName = memory.HeardFromNpcName,
+                    CircleKey = memory.CircleKey,
                     Importance = memory.Importance,
                     CreatedTotalDays = memory.CreatedTotalDays,
                     CreatedTimeOfDay = memory.CreatedTimeOfDay,
@@ -6337,6 +6545,10 @@ internal sealed class LivingNpcState
                     LastUpdatedTimeOfDay = memory.LastUpdatedTimeOfDay,
                     LastRecalledTotalDays = memory.LastRecalledTotalDays,
                     LastRecalledTimeOfDay = memory.LastRecalledTimeOfDay,
+                    LastSharedTotalDays = memory.LastSharedTotalDays,
+                    LastSharedTimeOfDay = memory.LastSharedTimeOfDay,
+                    ShareCount = memory.ShareCount,
+                    ExpiresTotalDays = memory.ExpiresTotalDays,
                     RecallCount = memory.RecallCount,
                     TimesReinforced = memory.TimesReinforced
                 })
