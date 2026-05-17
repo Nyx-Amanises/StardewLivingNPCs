@@ -51,6 +51,36 @@ internal static class WorldProgression
             ["Bear"] = ["foraging"]
         };
 
+    private static readonly IReadOnlyDictionary<string, IReadOnlyCollection<string>> ExplicitAttitudeTraits =
+        new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Lewis"] = ["community", "civic"],
+            ["Lenny"] = ["community", "civic"],
+            ["Gus"] = ["community", "hospitality"],
+            ["Pierre"] = ["anti_joja", "community", "shopkeeper"],
+            ["Morris"] = ["pro_joja", "corporate"],
+            ["Claire"] = ["joja_tension", "work"],
+            ["Martin"] = ["joja_tension", "work"],
+            ["Andy"] = ["anti_joja", "traditional", "farming"],
+            ["Susan"] = ["community", "farming"],
+            ["Robin"] = ["farming", "practical"],
+            ["Marnie"] = ["farming", "family"],
+            ["Willy"] = ["travel", "fishing"],
+            ["Sandy"] = ["travel"],
+            ["Pam"] = ["bus", "work"],
+            ["Kenneth"] = ["technical", "practical"],
+            ["Olivia"] = ["social", "refined"],
+            ["Pika"] = ["hospitality", "family"],
+            ["Jodi"] = ["family"],
+            ["Evelyn"] = ["family", "community"],
+            ["Penny"] = ["family", "community"],
+            ["Lance"] = ["travel", "adventurous"],
+            ["Alesia"] = ["adventurous"],
+            ["Isaac"] = ["adventurous"],
+            ["MarlonFay"] = ["adventurous"],
+            ["Gil"] = ["adventurous"]
+        };
+
     public static WorldProgressSnapshot Current()
     {
         Farmer farmer = Game1.getPlayerOrEventFarmer();
@@ -154,6 +184,8 @@ internal static class WorldProgression
     {
         var observationDomains = DetermineObservationDomains(npc);
         var learnedDomains = DetermineLearnedDomains(state);
+        var disposition = NpcDisposition.For(npc);
+        var attitudeTraits = DetermineAttitudeTraits(npc, disposition);
         bool learnedFarmScale = HasLearnedFarmScale(state);
         bool onFarm = locationName.Contains("farm", StringComparison.OrdinalIgnoreCase);
         bool trustedRelationship = friendshipHearts >= 6;
@@ -188,16 +220,19 @@ internal static class WorldProgression
             learnedFarmScale,
             learnedDomains
         );
+        string attitudePrompt = BuildNpcAttitudePromptLabel(progression, attitudeTraits);
+        string attitudeDebug = BuildNpcAttitudeDebugLabel(progression, attitudeTraits);
 
         return new WorldProgressKnowledgeSnapshot(
             observationDomains,
             learnedDomains,
+            attitudeTraits,
             knownProfessionFocuses,
             farmKnowledgeAvailable,
             trustedRelationship,
-            BuildNpcPromptLabel(progression, personalKnowledgePrompt),
-            BuildNpcDebugLabel(progression, personalKnowledgeDebug),
-            BuildNpcReplyGuidance(progression, farmKnowledgeAvailable, knownProfessionFocuses)
+            BuildNpcPromptLabel(progression, personalKnowledgePrompt, attitudePrompt),
+            BuildNpcDebugLabel(progression, personalKnowledgeDebug, attitudeDebug),
+            BuildNpcReplyGuidance(progression, farmKnowledgeAvailable, knownProfessionFocuses, attitudePrompt)
         );
     }
 
@@ -291,6 +326,42 @@ internal static class WorldProgression
     {
         return ExplicitObservationDomains.TryGetValue(npcName, out var domains)
             && domains.Contains(domain, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyCollection<string> DetermineAttitudeTraits(NPC npc, NpcDispositionProfile disposition)
+    {
+        var traits = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (ExplicitAttitudeTraits.TryGetValue(npc.Name, out var explicitTraits))
+        {
+            foreach (string trait in explicitTraits)
+            {
+                traits.Add(trait);
+            }
+        }
+
+        string profileText = $"{disposition.PromptLabel} {disposition.BackgroundPrompt} {disposition.DialoguePrompt}".ToLowerInvariant();
+        AddTraitIfPresent(traits, profileText, "community", "community", "civic", "neighborly", "village", "social life");
+        AddTraitIfPresent(traits, profileText, "family", "family", "maternal", "paternal", "parent", "household");
+        AddTraitIfPresent(traits, profileText, "farming", "farm", "ranch", "vineyard", "crop");
+        AddTraitIfPresent(traits, profileText, "hospitality", "hospitality", "restaurant", "saloon", "hotel");
+        AddTraitIfPresent(traits, profileText, "technical", "technical", "engineering", "electrician", "carpenter");
+        AddTraitIfPresent(traits, profileText, "travel", "travel", "commute", "distant islands", "sea");
+        AddTraitIfPresent(traits, profileText, "adventurous", "adventurer", "danger", "exploration", "guild");
+        AddTraitIfPresent(traits, profileText, "social", "social", "performer", "stylish", "polished");
+        AddTraitIfPresent(traits, profileText, "refined", "refined", "wealthy", "elegant");
+        AddTraitIfPresent(traits, profileText, "traditional", "traditional", "old-fashioned");
+        AddTraitIfPresent(traits, profileText, "work", "work", "retail", "manager", "shopkeeper");
+        AddTraitIfPresent(traits, profileText, "practical", "practical", "grounded", "busy");
+        AddTraitIfPresent(traits, profileText, "fishing", "fishing", "fisher", "water life");
+        return traits;
+    }
+
+    private static void AddTraitIfPresent(HashSet<string> traits, string text, string trait, params string[] clues)
+    {
+        if (ContainsAny(text, clues))
+        {
+            traits.Add(trait);
+        }
     }
 
     private static IReadOnlyCollection<string> DetermineLearnedDomains(LivingNpcState? state)
@@ -453,9 +524,12 @@ internal static class WorldProgression
         return $"route: {FormatRoutePrompt(route)}; resident stage: {FormatResidentStagePrompt(residentStage)}; {facilities}; {professions}; farm scale: {FormatFarmScalePrompt(farmScale)} ({cropCount} growing crops, {buildingCount} completed farm buildings, {animalCount} animals); {household}";
     }
 
-    private static string BuildNpcPromptLabel(WorldProgressSnapshot progression, string personalKnowledgePrompt)
+    private static string BuildNpcPromptLabel(
+        WorldProgressSnapshot progression,
+        string personalKnowledgePrompt,
+        string attitudePrompt)
     {
-        return $"public facts: {BuildPublicPromptLabel(progression)}; personal knowledge available to this NPC: {personalKnowledgePrompt}";
+        return $"public facts: {BuildPublicPromptLabel(progression)}; personal knowledge available to this NPC: {personalKnowledgePrompt}; personal attitude lens: {attitudePrompt}";
     }
 
     private static string BuildPublicPromptLabel(WorldProgressSnapshot progression)
@@ -540,9 +614,12 @@ internal static class WorldProgression
         return $"路线：{FormatRouteDebug(route)}；阶段：{FormatResidentStageDebug(residentStage)}；解锁：{facilities}；职业：{professions}；农场：{FormatFarmScaleDebug(farmScale)}（作物 {cropCount}，建筑 {buildingCount}，动物 {animalCount}）；家庭：{household}";
     }
 
-    private static string BuildNpcDebugLabel(WorldProgressSnapshot progression, string personalKnowledgeDebug)
+    private static string BuildNpcDebugLabel(
+        WorldProgressSnapshot progression,
+        string personalKnowledgeDebug,
+        string attitudeDebug)
     {
-        return $"公开事实：{BuildPublicDebugLabel(progression)}；NPC 可知私人信息：{personalKnowledgeDebug}";
+        return $"公开事实：{BuildPublicDebugLabel(progression)}；NPC 可知私人信息：{personalKnowledgeDebug}；NPC 世界态度：{attitudeDebug}";
     }
 
     private static string BuildPublicDebugLabel(WorldProgressSnapshot progression)
@@ -638,7 +715,8 @@ internal static class WorldProgression
     private static string BuildNpcReplyGuidance(
         WorldProgressSnapshot progression,
         bool farmKnowledgeAvailable,
-        IReadOnlyCollection<string> knownProfessionFocuses)
+        IReadOnlyCollection<string> knownProfessionFocuses,
+        string attitudePrompt)
     {
         string privateKnowledgeGuidance = farmKnowledgeAvailable
             ? "the NPC may refer to the farm's general scale, but should not cite exact crops, buildings, or animal counts unless the farmer just said so"
@@ -649,7 +727,179 @@ internal static class WorldProgression
                 ? "do not let this NPC casually name the farmer's profession focus"
                 : "no profession focus needs to be assumed yet";
 
-        return $"{progression.ReplyGuidance} {privateKnowledgeGuidance}; {professionGuidance}.";
+        return $"{progression.ReplyGuidance} {privateKnowledgeGuidance}; {professionGuidance}; let relevant world changes pass through this NPC's own attitude rather than sounding neutral: {attitudePrompt}.";
+    }
+
+    private static string BuildNpcAttitudePromptLabel(
+        WorldProgressSnapshot progression,
+        IReadOnlyCollection<string> attitudeTraits)
+    {
+        var cues = new List<string>();
+
+        switch (progression.Route)
+        {
+            case "community_center" when attitudeTraits.Contains("pro_joja", StringComparer.OrdinalIgnoreCase):
+                cues.Add("the restored community center may feel like a public loss or an inconvenient civic victory");
+                break;
+            case "community_center" when attitudeTraits.Contains("community", StringComparer.OrdinalIgnoreCase)
+                || attitudeTraits.Contains("anti_joja", StringComparer.OrdinalIgnoreCase)
+                || attitudeTraits.Contains("traditional", StringComparer.OrdinalIgnoreCase):
+                cues.Add("the restored community center may feel hopeful, communal, or quietly vindicating");
+                break;
+            case "community_center" when attitudeTraits.Contains("joja_tension", StringComparer.OrdinalIgnoreCase):
+                cues.Add("the restored community center may feel personally mixed because Joja touched this NPC's own work life");
+                break;
+            case "joja" when attitudeTraits.Contains("pro_joja", StringComparer.OrdinalIgnoreCase):
+                cues.Add("the Joja route may feel like proof that their practical or corporate worldview prevailed");
+                break;
+            case "joja" when attitudeTraits.Contains("anti_joja", StringComparer.OrdinalIgnoreCase):
+                cues.Add("the Joja route may carry disappointment, wariness, or a sense that something communal was lost");
+                break;
+            case "joja" when attitudeTraits.Contains("community", StringComparer.OrdinalIgnoreCase):
+                cues.Add("the Joja route may be treated pragmatically, but with some awareness that civic life changed");
+                break;
+            case "joja" when attitudeTraits.Contains("joja_tension", StringComparer.OrdinalIgnoreCase):
+                cues.Add("the Joja route may feel personally complicated because it touches this NPC's livelihood rather than being an abstract civic question");
+                break;
+            case "unresolved" when attitudeTraits.Contains("community", StringComparer.OrdinalIgnoreCase)
+                || attitudeTraits.Contains("anti_joja", StringComparer.OrdinalIgnoreCase):
+                cues.Add("the town's unresolved route may still feel like an open civic concern rather than settled history");
+                break;
+            case "unresolved" when attitudeTraits.Contains("joja_tension", StringComparer.OrdinalIgnoreCase):
+                cues.Add("the unresolved route may carry a low-level personal uncertainty around Joja's place in town");
+                break;
+        }
+
+        if (progression.BusRepaired && attitudeTraits.Contains("bus", StringComparer.OrdinalIgnoreCase))
+        {
+            cues.Add("the repaired bus is personally significant, not just background infrastructure");
+        }
+        else if (progression.BusRepaired && attitudeTraits.Contains("travel", StringComparer.OrdinalIgnoreCase))
+        {
+            cues.Add("the repaired bus can register as expanded freedom or renewed connection");
+        }
+
+        if (progression.GreenhouseRepaired && attitudeTraits.Contains("farming", StringComparer.OrdinalIgnoreCase))
+        {
+            cues.Add("the greenhouse can read as a practical sign that the farmer's life has become more established");
+        }
+
+        if (progression.MinecartsRepaired && attitudeTraits.Contains("technical", StringComparer.OrdinalIgnoreCase))
+        {
+            cues.Add("the minecarts may stand out as useful infrastructure rather than mere convenience");
+        }
+
+        if (progression.GingerIslandUnlocked
+            && (attitudeTraits.Contains("travel", StringComparer.OrdinalIgnoreCase)
+                || attitudeTraits.Contains("adventurous", StringComparer.OrdinalIgnoreCase)
+                || attitudeTraits.Contains("fishing", StringComparer.OrdinalIgnoreCase)))
+        {
+            cues.Add("Ginger Island access may feel especially vivid through travel, adventure, or sea-life interests");
+        }
+
+        if (progression.MovieTheaterOpen
+            && (attitudeTraits.Contains("social", StringComparer.OrdinalIgnoreCase)
+                || attitudeTraits.Contains("hospitality", StringComparer.OrdinalIgnoreCase)
+                || attitudeTraits.Contains("refined", StringComparer.OrdinalIgnoreCase)))
+        {
+            cues.Add("the movie theater may register as a social or cultural change, not merely a new building");
+        }
+
+        if ((progression.SpouseNames.Count > 0 || progression.ChildrenCount > 0)
+            && attitudeTraits.Contains("family", StringComparer.OrdinalIgnoreCase))
+        {
+            cues.Add("marriage or children may be noticed with personal warmth or family-minded concern when relevant");
+        }
+
+        return cues.Count == 0
+            ? "no strong personal stance is implied; keep reactions shaped by temperament but modest"
+            : string.Join("; ", cues.Take(3));
+    }
+
+    private static string BuildNpcAttitudeDebugLabel(
+        WorldProgressSnapshot progression,
+        IReadOnlyCollection<string> attitudeTraits)
+    {
+        var cues = new List<string>();
+
+        switch (progression.Route)
+        {
+            case "community_center" when attitudeTraits.Contains("pro_joja", StringComparer.OrdinalIgnoreCase):
+                cues.Add("社区中心修复可能让其不快");
+                break;
+            case "community_center" when attitudeTraits.Contains("community", StringComparer.OrdinalIgnoreCase)
+                || attitudeTraits.Contains("anti_joja", StringComparer.OrdinalIgnoreCase)
+                || attitudeTraits.Contains("traditional", StringComparer.OrdinalIgnoreCase):
+                cues.Add("社区中心修复更可能带来欣慰或认同");
+                break;
+            case "community_center" when attitudeTraits.Contains("joja_tension", StringComparer.OrdinalIgnoreCase):
+                cues.Add("社区中心修复对其可能带着和工作有关的复杂感受");
+                break;
+            case "joja" when attitudeTraits.Contains("pro_joja", StringComparer.OrdinalIgnoreCase):
+                cues.Add("Joja 路线更可能被视为自己立场得证");
+                break;
+            case "joja" when attitudeTraits.Contains("anti_joja", StringComparer.OrdinalIgnoreCase):
+                cues.Add("Joja 路线更可能带来失望或戒备");
+                break;
+            case "joja" when attitudeTraits.Contains("community", StringComparer.OrdinalIgnoreCase):
+                cues.Add("Joja 路线会被看成影响社区生活的变化");
+                break;
+            case "joja" when attitudeTraits.Contains("joja_tension", StringComparer.OrdinalIgnoreCase):
+                cues.Add("Joja 路线对其更像切身处境，而不只是镇上新闻");
+                break;
+            case "unresolved" when attitudeTraits.Contains("community", StringComparer.OrdinalIgnoreCase)
+                || attitudeTraits.Contains("anti_joja", StringComparer.OrdinalIgnoreCase):
+                cues.Add("路线未定仍是其会在意的社区问题");
+                break;
+            case "unresolved" when attitudeTraits.Contains("joja_tension", StringComparer.OrdinalIgnoreCase):
+                cues.Add("路线未定会给其留下和 Joja 有关的持续不确定感");
+                break;
+        }
+
+        if (progression.BusRepaired && attitudeTraits.Contains("bus", StringComparer.OrdinalIgnoreCase))
+        {
+            cues.Add("巴士修好对其有直接意义");
+        }
+        else if (progression.BusRepaired && attitudeTraits.Contains("travel", StringComparer.OrdinalIgnoreCase))
+        {
+            cues.Add("巴士修好会被看作重新连通");
+        }
+
+        if (progression.GreenhouseRepaired && attitudeTraits.Contains("farming", StringComparer.OrdinalIgnoreCase))
+        {
+            cues.Add("温室会被视作农场成熟的信号");
+        }
+
+        if (progression.MinecartsRepaired && attitudeTraits.Contains("technical", StringComparer.OrdinalIgnoreCase))
+        {
+            cues.Add("矿车修好会被其看成有价值的基础设施");
+        }
+
+        if (progression.GingerIslandUnlocked
+            && (attitudeTraits.Contains("travel", StringComparer.OrdinalIgnoreCase)
+                || attitudeTraits.Contains("adventurous", StringComparer.OrdinalIgnoreCase)
+                || attitudeTraits.Contains("fishing", StringComparer.OrdinalIgnoreCase)))
+        {
+            cues.Add("姜岛会明显勾起旅行、冒险或水上生活联想");
+        }
+
+        if (progression.MovieTheaterOpen
+            && (attitudeTraits.Contains("social", StringComparer.OrdinalIgnoreCase)
+                || attitudeTraits.Contains("hospitality", StringComparer.OrdinalIgnoreCase)
+                || attitudeTraits.Contains("refined", StringComparer.OrdinalIgnoreCase)))
+        {
+            cues.Add("电影院会被看作社交或文化变化");
+        }
+
+        if ((progression.SpouseNames.Count > 0 || progression.ChildrenCount > 0)
+            && attitudeTraits.Contains("family", StringComparer.OrdinalIgnoreCase))
+        {
+            cues.Add("婚姻或孩子更容易触动其家庭视角");
+        }
+
+        return cues.Count == 0
+            ? "暂无强烈专属立场"
+            : string.Join("；", cues.Take(3));
     }
 
     private static string BuildFacilityPromptLabel(WorldProgressSnapshot progression)
@@ -826,6 +1076,7 @@ internal sealed record WorldProgressSnapshot(
 internal sealed record WorldProgressKnowledgeSnapshot(
     IReadOnlyCollection<string> ObservationDomains,
     IReadOnlyCollection<string> LearnedDomains,
+    IReadOnlyCollection<string> AttitudeTraits,
     IReadOnlyList<string> KnownProfessionFocuses,
     bool KnowsFarmScale,
     bool TrustedRelationship,
