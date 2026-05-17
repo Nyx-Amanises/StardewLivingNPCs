@@ -98,6 +98,44 @@ internal static class HelpRequestAdvisor
         return $"theme {profile.Theme}; currently reasonable item requests: {itemText}; fitting question requests: {questionText}; request depth: {stageText}; world-stage constraint: {routeText}; only ask if the current conversation naturally creates a reason.";
     }
 
+    public static string BuildDebugLabel(NPC npc, WorldProgressSnapshot progression)
+    {
+        var profile = GetProfile(npc);
+        var tags = new HashSet<string>(profile.Tags, StringComparer.OrdinalIgnoreCase);
+        var seasonal = GetSeasonalItems()
+            .Where(item => item.Tags.Any(tags.Contains))
+            .Take(3)
+            .ToList();
+        var progressionItems = GetProgressionItems()
+            .Where(item => item.Tags.Any(tags.Contains))
+            .Take(2)
+            .ToList();
+        var preferredItems = seasonal
+            .Concat(progressionItems)
+            .DistinctBy(item => item.ItemId)
+            .ToList();
+
+        string itemText = preferredItems.Count == 0
+            ? "当前不建议物品求助"
+            : string.Join("、", preferredItems.Select(item => $"{item.Label} {item.ItemId}"));
+        string questionText = string.Join("、", profile.QuestionPrompts);
+        string depthText = progression.ResidentStage switch
+        {
+            "first_spring_newcomer" => "第一年春，新人阶段：只适合低负担一步小忙或简单问题",
+            "first_year_settling_in" => "第一年安顿中：以一步小忙为主，强语境下可两步",
+            "second_year_established" => "第二年已融入：可出现适度个人请求",
+            _ => "老住户阶段：高信任时可出现更完整请求"
+        };
+        string routeText = progression.Route switch
+        {
+            "community_center" => "社区中心路线已完成",
+            "joja" => "Joja 路线已完成",
+            _ => "路线未定"
+        };
+
+        return $"主题：{profile.Theme}；候选物品：{itemText}；候选问题：{questionText}；深度：{depthText}；路线：{routeText}";
+    }
+
     public static bool IsCurrentlyRequestableItem(string itemId)
     {
         return GetSeasonalItems()

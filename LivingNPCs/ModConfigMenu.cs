@@ -82,6 +82,11 @@ internal static class ModConfigMenu
             setValue: value => config.ShowHudMessages = value
         );
 
+        configMenu.AddParagraph(
+            mod: manifest,
+            text: () => "SMAPI 调试命令：livingnpcs_debug、livingnpcs_prompt、livingnpcs_export、livingnpcs_eval。"
+        );
+
         configMenu.AddSectionTitle(
             mod: manifest,
             text: () => "手动测试"

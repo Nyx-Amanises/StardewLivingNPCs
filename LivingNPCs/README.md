@@ -322,6 +322,32 @@ LivingNPCs 现在会把“这个存档已经走到哪里”压成一层独立的
 - `Pam` 对巴士修复、`Willy` 对姜岛、农场型角色对温室、重视家庭的角色对结婚生子，都会拿到更贴近自己的态度提示。
 - 这套态度层对原版、SVE、RSV 角色都会生效；有手写档案的角色更准，没手写档案的角色会从 `Data/Characters` 与现有人物提示里保守推断。
 
+### 调试与评估工具
+
+现在可以用几种方式看清 LivingNPCs 为什么这样判断：
+
+- `LeftShift + J`：查看附近 NPC 的状态摘要，输出到 SMAPI 控制台。
+- `livingnpcs_debug [near|NPC名]`：输出某个 NPC 的状态、最近行为原因、求助生成适配、记忆召回。
+- `livingnpcs_prompt [near|NPC名]`：输出即将注入 ValleyTalk 的完整隐藏上下文。
+- `livingnpcs_export [near|all|NPC名]`：导出 Markdown 调试报告到 `Mods/LivingNPCs/debug_reports/<存档名>/`。
+- `livingnpcs_eval`：运行一组轻量运行时诊断，确认关键人格化规则还在。
+
+报告里会显示：
+
+- 每个 NPC 当前状态。
+- 最近为什么选择了这个行为。
+- 这次为什么适合 / 不适合提出求助。
+- 哪些长期记忆、玩家偏好、社区印象被检索进 prompt。
+- 完整 ValleyTalk 隐藏上下文预览。
+
+仓库根目录还提供了离线回归检查：
+
+```powershell
+dotnet run --project LivingNPCs.Diagnostics\LivingNPCs.Diagnostics.csproj -- .
+```
+
+它不需要启动游戏，用来检查调试命令、情绪表达风格、求助解释、行为选择原因和文档说明没有被改丢。
+
 ### NPC 社会关系层
 
 LivingNPCs 现在不再只记“这个 NPC 和玩家之间发生了什么”，还会保存一层小范围的社区印象。

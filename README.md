@@ -192,6 +192,34 @@ LivingNPCs 现在还会把“这个存档已经走到哪一步”写进隐藏上
 - 魔法线、冒险线、农场 / 葡萄园线、Joja 线、里奇赛德社区线等角色，会获得更贴身份的个人化提示。
 - 未确认的扩展里程碑会被明确标记为未完成，避免 AI 提前剧透或编造玩家已经做过的事。
 
+### 4.7. 调试与评估工具
+
+为了后面越做越大时还能看清“为什么”，现在加了一层调试工具：
+
+| 工具 | 用途 |
+| --- | --- |
+| `LeftShift + J` | 输出最近 NPC 的状态、记忆、召回结果到 SMAPI 控制台 |
+| `livingnpcs_debug [near\|NPC名]` | 输出某个 NPC 当前状态、最近行为选择原因、求助生成适配和记忆召回 |
+| `livingnpcs_prompt [near\|NPC名]` | 输出 LivingNPCs 即将注入 ValleyTalk 的完整隐藏上下文 |
+| `livingnpcs_export [near\|all\|NPC名]` | 导出 Markdown 调试报告到 `Mods/LivingNPCs/debug_reports/<存档名>/` |
+| `livingnpcs_eval` | 在游戏内跑一组轻量运行时诊断，确认关键人格化规则还在 |
+
+导出的报告会包含：
+
+- 每个 NPC 的当前状态可视化表格。
+- 最近为什么选择了某个行为。
+- 当前为什么适合或不适合提出求助。
+- 本次哪些长期记忆、玩家偏好、社区印象被检索进 prompt。
+- 完整 ValleyTalk 隐藏上下文预览。
+
+仓库里还新增了一个离线回归检查项目：
+
+```powershell
+dotnet run --project LivingNPCs.Diagnostics\LivingNPCs.Diagnostics.csproj -- .
+```
+
+它不需要开游戏，主要检查关键调试能力、情绪风格、求助解释、行为选择原因和 README 说明没有被后续改动误删。
+
 ### 5. NPC 行为层
 
 当前已实现的安全微行为：

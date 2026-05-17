@@ -2932,6 +2932,8 @@ internal sealed class BehaviorMemory
                 preferenceCount: 4
             );
             IReadOnlyList<CommunityImpressionSelection> communityImpressions = this.BuildCommunityImpressionRecallPlan(state, maxCount: 2);
+            var latestBehavior = entries?
+                .LastOrDefault(entry => string.Equals(entry.Kind, "Behavior", System.StringComparison.OrdinalIgnoreCase));
             summary.AppendLine($"{npc.displayName} 当前 LivingNPCs 状态：");
             summary.AppendLine($"- 心情：{state.MoodLabel}");
             summary.AppendLine($"- 人际情绪：{state.EmotionLabel}");
@@ -2952,10 +2954,12 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 社区印象：{state.CommunityImpressionDebugLabel}");
             summary.AppendLine($"- 当前检索社区印象：{this.FormatCommunityImpressionDebugLabel(communityImpressions)}");
             summary.AppendLine($"- 对话驱动行为：{state.DialogueBehaviorInfluenceDebugLabel}");
+            summary.AppendLine($"- 最近行为选择：{this.FormatLatestBehaviorChoiceDebugLabel(latestBehavior)}");
             summary.AppendLine($"- 长期约定：{state.CommitmentDebugLabel}");
             summary.AppendLine($"- 共同经历：{state.SharedExperienceDebugLabel}");
             summary.AppendLine($"- 履约信任：{state.CommitmentTrustDebugLabel}");
             summary.AppendLine($"- 主动求助：{state.HelpRequestDebugLabel}");
+            summary.AppendLine($"- 求助生成适配：{HelpRequestAdvisor.BuildDebugLabel(npc, world.Progression)}");
             summary.AppendLine($"- 冲突记忆：{state.ConflictDebugLabel}");
             summary.AppendLine($"- 长期称呼记忆：{state.FarmerNicknameLabel}");
             summary.AppendLine($"- 今日 AI 对话额外好感：{state.AiFriendshipGainedToday}");
@@ -2996,6 +3000,18 @@ internal sealed class BehaviorMemory
         }
 
         return summary.ToString().TrimEnd();
+    }
+
+    private string FormatLatestBehaviorChoiceDebugLabel(BehaviorMemoryEntry? entry)
+    {
+        if (entry == null)
+        {
+            return "暂无行为选择记录";
+        }
+
+        string location = string.IsNullOrWhiteSpace(entry.LocationDisplayName) ? entry.LocationName : entry.LocationDisplayName;
+        string locationPart = string.IsNullOrWhiteSpace(location) ? string.Empty : $"，地点 {location}";
+        return $"{entry.Action}（第 {entry.TotalDays} 天 {entry.TimeOfDay}{locationPart}；原因：{entry.Reason}）";
     }
 
     private LivingNpcState GetOrCreateState(NPC npc)
@@ -6055,7 +6071,7 @@ internal sealed class LivingNpcState
             return requests.Count == 0
                 ? "暂无"
                 : string.Join("；", requests.Select(request =>
-                    $"{request.Summary}（{request.Type}，截止第 {request.DueTotalDays} 天，{request.Status}）"));
+                    $"{request.Summary}（{request.Type}，截止第 {request.DueTotalDays} 天，{request.Status}，原因：{request.Reason}，当前步骤：{request.CurrentStepPromptLabel}）"));
         }
     }
 
