@@ -20,6 +20,7 @@ internal static class WorldContext
         int friendshipHearts = GetFriendshipHearts(npc);
         var relationship = DetermineRelationship(friendshipHearts);
         var social = DetermineSocialContext(npc);
+        var progression = WorldProgression.Current();
         var stateInfluence = BuildStateInfluence([
             time.StateCue,
             weather.StateCue,
@@ -74,6 +75,7 @@ internal static class WorldContext
             Game1.dayOfMonth,
             Game1.timeOfDay,
             friendshipHearts,
+            progression,
             social.NearbyNpcNames,
             stateInfluence,
             string.Join("; ", promptParts),
@@ -299,6 +301,7 @@ internal sealed record WorldContextSnapshot(
     int DayOfMonth,
     int TimeOfDay,
     int FriendshipHearts,
+    WorldProgressSnapshot Progression,
     IReadOnlyList<string> NearbyNpcNames,
     WorldStateInfluence StateInfluence,
     string PromptLabel,
