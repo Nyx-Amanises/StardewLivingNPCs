@@ -607,6 +607,7 @@ public class Character
 
     public IEnumerable<string> ProcessLines(string resultString,bool relaxedValidation = false)
     {
+        resultString = NormalizeRawModelOutput(resultString);
         var resultLines = resultString.Split('\n').AsEnumerable();
         // Remove any line breaks
         resultLines = resultLines.Select(x => x.Replace("\n", "").Replace("\r", "").Trim());
@@ -689,9 +690,10 @@ public class Character
 
     private string CommonCleanup(string line)
     {
+        line = StreamingDialoguePreview.StripHiddenAndResponseTail(line);
         // Remove any leading punctuation and trailing quotation marks
-        line = line.Trim().TrimStart('-', ' ', '"', '%');
-        line = line.TrimEnd('"');
+        line = line.Trim().TrimStart('-', ' ', '"', '“', '%');
+        line = line.TrimEnd('"', '”');
         // If the string starts or ends with #$b# ot #$e# remove it.
         line = line.StartsWith("#$b#") ? line[4..] : line;
         line = line.EndsWith("#$b#") ? line[..^4] : line;
@@ -699,11 +701,13 @@ public class Character
         line = line.EndsWith("#$e#") ? line[..^4] : line;
         // Remove any quotation marks
         line = line.Replace("\"", "");
+        line = line.Replace("“", "").Replace("”", "");
         return line;
     }
 
     private string DialogueLineCleanup(string line,bool relaxedValidation = false)
     {
+        line = StreamingDialoguePreview.StripHiddenAndResponseTail(line);
         // Normalize common invalid break tokens emitted by smaller models.
         line = line.Replace("#b#", "#$b#", StringComparison.OrdinalIgnoreCase);
         line = line.Replace("#e#", "#$e#", StringComparison.OrdinalIgnoreCase);
@@ -828,6 +832,27 @@ public class Character
             line = string.Join("#", elements);
         }
         return line;
+    }
+
+    private string NormalizeRawModelOutput(string resultString)
+    {
+        if (string.IsNullOrWhiteSpace(resultString))
+        {
+            return string.Empty;
+        }
+
+        string normalized = resultString.Replace("\r", string.Empty);
+        normalized = System.Text.RegularExpressions.Regex.Replace(
+            normalized,
+            @"\s*!+LIVINGNPCS_META",
+            "\n!LIVINGNPCS_META",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        normalized = System.Text.RegularExpressions.Regex.Replace(
+            normalized,
+            @"\s+(%{1,2}\s*)",
+            "\n% ",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        return normalized;
     }
 
     private string ResponseLineCleanup(string line)

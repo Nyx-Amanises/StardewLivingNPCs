@@ -6,6 +6,14 @@ namespace ValleyTalk;
 
 internal static class ConversationTextPostProcessor
 {
+    private static readonly Regex PlayerFarewellPattern = new(
+        @"(再见|拜拜|回头见|回头聊|下次见|改天聊|晚点见|先走|先去|去忙|我得走|我要走|不打扰|先这样|回农场|去农场忙|see\s+you|goodbye|bye|later|talk\s+later)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
+    private static readonly Regex NpcFarewellPattern = new(
+        @"(回头见|下次见|改天聊|先忙|先去|再见|拜拜|不耽误你|你去忙吧|我该走了|see\s+you|goodbye|bye|talk\s+later)",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+
     public static string NormalizeImmediateNicknameReply(string dialogue, string playerText)
     {
         if (string.IsNullOrWhiteSpace(dialogue)
@@ -18,6 +26,18 @@ internal static class ConversationTextPostProcessor
         }
 
         return dialogue.Replace(Game1.player.Name, nickname, StringComparison.Ordinal);
+    }
+
+    public static bool PlayerLikelyEndedConversation(string playerText)
+    {
+        return !string.IsNullOrWhiteSpace(playerText)
+            && PlayerFarewellPattern.IsMatch(playerText);
+    }
+
+    public static bool NpcLikelyEndedConversation(string npcText)
+    {
+        return !string.IsNullOrWhiteSpace(npcText)
+            && NpcFarewellPattern.IsMatch(npcText);
     }
 
     private static bool TryExtractNicknameRequest(string playerText, out string nickname)

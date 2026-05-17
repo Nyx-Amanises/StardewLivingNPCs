@@ -9,7 +9,7 @@ namespace ValleyTalk
         public static bool Prefix(ref NPC __instance, ref Dialogue __result, string dialogueKey)
         {
             ModEntry.SMonitor.Log($"NPC {__instance.Name} trying to get marriage specific dialogue with key '{dialogueKey}'", StardewModdingAPI.LogLevel.Trace);
-            if (!DialogueBuilder.Instance.PatchNpc(__instance, ModEntry.Config.MarriageFrequency))
+            if (!DialogueBuilder.Instance.PatchPassiveNpc(__instance, ModEntry.Config.MarriageFrequency))
             {
                 return true;
             }

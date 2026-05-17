@@ -99,7 +99,11 @@ namespace ValleyTalk
             context.ChatHistory = fullHistory;
             LastContext = context;
             var theLine = await character.CreateBasicDialogue(context, onToken);
-            string formattedLine = FormatLine(theLine);
+            string playerText = conversation.LastOrDefault(line => line.IsPlayerLine)?.Text ?? string.Empty;
+            bool forceNoResponses = character.LastConversationAnalysis.EndConversation
+                || ConversationTextPostProcessor.PlayerLikelyEndedConversation(playerText)
+                || ConversationTextPostProcessor.NpcLikelyEndedConversation(theLine.FirstOrDefault() ?? string.Empty);
+            string formattedLine = FormatLine(theLine, forceNoResponses);
             return new GeneratedResponse(
                 $"{(dontSkipNext ? "" : "skip#")}{formattedLine}",
                 theLine
@@ -141,13 +145,13 @@ namespace ValleyTalk
             return new Dialogue(instance, dialogueKey, formattedLine);
         }
 
-        private string FormatLine(string[] theLine)
+        private string FormatLine(string[] theLine, bool forceNoResponses = false)
         {
             if (theLine == null || theLine.Length == 0)
             {
                 return string.Empty;
             }
-            if (theLine.Length == 1 && ModEntry.Config.TypedResponses != "Always")
+            if (forceNoResponses || (theLine.Length == 1 && ModEntry.Config.TypedResponses != "Always"))
             {
                 return theLine[0];
             }
@@ -170,9 +174,9 @@ namespace ValleyTalk
             return sb.ToString();
         }
 
-        internal string BuildResponseOnlyLine(string[] theLine)
+        internal string BuildResponseOnlyLine(string[] theLine, bool forceNoResponses = false)
         {
-            if (theLine == null || theLine.Length == 0)
+            if (forceNoResponses || theLine == null || theLine.Length == 0)
             {
                 return string.Empty;
             }
@@ -198,6 +202,35 @@ namespace ValleyTalk
             }
 
             return sb.ToString();
+        }
+
+        internal IEnumerable<StreamingResponseOption> BuildStreamingResponseOptions(string[] theLine)
+        {
+            if (theLine == null || theLine.Length == 0)
+            {
+                yield break;
+            }
+
+            if (theLine.Length == 1 && ModEntry.Config.TypedResponses != "Always")
+            {
+                yield break;
+            }
+
+            yield return new StreamingResponseOption(
+                Util.GetString("outputStaySilent", returnNull: true) ?? "保持沉默",
+                StreamingResponseOptionKind.Silent);
+
+            foreach (string option in theLine.Skip(1).Where(option => !string.IsNullOrWhiteSpace(option)))
+            {
+                yield return new StreamingResponseOption(option, StreamingResponseOptionKind.Generated);
+            }
+
+            if (ModEntry.Config.TypedResponses != "Never")
+            {
+                yield return new StreamingResponseOption(
+                    Util.GetString("uiTypeYourResponse", returnNull: true) ?? "换个说法",
+                    StreamingResponseOptionKind.Typed);
+            }
         }
 
         private DialogueContext GetBasicContext(NPC instance)
@@ -431,6 +464,12 @@ namespace ValleyTalk
             }
 
             return true;
+        }
+
+        internal bool PatchPassiveNpc(NPC n, int probability = 4, bool retainResult = false)
+        {
+            return ModEntry.Config.GenerateAiForNormalRightClick
+                && PatchNpc(n, probability, retainResult);
         }
 
         internal void ClearContext()

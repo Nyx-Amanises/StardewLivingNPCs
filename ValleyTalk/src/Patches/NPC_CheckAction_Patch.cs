@@ -33,7 +33,7 @@ namespace ValleyTalk
 
             DialogueBuilder.Instance.ClearContext();
             var character = DialogueBuilder.Instance.GetCharacter(__instance);  
-            var prompt = Util.GetString(character, "uiStartConversation", new { Name = __instance.displayName }) ?? $"What do you want to say to {__instance.displayName}?";
+            var prompt = Util.GetString(character, "uiStartConversation", new { Name = __instance.displayName }, returnNull: true) ?? "你想说什么？";
             // Show text entry dialog for the player to type their dialogue
             TextInputManager.RequestTextInput
             (

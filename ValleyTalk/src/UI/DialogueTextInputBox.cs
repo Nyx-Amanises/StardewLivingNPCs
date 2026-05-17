@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
@@ -66,7 +68,13 @@ namespace ValleyTalk
         private void DrawWrappedText(SpriteBatch spriteBatch, string text, Rectangle area, SpriteFont font, Color color)
         {
             var lines = WrapText(text, area.Width, font);
-            var lineHeight = (int)font.MeasureString("A").Y;
+            var lineHeight = Math.Max(1, font.LineSpacing);
+            int maxVisibleLines = Math.Max(1, area.Height / lineHeight);
+            if (lines.Length > maxVisibleLines)
+            {
+                lines = lines.Skip(lines.Length - maxVisibleLines).ToArray();
+            }
+
             var y = area.Y;
             
             foreach (var line in lines)
@@ -114,7 +122,7 @@ namespace ValleyTalk
             // Calculate caret position based on actual cursor position in text
             var textBeforeCaret = Text.Substring(0, _caretPosition);
             var lines = WrapText(textBeforeCaret, textArea.Width, Font);
-            var lineHeight = (int)Font.MeasureString("A").Y;
+            var lineHeight = Math.Max(1, Font.LineSpacing);
             
             int caretX, caretY;
             
@@ -129,9 +137,11 @@ namespace ValleyTalk
                 // Caret is at the end of the last line of text before cursor
                 var lastLine = lines[lines.Length - 1];
                 var lastLineWidth = Font.MeasureString(lastLine).X;
+                int maxVisibleLines = Math.Max(1, textArea.Height / lineHeight);
+                int visibleLineOffset = Math.Max(0, lines.Length - maxVisibleLines);
                 
                 caretX = textArea.X + (int)lastLineWidth;
-                caretY = textArea.Y + (lines.Length - 1) * lineHeight;
+                caretY = textArea.Y + (lines.Length - 1 - visibleLineOffset) * lineHeight;
                 
                 // If we're at the very end and the line is full, move to next line
                 if (_caretPosition < Text.Length)
@@ -145,6 +155,7 @@ namespace ValleyTalk
                 }
             }
             
+            caretY = Math.Clamp(caretY, textArea.Top, Math.Max(textArea.Top, textArea.Bottom - lineHeight));
             var caretRect = new Rectangle(caretX, caretY, 2, lineHeight);
             spriteBatch.Draw(Game1.staminaRect, caretRect, TextColor);
         }

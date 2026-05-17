@@ -351,7 +351,7 @@
   "historyConversationFormat.maleNpc": "${\u4E0E\u519C\u6C11\u8FDB\u884C\u4E86\u4EA4\u8C08\uFF1A{{builder}}^\u4E0E\u519C\u6C11\u5973\u58EB\u8FDB\u884C\u4E86\u4EA4\u8C08\uFF1A{{builder}}}$",
   "historyConversationFormat.femaleNpc": "${\u4E0E\u519C\u592B\u8FDB\u884C\u4E86\u4EA4\u8C08\uFF1A{{builder}}^\u4E0E\u519C\u592B\u4EA4\u8C08\uFF1A{{builder}}}$",
   "outputStaySilent": "\u4FDD\u6301\u6C89\u9ED8",
-  "outputRespond": "\u56DE\u590D\uFF1A",
+  "outputRespond": "\u56DE\u5E94",
   "generalEarlyMorning": "\u65E9\u4E0A",
   "generalLateMorning.maleNpc": "\u4E0A\u5348\u665A\u6BB5",
   "generalLateMorning.femaleNpc": "${\u4E0A\u5348\u665A\u6BB5^\u4E0A\u5348\u665A}$",

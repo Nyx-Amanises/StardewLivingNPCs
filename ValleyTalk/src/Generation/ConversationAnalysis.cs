@@ -108,7 +108,13 @@ internal sealed class ConversationAnalysis
 
         try
         {
-            var json = JObject.Parse(remainder[objectStart..]);
+            string jsonText = ExtractBalancedJsonObject(remainder[objectStart..]);
+            if (string.IsNullOrWhiteSpace(jsonText))
+            {
+                return Empty;
+            }
+
+            var json = JObject.Parse(jsonText);
             var analysis = json.ToObject<ConversationAnalysis>() ?? new ConversationAnalysis();
             analysis.RapportDelta = Math.Clamp(analysis.RapportDelta, 0, 30);
             analysis.Memories = analysis.Memories
@@ -243,6 +249,59 @@ internal sealed class ConversationAnalysis
         {
             return Empty;
         }
+    }
+
+    private static string ExtractBalancedJsonObject(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || text[0] != '{')
+        {
+            return string.Empty;
+        }
+
+        int depth = 0;
+        bool inString = false;
+        bool escaping = false;
+        for (int i = 0; i < text.Length; i++)
+        {
+            char ch = text[i];
+            if (escaping)
+            {
+                escaping = false;
+                continue;
+            }
+
+            if (ch == '\\' && inString)
+            {
+                escaping = true;
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                inString = !inString;
+                continue;
+            }
+
+            if (inString)
+            {
+                continue;
+            }
+
+            if (ch == '{')
+            {
+                depth++;
+            }
+            else if (ch == '}')
+            {
+                depth--;
+                if (depth == 0)
+                {
+                    return text[..(i + 1)];
+                }
+            }
+        }
+
+        return string.Empty;
     }
 
     private static string NormalizeKind(string kind)

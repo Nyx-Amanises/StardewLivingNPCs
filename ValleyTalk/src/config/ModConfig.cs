@@ -20,6 +20,7 @@ namespace ValleyTalk
         public int GeneralFrequency { get; set; } = 4;
         public int MarriageFrequency { get; set; } = 4;
         public int GiftFrequency { get; set; } = 4;
+        public bool GenerateAiForNormalRightClick { get; set; } = false;
         public string TypedResponses { get; set; } = "With Generated";
         public bool AllowLocalContentPackDialogueForAi { get; set; } = true;
         public string DisableCharacters

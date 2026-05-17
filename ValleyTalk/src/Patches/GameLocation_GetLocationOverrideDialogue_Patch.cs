@@ -13,7 +13,7 @@ namespace ValleyTalk
             {
                 return true;
             }
-            if (!DialogueBuilder.Instance.PatchNpc(character, ModEntry.Config.GeneralFrequency, true))
+            if (!DialogueBuilder.Instance.PatchPassiveNpc(character, ModEntry.Config.GeneralFrequency, true))
             {
                 return true;
             }

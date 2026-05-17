@@ -128,6 +128,13 @@ namespace ValleyTalk
                 getValue: () => Config.AllowLocalContentPackDialogueForAi,
                 setValue: (value) =>{ Config.AllowLocalContentPackDialogueForAi = value; }
             );
+            ConfigMenu.AddBoolOption(
+                mod: ModManifest,
+                name: () => Util.GetString("configGenerateAiForNormalRightClick", returnNull: true) ?? "普通右键也生成 AI 对话",
+                tooltip: () => Util.GetString("configGenerateAiForNormalRightClickTooltip", returnNull: true) ?? "关闭时，普通右键保留原版对白；只有按住设置的热键点击 NPC 才会开启 ValleyTalk AI 聊天。",
+                getValue: () => Config.GenerateAiForNormalRightClick,
+                setValue: (value) =>{ Config.GenerateAiForNormalRightClick = value; }
+            );
             ConfigMenu.AddKeybind(
                 mod: ModManifest,
                 name: () => Util.GetString("configKeybind", returnNull: true) ?? "Keybind for typed dialogue",

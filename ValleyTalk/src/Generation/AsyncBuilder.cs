@@ -44,7 +44,7 @@ public class AsyncBuilder
             }
 
             var character = DialogueBuilder.Instance.GetCharacter(_speakingNpc);
-            var display = Util.GetString(character, "uiThinking", new { Name = _speakingNpc.displayName }) ?? $"{_speakingNpc.displayName} is thinking";
+            var display = Util.GetString(character, "uiThinking", new { Name = _speakingNpc.displayName }, returnNull: true) ?? $"{_speakingNpc.displayName} 正在思考";
             // Show "Thinking..." window
             thinkingWindow = new ThinkingWindow(display);
             Game1.activeClickableMenu = thinkingWindow;
@@ -212,38 +212,66 @@ public class AsyncBuilder
             var analysis = DialogueBuilder.Instance.GetCharacter(npc).LastConversationAnalysis;
             LivingNpcConversationBridge.RecordExchange(npc, playerText, newDialogue, analysis.ToJson());
 
-            string responseOnlyLine = analysis.EndConversation
-                ? string.Empty
-                : DialogueBuilder.Instance.BuildResponseOnlyLine(parsedLines);
-            string dialogueKey = string.IsNullOrWhiteSpace(_currentDialogueKey)
-                ? $"{SldConstants.DialogueKeyPrefix}Conversation"
-                : _currentDialogueKey;
+            bool shouldEndConversation = analysis.EndConversation
+                || ConversationTextPostProcessor.PlayerLikelyEndedConversation(playerText)
+                || ConversationTextPostProcessor.NpcLikelyEndedConversation(parsedLines.FirstOrDefault() ?? string.Empty);
             string displayLine = parsedLines.FirstOrDefault() ?? "...";
+            var responseOptions = shouldEndConversation
+                ? Array.Empty<StreamingResponseOption>()
+                : DialogueBuilder.Instance.BuildStreamingResponseOptions(parsedLines).ToArray();
 
-            streamingWindow.Complete(displayLine, () =>
-            {
-                if (Game1.activeClickableMenu == streamingWindow)
+            streamingWindow.Complete(
+                displayLine,
+                responseOptions,
+                selected =>
                 {
-                    Game1.exitActiveMenu();
-                }
+                    if (Game1.activeClickableMenu == streamingWindow)
+                    {
+                        Game1.exitActiveMenu();
+                    }
 
-                if (!string.IsNullOrWhiteSpace(responseOnlyLine))
+                    if (selected.Kind == StreamingResponseOptionKind.Silent)
+                    {
+                        DialogueBuilder.Instance.AddConversation(npc, string.Empty, isPlayerLine: true);
+                        return;
+                    }
+
+                    if (selected.Kind == StreamingResponseOptionKind.Typed)
+                    {
+                        TextInputManager.RequestTextInput(
+                            Util.GetString("uiYourResponse", returnNull: true) ?? "你的回复",
+                            npc,
+                            npc.LoadedDialogueKey ?? "default",
+                            DialogueBuilder.Instance.LastContext?.ChatHistory?.ToList() ?? new List<ConversationElement>());
+                        return;
+                    }
+
+                    var playerLine = new ConversationElement(selected.Text, true);
+                    AsyncBuilder.Instance.RequestNpcResponse(npc, new[] { playerLine });
+                },
+                () =>
                 {
-                    Game1.DrawDialogue(new Dialogue(npc, dialogueKey, responseOnlyLine));
-                }
-            });
+                    if (Game1.activeClickableMenu == streamingWindow)
+                    {
+                        Game1.exitActiveMenu();
+                    }
+                });
         }
         catch (Exception ex)
         {
             var npc = _speakingNpc;
             ModEntry.SMonitor?.Log($"Error generating streaming NPC response for {npc?.Name ?? "unknown NPC"}: {ex}", StardewModdingAPI.LogLevel.Error);
-            streamingWindow.Complete("...", () =>
-            {
-                if (Game1.activeClickableMenu == streamingWindow)
+            streamingWindow.Complete(
+                "...",
+                Array.Empty<StreamingResponseOption>(),
+                null,
+                () =>
                 {
-                    Game1.exitActiveMenu();
-                }
-            });
+                    if (Game1.activeClickableMenu == streamingWindow)
+                    {
+                        Game1.exitActiveMenu();
+                    }
+                });
         }
         finally
         {
@@ -330,9 +358,14 @@ public class AsyncBuilder
         }
 
         var conversation = _currentConversation?.ToList() ?? new List<ConversationElement>();
-        var newDialogueTask = DialogueBuilder.Instance.GenerateResponse(npc, conversation, true);
-        var newDialogue = await newDialogueTask;
+        var generated = await DialogueBuilder.Instance.GenerateResponseDetailed(npc, conversation, true);
         string playerText = conversation.LastOrDefault(line => line.IsPlayerLine)?.Text ?? string.Empty;
+        bool shouldEndConversation = DialogueBuilder.Instance.GetCharacter(npc).LastConversationAnalysis.EndConversation
+            || ConversationTextPostProcessor.PlayerLikelyEndedConversation(playerText)
+            || ConversationTextPostProcessor.NpcLikelyEndedConversation(generated.ParsedLines.FirstOrDefault() ?? string.Empty);
+        var newDialogue = shouldEndConversation
+            ? generated.ParsedLines.FirstOrDefault() ?? string.Empty
+            : generated.FormattedLine;
         newDialogue = ConversationTextPostProcessor.NormalizeImmediateNicknameReply(newDialogue, playerText);
         if (string.IsNullOrWhiteSpace(newDialogue))
         {

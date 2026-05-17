@@ -10,7 +10,7 @@ namespace ValleyTalk
         {
             ModEntry.SMonitor.Log($"NPC {__instance.Name} trying to retrieve dialogue with preface '{preface}' at heart level {heartLevel}", StardewModdingAPI.LogLevel.Trace);
 
-            if (!DialogueBuilder.Instance.PatchNpc(__instance, ModEntry.Config.GeneralFrequency, true))
+            if (!DialogueBuilder.Instance.PatchPassiveNpc(__instance, ModEntry.Config.GeneralFrequency, true))
             {
                 return true;
             }

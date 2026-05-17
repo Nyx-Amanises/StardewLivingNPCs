@@ -11,7 +11,7 @@ namespace ValleyTalk
         public static bool Prefix(ref Dialogue __instance, ref Dialogue __result, NPC speaker, string translationKey)
         {
             ModEntry.SMonitor.Log($"Dialogue.TryGetDialogue called for {speaker.Name} with key {translationKey}", StardewModdingAPI.LogLevel.Trace);
-            if (!DialogueBuilder.Instance.PatchNpc(speaker, ModEntry.Config.GeneralFrequency, true))
+            if (!DialogueBuilder.Instance.PatchPassiveNpc(speaker, ModEntry.Config.GeneralFrequency, true))
             {
                 return true;
             }

@@ -9,7 +9,7 @@ namespace ValleyTalk
         public static bool Prefix(ref NPC __instance, ref bool __result, int heartLevel, bool noPreface)
         {
             ModEntry.SMonitor.Log($"NPC {__instance.Name} checking for new dialogue at heart level {heartLevel}", StardewModdingAPI.LogLevel.Trace);
-            if (!DialogueBuilder.Instance.PatchNpc(__instance, ModEntry.Config.GeneralFrequency, true))
+            if (!DialogueBuilder.Instance.PatchPassiveNpc(__instance, ModEntry.Config.GeneralFrequency, true))
             {
                 return true;
             }

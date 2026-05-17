@@ -15,7 +15,7 @@ namespace ValleyTalk
             ModEntry.SMonitor.Log($"MarriageDialogueReference.GetDialogue called for {n.Name} with key {__instance.DialogueKey}", StardewModdingAPI.LogLevel.Trace);
             var trace = new System.Diagnostics.StackTrace().GetFrames();
 
-            if (!DialogueBuilder.Instance.PatchNpc(n, ModEntry.Config.MarriageFrequency))
+            if (!DialogueBuilder.Instance.PatchPassiveNpc(n, ModEntry.Config.MarriageFrequency))
             {
                 return true;
             }
