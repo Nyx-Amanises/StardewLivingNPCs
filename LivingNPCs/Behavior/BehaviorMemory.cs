@@ -1597,7 +1597,7 @@ internal sealed class BehaviorMemory
             prompt.AppendLine($"- Stable community circles this NPC belongs to: {this.FormatSocialCirclePromptLabel(npc)}.");
             prompt.AppendLine("- Help-request lifecycle: Offered means the NPC has asked but the farmer has not accepted; Pending means accepted and active; only Pending requests should be treated like tasks.");
             prompt.AppendLine($"- Help-request readiness: {this.BuildHelpRequestReadinessLabel(npc, state, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, minRelationshipTrustForHelpRequests)}.");
-            prompt.AppendLine($"- Help-request fit: {HelpRequestAdvisor.BuildPromptLabel(npc)}");
+            prompt.AppendLine($"- Help-request fit: {HelpRequestAdvisor.BuildPromptLabel(npc, world.Progression)}");
             prompt.AppendLine($"- Conflict memory: {state.ConflictPromptLabel}.");
             prompt.AppendLine($"- Personal memory context: {state.FarmerNicknamePromptLabel}.");
             prompt.AppendLine($"- Scene influence on mood: {state.LastSceneInfluenceReason}.");
@@ -4006,7 +4006,7 @@ internal sealed class BehaviorMemory
             };
 
         var steps = new List<NpcHelpRequestStepFact>();
-        foreach (var rawStep in rawSteps.Take(3))
+        foreach (var rawStep in rawSteps.Take(this.GetMaxHelpRequestStepsForCurrentWorldStage()))
         {
             string type = NormalizeHelpRequestType(rawStep.Type);
             if (type == "item_request")
@@ -4286,6 +4286,16 @@ internal sealed class BehaviorMemory
 
             return 50 + System.Math.Abs(hash % 51);
         }
+    }
+
+    private int GetMaxHelpRequestStepsForCurrentWorldStage()
+    {
+        return WorldProgression.Current().ResidentStage switch
+        {
+            "first_spring_newcomer" => 1,
+            "first_year_settling_in" => 2,
+            _ => 3
+        };
     }
 
     private bool CanOpenHelpRequest(

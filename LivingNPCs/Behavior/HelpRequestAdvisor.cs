@@ -71,7 +71,7 @@ internal static class HelpRequestAdvisor
             ]
         };
 
-    public static string BuildPromptLabel(NPC npc)
+    public static string BuildPromptLabel(NPC npc, WorldProgressSnapshot progression)
     {
         var profile = GetProfile(npc);
         var tags = new HashSet<string>(profile.Tags, StringComparer.OrdinalIgnoreCase);
@@ -79,12 +79,12 @@ internal static class HelpRequestAdvisor
             .Where(item => item.Tags.Any(tags.Contains))
             .Take(3)
             .ToList();
-        var progression = GetProgressionItems()
+        var progressionItems = GetProgressionItems()
             .Where(item => item.Tags.Any(tags.Contains))
             .Take(2)
             .ToList();
         var preferredItems = seasonal
-            .Concat(progression)
+            .Concat(progressionItems)
             .DistinctBy(item => item.ItemId)
             .ToList();
 
@@ -92,8 +92,10 @@ internal static class HelpRequestAdvisor
             ? "no currently reasonable item request; prefer a question request if the current conversation supports one"
             : string.Join(", ", preferredItems.Select(item => $"{item.Label} {item.ItemId}"));
         string questionText = string.Join(", ", profile.QuestionPrompts);
+        string stageText = BuildRequestDepthGuidance(progression);
+        string routeText = BuildRouteGuidance(progression);
 
-        return $"theme {profile.Theme}; currently reasonable item requests: {itemText}; fitting question requests: {questionText}; only ask if the current conversation naturally creates a reason.";
+        return $"theme {profile.Theme}; currently reasonable item requests: {itemText}; fitting question requests: {questionText}; request depth: {stageText}; world-stage constraint: {routeText}; only ask if the current conversation naturally creates a reason.";
     }
 
     public static bool IsCurrentlyRequestableItem(string itemId)
@@ -178,6 +180,41 @@ internal static class HelpRequestAdvisor
     private static bool ContainsAny(string text, params string[] values)
     {
         return values.Any(value => text.Contains(value, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string BuildRequestDepthGuidance(WorldProgressSnapshot progression)
+    {
+        return progression.ResidentStage switch
+        {
+            "first_spring_newcomer" =>
+                "prefer a one-step, low-stakes favor or simple question; avoid requests that assume long shared history",
+            "first_year_settling_in" =>
+                "small one-step favors fit best; a modest two-step request is okay only when the current conversation strongly supports it",
+            "second_year_established" =>
+                "modest personal requests and occasional two-step favors can fit when trust and conversation support them",
+            _ =>
+                "deeper personal requests or fuller multi-step favors can fit when trust is high and the conversation earns them"
+        };
+    }
+
+    private static string BuildRouteGuidance(WorldProgressSnapshot progression)
+    {
+        string facilities = progression switch
+        {
+            { BusRepaired: false, GingerIslandUnlocked: false, MovieTheaterOpen: false } =>
+                "do not rely on unrepaired travel or late-game facilities",
+            _ =>
+                "already-unlocked public facilities may be treated as ordinary parts of life"
+        };
+
+        string route = progression.Route switch
+        {
+            "community_center" => "the community center is already restored",
+            "joja" => "the town followed the Joja route",
+            _ => "the town route is still unresolved"
+        };
+
+        return $"{route}; {facilities}";
     }
 
     private sealed record HelpRequestProfile(
