@@ -8,7 +8,7 @@ namespace LivingNPCs.Behavior;
 
 internal static class WorldContext
 {
-    public static WorldContextSnapshot For(NPC npc)
+    public static WorldContextSnapshot For(NPC npc, LivingNpcState? state = null)
     {
         var location = npc.currentLocation ?? Game1.currentLocation;
         string locationName = location?.Name ?? string.Empty;
@@ -21,7 +21,7 @@ internal static class WorldContext
         var relationship = DetermineRelationship(friendshipHearts);
         var social = DetermineSocialContext(npc);
         var progression = WorldProgression.Current();
-        var progressionKnowledge = WorldProgression.ForNpc(npc, friendshipHearts, locationName, progression);
+        var progressionKnowledge = WorldProgression.ForNpc(npc, friendshipHearts, locationName, progression, state);
         var stateInfluence = BuildStateInfluence([
             time.StateCue,
             weather.StateCue,

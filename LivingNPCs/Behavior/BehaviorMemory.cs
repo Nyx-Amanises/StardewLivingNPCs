@@ -1526,7 +1526,6 @@ internal sealed class BehaviorMemory
     {
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
         var disposition = NpcDisposition.For(npc);
-        var world = WorldContext.For(npc);
         int safeMaxEntries = System.Math.Max(maxEntries, 0);
         var recentEntries = entries is { Count: > 0 }
             ? entries.TakeLast(safeMaxEntries).ToList()
@@ -1536,6 +1535,7 @@ internal sealed class BehaviorMemory
         {
             this.statesByNpc.TryGetValue(npc.Name, out state);
         }
+        var world = WorldContext.For(npc, state);
 
         MemoryRecallPlan recallPlan = state == null
             ? MemoryRecallPlan.Empty
@@ -2898,12 +2898,12 @@ internal sealed class BehaviorMemory
     {
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
         var disposition = NpcDisposition.For(npc);
-        var world = WorldContext.For(npc);
         LivingNpcState? state = null;
         if (includeState)
         {
             this.statesByNpc.TryGetValue(npc.Name, out state);
         }
+        var world = WorldContext.For(npc, state);
 
         if ((entries == null || entries.Count == 0) && state == null)
         {

@@ -149,18 +149,23 @@ internal static class WorldProgression
         NPC npc,
         int friendshipHearts,
         string locationName,
-        WorldProgressSnapshot progression)
+        WorldProgressSnapshot progression,
+        LivingNpcState? state = null)
     {
         var observationDomains = DetermineObservationDomains(npc);
+        var learnedDomains = DetermineLearnedDomains(state);
+        bool learnedFarmScale = HasLearnedFarmScale(state);
         bool onFarm = locationName.Contains("farm", StringComparison.OrdinalIgnoreCase);
         bool trustedRelationship = friendshipHearts >= 6;
         bool farmKnowledgeAvailable = onFarm
             || trustedRelationship
+            || learnedFarmScale
             || HasExplicitObservationDomain(npc.Name, "farming")
             || (friendshipHearts >= 2 && observationDomains.Contains("farming", StringComparer.OrdinalIgnoreCase));
         var knownProfessionFocuses = progression.ProfessionFocuses
             .Where(focus =>
                 trustedRelationship
+                || learnedDomains.Contains(focus, StringComparer.OrdinalIgnoreCase)
                 || HasExplicitObservationDomain(npc.Name, focus)
                 || (friendshipHearts >= 2 && observationDomains.Contains(focus, StringComparer.OrdinalIgnoreCase)))
             .ToList();
@@ -170,18 +175,23 @@ internal static class WorldProgression
             farmKnowledgeAvailable,
             knownProfessionFocuses,
             onFarm,
-            trustedRelationship
+            trustedRelationship,
+            learnedFarmScale,
+            learnedDomains
         );
         string personalKnowledgeDebug = BuildPersonalKnowledgeDebugLabel(
             progression,
             farmKnowledgeAvailable,
             knownProfessionFocuses,
             onFarm,
-            trustedRelationship
+            trustedRelationship,
+            learnedFarmScale,
+            learnedDomains
         );
 
         return new WorldProgressKnowledgeSnapshot(
             observationDomains,
+            learnedDomains,
             knownProfessionFocuses,
             farmKnowledgeAvailable,
             trustedRelationship,
@@ -281,6 +291,56 @@ internal static class WorldProgression
     {
         return ExplicitObservationDomains.TryGetValue(npcName, out var domains)
             && domains.Contains(domain, StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static IReadOnlyCollection<string> DetermineLearnedDomains(LivingNpcState? state)
+    {
+        var domains = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (state == null)
+        {
+            return domains;
+        }
+
+        foreach (string tag in state.LongTermMemories
+            .Where(memory => memory.Importance >= 4)
+            .SelectMany(memory => memory.Tags)
+            .Concat(state.PlayerPreferenceMemories
+                .Where(memory => memory.Importance >= 4)
+                .SelectMany(memory => memory.Tags)))
+        {
+            if (tag is "farming" or "fishing" or "foraging" or "mining" or "combat")
+            {
+                domains.Add(tag);
+            }
+        }
+
+        return domains;
+    }
+
+    private static bool HasLearnedFarmScale(LivingNpcState? state)
+    {
+        if (state == null)
+        {
+            return false;
+        }
+
+        return state.LongTermMemories.Any(memory =>
+            memory.Importance >= 4
+            && memory.Tags.Contains("farming", StringComparer.OrdinalIgnoreCase)
+            && ContainsAny(
+                $"{memory.Subject} {memory.Summary}",
+                "farm",
+                "农场",
+                "crop",
+                "作物",
+                "barn",
+                "coop",
+                "畜棚",
+                "鸡舍",
+                "动物",
+                "扩建"
+            )
+        );
     }
 
     private static int CountGrowingCrops()
@@ -415,7 +475,9 @@ internal static class WorldProgression
         bool farmKnowledgeAvailable,
         IReadOnlyCollection<string> knownProfessionFocuses,
         bool onFarm,
-        bool trustedRelationship)
+        bool trustedRelationship,
+        bool learnedFarmScale,
+        IReadOnlyCollection<string> learnedDomains)
     {
         var details = new List<string>();
         if (farmKnowledgeAvailable)
@@ -424,7 +486,9 @@ internal static class WorldProgression
                 ? "visible from the farm visit"
                 : trustedRelationship
                     ? "known through a close relationship"
-                    : "plausible from this NPC's work or interests";
+                    : learnedFarmScale
+                        ? "learned from earlier conversations with the farmer"
+                        : "plausible from this NPC's work or interests";
             details.Add($"farm scale may be understood approximately as {FormatFarmScalePrompt(progression.FarmScale)} ({reason}); avoid exact crop, building, or animal counts");
         }
         else
@@ -434,7 +498,10 @@ internal static class WorldProgression
 
         if (knownProfessionFocuses.Count > 0)
         {
-            details.Add($"farmer focus plausibly known as {string.Join(", ", knownProfessionFocuses)}");
+            string learnedSuffix = knownProfessionFocuses.Any(focus => learnedDomains.Contains(focus, StringComparer.OrdinalIgnoreCase))
+                ? " including details learned from earlier conversations"
+                : string.Empty;
+            details.Add($"farmer focus plausibly known as {string.Join(", ", knownProfessionFocuses)}{learnedSuffix}");
         }
         else if (progression.ProfessionFocuses.Count > 0)
         {
@@ -493,7 +560,9 @@ internal static class WorldProgression
         bool farmKnowledgeAvailable,
         IReadOnlyCollection<string> knownProfessionFocuses,
         bool onFarm,
-        bool trustedRelationship)
+        bool trustedRelationship,
+        bool learnedFarmScale,
+        IReadOnlyCollection<string> learnedDomains)
     {
         var details = new List<string>();
         if (farmKnowledgeAvailable)
@@ -502,7 +571,9 @@ internal static class WorldProgression
                 ? "当前就在农场"
                 : trustedRelationship
                     ? "关系够近"
-                    : "职业/兴趣相关";
+                    : learnedFarmScale
+                        ? "之前聊过"
+                        : "职业/兴趣相关";
             details.Add($"大致知道农场规模：{FormatFarmScaleDebug(progression.FarmScale)}（{reason}）");
         }
         else
@@ -512,7 +583,10 @@ internal static class WorldProgression
 
         if (knownProfessionFocuses.Count > 0)
         {
-            details.Add($"可能知道职业倾向：{string.Join("、", knownProfessionFocuses.Select(FormatProfessionDebug))}");
+            string learnedSuffix = knownProfessionFocuses.Any(focus => learnedDomains.Contains(focus, StringComparer.OrdinalIgnoreCase))
+                ? "（含对话得知）"
+                : string.Empty;
+            details.Add($"可能知道职业倾向：{string.Join("、", knownProfessionFocuses.Select(FormatProfessionDebug))}{learnedSuffix}");
         }
         else
         {
@@ -751,6 +825,7 @@ internal sealed record WorldProgressSnapshot(
 
 internal sealed record WorldProgressKnowledgeSnapshot(
     IReadOnlyCollection<string> ObservationDomains,
+    IReadOnlyCollection<string> LearnedDomains,
     IReadOnlyList<string> KnownProfessionFocuses,
     bool KnowsFarmScale,
     bool TrustedRelationship,
