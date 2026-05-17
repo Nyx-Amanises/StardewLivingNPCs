@@ -1575,7 +1575,7 @@ internal sealed class BehaviorMemory
         }
 
         prompt.AppendLine($"- Scene: {world.PromptLabel}; location: {world.LocationDisplayName}; date: {world.Season} {world.DayOfMonth}; time: {world.TimeOfDay}.");
-        prompt.AppendLine($"- World progression: {world.Progression.PromptLabel}.");
+        prompt.AppendLine($"- World knowledge available to this NPC: {world.ProgressionKnowledge.PromptLabel}.");
         if (state != null)
         {
             prompt.AppendLine($"- Mood: {state.Mood}; attention to farmer: {state.Attention}/100; response inclination: {state.CurrentInclination}.");
@@ -1850,7 +1850,7 @@ internal sealed class BehaviorMemory
             yield return $"Scene cue: {world.StateInfluence.Reason}; this can tint mood toward {world.StateInfluence.Mood} and reply style toward {world.StateInfluence.Inclination}.";
         }
 
-        yield return $"World-stage continuity: {world.Progression.ReplyGuidance}";
+        yield return $"World-stage continuity: {world.ProgressionKnowledge.ReplyGuidance}";
 
         if (world.NearbyNpcNames.Count > 0)
         {
@@ -1954,7 +1954,7 @@ internal sealed class BehaviorMemory
             yield return $"Let the scene nudge tone through {world.StateInfluence.Reason}, without explicitly explaining the scene mechanics.";
         }
 
-        yield return $"Keep references to town progress, the farmer's household, and how long she has lived here consistent with this world stage: {world.Progression.ReplyGuidance}";
+        yield return $"Keep references to town progress, the farmer's household, and how long she has lived here consistent with what this NPC could plausibly know: {world.ProgressionKnowledge.ReplyGuidance}";
     }
 
     private string BuildTravelInvitationPolicyPromptLabel(LivingNpcState state)
@@ -2141,7 +2141,7 @@ internal sealed class BehaviorMemory
         this.AddRecallSignals(world.LocationName, tags, tokens);
         this.AddRecallSignals(world.LocationDisplayName, tags, tokens);
         this.AddRecallSignals(world.PromptLabel, tags, tokens);
-        this.AddRecallSignals(world.Progression.PromptLabel, tags, tokens);
+        this.AddRecallSignals(world.ProgressionKnowledge.PromptLabel, tags, tokens);
         this.AddRecallSignals(state.LastGiftName, tags, tokens);
         this.AddRecallSignals(state.LastEventContext, tags, tokens);
         this.AddRecallSignals(state.LastInteraction, tags, tokens);
@@ -2907,7 +2907,7 @@ internal sealed class BehaviorMemory
 
         if ((entries == null || entries.Count == 0) && state == null)
         {
-            return $"{npc.displayName} 还没有 LivingNPCs 行为/互动记忆或状态。\n- 行为倾向：{disposition.DebugLabel}\n- 当前场景：{world.DebugLabel}\n- 世界进度：{world.Progression.DebugLabel}";
+            return $"{npc.displayName} 还没有 LivingNPCs 行为/互动记忆或状态。\n- 行为倾向：{disposition.DebugLabel}\n- 当前场景：{world.DebugLabel}\n- 世界进度（客观）：{world.Progression.DebugLabel}\n- NPC 可知进度：{world.ProgressionKnowledge.DebugLabel}";
         }
 
         var summary = new StringBuilder();
@@ -2950,7 +2950,8 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 角色资料：{disposition.SourceDebugLabel}");
             summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
             summary.AppendLine($"- 当前场景：{world.DebugLabel}");
-            summary.AppendLine($"- 世界进度：{world.Progression.DebugLabel}");
+            summary.AppendLine($"- 世界进度（客观）：{world.Progression.DebugLabel}");
+            summary.AppendLine($"- NPC 可知进度：{world.ProgressionKnowledge.DebugLabel}");
             summary.AppendLine($"- 情境影响：{state.LastSceneInfluenceLabel}");
             summary.AppendLine($"- 回应倾向：{state.InclinationLabel}");
             summary.AppendLine($"- 最近互动：{state.LastInteractionLabel}");
@@ -2961,7 +2962,8 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 角色资料：{disposition.SourceDebugLabel}");
             summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
             summary.AppendLine($"- 当前场景：{world.DebugLabel}");
-            summary.AppendLine($"- 世界进度：{world.Progression.DebugLabel}");
+            summary.AppendLine($"- 世界进度（客观）：{world.Progression.DebugLabel}");
+            summary.AppendLine($"- NPC 可知进度：{world.ProgressionKnowledge.DebugLabel}");
         }
 
         if (entries is { Count: > 0 })

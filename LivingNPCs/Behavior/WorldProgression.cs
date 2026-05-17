@@ -27,6 +27,30 @@ internal static class WorldProgression
             ["movie_theater"] = "电影院"
         };
 
+    private static readonly IReadOnlyDictionary<string, IReadOnlyCollection<string>> ExplicitObservationDomains =
+        new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Robin"] = ["farming"],
+            ["Marnie"] = ["farming"],
+            ["Pierre"] = ["farming"],
+            ["Andy"] = ["farming"],
+            ["Susan"] = ["farming"],
+            ["Sophia"] = ["farming"],
+            ["Willy"] = ["fishing"],
+            ["Carmen"] = ["fishing"],
+            ["Clint"] = ["mining"],
+            ["Dwarf"] = ["mining"],
+            ["MarlonFay"] = ["mining", "combat"],
+            ["Gil"] = ["mining", "combat"],
+            ["Abigail"] = ["mining", "combat"],
+            ["Lance"] = ["mining", "combat"],
+            ["Alesia"] = ["mining", "combat"],
+            ["Isaac"] = ["mining", "combat"],
+            ["Linus"] = ["foraging"],
+            ["Leah"] = ["foraging"],
+            ["Bear"] = ["foraging"]
+        };
+
     public static WorldProgressSnapshot Current()
     {
         Farmer farmer = Game1.getPlayerOrEventFarmer();
@@ -121,6 +145,52 @@ internal static class WorldProgression
         );
     }
 
+    public static WorldProgressKnowledgeSnapshot ForNpc(
+        NPC npc,
+        int friendshipHearts,
+        string locationName,
+        WorldProgressSnapshot progression)
+    {
+        var observationDomains = DetermineObservationDomains(npc);
+        bool onFarm = locationName.Contains("farm", StringComparison.OrdinalIgnoreCase);
+        bool trustedRelationship = friendshipHearts >= 6;
+        bool farmKnowledgeAvailable = onFarm
+            || trustedRelationship
+            || HasExplicitObservationDomain(npc.Name, "farming")
+            || (friendshipHearts >= 2 && observationDomains.Contains("farming", StringComparer.OrdinalIgnoreCase));
+        var knownProfessionFocuses = progression.ProfessionFocuses
+            .Where(focus =>
+                trustedRelationship
+                || HasExplicitObservationDomain(npc.Name, focus)
+                || (friendshipHearts >= 2 && observationDomains.Contains(focus, StringComparer.OrdinalIgnoreCase)))
+            .ToList();
+
+        string personalKnowledgePrompt = BuildPersonalKnowledgePromptLabel(
+            progression,
+            farmKnowledgeAvailable,
+            knownProfessionFocuses,
+            onFarm,
+            trustedRelationship
+        );
+        string personalKnowledgeDebug = BuildPersonalKnowledgeDebugLabel(
+            progression,
+            farmKnowledgeAvailable,
+            knownProfessionFocuses,
+            onFarm,
+            trustedRelationship
+        );
+
+        return new WorldProgressKnowledgeSnapshot(
+            observationDomains,
+            knownProfessionFocuses,
+            farmKnowledgeAvailable,
+            trustedRelationship,
+            BuildNpcPromptLabel(progression, personalKnowledgePrompt),
+            BuildNpcDebugLabel(progression, personalKnowledgeDebug),
+            BuildNpcReplyGuidance(progression, farmKnowledgeAvailable, knownProfessionFocuses)
+        );
+    }
+
     private static bool HasActivity(IDictionary<string, int>? activities, string key)
     {
         return activities?.ContainsKey(key) == true;
@@ -164,6 +234,53 @@ internal static class WorldProgression
         }
 
         return "veteran_resident";
+    }
+
+    private static IReadOnlyCollection<string> DetermineObservationDomains(NPC npc)
+    {
+        var domains = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        if (ExplicitObservationDomains.TryGetValue(npc.Name, out var explicitDomains))
+        {
+            foreach (string domain in explicitDomains)
+            {
+                domains.Add(domain);
+            }
+        }
+
+        var disposition = NpcDisposition.For(npc);
+        string profileText = $"{disposition.PromptLabel} {disposition.BackgroundPrompt} {disposition.DialoguePrompt}".ToLowerInvariant();
+        if (ContainsAny(profileText, "farm", "ranch", "vineyard", "crop", "carpenter"))
+        {
+            domains.Add("farming");
+        }
+
+        if (ContainsAny(profileText, "fish", "sea", "water life"))
+        {
+            domains.Add("fishing");
+        }
+
+        if (ContainsAny(profileText, "mine", "smith", "ore", "adventurer", "guild"))
+        {
+            domains.Add("mining");
+        }
+
+        if (ContainsAny(profileText, "forag", "woodland", "forest", "nature"))
+        {
+            domains.Add("foraging");
+        }
+
+        if (ContainsAny(profileText, "combat", "fighter", "battle", "monster", "danger"))
+        {
+            domains.Add("combat");
+        }
+
+        return domains;
+    }
+
+    private static bool HasExplicitObservationDomain(string npcName, string domain)
+    {
+        return ExplicitObservationDomains.TryGetValue(npcName, out var domains)
+            && domains.Contains(domain, StringComparer.OrdinalIgnoreCase);
     }
 
     private static int CountGrowingCrops()
@@ -276,6 +393,61 @@ internal static class WorldProgression
         return $"route: {FormatRoutePrompt(route)}; resident stage: {FormatResidentStagePrompt(residentStage)}; {facilities}; {professions}; farm scale: {FormatFarmScalePrompt(farmScale)} ({cropCount} growing crops, {buildingCount} completed farm buildings, {animalCount} animals); {household}";
     }
 
+    private static string BuildNpcPromptLabel(WorldProgressSnapshot progression, string personalKnowledgePrompt)
+    {
+        return $"public facts: {BuildPublicPromptLabel(progression)}; personal knowledge available to this NPC: {personalKnowledgePrompt}";
+    }
+
+    private static string BuildPublicPromptLabel(WorldProgressSnapshot progression)
+    {
+        string facilities = BuildFacilityPromptLabel(progression);
+        string household = progression.SpouseNames.Count == 0
+            ? progression.ChildrenCount == 0
+                ? "household publicly known as not married, no children"
+                : $"household publicly known as no spouse recorded, {FormatChildrenPrompt(progression.ChildrenCount)}"
+            : $"household publicly known as married to {string.Join(", ", progression.SpouseNames)}, {FormatChildrenPrompt(progression.ChildrenCount)}";
+
+        return $"route: {FormatRoutePrompt(progression.Route)}; resident stage: {FormatResidentStagePrompt(progression.ResidentStage)}; {facilities}; {household}";
+    }
+
+    private static string BuildPersonalKnowledgePromptLabel(
+        WorldProgressSnapshot progression,
+        bool farmKnowledgeAvailable,
+        IReadOnlyCollection<string> knownProfessionFocuses,
+        bool onFarm,
+        bool trustedRelationship)
+    {
+        var details = new List<string>();
+        if (farmKnowledgeAvailable)
+        {
+            string reason = onFarm
+                ? "visible from the farm visit"
+                : trustedRelationship
+                    ? "known through a close relationship"
+                    : "plausible from this NPC's work or interests";
+            details.Add($"farm scale may be understood approximately as {FormatFarmScalePrompt(progression.FarmScale)} ({reason}); avoid exact crop, building, or animal counts");
+        }
+        else
+        {
+            details.Add("farm scale is not clearly known; do not assume exact crop, building, or animal details");
+        }
+
+        if (knownProfessionFocuses.Count > 0)
+        {
+            details.Add($"farmer focus plausibly known as {string.Join(", ", knownProfessionFocuses)}");
+        }
+        else if (progression.ProfessionFocuses.Count > 0)
+        {
+            details.Add("farmer profession focus is not clearly known to this NPC");
+        }
+        else
+        {
+            details.Add("no clear profession focus is known yet");
+        }
+
+        return string.Join("; ", details);
+    }
+
     private static string BuildDebugLabel(
         string route,
         string residentStage,
@@ -299,6 +471,55 @@ internal static class WorldProgression
             : $"已婚：{string.Join("、", spouseNames)}，{FormatChildrenDebug(childrenCount)}";
 
         return $"路线：{FormatRouteDebug(route)}；阶段：{FormatResidentStageDebug(residentStage)}；解锁：{facilities}；职业：{professions}；农场：{FormatFarmScaleDebug(farmScale)}（作物 {cropCount}，建筑 {buildingCount}，动物 {animalCount}）；家庭：{household}";
+    }
+
+    private static string BuildNpcDebugLabel(WorldProgressSnapshot progression, string personalKnowledgeDebug)
+    {
+        return $"公开事实：{BuildPublicDebugLabel(progression)}；NPC 可知私人信息：{personalKnowledgeDebug}";
+    }
+
+    private static string BuildPublicDebugLabel(WorldProgressSnapshot progression)
+    {
+        string facilities = BuildFacilityDebugLabel(progression);
+        string household = progression.SpouseNames.Count == 0
+            ? $"未婚，{FormatChildrenDebug(progression.ChildrenCount)}"
+            : $"已婚：{string.Join("、", progression.SpouseNames)}，{FormatChildrenDebug(progression.ChildrenCount)}";
+
+        return $"路线 {FormatRouteDebug(progression.Route)}，阶段 {FormatResidentStageDebug(progression.ResidentStage)}，解锁 {facilities}，家庭 {household}";
+    }
+
+    private static string BuildPersonalKnowledgeDebugLabel(
+        WorldProgressSnapshot progression,
+        bool farmKnowledgeAvailable,
+        IReadOnlyCollection<string> knownProfessionFocuses,
+        bool onFarm,
+        bool trustedRelationship)
+    {
+        var details = new List<string>();
+        if (farmKnowledgeAvailable)
+        {
+            string reason = onFarm
+                ? "当前就在农场"
+                : trustedRelationship
+                    ? "关系够近"
+                    : "职业/兴趣相关";
+            details.Add($"大致知道农场规模：{FormatFarmScaleDebug(progression.FarmScale)}（{reason}）");
+        }
+        else
+        {
+            details.Add("不清楚农场规模");
+        }
+
+        if (knownProfessionFocuses.Count > 0)
+        {
+            details.Add($"可能知道职业倾向：{string.Join("、", knownProfessionFocuses.Select(FormatProfessionDebug))}");
+        }
+        else
+        {
+            details.Add("不清楚职业倾向");
+        }
+
+        return string.Join("；", details);
     }
 
     private static string BuildReplyGuidance(
@@ -338,6 +559,70 @@ internal static class WorldProgression
             : "the farmer's household has changed, so spouse or child references are allowed when the topic naturally reaches family life";
 
         return $"{stageGuidance}; {routeGuidance}; {unlockGuidance}; {householdGuidance}.";
+    }
+
+    private static string BuildNpcReplyGuidance(
+        WorldProgressSnapshot progression,
+        bool farmKnowledgeAvailable,
+        IReadOnlyCollection<string> knownProfessionFocuses)
+    {
+        string privateKnowledgeGuidance = farmKnowledgeAvailable
+            ? "the NPC may refer to the farm's general scale, but should not cite exact crops, buildings, or animal counts unless the farmer just said so"
+            : "do not let this NPC speak as if they know the farm's detailed scale";
+        string professionGuidance = knownProfessionFocuses.Count > 0
+            ? $"this NPC may plausibly recognize {string.Join(", ", knownProfessionFocuses)} as part of the farmer's life"
+            : progression.ProfessionFocuses.Count > 0
+                ? "do not let this NPC casually name the farmer's profession focus"
+                : "no profession focus needs to be assumed yet";
+
+        return $"{progression.ReplyGuidance} {privateKnowledgeGuidance}; {professionGuidance}.";
+    }
+
+    private static string BuildFacilityPromptLabel(WorldProgressSnapshot progression)
+    {
+        var unlockedFacilities = GetUnlockedFacilities(progression);
+        return unlockedFacilities.Count == 0
+            ? "no major late-game facilities are confirmed unlocked yet"
+            : $"confirmed public unlocks: {string.Join(", ", unlockedFacilities.Select(key => FacilityPromptLabels[key]))}";
+    }
+
+    private static string BuildFacilityDebugLabel(WorldProgressSnapshot progression)
+    {
+        var unlockedFacilities = GetUnlockedFacilities(progression);
+        return unlockedFacilities.Count == 0
+            ? "暂无已确认的大型解锁"
+            : string.Join("、", unlockedFacilities.Select(key => FacilityDebugLabels[key]));
+    }
+
+    private static IReadOnlyList<string> GetUnlockedFacilities(WorldProgressSnapshot progression)
+    {
+        var unlockedFacilities = new List<string>();
+        if (progression.BusRepaired)
+        {
+            unlockedFacilities.Add("bus");
+        }
+
+        if (progression.GreenhouseRepaired)
+        {
+            unlockedFacilities.Add("greenhouse");
+        }
+
+        if (progression.MinecartsRepaired)
+        {
+            unlockedFacilities.Add("minecarts");
+        }
+
+        if (progression.GingerIslandUnlocked)
+        {
+            unlockedFacilities.Add("ginger_island");
+        }
+
+        if (progression.MovieTheaterOpen)
+        {
+            unlockedFacilities.Add("movie_theater");
+        }
+
+        return unlockedFacilities;
     }
 
     private static string FormatRoutePrompt(string route)
@@ -436,6 +721,11 @@ internal static class WorldProgression
             _ => $"{count} 个孩子"
         };
     }
+
+    private static bool ContainsAny(string text, params string[] values)
+    {
+        return values.Any(value => text.Contains(value, StringComparison.OrdinalIgnoreCase));
+    }
 }
 
 internal sealed record WorldProgressSnapshot(
@@ -454,6 +744,16 @@ internal sealed record WorldProgressSnapshot(
     int AnimalCount,
     IReadOnlyList<string> SpouseNames,
     int ChildrenCount,
+    string PromptLabel,
+    string DebugLabel,
+    string ReplyGuidance
+);
+
+internal sealed record WorldProgressKnowledgeSnapshot(
+    IReadOnlyCollection<string> ObservationDomains,
+    IReadOnlyList<string> KnownProfessionFocuses,
+    bool KnowsFarmScale,
+    bool TrustedRelationship,
     string PromptLabel,
     string DebugLabel,
     string ReplyGuidance

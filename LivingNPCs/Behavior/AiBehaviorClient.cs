@@ -132,7 +132,7 @@ internal sealed class AiBehaviorClient
         prompt.AppendLine($"Date: year {Game1.year}, {world.Season} {world.DayOfMonth}");
         prompt.AppendLine($"Time: {world.TimeOfDay}");
         prompt.AppendLine($"Scene context: {world.PromptLabel}");
-        prompt.AppendLine($"World progression: {world.Progression.PromptLabel}");
+        prompt.AppendLine($"World knowledge available to this NPC: {world.ProgressionKnowledge.PromptLabel}");
         prompt.AppendLine($"Distance to farmer in tiles: {Math.Round(Vector2.Distance(npc.Tile, Game1.player.Tile), 1)}");
         prompt.AppendLine($"Nearby NPCs: {(string.IsNullOrWhiteSpace(nearby) ? "none" : nearby)}");
         prompt.AppendLine();
