@@ -260,6 +260,13 @@ internal static class NpcDisposition
         return FallbackFor(npc.Name);
     }
 
+    public static NpcDispositionProfile ForName(string npcName)
+    {
+        return TryGetKnownProfile(npcName, out var profile)
+            ? profile
+            : FallbackFor(npcName);
+    }
+
     private static bool TryGetKnownProfile(string? name, out NpcDispositionProfile profile)
     {
         if (!string.IsNullOrWhiteSpace(name) && Profiles.TryGetValue(name, out profile!))

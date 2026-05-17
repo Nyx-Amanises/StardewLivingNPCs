@@ -1073,6 +1073,7 @@ internal sealed class BehaviorMemory
         this.lastStateDecayTotalDays = Game1.Date.TotalDays;
         foreach (var state in this.statesByNpc.Values)
         {
+            var emotionalStyle = EmotionalExpressionStyle.For(state.NpcName, NpcDisposition.ForName(state.NpcName));
             state.Familiarity = LivingNpcState.ClampScore(state.Familiarity);
             if (state.LastFamiliarityGainTotalDays != Game1.Date.TotalDays)
             {
@@ -1094,7 +1095,7 @@ internal sealed class BehaviorMemory
             this.FadeCommunityImpressions(state);
             if (dailyDecay <= 0)
             {
-                this.DecayEmotionAndConflicts(state, emotionDailyDecay, conflictDailyDecay);
+                this.DecayEmotionAndConflicts(state, emotionDailyDecay, conflictDailyDecay, emotionalStyle);
                 continue;
             }
 
@@ -1105,7 +1106,7 @@ internal sealed class BehaviorMemory
             state.LastInteraction = "time passed";
             state.LastUpdatedTotalDays = Game1.Date.TotalDays;
             state.LastUpdatedTimeOfDay = Game1.timeOfDay;
-            this.DecayEmotionAndConflicts(state, emotionDailyDecay, conflictDailyDecay);
+            this.DecayEmotionAndConflicts(state, emotionDailyDecay, conflictDailyDecay, emotionalStyle);
         }
     }
 
@@ -1526,6 +1527,7 @@ internal sealed class BehaviorMemory
     {
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
         var disposition = NpcDisposition.For(npc);
+        var emotionalStyle = EmotionalExpressionStyle.For(npc);
         int safeMaxEntries = System.Math.Max(maxEntries, 0);
         var recentEntries = entries is { Count: > 0 }
             ? entries.TakeLast(safeMaxEntries).ToList()
@@ -1555,7 +1557,7 @@ internal sealed class BehaviorMemory
 
         prompt.AppendLine();
         prompt.AppendLine("Conversation stance:");
-        prompt.AppendLine($"- {this.BuildConversationStance(npc, state, disposition, world)}");
+        prompt.AppendLine($"- {this.BuildConversationStance(npc, state, disposition, world, emotionalStyle)}");
 
         prompt.AppendLine();
         prompt.AppendLine("Current state:");
@@ -1580,6 +1582,7 @@ internal sealed class BehaviorMemory
         {
             prompt.AppendLine($"- Mood: {state.Mood}; attention to farmer: {state.Attention}/100; response inclination: {state.CurrentInclination}.");
             prompt.AppendLine($"- Interpersonal emotion: {state.EmotionPromptLabel}.");
+            prompt.AppendLine($"- Emotional expression style: {emotionalStyle.PromptLabel}.");
             prompt.AppendLine($"- Long-term familiarity with the farmer: {state.Familiarity}/100 ({state.FamiliarityPromptLabel}).");
             prompt.AppendLine($"- Relationship trust in the farmer: {state.RelationshipTrustPromptLabel}.");
             prompt.AppendLine($"- Secret-sharing depth: {state.SecretSharingPromptLabel}.");
@@ -1608,7 +1611,7 @@ internal sealed class BehaviorMemory
             prompt.AppendLine("- No persistent LivingNPCs state exists yet; use disposition and scene context conservatively.");
         }
 
-        var priorityContext = this.BuildPriorityPromptContext(npc, state, world, recentEntries, recallPlan, communityImpressions).ToList();
+        var priorityContext = this.BuildPriorityPromptContext(npc, state, world, recentEntries, recallPlan, communityImpressions, emotionalStyle).ToList();
         if (priorityContext.Count > 0)
         {
             prompt.AppendLine();
@@ -1631,7 +1634,7 @@ internal sealed class BehaviorMemory
 
         prompt.AppendLine();
         prompt.AppendLine("Next reply guidance:");
-        foreach (string guidance in this.BuildReplyGuidance(state, world))
+        foreach (string guidance in this.BuildReplyGuidance(state, world, emotionalStyle))
         {
             prompt.AppendLine($"- {guidance}");
         }
@@ -1646,11 +1649,12 @@ internal sealed class BehaviorMemory
         NPC npc,
         LivingNpcState? state,
         NpcDispositionProfile disposition,
-        WorldContextSnapshot world)
+        WorldContextSnapshot world,
+        EmotionalExpressionCue emotionalStyle)
     {
         if (state == null)
         {
-            return $"{npc.displayName} should sound {disposition.PromptLabel}, shaped by {disposition.SourceLabel} profile context and the current scene: {world.PromptLabel}.";
+            return $"{npc.displayName} should sound {disposition.PromptLabel}, with emotional expression style: {emotionalStyle.PromptLabel}; shaped by {disposition.SourceLabel} profile context and the current scene: {world.PromptLabel}.";
         }
 
         string tone = this.BuildToneCue(state);
@@ -1659,7 +1663,7 @@ internal sealed class BehaviorMemory
             ? $"scene pressure suggests {world.StateInfluence.Mood}/{world.StateInfluence.Inclination}"
             : "scene pressure is mild";
 
-        return $"{npc.displayName} should sound {tone}; temperament is {disposition.PromptLabel}; profile source is {disposition.SourceLabel}; relationship is {state.FamiliarityPromptLabel}; {rhythm}; {scenePressure}.";
+        return $"{npc.displayName} should sound {tone}; temperament is {disposition.PromptLabel}; emotional expression style is {emotionalStyle.PromptLabel}; profile source is {disposition.SourceLabel}; relationship is {state.FamiliarityPromptLabel}; {rhythm}; {scenePressure}.";
     }
 
     private IEnumerable<string> BuildPriorityPromptContext(
@@ -1668,7 +1672,8 @@ internal sealed class BehaviorMemory
         WorldContextSnapshot world,
         IReadOnlyList<BehaviorMemoryEntry> recentEntries,
         MemoryRecallPlan recallPlan,
-        IReadOnlyList<CommunityImpressionSelection> communityImpressions)
+        IReadOnlyList<CommunityImpressionSelection> communityImpressions,
+        EmotionalExpressionCue emotionalStyle)
     {
         if (state != null)
         {
@@ -1811,7 +1816,7 @@ internal sealed class BehaviorMemory
                 .FirstOrDefault();
             if (activeConflict != null)
             {
-                yield return $"Unresolved conflict: {activeConflict.PromptLabel}; while this remains unresolved, warmth should be reduced and the NPC may be brief, cool, or decline closeness.";
+                yield return $"Unresolved conflict: {activeConflict.PromptLabel}; while this remains unresolved, warmth should be reduced and the NPC may be brief, cool, or decline closeness; expression style: {emotionalStyle.ConflictPromptLabel}.";
                 if (activeConflict.RequiresComplexRepair)
                 {
                     yield return $"Complex repair chain: stage {activeConflict.RepairStage}; serious hurt may need apology, a meaningful gesture, time, and a specific restorative conversation before it is fully repaired.";
@@ -1825,7 +1830,7 @@ internal sealed class BehaviorMemory
             );
             if (recoveredConflict != null)
             {
-                yield return $"Recently resolved conflict: {recoveredConflict.ResolvedPromptLabel}; if it fits naturally, the NPC may briefly make clear that the earlier issue is past now.";
+                yield return $"Recently resolved conflict: {recoveredConflict.ResolvedPromptLabel}; if it fits naturally, the NPC may briefly make clear that the earlier issue is past now; recovery style: {emotionalStyle.RepairPromptLabel}.";
             }
 
             if (!string.IsNullOrWhiteSpace(state.InteractionRhythm)
@@ -1865,16 +1870,21 @@ internal sealed class BehaviorMemory
         }
     }
 
-    private IEnumerable<string> BuildReplyGuidance(LivingNpcState? state, WorldContextSnapshot world)
+    private IEnumerable<string> BuildReplyGuidance(
+        LivingNpcState? state,
+        WorldContextSnapshot world,
+        EmotionalExpressionCue emotionalStyle)
     {
         if (state == null)
         {
             yield return "Let the reply be scene-aware and modest because there is no persistent state yet.";
             yield return "Keep continuity subtle; do not invent strong feelings from weak context.";
+            yield return $"Emotion expression style: {emotionalStyle.ReplyGuidance}.";
             yield break;
         }
 
         yield return $"Tone target: {this.BuildToneCue(state)}.";
+        yield return $"Emotion expression style: {emotionalStyle.ReplyGuidance}.";
         yield return $"Relationship pacing: {state.InteractionComfortTierPromptLabel}.";
         yield return $"Disclosure pacing: {state.SecretSharingPromptLabel}.";
         yield return $"Invitation policy: {this.BuildTravelInvitationPolicyPromptLabel(state)}.";
@@ -1929,7 +1939,7 @@ internal sealed class BehaviorMemory
 
         if (state.HasUnresolvedConflict)
         {
-            yield return "An unresolved conflict is still shaping the relationship; do not answer with default warmth, and if the conflict is severe it is okay to keep the reply short or refuse a friendly invitation.";
+            yield return $"An unresolved conflict is still shaping the relationship; do not answer with default warmth, and if the conflict is severe it is okay to keep the reply short or refuse a friendly invitation; express it through this NPC's style: {emotionalStyle.ConflictPromptLabel}.";
             if (state.Conflicts.Any(conflict => conflict.RequiresComplexRepair && conflict.Status is "Active" or "Recovering"))
             {
                 yield return "For a serious conflict, let repair feel gradual: a single pleasant line should not erase hurt before apology, gesture, time, and a real repair conversation have accumulated.";
@@ -1941,7 +1951,7 @@ internal sealed class BehaviorMemory
                 && conflict.ResolvedTotalDays >= Game1.Date.TotalDays - 3
                 && conflict.RecoveryMentionedTotalDays < 0))
         {
-            yield return "If a recently resolved conflict is relevant, it is okay to say in a natural in-character way that the earlier matter is behind you now.";
+            yield return $"If a recently resolved conflict is relevant, it is okay to say in a natural in-character way that the earlier matter is behind you now; recovery style: {emotionalStyle.RepairPromptLabel}.";
         }
 
         if (state.RepeatedConversationPressure >= 20)
@@ -2898,6 +2908,7 @@ internal sealed class BehaviorMemory
     {
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
         var disposition = NpcDisposition.For(npc);
+        var emotionalStyle = EmotionalExpressionStyle.For(npc);
         LivingNpcState? state = null;
         if (includeState)
         {
@@ -2907,7 +2918,7 @@ internal sealed class BehaviorMemory
 
         if ((entries == null || entries.Count == 0) && state == null)
         {
-            return $"{npc.displayName} 还没有 LivingNPCs 行为/互动记忆或状态。\n- 行为倾向：{disposition.DebugLabel}\n- 当前场景：{world.DebugLabel}\n- 世界进度（客观）：{world.Progression.DebugLabel}\n- NPC 可知进度：{world.ProgressionKnowledge.DebugLabel}";
+            return $"{npc.displayName} 还没有 LivingNPCs 行为/互动记忆或状态。\n- 行为倾向：{disposition.DebugLabel}\n- 情绪表达风格：{emotionalStyle.DebugSummaryLabel}\n- 当前场景：{world.DebugLabel}\n- 世界进度（客观）：{world.Progression.DebugLabel}\n- NPC 可知进度：{world.ProgressionKnowledge.DebugLabel}";
         }
 
         var summary = new StringBuilder();
@@ -2936,6 +2947,7 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 玩家偏好记忆：{state.PlayerPreferenceDebugLabel}");
             summary.AppendLine($"- 当前检索玩家偏好：{this.FormatPlayerPreferenceDebugLabel(recallPlan.PlayerPreferences)}");
             summary.AppendLine($"- 社区消息口吻：{CommunityReactionStyle.For(npc).DebugLabel}");
+            summary.AppendLine($"- 情绪表达风格：{emotionalStyle.DebugSummaryLabel}");
             summary.AppendLine($"- 社区圈层：{this.FormatSocialCircleDebugLabel(npc)}");
             summary.AppendLine($"- 社区印象：{state.CommunityImpressionDebugLabel}");
             summary.AppendLine($"- 当前检索社区印象：{this.FormatCommunityImpressionDebugLabel(communityImpressions)}");
@@ -2949,6 +2961,7 @@ internal sealed class BehaviorMemory
             summary.AppendLine($"- 今日 AI 对话额外好感：{state.AiFriendshipGainedToday}");
             summary.AppendLine($"- 角色资料：{disposition.SourceDebugLabel}");
             summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
+            summary.AppendLine($"- 情绪表达风格：{emotionalStyle.DebugSummaryLabel}");
             summary.AppendLine($"- 当前场景：{world.DebugLabel}");
             summary.AppendLine($"- 世界进度（客观）：{world.Progression.DebugLabel}");
             summary.AppendLine($"- NPC 可知进度：{world.ProgressionKnowledge.DebugLabel}");
@@ -3343,7 +3356,7 @@ internal sealed class BehaviorMemory
                 existing.RequiresComplexRepair = true;
                 existing.MinimumRepairTotalDays = System.Math.Max(
                     existing.MinimumRepairTotalDays,
-                    Game1.Date.TotalDays + GetComplexRepairDelayDays(existing.PeakSeverity)
+                    Game1.Date.TotalDays + GetComplexRepairDelayDays(state, existing.PeakSeverity)
                 );
                 existing.SpecificRepairTalkReceived = false;
                 if (candidate.Severity >= 30)
@@ -3375,7 +3388,7 @@ internal sealed class BehaviorMemory
             LastUpdatedTimeOfDay = Game1.timeOfDay,
             RequiresComplexRepair = candidate.Severity >= 60,
             MinimumRepairTotalDays = candidate.Severity >= 60
-                ? Game1.Date.TotalDays + GetComplexRepairDelayDays(candidate.Severity)
+                ? Game1.Date.TotalDays + GetComplexRepairDelayDays(state, candidate.Severity)
                 : -1,
             TimesReinforced = 1
         };
@@ -3394,7 +3407,8 @@ internal sealed class BehaviorMemory
 
     private int ApplyConflictRepair(LivingNpcState state, int repairDelta, bool apology, bool specificRepairTalk)
     {
-        int totalRepair = System.Math.Clamp(repairDelta + (apology ? 12 : 0), 0, 100);
+        var emotionalStyle = EmotionalExpressionStyle.For(state.NpcName, NpcDisposition.ForName(state.NpcName));
+        int totalRepair = emotionalStyle.AdjustRepairAmount(System.Math.Clamp(repairDelta + (apology ? 12 : 0), 0, 100));
         if (totalRepair <= 0 && !apology && !specificRepairTalk)
         {
             return 0;
@@ -3472,18 +3486,24 @@ internal sealed class BehaviorMemory
         }
     }
 
-    private void DecayEmotionAndConflicts(LivingNpcState state, int emotionDailyDecay, int conflictDailyDecay)
+    private void DecayEmotionAndConflicts(
+        LivingNpcState state,
+        int emotionDailyDecay,
+        int conflictDailyDecay,
+        EmotionalExpressionCue emotionalStyle)
     {
-        if (emotionDailyDecay > 0 && state.EmotionIntensity > 0)
+        int adjustedEmotionDailyDecay = emotionalStyle.AdjustEmotionDecay(emotionDailyDecay);
+        int adjustedConflictDailyDecay = emotionalStyle.AdjustConflictDecay(conflictDailyDecay);
+        if (adjustedEmotionDailyDecay > 0 && state.EmotionIntensity > 0)
         {
-            state.EmotionIntensity = LivingNpcState.MoveToward(state.EmotionIntensity, 0, emotionDailyDecay);
+            state.EmotionIntensity = LivingNpcState.MoveToward(state.EmotionIntensity, 0, adjustedEmotionDailyDecay);
             if (state.EmotionIntensity == 0)
             {
                 state.CurrentEmotion = "Calm";
             }
         }
 
-        if (conflictDailyDecay <= 0)
+        if (adjustedConflictDailyDecay <= 0)
         {
             return;
         }
@@ -3496,7 +3516,7 @@ internal sealed class BehaviorMemory
                 int floor = GetComplexRepairSeverityFloor(conflict);
                 conflict.Severity = System.Math.Max(
                     floor,
-                    LivingNpcState.MoveToward(conflict.Severity, 0, conflictDailyDecay)
+                    LivingNpcState.MoveToward(conflict.Severity, 0, adjustedConflictDailyDecay)
                 );
                 conflict.LastUpdatedTotalDays = Game1.Date.TotalDays;
                 conflict.LastUpdatedTimeOfDay = Game1.timeOfDay;
@@ -3515,7 +3535,7 @@ internal sealed class BehaviorMemory
                 continue;
             }
 
-            conflict.Severity = LivingNpcState.MoveToward(conflict.Severity, 0, conflictDailyDecay);
+            conflict.Severity = LivingNpcState.MoveToward(conflict.Severity, 0, adjustedConflictDailyDecay);
             conflict.LastUpdatedTotalDays = Game1.Date.TotalDays;
             conflict.LastUpdatedTimeOfDay = Game1.timeOfDay;
             if (conflict.Severity == 0)
@@ -3623,6 +3643,12 @@ internal sealed class BehaviorMemory
     internal static int GetComplexRepairDelayDays(int severity)
     {
         return severity >= 80 ? 5 : 3;
+    }
+
+    private static int GetComplexRepairDelayDays(LivingNpcState state, int severity)
+    {
+        var emotionalStyle = EmotionalExpressionStyle.For(state.NpcName, NpcDisposition.ForName(state.NpcName));
+        return emotionalStyle.AdjustComplexRepairDelay(GetComplexRepairDelayDays(severity));
     }
 
     private static int GetConflictTrustLoss(int severity)
