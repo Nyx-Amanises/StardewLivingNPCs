@@ -104,6 +104,7 @@ internal static class WorldProgression
         var professionFocuses = DetermineProfessionFocuses(farmer);
         var spouseNames = GetSpouseDisplayNames(farmer);
         int childrenCount = farmer.getChildren().Count;
+        var modProgression = ModWorldProgression.Current(farmer);
 
         var unlockedFacilities = new List<string>();
         if (busRepaired)
@@ -147,6 +148,7 @@ internal static class WorldProgression
             animalCount,
             spouseNames,
             childrenCount,
+            modProgression,
             BuildPromptLabel(
                 route,
                 residentStage,
@@ -157,7 +159,8 @@ internal static class WorldProgression
                 buildingCount,
                 animalCount,
                 spouseNames,
-                childrenCount
+                childrenCount,
+                modProgression
             ),
             BuildDebugLabel(
                 route,
@@ -169,9 +172,10 @@ internal static class WorldProgression
                 buildingCount,
                 animalCount,
                 spouseNames,
-                childrenCount
+                childrenCount,
+                modProgression
             ),
-            BuildReplyGuidance(route, residentStage, unlockedFacilities, spouseNames, childrenCount)
+            BuildReplyGuidance(route, residentStage, unlockedFacilities, spouseNames, childrenCount, modProgression)
         );
     }
 
@@ -222,17 +226,19 @@ internal static class WorldProgression
         );
         string attitudePrompt = BuildNpcAttitudePromptLabel(progression, attitudeTraits);
         string attitudeDebug = BuildNpcAttitudeDebugLabel(progression, attitudeTraits);
+        var modProgressionKnowledge = ModWorldProgression.ForNpc(npc, disposition, progression.ModProgression, attitudeTraits);
 
         return new WorldProgressKnowledgeSnapshot(
             observationDomains,
             learnedDomains,
             attitudeTraits,
+            modProgressionKnowledge,
             knownProfessionFocuses,
             farmKnowledgeAvailable,
             trustedRelationship,
-            BuildNpcPromptLabel(progression, personalKnowledgePrompt, attitudePrompt),
-            BuildNpcDebugLabel(progression, personalKnowledgeDebug, attitudeDebug),
-            BuildNpcReplyGuidance(progression, farmKnowledgeAvailable, knownProfessionFocuses, attitudePrompt)
+            BuildNpcPromptLabel(progression, personalKnowledgePrompt, attitudePrompt, modProgressionKnowledge),
+            BuildNpcDebugLabel(progression, personalKnowledgeDebug, attitudeDebug, modProgressionKnowledge),
+            BuildNpcReplyGuidance(progression, farmKnowledgeAvailable, knownProfessionFocuses, attitudePrompt, modProgressionKnowledge)
         );
     }
 
@@ -507,7 +513,8 @@ internal static class WorldProgression
         int buildingCount,
         int animalCount,
         IReadOnlyList<string> spouseNames,
-        int childrenCount)
+        int childrenCount,
+        ModWorldProgressSnapshot modProgression)
     {
         string facilities = unlockedFacilities.Count == 0
             ? "no major late-game facilities are confirmed unlocked yet"
@@ -521,15 +528,16 @@ internal static class WorldProgression
                 : $"household: no spouse recorded, {FormatChildrenPrompt(childrenCount)}"
             : $"household: married to {string.Join(", ", spouseNames)}, {FormatChildrenPrompt(childrenCount)}";
 
-        return $"route: {FormatRoutePrompt(route)}; resident stage: {FormatResidentStagePrompt(residentStage)}; {facilities}; {professions}; farm scale: {FormatFarmScalePrompt(farmScale)} ({cropCount} growing crops, {buildingCount} completed farm buildings, {animalCount} animals); {household}";
+        return $"route: {FormatRoutePrompt(route)}; resident stage: {FormatResidentStagePrompt(residentStage)}; {facilities}; {professions}; farm scale: {FormatFarmScalePrompt(farmScale)} ({cropCount} growing crops, {buildingCount} completed farm buildings, {animalCount} animals); {household}; expansion progress: {modProgression.PromptLabel}";
     }
 
     private static string BuildNpcPromptLabel(
         WorldProgressSnapshot progression,
         string personalKnowledgePrompt,
-        string attitudePrompt)
+        string attitudePrompt,
+        ModWorldProgressKnowledgeSnapshot modProgressionKnowledge)
     {
-        return $"public facts: {BuildPublicPromptLabel(progression)}; personal knowledge available to this NPC: {personalKnowledgePrompt}; personal attitude lens: {attitudePrompt}";
+        return $"public facts: {BuildPublicPromptLabel(progression)}; expansion facts: {modProgressionKnowledge.PromptLabel}; personal knowledge available to this NPC: {personalKnowledgePrompt}; personal attitude lens: {attitudePrompt}";
     }
 
     private static string BuildPublicPromptLabel(WorldProgressSnapshot progression)
@@ -599,7 +607,8 @@ internal static class WorldProgression
         int buildingCount,
         int animalCount,
         IReadOnlyList<string> spouseNames,
-        int childrenCount)
+        int childrenCount,
+        ModWorldProgressSnapshot modProgression)
     {
         string facilities = unlockedFacilities.Count == 0
             ? "暂无已确认的大型解锁"
@@ -611,15 +620,16 @@ internal static class WorldProgression
             ? $"未婚，{FormatChildrenDebug(childrenCount)}"
             : $"已婚：{string.Join("、", spouseNames)}，{FormatChildrenDebug(childrenCount)}";
 
-        return $"路线：{FormatRouteDebug(route)}；阶段：{FormatResidentStageDebug(residentStage)}；解锁：{facilities}；职业：{professions}；农场：{FormatFarmScaleDebug(farmScale)}（作物 {cropCount}，建筑 {buildingCount}，动物 {animalCount}）；家庭：{household}";
+        return $"路线：{FormatRouteDebug(route)}；阶段：{FormatResidentStageDebug(residentStage)}；解锁：{facilities}；职业：{professions}；农场：{FormatFarmScaleDebug(farmScale)}（作物 {cropCount}，建筑 {buildingCount}，动物 {animalCount}）；家庭：{household}；扩展进度：{modProgression.DebugLabel}";
     }
 
     private static string BuildNpcDebugLabel(
         WorldProgressSnapshot progression,
         string personalKnowledgeDebug,
-        string attitudeDebug)
+        string attitudeDebug,
+        ModWorldProgressKnowledgeSnapshot modProgressionKnowledge)
     {
-        return $"公开事实：{BuildPublicDebugLabel(progression)}；NPC 可知私人信息：{personalKnowledgeDebug}；NPC 世界态度：{attitudeDebug}";
+        return $"公开事实：{BuildPublicDebugLabel(progression)}；扩展可知进度：{modProgressionKnowledge.DebugLabel}；NPC 可知私人信息：{personalKnowledgeDebug}；NPC 世界态度：{attitudeDebug}";
     }
 
     private static string BuildPublicDebugLabel(WorldProgressSnapshot progression)
@@ -678,7 +688,8 @@ internal static class WorldProgression
         string residentStage,
         IReadOnlyList<string> unlockedFacilities,
         IReadOnlyList<string> spouseNames,
-        int childrenCount)
+        int childrenCount,
+        ModWorldProgressSnapshot modProgression)
     {
         string stageGuidance = residentStage switch
         {
@@ -709,14 +720,15 @@ internal static class WorldProgression
             ? "do not imply a spouse or children"
             : "the farmer's household has changed, so spouse or child references are allowed when the topic naturally reaches family life";
 
-        return $"{stageGuidance}; {routeGuidance}; {unlockGuidance}; {householdGuidance}.";
+        return $"{stageGuidance}; {routeGuidance}; {unlockGuidance}; {householdGuidance}; {modProgression.ReplyGuidance}";
     }
 
     private static string BuildNpcReplyGuidance(
         WorldProgressSnapshot progression,
         bool farmKnowledgeAvailable,
         IReadOnlyCollection<string> knownProfessionFocuses,
-        string attitudePrompt)
+        string attitudePrompt,
+        ModWorldProgressKnowledgeSnapshot modProgressionKnowledge)
     {
         string privateKnowledgeGuidance = farmKnowledgeAvailable
             ? "the NPC may refer to the farm's general scale, but should not cite exact crops, buildings, or animal counts unless the farmer just said so"
@@ -727,7 +739,7 @@ internal static class WorldProgression
                 ? "do not let this NPC casually name the farmer's profession focus"
                 : "no profession focus needs to be assumed yet";
 
-        return $"{progression.ReplyGuidance} {privateKnowledgeGuidance}; {professionGuidance}; let relevant world changes pass through this NPC's own attitude rather than sounding neutral: {attitudePrompt}.";
+        return $"{progression.ReplyGuidance} {modProgressionKnowledge.ReplyGuidance} {privateKnowledgeGuidance}; {professionGuidance}; let relevant world changes pass through this NPC's own attitude rather than sounding neutral: {attitudePrompt}.";
     }
 
     private static string BuildNpcAttitudePromptLabel(
@@ -1068,6 +1080,7 @@ internal sealed record WorldProgressSnapshot(
     int AnimalCount,
     IReadOnlyList<string> SpouseNames,
     int ChildrenCount,
+    ModWorldProgressSnapshot ModProgression,
     string PromptLabel,
     string DebugLabel,
     string ReplyGuidance
@@ -1077,6 +1090,7 @@ internal sealed record WorldProgressKnowledgeSnapshot(
     IReadOnlyCollection<string> ObservationDomains,
     IReadOnlyCollection<string> LearnedDomains,
     IReadOnlyCollection<string> AttitudeTraits,
+    ModWorldProgressKnowledgeSnapshot ModProgression,
     IReadOnlyList<string> KnownProfessionFocuses,
     bool KnowsFarmScale,
     bool TrustedRelationship,
