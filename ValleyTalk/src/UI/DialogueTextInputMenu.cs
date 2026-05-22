@@ -15,7 +15,6 @@ namespace ValleyTalk
     {
         public delegate void TextSubmittedDelegate(string input);
 
-        private readonly string _title;
         private readonly DialogueTextInputBox _inputTextBox;
         private readonly TextSubmittedDelegate _onTextSubmitted;
         private readonly NPC _currentNpc;
@@ -24,19 +23,16 @@ namespace ValleyTalk
         private int _lastViewportHeight;
 
         private const int TextInsetX = 40;
-        private const int TextInsetTop = 34;
+        private const int TextInsetTop = 72;
         private const int TextInsetBottom = 40;
         private const int PortraitPanelWidth = 388;
-        private const int TitleToInputGap = 10;
 
         // Positions
-        private Vector2 _menuPosition;
         private Rectangle _menuBounds;
         private Rectangle _textBounds;
 
         public DialogueTextInputMenu(string title, TextSubmittedDelegate callback, NPC currentNpc)
         {
-            _title = string.IsNullOrWhiteSpace(title) ? "你想说什么？" : title;
             _onTextSubmitted = callback;
             _currentNpc = currentNpc;
 
@@ -63,30 +59,7 @@ namespace ValleyTalk
         {
             UpdateLayout();
 
-            Game1.drawDialogueBox(_menuBounds.X, _menuBounds.Y, _menuBounds.Width, _menuBounds.Height, false, true);
-            _dialogueShell.drawPortrait(spriteBatch);
-
-            // Draw title
-            var titlePos = new Vector2(
-                _textBounds.X,
-                _menuBounds.Y + TextInsetTop
-            );
-            SpriteText.drawString(
-                spriteBatch,
-                _title,
-                (int)titlePos.X,
-                (int)titlePos.Y,
-                999999,
-                _textBounds.Width,
-                GetSpriteTextLineHeight(_textBounds.Width),
-                1f,
-                0.88f,
-                false,
-                -1,
-                "",
-                Game1.textColor,
-                SpriteText.ScrollTextAlignment.Left
-            );
+            _dialogueShell.draw(spriteBatch);
 
             // Draw text input box
             _inputTextBox.Draw(spriteBatch);
@@ -145,13 +118,11 @@ namespace ValleyTalk
                 _lastViewportHeight = viewportHeight;
             }
 
-            _menuPosition = new Vector2(_dialogueShell.x, _dialogueShell.y);
             _menuBounds = new Rectangle(_dialogueShell.x, _dialogueShell.y, _dialogueShell.width, _dialogueShell.height);
 
             int rightPadding = _currentNpc?.Portrait != null ? PortraitPanelWidth : TextInsetX;
             int textWidth = Math.Max(120, _menuBounds.Width - rightPadding - (TextInsetX * 2));
-            int titleHeight = GetSpriteTextLineHeight(textWidth);
-            int inputY = _menuBounds.Y + TextInsetTop + titleHeight + TitleToInputGap;
+            int inputY = _menuBounds.Y + TextInsetTop;
             _textBounds = new Rectangle(
                 _menuBounds.X + TextInsetX,
                 inputY,
@@ -167,11 +138,6 @@ namespace ValleyTalk
                 _textBounds.Width,
                 _textBounds.Height
             );
-        }
-
-        private static int GetSpriteTextLineHeight(int width)
-        {
-            return Math.Max(42, SpriteText.getHeightOfString("A", Math.Max(1, width)) + 4);
         }
     }
 }

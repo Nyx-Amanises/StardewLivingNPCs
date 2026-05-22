@@ -5,18 +5,17 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using StardewValley;
+using StardewValley.BellsAndWhistles;
 using StardewValley.Menus;
 
 namespace ValleyTalk;
 
 internal sealed class StreamingDialogueWindow : IClickableMenu
 {
-    private const int OuterMargin = 16;
-    private const int InnerMargin = 28;
-    private const int MaxWindowWidth = 1248;
-    private const int MaxWindowHeight = 336;
-    private const int PortraitPanelWidth = 320;
-    private const int PortraitSize = 256;
+    private const int TextInsetX = 40;
+    private const int TextInsetTop = 74;
+    private const int TextInsetBottom = 40;
+    private const int PortraitPanelWidth = 388;
     private const float RevealMillisecondsPerCharacter = 81f;
 
     private readonly object sync = new();
@@ -38,6 +37,9 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
     private float revealTimer;
     private int lastTextWidth;
     private int lastTextHeight;
+    private DialogueBox dialogueShell;
+    private int lastViewportWidth;
+    private int lastViewportHeight;
 
     public StreamingDialogueWindow(NPC npc)
     {
@@ -121,40 +123,17 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
 
     public override void draw(SpriteBatch b)
     {
-        Game1.drawDialogueBox(this.xPositionOnScreen, this.yPositionOnScreen, this.width, this.height, false, true);
-
         if (this.showingResponses)
         {
+            Game1.drawDialogueBox(this.xPositionOnScreen, this.yPositionOnScreen, this.width, this.height, false, true);
             this.DrawResponseOptions(b);
             this.DrawCursor(b);
             return;
         }
 
-        Rectangle portraitBounds = this.GetPortraitBounds();
-        if (this.npc?.Portrait != null)
-        {
-            b.Draw(
-                this.npc.Portrait,
-                portraitBounds,
-                new Rectangle(0, 0, 64, 64),
-                Color.White
-            );
-        }
-
-        string name = this.npc?.displayName ?? string.Empty;
-        Vector2 nameSize = Game1.dialogueFont.MeasureString(name);
-        b.DrawString(
-            Game1.dialogueFont,
-            name,
-            new Vector2(
-                portraitBounds.X + ((portraitBounds.Width - nameSize.X) / 2),
-                portraitBounds.Bottom - nameSize.Y - 10
-            ),
-            Game1.textColor
-        );
+        this.dialogueShell?.draw(b);
 
         string pageText;
-        bool canAdvance;
         lock (this.sync)
         {
             if (this.pages.Count > 0)
@@ -165,23 +144,15 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
                 {
                     pageText = this.GetAnimatedDots();
                 }
-                canAdvance = this.visibleCharacterCount >= currentPage.Length
-                    && (this.currentPageIndex < this.pages.Count - 1 || this.generationComplete);
             }
             else
             {
                 pageText = this.GetAnimatedDots();
-                canAdvance = false;
             }
         }
 
         Rectangle textBounds = this.GetTextBounds();
-        b.DrawString(
-            Game1.dialogueFont,
-            pageText,
-            new Vector2(textBounds.X, textBounds.Y),
-            Game1.textColor
-        );
+        this.DrawSpriteTextBlock(b, pageText, textBounds, Game1.textColor);
 
         this.DrawCursor(b);
     }
@@ -295,12 +266,12 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
         this.displayText = displayText ?? string.Empty;
         var rebuilt = new List<string>();
         Rectangle textBounds = this.GetTextBounds();
-        int maxLines = Math.Max(1, textBounds.Height / Math.Max(Game1.dialogueFont.LineSpacing, 1));
+        int lineHeight = GetSpriteTextLineHeight(textBounds.Width);
+        int maxLines = Math.Max(1, textBounds.Height / lineHeight);
 
         foreach (string segment in this.displayText.Split('\f', StringSplitOptions.RemoveEmptyEntries))
         {
-            string wrapped = Game1.parseText(segment, Game1.dialogueFont, textBounds.Width);
-            var lines = wrapped.Split('\n');
+            var lines = WrapSpriteText(segment, textBounds.Width);
             for (int i = 0; i < lines.Length; i += maxLines)
             {
                 rebuilt.Add(string.Join("\n", lines.Skip(i).Take(maxLines)));
@@ -362,12 +333,12 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
         Rectangle textBounds = this.GetTextBounds(includePortrait: false);
         this.responseOptionBounds.Clear();
 
-        int lineHeight = Math.Max(48, Game1.dialogueFont.LineSpacing + 12);
+        int lineHeight = Math.Max(48, GetSpriteTextLineHeight(textBounds.Width) + 6);
         int y = textBounds.Y;
 
         for (int i = 0; i < this.responseOptions.Count; i++)
         {
-            string optionText = Game1.parseText(this.responseOptions[i].Text, Game1.dialogueFont, textBounds.Width - 32);
+            string optionText = string.Join("\n", WrapSpriteText(this.responseOptions[i].Text, textBounds.Width - 32));
             int optionHeight = Math.Max(lineHeight, (optionText.Count(c => c == '\n') + 1) * lineHeight);
             var bounds = new Rectangle(textBounds.X, y - 4, textBounds.Width, optionHeight);
             this.responseOptionBounds.Add(bounds);
@@ -377,10 +348,10 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
                 b.Draw(Game1.staminaRect, bounds, Color.Brown * 0.18f);
             }
 
-            b.DrawString(
-                Game1.dialogueFont,
+            this.DrawSpriteTextBlock(
+                b,
                 optionText,
-                new Vector2(bounds.X + 12, y),
+                new Rectangle(bounds.X + 12, y, bounds.Width - 24, bounds.Height),
                 i == this.selectedResponseIndex ? new Color(96, 32, 16) : Game1.textColor
             );
 
@@ -416,10 +387,19 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
     {
         int viewportWidth = Math.Max(1, Game1.uiViewport.Width);
         int viewportHeight = Math.Max(1, Game1.uiViewport.Height);
-        this.width = Math.Min(viewportWidth - (OuterMargin * 2), MaxWindowWidth);
-        this.height = Math.Min(viewportHeight - (OuterMargin * 2), MaxWindowHeight);
-        this.xPositionOnScreen = (viewportWidth - this.width) / 2;
-        this.yPositionOnScreen = viewportHeight - this.height - OuterMargin;
+        if (this.dialogueShell == null || viewportWidth != this.lastViewportWidth || viewportHeight != this.lastViewportHeight)
+        {
+            this.dialogueShell = this.npc != null
+                ? new DialogueBox(new Dialogue(this.npc, $"{SldConstants.DialogueKeyPrefix}Streaming", " "))
+                : new DialogueBox(" ");
+            this.lastViewportWidth = viewportWidth;
+            this.lastViewportHeight = viewportHeight;
+        }
+
+        this.width = this.dialogueShell.width;
+        this.height = this.dialogueShell.height;
+        this.xPositionOnScreen = this.dialogueShell.x;
+        this.yPositionOnScreen = this.dialogueShell.y;
 
         Rectangle textBounds = this.GetTextBounds();
         bool textBoundsChanged = textBounds.Width != this.lastTextWidth || textBounds.Height != this.lastTextHeight;
@@ -432,36 +412,81 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
         }
     }
 
-    private Rectangle GetPortraitBounds()
-    {
-        int portraitSize = Math.Min(PortraitSize, Math.Max(96, this.height - (InnerMargin * 2) - 44));
-        Rectangle portraitPanel = this.GetPortraitPanelBounds();
-        return new Rectangle(
-            portraitPanel.X + ((portraitPanel.Width - portraitSize) / 2),
-            this.yPositionOnScreen + InnerMargin,
-            portraitSize,
-            portraitSize
-        );
-    }
-
-    private Rectangle GetPortraitPanelBounds()
-    {
-        return new Rectangle(
-            this.xPositionOnScreen + this.width - PortraitPanelWidth,
-            this.yPositionOnScreen + InnerMargin,
-            PortraitPanelWidth - InnerMargin,
-            this.height - (InnerMargin * 2)
-        );
-    }
-
     private Rectangle GetTextBounds(bool includePortrait = true)
     {
-        int rightPadding = includePortrait ? PortraitPanelWidth : InnerMargin;
+        int rightPadding = includePortrait && this.npc?.Portrait != null ? PortraitPanelWidth : TextInsetX;
         return new Rectangle(
-            this.xPositionOnScreen + InnerMargin,
-            this.yPositionOnScreen + InnerMargin + 4,
-            this.width - rightPadding - (InnerMargin * 2),
-            this.height - (InnerMargin * 2) - 4
+            this.xPositionOnScreen + TextInsetX,
+            this.yPositionOnScreen + TextInsetTop,
+            Math.Max(120, this.width - rightPadding - (TextInsetX * 2)),
+            Math.Max(48, this.height - TextInsetTop - TextInsetBottom)
         );
+    }
+
+    private void DrawSpriteTextBlock(SpriteBatch b, string text, Rectangle bounds, Color color)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        int lineHeight = GetSpriteTextLineHeight(bounds.Width);
+        int y = bounds.Y;
+        foreach (string line in text.Replace("\r", string.Empty).Split('\n'))
+        {
+            if (y + lineHeight > bounds.Bottom)
+            {
+                break;
+            }
+
+            SpriteText.drawString(
+                b,
+                line,
+                bounds.X,
+                y,
+                999999,
+                bounds.Width,
+                lineHeight,
+                1f,
+                0.88f,
+                false,
+                -1,
+                "",
+                color,
+                SpriteText.ScrollTextAlignment.Left
+            );
+            y += lineHeight;
+        }
+    }
+
+    private static string[] WrapSpriteText(string text, int maxWidth)
+    {
+        var lines = new List<string>();
+        foreach (string paragraph in (text ?? string.Empty).Replace("\r", string.Empty).Split('\n'))
+        {
+            string currentLine = string.Empty;
+            foreach (char character in paragraph)
+            {
+                string testLine = currentLine + character;
+                if (SpriteText.getWidthOfString(testLine, 999999) <= maxWidth || string.IsNullOrEmpty(currentLine))
+                {
+                    currentLine = testLine;
+                }
+                else
+                {
+                    lines.Add(currentLine);
+                    currentLine = character.ToString();
+                }
+            }
+
+            lines.Add(currentLine);
+        }
+
+        return lines.Where(line => !string.IsNullOrWhiteSpace(line)).DefaultIfEmpty(string.Empty).ToArray();
+    }
+
+    private static int GetSpriteTextLineHeight(int width)
+    {
+        return Math.Max(42, SpriteText.getHeightOfString("A", Math.Max(1, width)) + 4);
     }
 }
