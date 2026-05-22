@@ -23,7 +23,7 @@ namespace ValleyTalk
         private int _lastViewportHeight;
 
         private const int TextInsetX = 40;
-        private const int TextInsetTop = 72;
+        private const int TextInsetTop = 40;
         private const int TextInsetBottom = 40;
         private const int PortraitPanelWidth = 388;
 
@@ -59,7 +59,7 @@ namespace ValleyTalk
         {
             UpdateLayout();
 
-            _dialogueShell.draw(spriteBatch);
+            DrawDialogueChrome(spriteBatch);
 
             // Draw text input box
             _inputTextBox.Draw(spriteBatch);
@@ -138,6 +138,19 @@ namespace ValleyTalk
                 _textBounds.Width,
                 _textBounds.Height
             );
+        }
+
+        private void DrawDialogueChrome(SpriteBatch spriteBatch)
+        {
+            if (_currentNpc?.Portrait == null)
+            {
+                Game1.drawDialogueBox(_menuBounds.X, _menuBounds.Y, _menuBounds.Width, _menuBounds.Height, false, true);
+                return;
+            }
+
+            int textPanelWidth = Math.Max(120, _menuBounds.Width - PortraitPanelWidth);
+            Game1.drawDialogueBox(_menuBounds.X, _menuBounds.Y, textPanelWidth, _menuBounds.Height, false, true);
+            _dialogueShell.drawPortrait(spriteBatch);
         }
     }
 }

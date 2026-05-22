@@ -13,7 +13,7 @@ namespace ValleyTalk;
 internal sealed class StreamingDialogueWindow : IClickableMenu
 {
     private const int TextInsetX = 40;
-    private const int TextInsetTop = 74;
+    private const int TextInsetTop = 40;
     private const int TextInsetBottom = 40;
     private const int PortraitPanelWidth = 388;
     private const float RevealMillisecondsPerCharacter = 81f;
@@ -131,7 +131,7 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
             return;
         }
 
-        this.dialogueShell?.draw(b);
+        this.DrawDialogueChrome(b);
 
         string pageText;
         lock (this.sync)
@@ -421,6 +421,19 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
             Math.Max(120, this.width - rightPadding - (TextInsetX * 2)),
             Math.Max(48, this.height - TextInsetTop - TextInsetBottom)
         );
+    }
+
+    private void DrawDialogueChrome(SpriteBatch b)
+    {
+        if (this.npc?.Portrait == null)
+        {
+            Game1.drawDialogueBox(this.xPositionOnScreen, this.yPositionOnScreen, this.width, this.height, false, true);
+            return;
+        }
+
+        int textPanelWidth = Math.Max(120, this.width - PortraitPanelWidth);
+        Game1.drawDialogueBox(this.xPositionOnScreen, this.yPositionOnScreen, textPanelWidth, this.height, false, true);
+        this.dialogueShell?.drawPortrait(b);
     }
 
     private void DrawSpriteTextBlock(SpriteBatch b, string text, Rectangle bounds, Color color)
