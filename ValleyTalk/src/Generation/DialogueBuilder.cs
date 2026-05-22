@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using StardewModdingAPI;
 using StardewValley;
 using StardewValley.Characters;
+using StardewValley.Pathfinding;
 
 namespace ValleyTalk
 {
@@ -92,9 +93,9 @@ namespace ValleyTalk
         {
             var character = GetCharacter(instance);
 
-            DialogueContext context = LastContext ?? GetBasicContext(instance);
+            DialogueContext context = GetBasicContext(instance);
             context.CanGiveGift = false;
-            var fullHistory = context.ChatHistory.ToList();
+            var fullHistory = LastContext?.ChatHistory?.ToList() ?? new List<ConversationElement>();
             fullHistory.AddRange(conversation.Where(x => !fullHistory.Any(y => y.Id == x.Id)));
             context.ChatHistory = fullHistory;
             LastContext = context;
@@ -318,13 +319,22 @@ namespace ValleyTalk
                                 farmer.friendshipData[instance.Name].Points / 250
                     ) 
                     : -1;
+            var currentSchedule = GetCurrentScheduleEntry(instance);
+            var nextSchedule = GetNextScheduleEntry(instance);
             var context = new ValleyTalk.DialogueContext()
             {
                 Season = season,
                 DayOfSeason = Game1.dayOfMonth,
                 TimeOfDay = timeOfDay,
                 Hearts = hearts,
-                Location = instance.currentLocation.Name,
+                Location = instance.currentLocation?.Name,
+                CurrentActivity = DescribeCurrentActivity(instance, currentSchedule),
+                CurrentScheduleLocation = currentSchedule?.targetLocationName,
+                CurrentScheduleTime = currentSchedule?.time,
+                NextScheduleLocation = nextSchedule?.Entry.targetLocationName,
+                MinutesUntilNextSchedule = nextSchedule.HasValue
+                    ? Math.Max(0, ToDayMinutes(nextSchedule.Value.Time) - ToDayMinutes(Game1.timeOfDay))
+                    : null,
                 Year = Game1.year,
                 Day = day,
                 MaleFarmer = farmer.IsMale,
@@ -335,6 +345,120 @@ namespace ValleyTalk
                 Weather = weather
             };
             return context;
+        }
+
+        private static SchedulePathDescription GetCurrentScheduleEntry(NPC instance)
+        {
+            if (instance?.Schedule == null)
+            {
+                return null;
+            }
+
+            return instance.Schedule
+                .Where(schedule => schedule.Key <= Game1.timeOfDay)
+                .OrderByDescending(schedule => schedule.Key)
+                .Select(schedule => schedule.Value)
+                .FirstOrDefault();
+        }
+
+        private static (SchedulePathDescription Entry, int Time)? GetNextScheduleEntry(NPC instance)
+        {
+            if (instance?.Schedule == null)
+            {
+                return null;
+            }
+
+            var next = instance.Schedule
+                .Where(schedule => schedule.Key > Game1.timeOfDay)
+                .OrderBy(schedule => schedule.Key)
+                .FirstOrDefault();
+            return next.Value == null ? null : (next.Value, next.Key);
+        }
+
+        private static int ToDayMinutes(int timeOfDay)
+        {
+            int hours = timeOfDay / 100;
+            int minutes = timeOfDay % 100;
+            return (hours * 60) + minutes;
+        }
+
+        private static string DescribeCurrentActivity(NPC instance, SchedulePathDescription currentSchedule)
+        {
+            if (instance?.DirectionsToNewLocation != null)
+            {
+                return "walking to the next scheduled destination";
+            }
+
+            string scheduleCue = currentSchedule?.endOfRouteBehavior;
+            if (string.IsNullOrWhiteSpace(scheduleCue))
+            {
+                scheduleCue = currentSchedule?.endOfRouteMessage;
+            }
+
+            if (!string.IsNullOrWhiteSpace(scheduleCue))
+            {
+                return NormalizeScheduleCue(scheduleCue);
+            }
+
+            return currentSchedule != null
+                ? "standing or waiting at the current scheduled spot"
+                : "standing nearby with no specific schedule activity visible";
+        }
+
+        private static string NormalizeScheduleCue(string cue)
+        {
+            string normalized = cue
+                .Replace("_", " ")
+                .Replace("-", " ")
+                .Trim();
+            string lower = normalized.ToLowerInvariant();
+
+            if (lower.Contains("read") || lower.Contains("book"))
+            {
+                return "reading or studying at the current spot";
+            }
+
+            if (lower.Contains("fish"))
+            {
+                return "fishing";
+            }
+
+            if (lower.Contains("drink") || lower.Contains("beer") || lower.Contains("bar"))
+            {
+                return "relaxing with a drink or spending time at the bar";
+            }
+
+            if (lower.Contains("shop") || lower.Contains("work"))
+            {
+                return "working or tending to daily business";
+            }
+
+            if (lower.Contains("sit") || lower.Contains("bench"))
+            {
+                return "sitting and resting";
+            }
+
+            if (lower.Contains("exercise") || lower.Contains("workout"))
+            {
+                return "exercising";
+            }
+
+            if (lower.Contains("music") || lower.Contains("guitar"))
+            {
+                return "playing or listening to music";
+            }
+
+            if (lower.Contains("dance"))
+            {
+                return "dancing or practicing movement";
+            }
+
+            if (lower.Contains("sleep") || lower.Contains("bed"))
+            {
+                return "resting";
+            }
+
+            return $"doing the current schedule activity ({normalized})";
         }
 
         private List<ChildDescription> ConvertChildren(List<Child> children)

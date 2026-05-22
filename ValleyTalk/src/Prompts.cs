@@ -577,7 +577,7 @@ public class Prompts
 
     private void GetLocation(StringBuilder prompt)
     {
-        if (Context.Location == null && Character.StardewNpc.DirectionsToNewLocation == null) return;
+        if (Context.Location == null && Character.StardewNpc.DirectionsToNewLocation == null && string.IsNullOrWhiteSpace(Context.CurrentActivity)) return;
         
         //var bedTile = npcData.Home[0].Tile;
         //if (bedTile == null || bedTile.X <= 0 || bedTile.Y <= 0)
@@ -636,6 +636,8 @@ public class Prompts
             prompt.AppendLine(Util.GetString(Character,"locationTravelling", new { Name= Name, destination= destinationName }));
         }
 
+        AppendCurrentNpcState(prompt);
+
         var schedule = Character.StardewNpc.Schedule;
         if (schedule != null)
         {
@@ -673,6 +675,53 @@ public class Prompts
                 prompt.AppendLine(Util.GetString(Character, "locationNoUpcomingSchedule", new { Name }));
             }
         }
+    }
+
+    private void AppendCurrentNpcState(StringBuilder prompt)
+    {
+        string currentLocation = Character.StardewNpc.currentLocation?.Name ?? Context.Location;
+        if (string.IsNullOrWhiteSpace(currentLocation) && string.IsNullOrWhiteSpace(Context.CurrentActivity))
+        {
+            return;
+        }
+
+        var displayLocation = string.IsNullOrWhiteSpace(currentLocation)
+            ? Util.GetString(Character, "timeInTheFuture")
+            : GetLocationDisplayNameIfAvailable(currentLocation);
+        var tile = Character.StardewNpc.TilePoint;
+        prompt.AppendLine($"### {Util.GetString(Character, "locationCurrentStateHeading")}");
+        prompt.AppendLine(Util.GetString(Character, "locationCurrentStatePlace", new
+        {
+            Name,
+            Location = displayLocation,
+            TileX = tile.X,
+            TileY = tile.Y
+        }));
+
+        if (!string.IsNullOrWhiteSpace(Context.CurrentActivity))
+        {
+            prompt.AppendLine(Util.GetString(Character, "locationCurrentStateActivity", new
+            {
+                Activity = Context.CurrentActivity
+            }));
+        }
+
+        if (!string.IsNullOrWhiteSpace(Context.CurrentScheduleLocation) && Context.CurrentScheduleTime.HasValue)
+        {
+            prompt.AppendLine(Util.GetString(Character, "locationCurrentScheduleStop", new
+            {
+                Name,
+                Time = FormatScheduleTime(Context.CurrentScheduleTime.Value),
+                Location = GetLocationDisplayNameIfAvailable(Context.CurrentScheduleLocation)
+            }));
+        }
+
+        prompt.AppendLine(Util.GetString(Character, "locationCurrentStateGrounding", new { Name }));
+    }
+
+    private static string FormatScheduleTime(int timeOfDay)
+    {
+        return $"{(timeOfDay / 100) % 24}:{timeOfDay % 100:00}";
     }
 
     private int ToDayMinutes(int timeOfDay)

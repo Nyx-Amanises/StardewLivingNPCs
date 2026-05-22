@@ -17,21 +17,27 @@ namespace ValleyTalk
         private readonly string _title;
         private readonly DialogueTextInputBox _inputTextBox;
         private readonly TextSubmittedDelegate _onTextSubmitted;
+        private readonly NPC _currentNpc;
 
         // Menu dimensions
-        private const int MaxMenuWidth = 1200;
-        private const int MenuHeight = 292;
-        private const int TextBoxHeight = 152;
-        private const int Margin = 28;
+        private const int MaxMenuWidth = 1248;
+        private const int MenuHeight = 336;
+        private const int OuterMargin = 16;
+        private const int InnerMargin = 28;
+        private const int PortraitPanelWidth = 320;
+        private const int PortraitSize = 256;
 
         // Positions
         private Vector2 _menuPosition;
         private Rectangle _menuBounds;
+        private Rectangle _textBounds;
+        private Rectangle _portraitBounds;
 
         public DialogueTextInputMenu(string title, TextSubmittedDelegate callback, NPC currentNpc)
         {
             _title = string.IsNullOrWhiteSpace(title) ? "你想说什么？" : title;
             _onTextSubmitted = callback;
+            _currentNpc = currentNpc;
 
             _inputTextBox = new DialogueTextInputBox(500)
             {
@@ -60,12 +66,13 @@ namespace ValleyTalk
             Game1.drawDialogueBox(_menuBounds.X, _menuBounds.Y, _menuBounds.Width, _menuBounds.Height, false, true);
 
             // Draw title
-            var titleSize = Game1.dialogueFont.MeasureString(_title);
             var titlePos = new Vector2(
-                _menuPosition.X + 2 * Margin,
-                _menuPosition.Y + 2 * Margin
+                _textBounds.X,
+                _menuBounds.Y + InnerMargin
             );
             spriteBatch.DrawString(Game1.dialogueFont, _title, titlePos, Game1.textColor);
+
+            DrawPortrait(spriteBatch);
 
             // Draw text input box
             _inputTextBox.Draw(spriteBatch);
@@ -113,23 +120,87 @@ namespace ValleyTalk
 
         private void UpdateLayout()
         {
-            int menuWidth = Math.Min(Game1.uiViewport.Width - (Margin * 2), MaxMenuWidth);
-            int menuHeight = Math.Min(MenuHeight, Game1.uiViewport.Height - (Margin * 2));
+            int viewportWidth = Math.Max(1, Game1.uiViewport.Width);
+            int viewportHeight = Math.Max(1, Game1.uiViewport.Height);
+            int menuWidth = Math.Min(viewportWidth - (OuterMargin * 2), MaxMenuWidth);
+            int menuHeight = Math.Min(MenuHeight, viewportHeight - (OuterMargin * 2));
             _menuPosition = new Vector2(
-                (Game1.uiViewport.Width - menuWidth) / 2,
-                Game1.uiViewport.Height - menuHeight - Margin
+                (viewportWidth - menuWidth) / 2,
+                viewportHeight - menuHeight - OuterMargin
             );
 
             _menuBounds = new Rectangle((int)_menuPosition.X, (int)_menuPosition.Y, menuWidth, menuHeight);
 
             var titleSize = Game1.dialogueFont.MeasureString(_title);
+            int portraitPanelWidth = _currentNpc?.Portrait != null
+                ? Math.Min(PortraitPanelWidth, Math.Max(0, menuWidth / 3))
+                : 0;
+            int rightPadding = portraitPanelWidth > 0 ? portraitPanelWidth : InnerMargin;
+            _textBounds = new Rectangle(
+                _menuBounds.X + InnerMargin,
+                _menuBounds.Y + InnerMargin + (int)titleSize.Y + 18,
+                Math.Max(80, _menuBounds.Width - rightPadding - (InnerMargin * 2)),
+                Math.Max(48, _menuBounds.Height - (InnerMargin * 2) - (int)titleSize.Y - 24)
+            );
+            if (portraitPanelWidth > 0)
+            {
+                int portraitSize = Math.Min(PortraitSize, Math.Max(96, _menuBounds.Height - (InnerMargin * 2) - 64));
+                var portraitPanel = new Rectangle(
+                    _menuBounds.X + _menuBounds.Width - portraitPanelWidth,
+                    _menuBounds.Y + InnerMargin,
+                    portraitPanelWidth - InnerMargin,
+                    _menuBounds.Height - (InnerMargin * 2)
+                );
+                _portraitBounds = new Rectangle(
+                    portraitPanel.X + ((portraitPanel.Width - portraitSize) / 2),
+                    _menuBounds.Y + InnerMargin,
+                    portraitSize,
+                    portraitSize
+                );
+            }
+            else
+            {
+                _portraitBounds = Rectangle.Empty;
+            }
+
             _inputTextBox.Position = new Vector2(
-                _menuPosition.X + (Margin * 2),
-                _menuPosition.Y + titleSize.Y + (Margin * 3)
+                _textBounds.X,
+                _textBounds.Y
             );
             _inputTextBox.Extent = new Vector2(
-                menuWidth - (Margin * 4),
-                Math.Min(TextBoxHeight, menuHeight - (int)titleSize.Y - (Margin * 5))
+                _textBounds.Width,
+                _textBounds.Height
+            );
+        }
+
+        private void DrawPortrait(SpriteBatch spriteBatch)
+        {
+            if (_currentNpc?.Portrait == null || _portraitBounds == Rectangle.Empty)
+            {
+                return;
+            }
+
+            spriteBatch.Draw(
+                _currentNpc.Portrait,
+                _portraitBounds,
+                new Rectangle(0, 0, 64, 64),
+                Color.White
+            );
+
+            string name = _currentNpc.displayName ?? string.Empty;
+            Vector2 nameSize = Game1.dialogueFont.MeasureString(name);
+            int nameY = Math.Min(
+                _menuBounds.Bottom - InnerMargin - (int)nameSize.Y,
+                _portraitBounds.Bottom + 8
+            );
+            spriteBatch.DrawString(
+                Game1.dialogueFont,
+                name,
+                new Vector2(
+                    _portraitBounds.X + ((_portraitBounds.Width - nameSize.X) / 2),
+                    nameY
+                ),
+                Game1.textColor
             );
         }
     }

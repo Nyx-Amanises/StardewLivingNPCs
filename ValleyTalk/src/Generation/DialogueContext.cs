@@ -311,6 +311,11 @@ public class DialogueContext
         Married = context.Married;
         TargetSamples = context.TargetSamples;
         Location = context.Location;
+        CurrentActivity = context.CurrentActivity;
+        CurrentScheduleLocation = context.CurrentScheduleLocation;
+        CurrentScheduleTime = context.CurrentScheduleTime;
+        NextScheduleLocation = context.NextScheduleLocation;
+        MinutesUntilNextSchedule = context.MinutesUntilNextSchedule;
         LastLineIsPlayerInput = context.LastLineIsPlayerInput;
     }
 
@@ -343,6 +348,11 @@ public class DialogueContext
 
     public string Gender { get; internal set; }
     public string Location { get; internal set; }
+    public string CurrentActivity { get; internal set; }
+    public string CurrentScheduleLocation { get; internal set; }
+    public int? CurrentScheduleTime { get; internal set; }
+    public string NextScheduleLocation { get; internal set; }
+    public int? MinutesUntilNextSchedule { get; internal set; }
     public bool Birthday { get; internal set; } = false;
     public bool MaleFarmer { get; internal set; }
     public List<ChildDescription> Children { get; internal set; }

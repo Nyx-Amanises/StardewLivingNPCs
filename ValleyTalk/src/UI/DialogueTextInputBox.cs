@@ -4,7 +4,6 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using StardewValley;
-using StardewValley.Menus;
 
 namespace ValleyTalk
 {
@@ -25,15 +24,9 @@ namespace ValleyTalk
 
         private readonly int _characterLimit;
         private int _caretPosition = 0;
-        private readonly Texture2D _backgroundTexture;
-
         public DialogueTextInputBox(int characterLimit = 500)
         {
             _characterLimit = characterLimit;
-            
-            // Create background texture
-            _backgroundTexture = new Texture2D(Game1.graphics.GraphicsDevice, 1, 1);
-            _backgroundTexture.SetData(new Color[] { Color.White });
         }
 
         public bool ContainsPoint(float x, float y)
@@ -44,13 +37,12 @@ namespace ValleyTalk
 
         public void Draw(SpriteBatch spriteBatch)
         {
-            // Draw textbox background using the game's standard texture box
-            IClickableMenu.drawTextureBox(spriteBatch, (int)Position.X, (int)Position.Y, 
-                                         (int)Extent.X, (int)Extent.Y, Color.White);
-            
-            // Calculate text area with padding
-            var textArea = new Rectangle((int)Position.X + 16, (int)Position.Y + 16, 
-                                       (int)Extent.X - 32, (int)Extent.Y - 32);
+            var textArea = new Rectangle(
+                (int)Position.X,
+                (int)Position.Y,
+                Math.Max(1, (int)Extent.X),
+                Math.Max(1, (int)Extent.Y)
+            );
             
             // Draw text with word wrapping
             if (!string.IsNullOrEmpty(Text))
