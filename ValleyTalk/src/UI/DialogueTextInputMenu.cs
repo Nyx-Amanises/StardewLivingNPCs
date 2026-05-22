@@ -63,7 +63,7 @@ namespace ValleyTalk
         {
             UpdateLayout();
 
-            _dialogueShell.drawBox(spriteBatch, _dialogueShell.x, _dialogueShell.y, _dialogueShell.width, _dialogueShell.height);
+            Game1.drawDialogueBox(_menuBounds.X, _menuBounds.Y, _menuBounds.Width, _menuBounds.Height, false, true);
             _dialogueShell.drawPortrait(spriteBatch);
 
             // Draw title
