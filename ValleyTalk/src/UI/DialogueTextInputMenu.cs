@@ -2,6 +2,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using StardewValley;
+using StardewValley.BellsAndWhistles;
 using StardewValley.Menus;
 using System;
 
@@ -18,20 +19,20 @@ namespace ValleyTalk
         private readonly DialogueTextInputBox _inputTextBox;
         private readonly TextSubmittedDelegate _onTextSubmitted;
         private readonly NPC _currentNpc;
+        private DialogueBox _dialogueShell;
+        private int _lastViewportWidth;
+        private int _lastViewportHeight;
 
-        // Menu dimensions
-        private const int MaxMenuWidth = 1248;
-        private const int MenuHeight = 336;
-        private const int OuterMargin = 16;
-        private const int InnerMargin = 28;
-        private const int PortraitPanelWidth = 320;
-        private const int PortraitSize = 256;
+        private const int TextInsetX = 40;
+        private const int TextInsetTop = 34;
+        private const int TextInsetBottom = 40;
+        private const int PortraitPanelWidth = 388;
+        private const int TitleToInputGap = 10;
 
         // Positions
         private Vector2 _menuPosition;
         private Rectangle _menuBounds;
         private Rectangle _textBounds;
-        private Rectangle _portraitBounds;
 
         public DialogueTextInputMenu(string title, TextSubmittedDelegate callback, NPC currentNpc)
         {
@@ -62,17 +63,30 @@ namespace ValleyTalk
         {
             UpdateLayout();
 
-            // Draw menu background
-            Game1.drawDialogueBox(_menuBounds.X, _menuBounds.Y, _menuBounds.Width, _menuBounds.Height, false, true);
+            _dialogueShell.drawBox(spriteBatch, _dialogueShell.x, _dialogueShell.y, _dialogueShell.width, _dialogueShell.height);
+            _dialogueShell.drawPortrait(spriteBatch);
 
             // Draw title
             var titlePos = new Vector2(
                 _textBounds.X,
-                _menuBounds.Y + InnerMargin
+                _menuBounds.Y + TextInsetTop
             );
-            spriteBatch.DrawString(Game1.dialogueFont, _title, titlePos, Game1.textColor);
-
-            DrawPortrait(spriteBatch);
+            SpriteText.drawString(
+                spriteBatch,
+                _title,
+                (int)titlePos.X,
+                (int)titlePos.Y,
+                999999,
+                _textBounds.Width,
+                GetSpriteTextLineHeight(_textBounds.Width),
+                1f,
+                0.88f,
+                false,
+                -1,
+                "",
+                Game1.textColor,
+                SpriteText.ScrollTextAlignment.Left
+            );
 
             // Draw text input box
             _inputTextBox.Draw(spriteBatch);
@@ -122,46 +136,28 @@ namespace ValleyTalk
         {
             int viewportWidth = Math.Max(1, Game1.uiViewport.Width);
             int viewportHeight = Math.Max(1, Game1.uiViewport.Height);
-            int menuWidth = Math.Min(viewportWidth - (OuterMargin * 2), MaxMenuWidth);
-            int menuHeight = Math.Min(MenuHeight, viewportHeight - (OuterMargin * 2));
-            _menuPosition = new Vector2(
-                (viewportWidth - menuWidth) / 2,
-                viewportHeight - menuHeight - OuterMargin
-            );
+            if (_dialogueShell == null || viewportWidth != _lastViewportWidth || viewportHeight != _lastViewportHeight)
+            {
+                _dialogueShell = _currentNpc != null
+                    ? new DialogueBox(new Dialogue(_currentNpc, $"{SldConstants.DialogueKeyPrefix}Input", " "))
+                    : new DialogueBox(" ");
+                _lastViewportWidth = viewportWidth;
+                _lastViewportHeight = viewportHeight;
+            }
 
-            _menuBounds = new Rectangle((int)_menuPosition.X, (int)_menuPosition.Y, menuWidth, menuHeight);
+            _menuPosition = new Vector2(_dialogueShell.x, _dialogueShell.y);
+            _menuBounds = new Rectangle(_dialogueShell.x, _dialogueShell.y, _dialogueShell.width, _dialogueShell.height);
 
-            var titleSize = Game1.dialogueFont.MeasureString(_title);
-            int portraitPanelWidth = _currentNpc?.Portrait != null
-                ? Math.Min(PortraitPanelWidth, Math.Max(0, menuWidth / 3))
-                : 0;
-            int rightPadding = portraitPanelWidth > 0 ? portraitPanelWidth : InnerMargin;
+            int rightPadding = _currentNpc?.Portrait != null ? PortraitPanelWidth : TextInsetX;
+            int textWidth = Math.Max(120, _menuBounds.Width - rightPadding - (TextInsetX * 2));
+            int titleHeight = GetSpriteTextLineHeight(textWidth);
+            int inputY = _menuBounds.Y + TextInsetTop + titleHeight + TitleToInputGap;
             _textBounds = new Rectangle(
-                _menuBounds.X + InnerMargin,
-                _menuBounds.Y + InnerMargin + (int)titleSize.Y + 18,
-                Math.Max(80, _menuBounds.Width - rightPadding - (InnerMargin * 2)),
-                Math.Max(48, _menuBounds.Height - (InnerMargin * 2) - (int)titleSize.Y - 24)
+                _menuBounds.X + TextInsetX,
+                inputY,
+                textWidth,
+                Math.Max(48, _menuBounds.Bottom - inputY - TextInsetBottom)
             );
-            if (portraitPanelWidth > 0)
-            {
-                int portraitSize = Math.Min(PortraitSize, Math.Max(96, _menuBounds.Height - (InnerMargin * 2) - 64));
-                var portraitPanel = new Rectangle(
-                    _menuBounds.X + _menuBounds.Width - portraitPanelWidth,
-                    _menuBounds.Y + InnerMargin,
-                    portraitPanelWidth - InnerMargin,
-                    _menuBounds.Height - (InnerMargin * 2)
-                );
-                _portraitBounds = new Rectangle(
-                    portraitPanel.X + ((portraitPanel.Width - portraitSize) / 2),
-                    _menuBounds.Y + InnerMargin,
-                    portraitSize,
-                    portraitSize
-                );
-            }
-            else
-            {
-                _portraitBounds = Rectangle.Empty;
-            }
 
             _inputTextBox.Position = new Vector2(
                 _textBounds.X,
@@ -173,35 +169,9 @@ namespace ValleyTalk
             );
         }
 
-        private void DrawPortrait(SpriteBatch spriteBatch)
+        private static int GetSpriteTextLineHeight(int width)
         {
-            if (_currentNpc?.Portrait == null || _portraitBounds == Rectangle.Empty)
-            {
-                return;
-            }
-
-            spriteBatch.Draw(
-                _currentNpc.Portrait,
-                _portraitBounds,
-                new Rectangle(0, 0, 64, 64),
-                Color.White
-            );
-
-            string name = _currentNpc.displayName ?? string.Empty;
-            Vector2 nameSize = Game1.dialogueFont.MeasureString(name);
-            int nameY = Math.Min(
-                _menuBounds.Bottom - InnerMargin - (int)nameSize.Y,
-                _portraitBounds.Bottom + 8
-            );
-            spriteBatch.DrawString(
-                Game1.dialogueFont,
-                name,
-                new Vector2(
-                    _portraitBounds.X + ((_portraitBounds.Width - nameSize.X) / 2),
-                    nameY
-                ),
-                Game1.textColor
-            );
+            return Math.Max(42, SpriteText.getHeightOfString("A", Math.Max(1, width)) + 4);
         }
     }
 }

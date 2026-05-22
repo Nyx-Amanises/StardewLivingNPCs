@@ -4,6 +4,7 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using StardewValley;
+using StardewValley.BellsAndWhistles;
 
 namespace ValleyTalk
 {
@@ -60,7 +61,7 @@ namespace ValleyTalk
         private void DrawWrappedText(SpriteBatch spriteBatch, string text, Rectangle area, SpriteFont font, Color color)
         {
             var lines = WrapText(text, area.Width, font);
-            var lineHeight = Math.Max(1, font.LineSpacing);
+            var lineHeight = GetLineHeight(area.Width);
             int maxVisibleLines = Math.Max(1, area.Height / lineHeight);
             if (lines.Length > maxVisibleLines)
             {
@@ -73,7 +74,22 @@ namespace ValleyTalk
             {
                 if (y + lineHeight > area.Bottom) break; // Don't draw outside the box
                 
-                spriteBatch.DrawString(font, line, new Vector2(area.X, y), color);
+                SpriteText.drawString(
+                    spriteBatch,
+                    line,
+                    area.X,
+                    y,
+                    999999,
+                    area.Width,
+                    lineHeight,
+                    1f,
+                    0.88f,
+                    false,
+                    -1,
+                    "",
+                    color,
+                    SpriteText.ScrollTextAlignment.Left
+                );
                 y += lineHeight;
             }
         }
@@ -89,7 +105,7 @@ namespace ValleyTalk
                 foreach (char character in paragraph)
                 {
                     var testLine = currentLine + character;
-                    if (font.MeasureString(testLine).X <= maxWidth || string.IsNullOrEmpty(currentLine))
+                    if (MeasureTextWidth(testLine, font) <= maxWidth || string.IsNullOrEmpty(currentLine))
                     {
                         currentLine = testLine;
                     }
@@ -114,7 +130,7 @@ namespace ValleyTalk
             // Calculate caret position based on actual cursor position in text
             var textBeforeCaret = Text.Substring(0, _caretPosition);
             var lines = WrapText(textBeforeCaret, textArea.Width, Font);
-            var lineHeight = Math.Max(1, Font.LineSpacing);
+            var lineHeight = GetLineHeight(textArea.Width);
             
             int caretX, caretY;
             
@@ -128,7 +144,7 @@ namespace ValleyTalk
             {
                 // Caret is at the end of the last line of text before cursor
                 var lastLine = lines[lines.Length - 1];
-                var lastLineWidth = Font.MeasureString(lastLine).X;
+                var lastLineWidth = MeasureTextWidth(lastLine, Font);
                 int maxVisibleLines = Math.Max(1, textArea.Height / lineHeight);
                 int visibleLineOffset = Math.Max(0, lines.Length - maxVisibleLines);
                 
@@ -139,7 +155,7 @@ namespace ValleyTalk
                 if (_caretPosition < Text.Length)
                 {
                     var fullTextLines = WrapText(Text, textArea.Width, Font);
-                    if (lines.Length < fullTextLines.Length && lastLineWidth + Font.MeasureString("A").X > textArea.Width)
+                    if (lines.Length < fullTextLines.Length && lastLineWidth + MeasureTextWidth("A", Font) > textArea.Width)
                     {
                         caretX = textArea.X;
                         caretY += lineHeight;
@@ -150,6 +166,21 @@ namespace ValleyTalk
             caretY = Math.Clamp(caretY, textArea.Top, Math.Max(textArea.Top, textArea.Bottom - lineHeight));
             var caretRect = new Rectangle(caretX, caretY, 2, lineHeight);
             spriteBatch.Draw(Game1.staminaRect, caretRect, TextColor);
+        }
+
+        private static int GetLineHeight(int maxWidth)
+        {
+            return Math.Max(42, SpriteText.getHeightOfString("A", Math.Max(1, maxWidth)) + 4);
+        }
+
+        private static float MeasureTextWidth(string text, SpriteFont fallbackFont)
+        {
+            if (string.IsNullOrEmpty(text))
+            {
+                return 0f;
+            }
+
+            return SpriteText.getWidthOfString(text, 999999);
         }
 
         public void RecieveTextInput(char inputChar)
