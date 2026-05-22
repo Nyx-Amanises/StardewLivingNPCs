@@ -635,6 +635,10 @@ public class Prompts
             var destinationName = GetLocationDisplayNameIfAvailable(destination);
             prompt.AppendLine(Util.GetString(Character,"locationTravelling", new { Name= Name, destination= destinationName }));
         }
+        else
+        {
+            prompt.AppendLine(Util.GetString(Character, "locationCurrentlyStationary", new { Name }));
+        }
 
         AppendCurrentNpcState(prompt);
 
@@ -652,23 +656,29 @@ public class Prompts
             if (remainingLocations.Any())
             {
                 var displayNames = remainingLocations.Select(x => GetLocationDisplayNameIfAvailable(x));
-                prompt.AppendLine(Util.GetString(Character,"locationFuturePlans", new { Name= Name, Locations= string.Join(", ", displayNames) }));
+                if (ShouldIncludeFutureSchedule(remainderOfSchedule.FirstOrDefault()))
+                {
+                    prompt.AppendLine(Util.GetString(Character,"locationFuturePlans", new { Name= Name, Locations= string.Join(", ", displayNames) }));
+                }
             }
 
             var nextSchedule = remainderOfSchedule.FirstOrDefault();
             if (nextSchedule.Value != null)
             {
                 int minutesUntilNextSchedule = Math.Max(0, ToDayMinutes(nextSchedule.Key) - ToDayMinutes(Game1.timeOfDay));
-                string destinationName = GetLocationDisplayNameIfAvailable(nextSchedule.Value.targetLocationName);
-                string key = minutesUntilNextSchedule <= 30
-                    ? "locationNextScheduleSoon"
-                    : "locationScheduleWindow";
-                prompt.AppendLine(Util.GetString(Character, key, new
+                if (ShouldIncludeFutureSchedule(nextSchedule))
                 {
-                    Name,
-                    Minutes = minutesUntilNextSchedule,
-                    Destination = destinationName
-                }));
+                    string destinationName = GetLocationDisplayNameIfAvailable(nextSchedule.Value.targetLocationName);
+                    string key = minutesUntilNextSchedule <= 30
+                        ? "locationNextScheduleSoon"
+                        : "locationScheduleWindow";
+                    prompt.AppendLine(Util.GetString(Character, key, new
+                    {
+                        Name,
+                        Minutes = minutesUntilNextSchedule,
+                        Destination = destinationName
+                    }));
+                }
             }
             else
             {
@@ -722,6 +732,45 @@ public class Prompts
     private static string FormatScheduleTime(int timeOfDay)
     {
         return $"{(timeOfDay / 100) % 24}:{timeOfDay % 100:00}";
+    }
+
+    private bool ShouldIncludeFutureSchedule(KeyValuePair<int, StardewValley.Pathfinding.SchedulePathDescription> nextSchedule)
+    {
+        if (Character.StardewNpc.DirectionsToNewLocation != null)
+        {
+            return true;
+        }
+
+        if (nextSchedule.Value != null)
+        {
+            int minutesUntilNextSchedule = Math.Max(0, ToDayMinutes(nextSchedule.Key) - ToDayMinutes(Game1.timeOfDay));
+            if (minutesUntilNextSchedule <= 30)
+            {
+                return true;
+            }
+        }
+
+        string lastPlayerLine = Context.ChatHistory.LastOrDefault(line => line.IsPlayerLine)?.Text ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(lastPlayerLine))
+        {
+            return false;
+        }
+
+        return lastPlayerLine.Contains("去哪", StringComparison.OrdinalIgnoreCase)
+            || lastPlayerLine.Contains("去哪里", StringComparison.OrdinalIgnoreCase)
+            || lastPlayerLine.Contains("接下来", StringComparison.OrdinalIgnoreCase)
+            || lastPlayerLine.Contains("之后", StringComparison.OrdinalIgnoreCase)
+            || lastPlayerLine.Contains("等下", StringComparison.OrdinalIgnoreCase)
+            || lastPlayerLine.Contains("待会", StringComparison.OrdinalIgnoreCase)
+            || lastPlayerLine.Contains("忙什么", StringComparison.OrdinalIgnoreCase)
+            || lastPlayerLine.Contains("在做什么", StringComparison.OrdinalIgnoreCase)
+            || lastPlayerLine.Contains("计划", StringComparison.OrdinalIgnoreCase)
+            || lastPlayerLine.Contains("日程", StringComparison.OrdinalIgnoreCase)
+            || lastPlayerLine.Contains("where", StringComparison.OrdinalIgnoreCase)
+            || lastPlayerLine.Contains("going", StringComparison.OrdinalIgnoreCase)
+            || lastPlayerLine.Contains("next", StringComparison.OrdinalIgnoreCase)
+            || lastPlayerLine.Contains("plan", StringComparison.OrdinalIgnoreCase)
+            || lastPlayerLine.Contains("schedule", StringComparison.OrdinalIgnoreCase);
     }
 
     private int ToDayMinutes(int timeOfDay)

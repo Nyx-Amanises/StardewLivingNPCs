@@ -1,5 +1,5 @@
 {
-  "uiTypeYourResponse": "换个说法",
+  "uiTypeYourResponse": "自由输入",
   "uiYourResponse": "你的回复",
   "uiStartConversation": "你想说什么？",
   "uiDialogueInstructions": "按 Enter 提交，按 Esc 取消。",
@@ -49,9 +49,10 @@
   "locationCurrentStateActivity": "当前可见或日程动作：{{Activity}}。",
   "locationCurrentScheduleStop": "当前生效的日程点从 {{Time}} 开始，地点指向{{Location}}。",
   "locationCurrentStateGrounding": "把当前可见状态当作事实。后面的日程只是未来安排。若农夫问{{Name}}现在在做什么或接下来去哪，要区分“现在”和“稍后”；除非当前状态显示正在移动，否则不要说{{Name}}已经在路上或马上离开。",
+  "locationCurrentlyStationary": "{{Name}}现在没有在赶路，仍停留在当前地点。",
   "locationFuturePlans": "今天稍晚，{{Name}}的日程可能会去：{{Locations}}。这是之后的安排，不代表{{Name}}现在正在做这些事或已经在去那里。",
   "locationNextScheduleSoon": "{{Name}}大约 {{Minutes}} 分钟后就有下一段日程，需要前往{{Destination}}。",
-  "locationScheduleWindow": "{{Name}}距离下一段前往{{Destination}}的日程大约还有 {{Minutes}} 分钟。",
+  "locationScheduleWindow": "{{Name}}距离下一段前往{{Destination}}的日程大约还有 {{Minutes}} 分钟。这不是马上发生的事，不要说成“现在”“正要”“马上”或“得赶快去”。",
   "locationNoUpcomingSchedule": "{{Name}}今天之后没有记录到新的日程移动。",
   "configGenerateAiForNormalRightClick": "普通右键也生成 AI 对话",
   "configGenerateAiForNormalRightClickTooltip": "关闭时，普通右键保留原版对白；只有按住设置的热键点击 NPC 才会开启 ValleyTalk AI 聊天。",

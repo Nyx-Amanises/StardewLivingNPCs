@@ -161,16 +161,15 @@ namespace ValleyTalk
             //sb.Append("#$b#Respond:");
             sb.Append($"#$q {responseIndex++} {SldConstants.DialogueKeyPrefix}Default#{Util.GetString("outputRespond")}");
             sb.Append($"#$r -999999 0 {SldConstants.DialogueKeyPrefix}Silent#{Util.GetString("outputStaySilent")}");
+            if (ModEntry.Config.TypedResponses != "Never")
+            {
+                sb.Append($"#$r -999997 0 {SldConstants.DialogueKeyPrefix}TypedResponse#{Util.GetString("uiTypeYourResponse")}");
+            }
 
             for (int i = 1; i < theLine.Length; i++)
             {
                 sb.Append($"#$r -999998 0 {SldConstants.DialogueKeyPrefix}Next#");
                 sb.Append(theLine[i]);
-            }
-            // Check config for typed response settings
-            if (ModEntry.Config.TypedResponses != "Never")
-            {
-                sb.Append($"#$r -999997 0 {SldConstants.DialogueKeyPrefix}TypedResponse#{Util.GetString("uiTypeYourResponse")}");
             }
             return sb.ToString();
         }
@@ -190,16 +189,15 @@ namespace ValleyTalk
             var sb = new StringBuilder();
             sb.Append($"#$q {responseIndex++} {SldConstants.DialogueKeyPrefix}Default#{Util.GetString("outputRespond")}");
             sb.Append($"#$r -999999 0 {SldConstants.DialogueKeyPrefix}Silent#{Util.GetString("outputStaySilent")}");
+            if (ModEntry.Config.TypedResponses != "Never")
+            {
+                sb.Append($"#$r -999997 0 {SldConstants.DialogueKeyPrefix}TypedResponse#{Util.GetString("uiTypeYourResponse")}");
+            }
 
             for (int i = 1; i < theLine.Length; i++)
             {
                 sb.Append($"#$r -999998 0 {SldConstants.DialogueKeyPrefix}Next#");
                 sb.Append(theLine[i]);
-            }
-
-            if (ModEntry.Config.TypedResponses != "Never")
-            {
-                sb.Append($"#$r -999997 0 {SldConstants.DialogueKeyPrefix}TypedResponse#{Util.GetString("uiTypeYourResponse")}");
             }
 
             return sb.ToString();
@@ -221,16 +219,16 @@ namespace ValleyTalk
                 Util.GetString("outputStaySilent", returnNull: true) ?? "保持沉默",
                 StreamingResponseOptionKind.Silent);
 
-            foreach (string option in theLine.Skip(1).Where(option => !string.IsNullOrWhiteSpace(option)))
-            {
-                yield return new StreamingResponseOption(option, StreamingResponseOptionKind.Generated);
-            }
-
             if (ModEntry.Config.TypedResponses != "Never")
             {
                 yield return new StreamingResponseOption(
-                    Util.GetString("uiTypeYourResponse", returnNull: true) ?? "换个说法",
+                    Util.GetString("uiTypeYourResponse", returnNull: true) ?? "自由输入",
                     StreamingResponseOptionKind.Typed);
+            }
+
+            foreach (string option in theLine.Skip(1).Where(option => !string.IsNullOrWhiteSpace(option)))
+            {
+                yield return new StreamingResponseOption(option, StreamingResponseOptionKind.Generated);
             }
         }
 
