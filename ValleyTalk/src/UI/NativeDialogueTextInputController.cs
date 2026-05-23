@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
+using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.BellsAndWhistles;
 using StardewValley.Menus;
@@ -22,6 +23,11 @@ internal static class NativeDialogueTextInputController
     private static int caretPosition;
     private static Action<string> onSubmitted;
     private static InputSubscriber subscriber;
+    private static Keys? repeatingKey;
+    private static double nextRepeatAtMilliseconds;
+
+    private const double InitialRepeatDelayMilliseconds = 320d;
+    private const double RepeatDelayMilliseconds = 48d;
 
     public static void Start(string title, NPC npc, Action<string> callback)
     {
@@ -47,6 +53,8 @@ internal static class NativeDialogueTextInputController
 
         subscriber = new InputSubscriber();
         Game1.keyboardDispatcher.Subscriber = subscriber;
+        ModEntry.SHelper.Events.GameLoop.UpdateTicked -= OnUpdateTicked;
+        ModEntry.SHelper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
     }
 
     public static bool IsInputBox(DialogueBox dialogueBox)
@@ -117,9 +125,11 @@ internal static class NativeDialogueTextInputController
                 break;
             case Keys.Back:
                 Backspace();
+                BeginKeyRepeat(key);
                 break;
             case Keys.Delete:
                 Delete();
+                BeginKeyRepeat(key);
                 break;
         }
     }
@@ -150,6 +160,7 @@ internal static class NativeDialogueTextInputController
         {
             Game1.keyboardDispatcher.Subscriber = null;
         }
+        ModEntry.SHelper.Events.GameLoop.UpdateTicked -= OnUpdateTicked;
 
         active = false;
         currentNpc = null;
@@ -159,6 +170,8 @@ internal static class NativeDialogueTextInputController
         caretPosition = 0;
         onSubmitted = null;
         subscriber = null;
+        repeatingKey = null;
+        nextRepeatAtMilliseconds = 0d;
     }
 
     private static void InsertText(string value)
@@ -232,9 +245,9 @@ internal static class NativeDialogueTextInputController
         int rightPadding = dialogueBox.characterDialogue?.speaker?.Portrait != null ? 388 : 40;
         return new Rectangle(
             dialogueBox.x + 40,
-            dialogueBox.y + 92,
+            dialogueBox.y + 84,
             Math.Max(120, dialogueBox.width - rightPadding - 80),
-            Math.Max(48, dialogueBox.height - 128)
+            Math.Max(48, dialogueBox.height - 120)
         );
     }
 
@@ -312,6 +325,51 @@ internal static class NativeDialogueTextInputController
         return Math.Max(42, SpriteText.getHeightOfString("A", Math.Max(1, width)) + 4);
     }
 
+    private static void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
+    {
+        if (!active || repeatingKey == null)
+        {
+            return;
+        }
+
+        var keyboardState = Keyboard.GetState();
+        Keys key = repeatingKey.Value;
+        if (!keyboardState.IsKeyDown(key))
+        {
+            repeatingKey = null;
+            return;
+        }
+
+        double now = Game1.currentGameTime?.TotalGameTime.TotalMilliseconds ?? 0d;
+        if (now < nextRepeatAtMilliseconds)
+        {
+            return;
+        }
+
+        PerformRepeatableEdit(key);
+        nextRepeatAtMilliseconds = now + RepeatDelayMilliseconds;
+    }
+
+    private static void BeginKeyRepeat(Keys key)
+    {
+        repeatingKey = key;
+        double now = Game1.currentGameTime?.TotalGameTime.TotalMilliseconds ?? 0d;
+        nextRepeatAtMilliseconds = now + InitialRepeatDelayMilliseconds;
+    }
+
+    private static void PerformRepeatableEdit(Keys key)
+    {
+        switch (key)
+        {
+            case Keys.Back:
+                Backspace();
+                break;
+            case Keys.Delete:
+                Delete();
+                break;
+        }
+    }
+
     private sealed class InputSubscriber : IKeyboardSubscriber
     {
         public bool Selected { get; set; } = true;
@@ -327,6 +385,7 @@ internal static class NativeDialogueTextInputController
             if (inputChar == '\b')
             {
                 Backspace();
+                BeginKeyRepeat(Keys.Back);
                 return;
             }
 

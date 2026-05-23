@@ -155,7 +155,7 @@ public class AsyncBuilder
             return;
         }
 
-        npc.CurrentDialogue.Push(dialogue);
+        Game1.currentSpeaker = npc;
         Game1.DrawDialogue(dialogue);
     }
 

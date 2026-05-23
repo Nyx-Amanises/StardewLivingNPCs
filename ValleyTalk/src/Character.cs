@@ -611,7 +611,10 @@ public class Character
         var resultLines = resultString.Split('\n').AsEnumerable();
         // Remove any line breaks
         resultLines = resultLines.Select(x => x.Replace("\n", "").Replace("\r", "").Trim());
-        var cleanedLines = resultLines.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
+        var cleanedLines = resultLines
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .Where(x => !IsLikelyMetadataLine(x))
+            .ToList();
         // Find the first line that starts with '-' and remove any lines before it
         resultLines = NormalizeModelOutputLines(cleanedLines);
         var dialogueLine = resultLines.FirstOrDefault();
@@ -686,6 +689,27 @@ public class Character
             || line.StartsWith("Sure", StringComparison.OrdinalIgnoreCase)
             || line.StartsWith("以下", StringComparison.OrdinalIgnoreCase)
             || line.StartsWith("当然", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsLikelyMetadataLine(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return false;
+        }
+
+        string trimmed = line.Trim().TrimStart('{', ',', '"');
+        return trimmed.StartsWith("rapportDelta", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("endConversation", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("ambientFollowUp", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("emotionImpact", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("actions", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("behaviorInfluences", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("commitments", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("helpRequests", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("helpRequestUpdates", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("conflicts", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("memories", StringComparison.OrdinalIgnoreCase);
     }
 
     private string CommonCleanup(string line)
