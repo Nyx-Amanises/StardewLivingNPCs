@@ -11,6 +11,7 @@ namespace ValleyTalk
         private static IGenericModConfigMenuApi ConfigMenu;
         private static IManifest ModManifest;
         private static ModEntry _modEntry;
+        private static bool _isRefreshingMenu;
 
         private static readonly string[] TypedResponseOptions = { "Always", "With Generated", "Never" };
 
@@ -104,6 +105,7 @@ namespace ValleyTalk
                         Config.ModelProfileNameToSave = string.Empty;
                         SetLlm();
                         PersistConfig(saveActiveProfile: false);
+                        RefreshConfigMenu();
                     }
                 },
                 fieldId: "SaveNamedModelProfile"
@@ -126,6 +128,7 @@ namespace ValleyTalk
                     {
                         SetLlm();
                         PersistConfig(saveActiveProfile: false);
+                        RefreshConfigMenu();
                     }
                 },
                 allowedValues: Config.ModelProfiles.Select(profile => profile.Name).ToArray(),
@@ -148,6 +151,7 @@ namespace ValleyTalk
                     {
                         SetLlm();
                         PersistConfig(saveActiveProfile: false);
+                        RefreshConfigMenu();
                     }
                 },
                 fieldId: "ApplySelectedModelProfile"
@@ -167,6 +171,7 @@ namespace ValleyTalk
 
                     Config.SaveCurrentToActiveModelProfile();
                     PersistConfig(saveActiveProfile: false);
+                    RefreshConfigMenu();
                 },
                 fieldId: "SaveActiveModelProfile"
             );
@@ -206,6 +211,7 @@ namespace ValleyTalk
                     Config.SaveCurrentToActiveModelProfile();
                     SetLlm();
                     PersistConfig();
+                    RefreshConfigMenu();
                 },
                 allowedValues: llmTypes,
                 formatAllowedValue: FormatProviderOption,
@@ -387,6 +393,30 @@ namespace ValleyTalk
             }
 
             _modEntry.Helper.WriteConfig(ModEntry.Config);
+        }
+
+        private static void RefreshConfigMenu()
+        {
+            if (_isRefreshingMenu || ConfigMenu == null || ModManifest == null || _modEntry == null)
+            {
+                return;
+            }
+
+            try
+            {
+                _isRefreshingMenu = true;
+                ConfigMenu.Unregister(ModManifest);
+                Register(_modEntry);
+                ConfigMenu.OpenModMenu(ModManifest);
+            }
+            catch (Exception ex)
+            {
+                ModEntry.SMonitor.Log($"Unable to refresh ValleyTalk config menu: {ex}", LogLevel.Warn);
+            }
+            finally
+            {
+                _isRefreshingMenu = false;
+            }
         }
 
         private static string[] GetModelNames()
