@@ -121,7 +121,7 @@ namespace ValleyTalk
 
             Config = Helper.ReadConfig<ModConfig>();
             Config.EnsureModelProfiles();
-            Config.SaveCurrentToActiveModelProfile();
+            Config.ApplyModelProfile(Config.ActiveModelProfile);
 
             SMonitor = Monitor;
 

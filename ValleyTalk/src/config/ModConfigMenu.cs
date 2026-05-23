@@ -12,14 +12,8 @@ namespace ValleyTalk
         private static IManifest ModManifest;
         private static ModEntry _modEntry;
 
-        private static Dictionary<int,string> freqs = new Dictionary<int, string>()
-                    {
-                        { 0, "Never (0%)" },
-                        { 1, "Rarely (25%)" },
-                        { 2, "Occasionally (50%)" },
-                        { 3, "Mostly (75%)" },
-                        { 4, "Always (100%)" }
-                    };
+        private static readonly string[] TypedResponseOptions = { "Always", "With Generated", "Never" };
+
         internal static void Register(ModEntry modEntry)
         {
             _modEntry = modEntry;
@@ -45,7 +39,16 @@ namespace ValleyTalk
                 },
                 save: () =>
                 {
-                    ModEntry.Config.SaveCurrentToActiveModelProfile();
+                    if (!string.IsNullOrWhiteSpace(ModEntry.Config.ModelProfileNameToSave))
+                    {
+                        ModEntry.Config.SaveCurrentAsModelProfile(ModEntry.Config.ModelProfileNameToSave);
+                        ModEntry.Config.ModelProfileNameToSave = string.Empty;
+                    }
+                    else
+                    {
+                        ModEntry.Config.SaveCurrentToActiveModelProfile();
+                    }
+
                     modEntry.Helper.WriteConfig(ModEntry.Config);
                 }
             );
@@ -83,6 +86,7 @@ namespace ValleyTalk
                     if (Config.ApplyModelProfile(value))
                     {
                         SetLlm();
+                        PersistConfig();
                         ConfigMenu.Unregister(ModManifest);
                         Register(_modEntry);
                     }
@@ -103,6 +107,7 @@ namespace ValleyTalk
                     {
                         Config.ModelProfileNameToSave = string.Empty;
                         SetLlm();
+                        PersistConfig();
                         ConfigMenu.Unregister(ModManifest);
                         Register(_modEntry);
                     }
@@ -144,6 +149,7 @@ namespace ValleyTalk
                     Config.Provider = value; 
                     Config.SaveCurrentToActiveModelProfile();
                     SetLlm();
+                    PersistConfig();
                     ConfigMenu.Unregister(ModManifest);
                     Register(_modEntry);
                 },
@@ -201,16 +207,17 @@ namespace ValleyTalk
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configTypedResponses", returnNull: true) ?? "Typed Responses",
-                tooltip: () => Util.GetString("configTypedResponsesTooltip", returnNull: true) ?? "When should the user be able to type responses?",
+                name: () => Util.GetString("configTypedResponses", returnNull: true) ?? "自由输入",
+                tooltip: () => Util.GetString("configTypedResponsesTooltip", returnNull: true) ?? "控制玩家什么时候可以自由输入回复。",
                 getValue: () => Config.TypedResponses,
-                allowedValues: new string[] { "Always", "With Generated", "Never" },
+                allowedValues: TypedResponseOptions,
+                formatAllowedValue: FormatTypedResponseOption,
                 setValue: (value) =>{ Config.TypedResponses = value; }
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configAllowLocalContentPackDialogueForAi", returnNull: true) ?? "Allow local content-pack dialogue for AI",
-                tooltip: () => Util.GetString("configAllowLocalContentPackDialogueForAiTooltip", returnNull: true) ?? "Local fork option: allow loaded content-pack dialogue, including SVE/RSV, to be used as AI context even when the content pack has not declared PermitAiUse.",
+                name: () => Util.GetString("configAllowLocalContentPackDialogueForAi", returnNull: true) ?? "允许本地内容包对白进入 AI 上下文",
+                tooltip: () => Util.GetString("configAllowLocalContentPackDialogueForAiTooltip", returnNull: true) ?? "即使内容包没有声明 PermitAiUse，也允许已加载的内容包对白进入 AI 上下文。",
                 getValue: () => Config.AllowLocalContentPackDialogueForAi,
                 setValue: (value) =>{ Config.AllowLocalContentPackDialogueForAi = value; }
             );
@@ -223,46 +230,46 @@ namespace ValleyTalk
             );
             ConfigMenu.AddKeybind(
                 mod: ModManifest,
-                name: () => Util.GetString("configKeybind", returnNull: true) ?? "Keybind for typed dialogue",
-                tooltip: () => Util.GetString("configKeybindTooltip", returnNull: true) ?? "Key to press while clicking on an NPC to initiate typed dialogue.",
+                name: () => Util.GetString("configKeybind", returnNull: true) ?? "开启自由输入的按键",
+                tooltip: () => Util.GetString("configKeybindTooltip", returnNull: true) ?? "按住这个键点击 NPC，会开启 ValleyTalk 的自由输入对话。",
                 getValue: () => ModEntry.Config.InitiateTypedDialogueKey,
                 setValue: (value) =>{ ModEntry.Config.InitiateTypedDialogueKey = value; }
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configTranslation", returnNull: true) ?? "Translate Outputs",
-                tooltip: () => Util.GetString("configTranslationTooltip", returnNull: true) ?? "Translate the AI model outputs to the game language (without i18n pack).",
+                name: () => Util.GetString("configTranslation", returnNull: true) ?? "翻译模型输出",
+                tooltip: () => Util.GetString("configTranslationTooltip", returnNull: true) ?? "把模型输出翻译成游戏语言。中文模型或中文提示词下通常建议关闭。",
                 getValue: () => Config.ApplyTranslation,
                 setValue: (value) =>{ Config.ApplyTranslation = value; Config.SaveCurrentToActiveModelProfile(); }
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configFrequencyGeneral", returnNull: true) ?? "Frequency of general lines",
-                tooltip: () => Util.GetString("configFrequencyGeneralTooltip", returnNull: true) ?? "How often should the mod generate general lines.",
-                getValue: () => freqs[Config.GeneralFrequency],
-                setValue: (value) =>{ Config.GeneralFrequency = freqs.First(x => x.Value == value).Key; },
-                allowedValues: freqs.Values.ToArray()
+                name: () => Util.GetString("configFrequencyGeneral", returnNull: true) ?? "普通对白生成频率",
+                tooltip: () => Util.GetString("configFrequencyGeneralTooltip", returnNull: true) ?? "控制普通对白由 AI 生成的频率。",
+                getValue: () => GetFrequencyOptions()[Config.GeneralFrequency],
+                setValue: (value) =>{ Config.GeneralFrequency = GetFrequencyOptions().First(x => x.Value == value).Key; },
+                allowedValues: GetFrequencyOptions().Values.ToArray()
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configFrequencyGift", returnNull: true) ?? "Frequency of gift responses",
-                tooltip: () => Util.GetString("configFrequencyGiftTooltip", returnNull: true) ?? "How often should the mod generate gift responses.",
-                getValue: () => freqs[Config.GiftFrequency],
-                setValue: (value) =>{ Config.GiftFrequency = freqs.First(x => x.Value == value).Key; },
-                allowedValues: freqs.Values.ToArray()
+                name: () => Util.GetString("configFrequencyGift", returnNull: true) ?? "礼物回应生成频率",
+                tooltip: () => Util.GetString("configFrequencyGiftTooltip", returnNull: true) ?? "控制送礼回应由 AI 生成的频率。",
+                getValue: () => GetFrequencyOptions()[Config.GiftFrequency],
+                setValue: (value) =>{ Config.GiftFrequency = GetFrequencyOptions().First(x => x.Value == value).Key; },
+                allowedValues: GetFrequencyOptions().Values.ToArray()
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configFrequencyMarriage", returnNull: true) ?? "Frequency of marriage lines",
-                tooltip: () => Util.GetString("configFrequencyMarriageTooltip", returnNull: true) ?? "How often should the mod generate marriage lines.",
-                getValue: () => freqs[Config.MarriageFrequency],
-                setValue: (value) =>{ Config.MarriageFrequency = freqs.First(x => x.Value == value).Key; },
-                allowedValues: freqs.Values.ToArray()
+                name: () => Util.GetString("configFrequencyMarriage", returnNull: true) ?? "婚后对白生成频率",
+                tooltip: () => Util.GetString("configFrequencyMarriageTooltip", returnNull: true) ?? "控制婚后对白由 AI 生成的频率。",
+                getValue: () => GetFrequencyOptions()[Config.MarriageFrequency],
+                setValue: (value) =>{ Config.MarriageFrequency = GetFrequencyOptions().First(x => x.Value == value).Key; },
+                allowedValues: GetFrequencyOptions().Values.ToArray()
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configDiableForCharacters", returnNull: true) ?? "Disable for characters",
-                tooltip: () => Util.GetString("configDiableForCharactersTooltip", returnNull: true) ?? "Comma-separated list of villagers to disable the mod for, e.g. (\"Abigail,Leah,Sam\")",
+                name: () => Util.GetString("configDiableForCharacters", returnNull: true) ?? "禁用角色",
+                tooltip: () => Util.GetString("configDiableForCharactersTooltip", returnNull: true) ?? "用逗号分隔要禁用 ValleyTalk 的角色英文名，例如 Abigail, Leah, Sam。",
                 getValue: () => Config.DisableCharacters,
                 setValue: (value) =>{ Config.DisableCharacters = value; }
             );
@@ -276,6 +283,35 @@ namespace ValleyTalk
                     return Util.GetString("configModels", new { Provider = Config.Provider, Models = modelString }, returnNull: true) ?? $"The models available on provider {Config.Provider} are:\n{modelString}";
                 }
             );
+        }
+
+        private static Dictionary<int, string> GetFrequencyOptions()
+        {
+            return new Dictionary<int, string>()
+            {
+                { 0, Util.GetString("configNever", returnNull: true) is { } never ? $"{never} (0%)" : "从不 (0%)" },
+                { 1, Util.GetString("configRarely", returnNull: true) is { } rarely ? $"{rarely} (25%)" : "很少 (25%)" },
+                { 2, Util.GetString("configOccasionally", returnNull: true) is { } occasionally ? $"{occasionally} (50%)" : "偶尔 (50%)" },
+                { 3, Util.GetString("configMostly", returnNull: true) is { } mostly ? $"{mostly} (75%)" : "经常 (75%)" },
+                { 4, Util.GetString("configAlways", returnNull: true) is { } always ? $"{always} (100%)" : "总是 (100%)" }
+            };
+        }
+
+        private static string FormatTypedResponseOption(string value)
+        {
+            return value switch
+            {
+                "Always" => Util.GetString("configTypedResponsesAlways", returnNull: true) ?? "总是",
+                "With Generated" => Util.GetString("configTypedResponsesWithGenerated", returnNull: true) ?? "有 AI 选项时",
+                "Never" => Util.GetString("configTypedResponsesNever", returnNull: true) ?? "从不",
+                _ => value
+            };
+        }
+
+        private static void PersistConfig()
+        {
+            ModEntry.Config.SaveCurrentToActiveModelProfile();
+            _modEntry.Helper.WriteConfig(ModEntry.Config);
         }
 
         private static string[] GetModelNames()
