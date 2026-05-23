@@ -20,6 +20,7 @@ namespace ValleyTalk
             _modEntry = modEntry;
             var Config = ModEntry.Config;
             Config.EnsureModelProfiles();
+            Config.ApplyModelProfile(Config.ActiveModelProfile);
 
             ModManifest = modEntry.ModManifest;
 
