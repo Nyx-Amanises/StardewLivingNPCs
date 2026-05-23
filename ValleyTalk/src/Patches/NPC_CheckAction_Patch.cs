@@ -15,6 +15,8 @@ namespace ValleyTalk
         /// </summary>
         public static bool Prefix(ref NPC __instance, ref bool __result, Farmer who, GameLocation l)
         {
+            ThinkingDialogueController.RemoveStale(__instance);
+
             // Check if the configured key is being held down while clicking the NPC.
             var triggerKey = ModEntry.Config.InitiateTypedDialogueKey;
             bool wasTriggerKeyDown = triggerKey != SButton.None && ModEntry.SHelper.Input.IsDown(triggerKey);

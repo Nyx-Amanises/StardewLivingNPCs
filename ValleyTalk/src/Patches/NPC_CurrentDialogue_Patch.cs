@@ -11,6 +11,11 @@ namespace ValleyTalk
         private static int minLine = int.MaxValue;
         public static void Postfix(ref NPC __instance, ref Stack<Dialogue> __result)
         {
+            if (ThinkingDialogueController.TryDiscardInactiveTop(__instance, __result))
+            {
+                return;
+            }
+
             if (__result.Count == 0) return;
 
             var trace = new System.Diagnostics.StackTrace().GetFrame(2);
