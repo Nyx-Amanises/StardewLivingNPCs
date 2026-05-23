@@ -30,30 +30,17 @@ public class AsyncBuilder
     
     private void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
     {
-        ThinkingWindow thinkingWindow;
         // Only perform generation if we are awaiting it
         if (_awaitingGeneration && Game1.activeClickableMenu == null)
         {
             _awaitingGeneration = false;
-            if (_awaitedType == GenerationType.conversation && Llm.Instance is IStreamingLlm)
-            {
-                var streamingWindow = new StreamingDialogueWindow(_speakingNpc);
-                Game1.activeClickableMenu = streamingWindow;
-                _ = PerformStreamingConversation(streamingWindow);
-                return;
-            }
+            ThinkingDialogueController.Start(_speakingNpc);
 
-            var character = DialogueBuilder.Instance.GetCharacter(_speakingNpc);
-            var display = Util.GetString(character, "uiThinking", new { Name = _speakingNpc.displayName }, returnNull: true) ?? $"{_speakingNpc.displayName} 正在思考";
-            // Show "Thinking..." window
-            thinkingWindow = new ThinkingWindow(display);
-            Game1.activeClickableMenu = thinkingWindow;
-
-            _ = PerformGeneration(thinkingWindow);
+            _ = PerformGeneration();
         }
     }
 
-    private async Task PerformGeneration(ThinkingWindow thinkingWindow)
+    private async Task PerformGeneration()
     {
         try
         {
@@ -98,11 +85,7 @@ public class AsyncBuilder
 
             void UpdateUI()
             {
-                // Hide thinking window
-                if (Game1.activeClickableMenu == thinkingWindow)
-                {
-                    Game1.exitActiveMenu();
-                }
+                ThinkingDialogueController.Close();
 
                 if (newDialogue != null && newDialogue.dialogues.Count > 0)
                 {
@@ -123,10 +106,7 @@ public class AsyncBuilder
                 EventHandler<UpdateTickedEventArgs> errorHandler = null;
                 errorHandler = (sender, e) =>
                 {
-                    if (thinkingWindow != null && Game1.activeClickableMenu == thinkingWindow)
-                    {
-                        Game1.exitActiveMenu();
-                    }
+                    ThinkingDialogueController.Close();
                     ShowFallbackDialogue(npc);
                     ModEntry.SHelper.Events.GameLoop.UpdateTicked -= errorHandler;
                 };
@@ -134,10 +114,7 @@ public class AsyncBuilder
             }
             else
             {
-                if (thinkingWindow != null && Game1.activeClickableMenu == thinkingWindow)
-                {
-                    Game1.exitActiveMenu();
-                }
+                ThinkingDialogueController.Close();
                 ShowFallbackDialogue(npc);
             }
         }
