@@ -104,7 +104,7 @@ namespace ValleyTalk
             bool forceNoResponses = character.LastConversationAnalysis.EndConversation
                 || ConversationTextPostProcessor.PlayerLikelyEndedConversation(playerText)
                 || ConversationTextPostProcessor.NpcLikelyEndedConversation(theLine.FirstOrDefault() ?? string.Empty);
-            string formattedLine = FormatLine(theLine, forceNoResponses);
+            string formattedLine = FormatLine(theLine, forceNoResponses, allowTypedFallback: true);
             return new GeneratedResponse(
                 $"{(dontSkipNext ? "" : "skip#")}{formattedLine}",
                 theLine
@@ -146,13 +146,14 @@ namespace ValleyTalk
             return new Dialogue(instance, dialogueKey, formattedLine);
         }
 
-        private string FormatLine(string[] theLine, bool forceNoResponses = false)
+        private string FormatLine(string[] theLine, bool forceNoResponses = false, bool allowTypedFallback = false)
         {
             if (theLine == null || theLine.Length == 0)
             {
                 return string.Empty;
             }
-            if (forceNoResponses || (theLine.Length == 1 && ModEntry.Config.TypedResponses != "Always"))
+            bool canAddTypedFallback = allowTypedFallback && ModEntry.Config.TypedResponses != "Never";
+            if (forceNoResponses || (theLine.Length == 1 && ModEntry.Config.TypedResponses != "Always" && !canAddTypedFallback))
             {
                 return theLine[0];
             }

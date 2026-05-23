@@ -51,8 +51,7 @@ namespace ValleyTalk
         {
             try
             {
-                var textInputMenu = new DialogueTextInputMenu(_inputTitle, OnTextEntered, _currentNpc);
-                Game1.activeClickableMenu = new DialogueTextInputMenuWrapper(textInputMenu);
+                NativeDialogueTextInputController.Start(_inputTitle, _currentNpc, OnTextEntered);
             }
             catch (Exception ex)
             {

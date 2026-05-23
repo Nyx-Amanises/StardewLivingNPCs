@@ -9,6 +9,12 @@ internal static class DialogueBox_GetCurrentString_ThinkingDialogue_Patch
 {
     public static bool Prefix(DialogueBox __instance, ref string __result)
     {
+        if (NativeDialogueTextInputController.TryGetDisplayText(__instance, out string inputText))
+        {
+            __result = inputText;
+            return false;
+        }
+
         if (ThinkingDialogueController.TryGetThinkingText(__instance, out string text))
         {
             __result = text;
@@ -24,6 +30,11 @@ internal static class DialogueBox_ReceiveLeftClick_ThinkingDialogue_Patch
 {
     public static bool Prefix(DialogueBox __instance)
     {
+        if (NativeDialogueTextInputController.IsInputBox(__instance))
+        {
+            return false;
+        }
+
         return !ThinkingDialogueController.IsThinkingBox(__instance);
     }
 }
@@ -31,8 +42,14 @@ internal static class DialogueBox_ReceiveLeftClick_ThinkingDialogue_Patch
 [HarmonyPatch(typeof(DialogueBox), nameof(DialogueBox.receiveKeyPress), new[] { typeof(Keys) })]
 internal static class DialogueBox_ReceiveKeyPress_ThinkingDialogue_Patch
 {
-    public static bool Prefix(DialogueBox __instance)
+    public static bool Prefix(DialogueBox __instance, Keys key)
     {
+        if (NativeDialogueTextInputController.IsInputBox(__instance))
+        {
+            NativeDialogueTextInputController.HandleSpecialKey(key);
+            return false;
+        }
+
         return !ThinkingDialogueController.IsThinkingBox(__instance);
     }
 }
