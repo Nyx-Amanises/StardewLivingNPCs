@@ -11,7 +11,7 @@ internal static class ConversationTextPostProcessor
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private static readonly Regex NpcFarewellPattern = new(
-        @"(回头见|下次见|改天聊|先忙|先去|再见|拜拜|不耽误你|你去忙吧|我该走了|see\s+you|goodbye|bye|talk\s+later)",
+        @"(再见|拜拜|下次见|改天聊|我该走了|我得走了|我先走了|see\s+you|goodbye|bye|talk\s+later)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     public static string NormalizeImmediateNicknameReply(string dialogue, string playerText)
