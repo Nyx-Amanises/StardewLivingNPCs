@@ -89,9 +89,7 @@ public class AsyncBuilder
 
                 if (newDialogue != null && newDialogue.dialogues.Count > 0)
                 {
-                    npc.CurrentDialogue.Push(newDialogue);
-                    Game1.DrawDialogue(newDialogue);
-                    npc.CurrentDialogue.TryPop(out var _);
+                    ShowNativeDialogue(npc, newDialogue);
                 }
             }
         }
@@ -141,15 +139,24 @@ public class AsyncBuilder
             try
             {
                 var fallback = new Dialogue(npc, $"{SldConstants.DialogueKeyPrefix}Error", "...");
-                npc.CurrentDialogue.Push(fallback);
-                Game1.DrawDialogue(fallback);
-                npc.CurrentDialogue.TryPop(out _);
+                ShowNativeDialogue(npc, fallback);
             }
             catch (Exception fallbackException)
             {
                 ModEntry.SMonitor?.Log($"Error showing fallback NPC response for {npc.Name}: {fallbackException}", StardewModdingAPI.LogLevel.Error);
             }
         }
+    }
+
+    private static void ShowNativeDialogue(NPC npc, Dialogue dialogue)
+    {
+        if (npc == null || dialogue == null || dialogue.dialogues.Count == 0)
+        {
+            return;
+        }
+
+        npc.CurrentDialogue.Push(dialogue);
+        Game1.DrawDialogue(dialogue);
     }
 
     private async Task PerformStreamingConversation(StreamingDialogueWindow streamingWindow)

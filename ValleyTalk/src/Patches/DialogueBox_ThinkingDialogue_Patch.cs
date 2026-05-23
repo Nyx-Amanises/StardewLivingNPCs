@@ -1,4 +1,5 @@
 using HarmonyLib;
+using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using StardewValley.Menus;
 
@@ -22,6 +23,15 @@ internal static class DialogueBox_GetCurrentString_ThinkingDialogue_Patch
         }
 
         return true;
+    }
+}
+
+[HarmonyPatch(typeof(DialogueBox), nameof(DialogueBox.draw), new[] { typeof(SpriteBatch) })]
+internal static class DialogueBox_Draw_NativeTextInput_Patch
+{
+    public static void Postfix(DialogueBox __instance, SpriteBatch b)
+    {
+        NativeDialogueTextInputController.DrawInputText(__instance, b);
     }
 }
 
