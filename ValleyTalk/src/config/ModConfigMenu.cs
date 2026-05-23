@@ -77,42 +77,98 @@ namespace ValleyTalk
 
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configActiveModelProfile", returnNull: true) ?? "当前模型档案",
-                tooltip: () => Util.GetString("configActiveModelProfileTooltip", returnNull: true) ?? "切换后会立即套用该档案保存的 Provider、API Key、模型名、Base URL 和超时设置。",
+                name: () => Util.GetString("configSaveModelProfile", returnNull: true) ?? "新档案名 / 覆盖档案名",
+                tooltip: () => Util.GetString("configSaveModelProfileTooltip", returnNull: true) ?? "输入档案名后，点击“保存为此档案”会把当前模型设置保存下来；如果同名档案已存在则覆盖。",
+                getValue: () => Config.ModelProfileNameToSave,
+                setValue: value =>
+                {
+                    Config.ModelProfileNameToSave = value?.Trim() ?? string.Empty;
+                },
+                fieldId: "ModelProfileNameToSave"
+            );
+
+            ConfigMenu.AddBoolOption(
+                mod: ModManifest,
+                name: () => Util.GetString("configSaveNamedModelProfile", returnNull: true) ?? "保存为此档案",
+                tooltip: () => Util.GetString("configSaveNamedModelProfileTooltip", returnNull: true) ?? "点右侧方框会立刻把当前模型设置保存到上面填写的档案名，并切换到该档案。",
+                getValue: () => false,
+                setValue: value =>
+                {
+                    if (!value)
+                    {
+                        return;
+                    }
+
+                    if (Config.SaveCurrentAsModelProfile(Config.ModelProfileNameToSave))
+                    {
+                        Config.ModelProfileNameToSave = string.Empty;
+                        SetLlm();
+                        PersistConfig(saveActiveProfile: false);
+                    }
+                },
+                fieldId: "SaveNamedModelProfile"
+            );
+
+            ConfigMenu.AddTextOption(
+                mod: ModManifest,
+                name: () => Util.GetString("configActiveModelProfile", returnNull: true) ?? "一键切换模型档案",
+                tooltip: () => Util.GetString("configActiveModelProfileTooltip", returnNull: true) ?? "选择要使用的模型档案。若下方字段没有立刻刷新，点“应用所选档案”即可立即写入 config.json。",
                 getValue: () => Config.ActiveModelProfile,
                 setValue: value =>
                 {
+                    if (string.Equals(value, Config.ActiveModelProfile, StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        return;
+                    }
+
                     Config.SaveCurrentToActiveModelProfile();
                     if (Config.ApplyModelProfile(value))
                     {
                         SetLlm();
-                        PersistConfig();
-                        ConfigMenu.Unregister(ModManifest);
-                        Register(_modEntry);
+                        PersistConfig(saveActiveProfile: false);
                     }
                 },
                 allowedValues: Config.ModelProfiles.Select(profile => profile.Name).ToArray(),
                 fieldId: "ActiveModelProfile"
             );
 
-            ConfigMenu.AddTextOption(
+            ConfigMenu.AddBoolOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configSaveModelProfile", returnNull: true) ?? "保存当前设置为档案",
-                tooltip: () => Util.GetString("configSaveModelProfileTooltip", returnNull: true) ?? "输入档案名后，会把当前模型设置保存下来；如果同名档案已存在则覆盖。",
-                getValue: () => Config.ModelProfileNameToSave,
+                name: () => Util.GetString("configApplySelectedModelProfile", returnNull: true) ?? "应用所选档案",
+                tooltip: () => Util.GetString("configApplySelectedModelProfileTooltip", returnNull: true) ?? "点右侧方框会立刻重新套用当前下拉框选择的模型档案，并写入 config.json。",
+                getValue: () => false,
                 setValue: value =>
                 {
-                    Config.ModelProfileNameToSave = value;
-                    if (Config.SaveCurrentAsModelProfile(value))
+                    if (!value)
                     {
-                        Config.ModelProfileNameToSave = string.Empty;
+                        return;
+                    }
+
+                    if (Config.ApplyModelProfile(Config.ActiveModelProfile))
+                    {
                         SetLlm();
-                        PersistConfig();
-                        ConfigMenu.Unregister(ModManifest);
-                        Register(_modEntry);
+                        PersistConfig(saveActiveProfile: false);
                     }
                 },
-                fieldId: "ModelProfileNameToSave"
+                fieldId: "ApplySelectedModelProfile"
+            );
+
+            ConfigMenu.AddBoolOption(
+                mod: ModManifest,
+                name: () => Util.GetString("configSaveActiveModelProfile", returnNull: true) ?? "保存当前档案",
+                tooltip: () => Util.GetString("configSaveActiveModelProfileTooltip", returnNull: true) ?? "点右侧方框会立刻把当前 Provider、API Key、模型名、Base URL、超时等字段保存到当前档案。",
+                getValue: () => false,
+                setValue: value =>
+                {
+                    if (!value)
+                    {
+                        return;
+                    }
+
+                    Config.SaveCurrentToActiveModelProfile();
+                    PersistConfig(saveActiveProfile: false);
+                },
+                fieldId: "SaveActiveModelProfile"
             );
 
             ConfigMenu.AddParagraph(
@@ -150,10 +206,9 @@ namespace ValleyTalk
                     Config.SaveCurrentToActiveModelProfile();
                     SetLlm();
                     PersistConfig();
-                    ConfigMenu.Unregister(ModManifest);
-                    Register(_modEntry);
                 },
                 allowedValues: llmTypes,
+                formatAllowedValue: FormatProviderOption,
                 fieldId: "Provider"
             );
             var llmType = ModEntry.LlmMap[Config.Provider];
@@ -308,9 +363,29 @@ namespace ValleyTalk
             };
         }
 
-        private static void PersistConfig()
+        private static string FormatProviderOption(string value)
         {
-            ModEntry.Config.SaveCurrentToActiveModelProfile();
+            return value switch
+            {
+                "OpenAI" => Util.GetString("configProviderOpenAi", returnNull: true) ?? "OpenAI 官方接口",
+                "OpenAiCompatible" => Util.GetString("configProviderOpenAiCompatible", returnNull: true) ?? "OpenAI 兼容接口",
+                "Google" => Util.GetString("configProviderGoogle", returnNull: true) ?? "Google Gemini",
+                "Anthropic" => Util.GetString("configProviderAnthropic", returnNull: true) ?? "Anthropic Claude",
+                "Mistral" => Util.GetString("configProviderMistral", returnNull: true) ?? "Mistral",
+                "DeepSeek" => Util.GetString("configProviderDeepSeek", returnNull: true) ?? "DeepSeek",
+                "VolcEngine" => Util.GetString("configProviderVolcEngine", returnNull: true) ?? "火山引擎",
+                "LlamaCpp" => Util.GetString("configProviderLlamaCpp", returnNull: true) ?? "本地 Llama.cpp",
+                _ => value
+            };
+        }
+
+        private static void PersistConfig(bool saveActiveProfile = true)
+        {
+            if (saveActiveProfile)
+            {
+                ModEntry.Config.SaveCurrentToActiveModelProfile();
+            }
+
             _modEntry.Helper.WriteConfig(ModEntry.Config);
         }
 
