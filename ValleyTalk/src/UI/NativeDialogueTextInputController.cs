@@ -244,10 +244,10 @@ internal static class NativeDialogueTextInputController
     {
         int rightPadding = dialogueBox.characterDialogue?.speaker?.Portrait != null ? 388 : 40;
         return new Rectangle(
-            dialogueBox.x + 40,
-            dialogueBox.y + 84,
-            Math.Max(120, dialogueBox.width - rightPadding - 80),
-            Math.Max(48, dialogueBox.height - 120)
+            dialogueBox.x + 16,
+            dialogueBox.y + 92,
+            Math.Max(120, dialogueBox.width - rightPadding - 56),
+            Math.Max(48, dialogueBox.height - 128)
         );
     }
 
