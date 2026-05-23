@@ -120,6 +120,8 @@ namespace ValleyTalk
             helper.Events.GameLoop.SaveLoaded += OnSaveLoaded;
 
             Config = Helper.ReadConfig<ModConfig>();
+            Config.EnsureModelProfiles();
+            Config.SaveCurrentToActiveModelProfile();
 
             SMonitor = Monitor;
 

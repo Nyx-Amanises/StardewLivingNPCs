@@ -246,7 +246,7 @@ internal static class NativeDialogueTextInputController
         return new Rectangle(
             dialogueBox.x + 16,
             dialogueBox.y + 92,
-            Math.Max(120, dialogueBox.width - rightPadding - 56),
+            Math.Max(120, dialogueBox.width - rightPadding - 88),
             Math.Max(48, dialogueBox.height - 128)
         );
     }

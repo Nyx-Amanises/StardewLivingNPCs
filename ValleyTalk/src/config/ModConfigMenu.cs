@@ -24,6 +24,7 @@ namespace ValleyTalk
         {
             _modEntry = modEntry;
             var Config = ModEntry.Config;
+            Config.EnsureModelProfiles();
 
             ModManifest = modEntry.ModManifest;
 
@@ -37,8 +38,16 @@ namespace ValleyTalk
             // register mod
             ConfigMenu.Register(
                 mod: ModManifest,
-                reset: () => ModEntry.Config = new ModConfig(),
-                save: () => modEntry.Helper.WriteConfig(ModEntry.Config)
+                reset: () =>
+                {
+                    ModEntry.Config = new ModConfig();
+                    ModEntry.Config.EnsureModelProfiles();
+                },
+                save: () =>
+                {
+                    ModEntry.Config.SaveCurrentToActiveModelProfile();
+                    modEntry.Helper.WriteConfig(ModEntry.Config);
+                }
             );
 
             // add some config options
@@ -58,8 +67,71 @@ namespace ValleyTalk
                 setValue: value => Config.Debug = value
             );
 #endif
+            ConfigMenu.AddSectionTitle(
+                mod: ModManifest,
+                text: () => Util.GetString("configModelProfilesSection", returnNull: true) ?? "模型配置档案"
+            );
+
+            ConfigMenu.AddTextOption(
+                mod: ModManifest,
+                name: () => Util.GetString("configActiveModelProfile", returnNull: true) ?? "当前模型档案",
+                tooltip: () => Util.GetString("configActiveModelProfileTooltip", returnNull: true) ?? "切换后会立即套用该档案保存的 Provider、API Key、模型名、Base URL 和超时设置。",
+                getValue: () => Config.ActiveModelProfile,
+                setValue: value =>
+                {
+                    Config.SaveCurrentToActiveModelProfile();
+                    if (Config.ApplyModelProfile(value))
+                    {
+                        SetLlm();
+                        ConfigMenu.Unregister(ModManifest);
+                        Register(_modEntry);
+                    }
+                },
+                allowedValues: Config.ModelProfiles.Select(profile => profile.Name).ToArray(),
+                fieldId: "ActiveModelProfile"
+            );
+
+            ConfigMenu.AddTextOption(
+                mod: ModManifest,
+                name: () => Util.GetString("configSaveModelProfile", returnNull: true) ?? "保存当前设置为档案",
+                tooltip: () => Util.GetString("configSaveModelProfileTooltip", returnNull: true) ?? "输入档案名后，会把当前模型设置保存下来；如果同名档案已存在则覆盖。",
+                getValue: () => Config.ModelProfileNameToSave,
+                setValue: value =>
+                {
+                    Config.ModelProfileNameToSave = value;
+                    if (Config.SaveCurrentAsModelProfile(value))
+                    {
+                        Config.ModelProfileNameToSave = string.Empty;
+                        SetLlm();
+                        ConfigMenu.Unregister(ModManifest);
+                        Register(_modEntry);
+                    }
+                },
+                fieldId: "ModelProfileNameToSave"
+            );
+
+            ConfigMenu.AddParagraph(
+                mod: ModManifest,
+                text: () => Util.GetString(
+                    "configActiveModelProfileSummary",
+                    new
+                    {
+                        Profile = Config.ActiveModelProfile,
+                        Provider = Config.Provider,
+                        Model = string.IsNullOrWhiteSpace(Config.ModelName) ? "(default)" : Config.ModelName,
+                        Timeout = Config.QueryTimeout
+                    },
+                    returnNull: true
+                ) ?? $"当前档案：{Config.ActiveModelProfile}\nProvider：{Config.Provider}\n模型：{(string.IsNullOrWhiteSpace(Config.ModelName) ? "(default)" : Config.ModelName)}\n超时：{Config.QueryTimeout} 秒"
+            );
+
             // Create a string array of the options in the LlmType enum
             var llmTypes = ModEntry.LlmMap.Keys.ToArray();
+            if (!ModEntry.LlmMap.ContainsKey(Config.Provider))
+            {
+                Config.Provider = llmTypes.FirstOrDefault() ?? "Mistral";
+                Config.SaveCurrentToActiveModelProfile();
+            }
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
                 name: () => Util.GetString("configProvider", returnNull: true) ?? "AI Model Provider",
@@ -67,8 +139,11 @@ namespace ValleyTalk
                 setValue: value => 
                 {
                     if (value == Config.Provider) return;
+                    Config.SaveCurrentToActiveModelProfile();
                     Config.ApiKey = "";
                     Config.Provider = value; 
+                    Config.SaveCurrentToActiveModelProfile();
+                    SetLlm();
                     ConfigMenu.Unregister(ModManifest);
                     Register(_modEntry);
                 },
@@ -84,7 +159,7 @@ namespace ValleyTalk
                     name: () => Util.GetString("configApiKey", returnNull: true) ?? "API Key",
                     tooltip: () => Util.GetString("configApiKeyTooltip", returnNull: true) ?? "API Key for the AI model provider.",
                     getValue: () => Config.ApiKey,
-                    setValue: (value) =>{ Config.ApiKey = value; SetLlm(); },
+                    setValue: (value) =>{ Config.ApiKey = value; Config.SaveCurrentToActiveModelProfile(); SetLlm(); },
                     fieldId: "ApiKey"
                 );
             }
@@ -98,7 +173,7 @@ namespace ValleyTalk
                     getValue: () => Config.ModelName,
                     setValue: (value) =>
                     { 
-                        Config.ModelName = value; SetLlm(); 
+                        Config.ModelName = value; Config.SaveCurrentToActiveModelProfile(); SetLlm(); 
                     },
                     fieldId: "ModelName"
                 );
@@ -110,9 +185,20 @@ namespace ValleyTalk
                     name: () => Util.GetString("configServerAddress", returnNull: true) ?? "Server Address",
                     tooltip: () => Util.GetString("configServerAddressTooltip", returnNull: true) ?? "URL of the server for local and Open AI compatible models.",
                     getValue: () => Config.ServerAddress,
-                    setValue: (value) =>{ Config.ServerAddress = value; SetLlm(); }
+                    setValue: (value) =>{ Config.ServerAddress = value; Config.SaveCurrentToActiveModelProfile(); SetLlm(); }
                 );
             }
+            ConfigMenu.AddNumberOption(
+                mod: ModManifest,
+                name: () => Util.GetString("configQueryTimeout", returnNull: true) ?? "请求超时",
+                tooltip: () => Util.GetString("configQueryTimeoutTooltip", returnNull: true) ?? "等待模型回复的秒数。较慢模型可以调高，快速测试模型可以调低。",
+                getValue: () => Config.QueryTimeout,
+                setValue: (value) =>{ Config.QueryTimeout = value; Config.SaveCurrentToActiveModelProfile(); },
+                min: 5,
+                max: 180,
+                interval: 5,
+                fieldId: "QueryTimeout"
+            );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
                 name: () => Util.GetString("configTypedResponses", returnNull: true) ?? "Typed Responses",
@@ -147,7 +233,7 @@ namespace ValleyTalk
                 name: () => Util.GetString("configTranslation", returnNull: true) ?? "Translate Outputs",
                 tooltip: () => Util.GetString("configTranslationTooltip", returnNull: true) ?? "Translate the AI model outputs to the game language (without i18n pack).",
                 getValue: () => Config.ApplyTranslation,
-                setValue: (value) =>{ Config.ApplyTranslation = value; }
+                setValue: (value) =>{ Config.ApplyTranslation = value; Config.SaveCurrentToActiveModelProfile(); }
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
