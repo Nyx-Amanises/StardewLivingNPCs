@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using GenericModConfigMenu;
 using StardewModdingAPI;
+using StardewModdingAPI.Events;
 
 namespace ValleyTalk
 {
@@ -12,6 +13,8 @@ namespace ValleyTalk
         private static IManifest ModManifest;
         private static ModEntry _modEntry;
         private static bool _isRefreshingMenu;
+        private static bool _refreshQueued;
+        private static bool _profileSelectionApplied;
 
         private static readonly string[] TypedResponseOptions = { "Always", "With Generated", "Never" };
 
@@ -45,6 +48,12 @@ namespace ValleyTalk
                     {
                         ModEntry.Config.SaveCurrentAsModelProfile(ModEntry.Config.ModelProfileNameToSave);
                         ModEntry.Config.ModelProfileNameToSave = string.Empty;
+                    }
+                    else if (_profileSelectionApplied)
+                    {
+                        ModEntry.Config.ApplyModelProfile(ModEntry.Config.ActiveModelProfile);
+                        _profileSelectionApplied = false;
+                        SetLlm();
                     }
                     else
                     {
@@ -104,6 +113,7 @@ namespace ValleyTalk
                     if (Config.SaveCurrentAsModelProfile(Config.ModelProfileNameToSave))
                     {
                         Config.ModelProfileNameToSave = string.Empty;
+                        _profileSelectionApplied = false;
                         SetLlm();
                         PersistConfig(saveActiveProfile: false);
                         RefreshConfigMenu();
@@ -124,9 +134,9 @@ namespace ValleyTalk
                         return;
                     }
 
-                    Config.SaveCurrentToActiveModelProfile();
                     if (Config.ApplyModelProfile(value))
                     {
+                        _profileSelectionApplied = true;
                         SetLlm();
                         PersistConfig(saveActiveProfile: false);
                         RefreshConfigMenu();
@@ -150,6 +160,7 @@ namespace ValleyTalk
 
                     if (Config.ApplyModelProfile(Config.ActiveModelProfile))
                     {
+                        _profileSelectionApplied = true;
                         SetLlm();
                         PersistConfig(saveActiveProfile: false);
                         RefreshConfigMenu();
@@ -171,6 +182,7 @@ namespace ValleyTalk
                     }
 
                     Config.SaveCurrentToActiveModelProfile();
+                    _profileSelectionApplied = false;
                     PersistConfig(saveActiveProfile: false);
                     RefreshConfigMenu();
                 },
@@ -206,12 +218,12 @@ namespace ValleyTalk
                 setValue: value => 
                 {
                     if (value == Config.Provider) return;
+                    if (_profileSelectionApplied) return;
                     Config.SaveCurrentToActiveModelProfile();
                     Config.ApiKey = "";
                     Config.Provider = value; 
-                    Config.SaveCurrentToActiveModelProfile();
                     SetLlm();
-                    PersistConfig();
+                    PersistConfig(saveActiveProfile: false);
                     RefreshConfigMenu();
                 },
                 allowedValues: llmTypes,
@@ -227,7 +239,12 @@ namespace ValleyTalk
                     name: () => Util.GetString("configApiKey", returnNull: true) ?? "API Key",
                     tooltip: () => Util.GetString("configApiKeyTooltip", returnNull: true) ?? "API Key for the AI model provider.",
                     getValue: () => Config.ApiKey,
-                    setValue: (value) =>{ Config.ApiKey = value; Config.SaveCurrentToActiveModelProfile(); SetLlm(); },
+                    setValue: (value) =>
+                    {
+                        if (_profileSelectionApplied) return;
+                        Config.ApiKey = value;
+                        SetLlm();
+                    },
                     fieldId: "ApiKey"
                 );
             }
@@ -240,8 +257,10 @@ namespace ValleyTalk
                     tooltip: () => Util.GetString("configModelNameTooltip", returnNull: true) ?? "Name of the AI model to use.",
                     getValue: () => Config.ModelName,
                     setValue: (value) =>
-                    { 
-                        Config.ModelName = value; Config.SaveCurrentToActiveModelProfile(); SetLlm(); 
+                    {
+                        if (_profileSelectionApplied) return;
+                        Config.ModelName = value;
+                        SetLlm();
                     },
                     fieldId: "ModelName"
                 );
@@ -253,7 +272,12 @@ namespace ValleyTalk
                     name: () => Util.GetString("configServerAddress", returnNull: true) ?? "Server Address",
                     tooltip: () => Util.GetString("configServerAddressTooltip", returnNull: true) ?? "URL of the server for local and Open AI compatible models.",
                     getValue: () => Config.ServerAddress,
-                    setValue: (value) =>{ Config.ServerAddress = value; Config.SaveCurrentToActiveModelProfile(); SetLlm(); }
+                    setValue: (value) =>
+                    {
+                        if (_profileSelectionApplied) return;
+                        Config.ServerAddress = value;
+                        SetLlm();
+                    }
                 );
             }
             ConfigMenu.AddNumberOption(
@@ -261,7 +285,11 @@ namespace ValleyTalk
                 name: () => Util.GetString("configQueryTimeout", returnNull: true) ?? "请求超时",
                 tooltip: () => Util.GetString("configQueryTimeoutTooltip", returnNull: true) ?? "等待模型回复的秒数。较慢模型可以调高，快速测试模型可以调低。",
                 getValue: () => Config.QueryTimeout,
-                setValue: (value) =>{ Config.QueryTimeout = value; Config.SaveCurrentToActiveModelProfile(); },
+                setValue: (value) =>
+                {
+                    if (_profileSelectionApplied) return;
+                    Config.QueryTimeout = value;
+                },
                 min: 5,
                 max: 180,
                 interval: 5,
@@ -302,7 +330,11 @@ namespace ValleyTalk
                 name: () => Util.GetString("configTranslation", returnNull: true) ?? "翻译模型输出",
                 tooltip: () => Util.GetString("configTranslationTooltip", returnNull: true) ?? "把模型输出翻译成游戏语言。中文模型或中文提示词下通常建议关闭。",
                 getValue: () => Config.ApplyTranslation,
-                setValue: (value) =>{ Config.ApplyTranslation = value; Config.SaveCurrentToActiveModelProfile(); }
+                setValue: (value) =>
+                {
+                    if (_profileSelectionApplied) return;
+                    Config.ApplyTranslation = value;
+                }
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
@@ -397,6 +429,28 @@ namespace ValleyTalk
         }
 
         private static void RefreshConfigMenu()
+        {
+            if (_isRefreshingMenu || _refreshQueued || ConfigMenu == null || ModManifest == null || _modEntry == null)
+            {
+                return;
+            }
+
+            _refreshQueued = true;
+            _modEntry.Helper.Events.GameLoop.UpdateTicked += OnUpdateTickedRefreshConfigMenu;
+        }
+
+        private static void OnUpdateTickedRefreshConfigMenu(object sender, UpdateTickedEventArgs e)
+        {
+            if (_modEntry != null)
+            {
+                _modEntry.Helper.Events.GameLoop.UpdateTicked -= OnUpdateTickedRefreshConfigMenu;
+            }
+
+            _refreshQueued = false;
+            RefreshConfigMenuNow();
+        }
+
+        private static void RefreshConfigMenuNow()
         {
             if (_isRefreshingMenu || ConfigMenu == null || ModManifest == null || _modEntry == null)
             {
