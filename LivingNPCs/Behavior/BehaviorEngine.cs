@@ -839,7 +839,19 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        GiftSelection selection = this.giftSelector.Choose(npc, state, playerText, npcResponse);
+        if (!this.TrySelectGiftForConversationAction(
+                action,
+                GiftTier.Small,
+                npc,
+                state,
+                playerText,
+                npcResponse,
+                out GiftSelection selection,
+                out reason))
+        {
+            return false;
+        }
+
         SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
         if (!Game1.player.addItemToInventoryBool(gift))
         {
@@ -1032,7 +1044,19 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        GiftSelection selection = this.giftSelector.ChooseMeaningful(npc, state, playerText, npcResponse);
+        if (!this.TrySelectGiftForConversationAction(
+                action,
+                GiftTier.Meaningful,
+                npc,
+                state,
+                playerText,
+                npcResponse,
+                out GiftSelection selection,
+                out reason))
+        {
+            return false;
+        }
+
         SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
         if (!Game1.player.addItemToInventoryBool(gift))
         {
@@ -1064,6 +1088,70 @@ internal sealed class BehaviorEngine
 
         this.ShowFeedback($"LivingNPCs：{npc.displayName} 给了你 {gift.DisplayName}。");
         return true;
+    }
+
+    private bool TrySelectGiftForConversationAction(
+        ValleyTalkWorldActionRequest action,
+        GiftTier tier,
+        NPC npc,
+        LivingNpcState state,
+        string playerText,
+        string npcResponse,
+        out GiftSelection selection,
+        out string reason
+    )
+    {
+        selection = null!;
+        reason = string.Empty;
+        if (!string.IsNullOrWhiteSpace(action.ItemId))
+        {
+            if (this.giftSelector.TryChooseRequested(action.ItemId, tier, out GiftSelection? requestedSelection)
+                && requestedSelection != null)
+            {
+                selection = requestedSelection;
+                return true;
+            }
+
+            reason = $"requested gift item {action.ItemId} is not in the allowed {tier.ToString().ToLowerInvariant()} gift pool";
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(action.ItemLabel))
+        {
+            reason = $"gift action named {action.ItemLabel}, but did not provide a valid itemId";
+            return false;
+        }
+
+        if (VisibleDialoguePromisesUnsupportedGift(npcResponse))
+        {
+            reason = "visible dialogue promised a specific unsupported gift without a valid itemId";
+            return false;
+        }
+
+        selection = tier == GiftTier.Meaningful
+            ? this.giftSelector.ChooseMeaningful(npc, state, playerText, npcResponse)
+            : this.giftSelector.Choose(npc, state, playerText, npcResponse);
+        return true;
+    }
+
+    private bool VisibleDialoguePromisesUnsupportedGift(string npcResponse)
+    {
+        if (string.IsNullOrWhiteSpace(npcResponse))
+        {
+            return false;
+        }
+
+        string text = npcResponse.ToLowerInvariant();
+        return ContainsAny(
+            text,
+            "书签",
+            "bookmark",
+            "便签",
+            "纸条",
+            "手帕",
+            "发夹",
+            "小卡片"
+        );
     }
 
     private bool TryWaterNearbyCrops(NPC npc, ValleyTalkWorldActionRequest action, out string reason)

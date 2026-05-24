@@ -3180,6 +3180,8 @@ internal sealed class BehaviorMemory
                     action.DelayMinutes = System.Math.Clamp(action.DelayMinutes, 0, 20);
                     action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
                     action.QuestHint = action.QuestHint?.Trim() ?? string.Empty;
+                    action.ItemId = action.ItemId?.Trim() ?? string.Empty;
+                    action.ItemLabel = action.ItemLabel?.Trim() ?? string.Empty;
                     return action;
                 })
                 .Where(action => action.Type != "none")
@@ -5552,6 +5554,8 @@ internal sealed class ValleyTalkWorldActionRequest
     public string Reason { get; set; } = string.Empty;
     public string TargetLocation { get; set; } = string.Empty;
     public string QuestHint { get; set; } = string.Empty;
+    public string ItemId { get; set; } = string.Empty;
+    public string ItemLabel { get; set; } = string.Empty;
 }
 
 internal sealed class ValleyTalkBehaviorInfluenceCandidate

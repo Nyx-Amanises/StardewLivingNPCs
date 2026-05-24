@@ -152,6 +152,8 @@ internal sealed class ConversationAnalysis
                     action.DelayMinutes = Math.Clamp(action.DelayMinutes, 0, 20);
                     action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
                     action.QuestHint = action.QuestHint?.Trim() ?? string.Empty;
+                    action.ItemId = action.ItemId?.Trim() ?? string.Empty;
+                    action.ItemLabel = action.ItemLabel?.Trim() ?? string.Empty;
                     return action;
                 })
                 .Where(action => action.Type != "none")
@@ -557,6 +559,12 @@ internal sealed class ConversationWorldActionRequest
 
     [JsonProperty("questHint")]
     public string QuestHint { get; set; } = string.Empty;
+
+    [JsonProperty("itemId")]
+    public string ItemId { get; set; } = string.Empty;
+
+    [JsonProperty("itemLabel")]
+    public string ItemLabel { get; set; } = string.Empty;
 }
 
 internal sealed class ConversationBehaviorInfluenceCandidate

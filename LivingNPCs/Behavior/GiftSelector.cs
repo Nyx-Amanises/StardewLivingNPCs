@@ -158,6 +158,42 @@ internal sealed class GiftSelector
         return this.ChooseFromPool(MeaningfulCandidates, GiftTier.Meaningful, npc, state, playerText, npcResponse);
     }
 
+    public bool TryChooseRequested(
+        string itemId,
+        GiftTier tier,
+        out GiftSelection? selection
+    )
+    {
+        selection = null;
+        string normalizedItemId = NormalizeItemId(itemId);
+        if (string.IsNullOrWhiteSpace(normalizedItemId))
+        {
+            return false;
+        }
+
+        string season = Game1.season.ToString().ToLowerInvariant();
+        IReadOnlyList<GiftCandidate> pool = tier == GiftTier.Meaningful
+            ? MeaningfulCandidates
+            : SmallCandidates;
+        GiftCandidate? candidate = pool.FirstOrDefault(candidate =>
+            candidate.ItemId.Equals(normalizedItemId, StringComparison.OrdinalIgnoreCase)
+            && (string.IsNullOrWhiteSpace(candidate.Season) || candidate.Season == season)
+        );
+        if (candidate == null)
+        {
+            return false;
+        }
+
+        selection = new GiftSelection(
+            candidate.ItemId,
+            candidate.DebugName,
+            tier,
+            "the AI named this gift in hidden metadata and it passed the allowed gift pool check",
+            string.Empty
+        );
+        return true;
+    }
+
     public bool HasMeaningfulMemoryCue(
         LivingNpcState state,
         string playerText,
@@ -522,6 +558,19 @@ internal sealed class GiftSelector
     private static bool ContainsAny(string text, params string[] needles)
     {
         return needles.Any(needle => text.Contains(needle, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string NormalizeItemId(string itemId)
+    {
+        string trimmed = itemId.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return string.Empty;
+        }
+
+        return int.TryParse(trimmed, out int rawId)
+            ? $"(O){rawId}"
+            : trimmed;
     }
 
     private static string FormatTags(IEnumerable<string> tags)
