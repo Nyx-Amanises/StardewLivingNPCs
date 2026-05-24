@@ -3918,6 +3918,9 @@ internal sealed class BehaviorMemory
             Status = "Pending",
             CreatedTotalDays = Game1.Date.TotalDays,
             CreatedTimeOfDay = Game1.timeOfDay,
+            WaitingStartedTotalDays = -1,
+            WaitingTileX = -1,
+            WaitingTileY = -1,
             LastUpdatedTotalDays = Game1.Date.TotalDays,
             LastUpdatedTimeOfDay = Game1.timeOfDay,
             RenewedAfterMiss = recentMissedSimilar != null,
@@ -5282,9 +5285,10 @@ internal sealed class BehaviorMemory
         return status switch
         {
             "Pending" => 0,
-            "Expired" => 1,
-            "Fulfilled" => 2,
-            _ => 3
+            "Waiting" => 1,
+            "Expired" => 2,
+            "Fulfilled" => 3,
+            _ => 4
         };
     }
 
@@ -5605,6 +5609,12 @@ internal sealed class NpcCommitmentFact
     public int LastUpdatedTimeOfDay { get; set; }
     public int LastMentionedTotalDays { get; set; } = -1;
     public int LastMentionedTimeOfDay { get; set; }
+    public bool WaitingGreetingShown { get; set; }
+    public int WaitingStartedTotalDays { get; set; } = -1;
+    public int WaitingStartedTimeOfDay { get; set; }
+    public string WaitingLocationName { get; set; } = string.Empty;
+    public int WaitingTileX { get; set; } = -1;
+    public int WaitingTileY { get; set; } = -1;
     public bool ArrivalGreetingShown { get; set; }
     public int FulfilledTotalDays { get; set; } = -1;
     public int FulfilledTimeOfDay { get; set; }
@@ -6518,6 +6528,7 @@ internal sealed class LivingNpcState
                     : commitment.LocationLabel.Trim();
                 commitment.Status = commitment.Status switch
                 {
+                    "Waiting" => "Waiting",
                     "Fulfilled" => "Fulfilled",
                     "Expired" => "Expired",
                     _ => "Pending"
@@ -6528,6 +6539,16 @@ internal sealed class LivingNpcState
                     commitment.FulfilledTimeOfDay = commitment.LastUpdatedTimeOfDay;
                 }
 
+                if (commitment.Status == "Waiting")
+                {
+                    commitment.WaitingStartedTotalDays = commitment.WaitingStartedTotalDays < 0
+                        ? commitment.LastUpdatedTotalDays
+                        : commitment.WaitingStartedTotalDays;
+                    commitment.WaitingLocationName = string.IsNullOrWhiteSpace(commitment.WaitingLocationName)
+                        ? commitment.LocationName
+                        : BehaviorMemory.NormalizeCommitmentLocation(commitment.WaitingLocationName, commitment.LocationName);
+                }
+
                 commitment.TimesReinforced = System.Math.Max(0, commitment.TimesReinforced);
                 return commitment;
             })
@@ -6535,9 +6556,10 @@ internal sealed class LivingNpcState
             .OrderBy(commitment => commitment.Status switch
             {
                 "Pending" => 0,
-                "Expired" => 1,
-                "Fulfilled" => 2,
-                _ => 3
+                "Waiting" => 1,
+                "Expired" => 2,
+                "Fulfilled" => 3,
+                _ => 4
             })
             .ThenBy(commitment => commitment.DueTotalDays)
             .ThenBy(commitment => commitment.TimeOfDay)
@@ -6910,6 +6932,12 @@ internal sealed class LivingNpcState
                     LastUpdatedTimeOfDay = commitment.LastUpdatedTimeOfDay,
                     LastMentionedTotalDays = commitment.LastMentionedTotalDays,
                     LastMentionedTimeOfDay = commitment.LastMentionedTimeOfDay,
+                    WaitingGreetingShown = commitment.WaitingGreetingShown,
+                    WaitingStartedTotalDays = commitment.WaitingStartedTotalDays,
+                    WaitingStartedTimeOfDay = commitment.WaitingStartedTimeOfDay,
+                    WaitingLocationName = commitment.WaitingLocationName,
+                    WaitingTileX = commitment.WaitingTileX,
+                    WaitingTileY = commitment.WaitingTileY,
                     ArrivalGreetingShown = commitment.ArrivalGreetingShown,
                     FulfilledTotalDays = commitment.FulfilledTotalDays,
                     FulfilledTimeOfDay = commitment.FulfilledTimeOfDay,
