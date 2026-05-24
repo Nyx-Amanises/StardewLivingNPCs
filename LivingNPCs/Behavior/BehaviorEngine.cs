@@ -1809,6 +1809,8 @@ internal sealed class BehaviorEngine
             return;
         }
 
+        this.TryBringPendingCommitmentNpcsToCurrentLocation();
+
         foreach (var npc in Game1.currentLocation.characters.Where(candidate => !string.IsNullOrWhiteSpace(candidate.Name)))
         {
             var state = this.memory.GetState(npc);
@@ -1820,7 +1822,7 @@ internal sealed class BehaviorEngine
             var commitment = state.Commitments.FirstOrDefault(candidate =>
                 candidate.Status == "Pending"
                 && !candidate.ArrivalGreetingShown
-                && candidate.LocationName == Game1.currentLocation.Name
+                && this.IsCommitmentForCurrentLocation(candidate)
                 && this.IsWithinCommitmentWindow(candidate)
             );
             if (commitment == null)
@@ -1860,6 +1862,120 @@ internal sealed class BehaviorEngine
                 importance: 72
             );
         }
+    }
+
+    private void TryBringPendingCommitmentNpcsToCurrentLocation()
+    {
+        if (Game1.currentLocation == null || Game1.player == null || Game1.activeClickableMenu != null)
+        {
+            return;
+        }
+
+        foreach (var state in this.memory.GetTrackedStates())
+        {
+            var commitment = state.Commitments.FirstOrDefault(candidate =>
+                candidate.Status == "Pending"
+                && !candidate.ArrivalGreetingShown
+                && this.IsCommitmentForCurrentLocation(candidate)
+                && this.IsWithinCommitmentWindow(candidate)
+            );
+            if (commitment == null)
+            {
+                continue;
+            }
+
+            NPC? npc = Game1.getCharacterFromName(state.NpcName);
+            if (npc == null || npc.currentLocation == Game1.currentLocation)
+            {
+                continue;
+            }
+
+            if (this.TryMoveNpcToCommitmentRendezvous(npc, commitment) && this.config.Debug)
+            {
+                this.monitor.Log(
+                    $"Moved {npc.Name} to {Game1.currentLocation.Name} for fulfilled LivingNPCs commitment: {commitment.Summary}",
+                    LogLevel.Debug
+                );
+            }
+        }
+    }
+
+    private bool TryMoveNpcToCommitmentRendezvous(NPC npc, NpcCommitmentFact commitment)
+    {
+        var location = Game1.currentLocation;
+        if (location == null || Game1.player == null || !this.TryFindCommitmentArrivalTile(location, out Point targetTile))
+        {
+            return false;
+        }
+
+        try
+        {
+            npc.controller = null;
+            npc.Halt();
+            npc.currentLocation?.characters.Remove(npc);
+            if (!location.characters.Contains(npc))
+            {
+                location.characters.Add(npc);
+            }
+
+            npc.currentLocation = location;
+            npc.Position = new Vector2(targetTile.X * Game1.tileSize, targetTile.Y * Game1.tileSize);
+            npc.faceDirection(this.GetDirectionTowardPlayerFromTile(targetTile));
+            this.memory.RecordNpcWorldAction(
+                npc,
+                "ArrivedForCommitment",
+                $"they came to {commitment.LocationLabel} for an agreed plan: {commitment.Summary}",
+                this.config.MaxMemoryEntriesPerNpc
+            );
+            return true;
+        }
+        catch (Exception ex)
+        {
+            this.monitor.Log($"Could not move {npc.Name} for LivingNPCs commitment: {ex.Message}", LogLevel.Warn);
+            return false;
+        }
+    }
+
+    private bool IsCommitmentForCurrentLocation(NpcCommitmentFact commitment)
+    {
+        string currentLocation = BehaviorMemory.NormalizeCommitmentLocation(Game1.currentLocation?.Name ?? string.Empty, string.Empty);
+        return !string.IsNullOrWhiteSpace(currentLocation)
+            && string.Equals(commitment.LocationName, currentLocation, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool TryFindCommitmentArrivalTile(GameLocation location, out Point targetTile)
+    {
+        targetTile = Point.Zero;
+        var playerTile = Game1.player.TilePoint;
+        var candidates = new List<Point>();
+        for (int radius = 1; radius <= 3; radius++)
+        {
+            for (int dx = -radius; dx <= radius; dx++)
+            {
+                for (int dy = -radius; dy <= radius; dy++)
+                {
+                    if (Math.Abs(dx) != radius && Math.Abs(dy) != radius)
+                    {
+                        continue;
+                    }
+
+                    candidates.Add(new Point(playerTile.X + dx, playerTile.Y + dy));
+                }
+            }
+        }
+
+        foreach (var candidate in candidates
+            .Distinct()
+            .OrderBy(tile => Vector2.Distance(new Vector2(tile.X, tile.Y), Game1.player.Tile)))
+        {
+            if (this.IsSafeDestinationTile(location, candidate))
+            {
+                targetTile = candidate;
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private string BuildCommitmentArrivalGreeting(NpcCommitmentFact commitment)
@@ -3050,7 +3166,7 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        return !Game1.currentLocation.characters.Any(npc => npc.TilePoint == tile);
+        return !location.characters.Any(npc => npc.TilePoint == tile);
     }
 
     private void ShowNearestNpcMemory()

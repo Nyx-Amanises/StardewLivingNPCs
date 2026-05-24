@@ -468,9 +468,18 @@ internal sealed class BehaviorMemory
             }
         }
 
-        foreach (var candidate in analysis.Commitments
-                     .Where(commitment => maxPendingCommitmentsPerNpc > 0 && !string.IsNullOrWhiteSpace(commitment.Summary))
-                     .Take(2))
+        var commitmentCandidates = analysis.Commitments
+            .Where(commitment => maxPendingCommitmentsPerNpc > 0 && !string.IsNullOrWhiteSpace(commitment.Summary))
+            .Take(2)
+            .ToList();
+        if (commitmentCandidates.Count == 0
+            && maxPendingCommitmentsPerNpc > 0
+            && TryInferAcceptedCommitment(playerText, npcResponse, out var inferredCommitment))
+        {
+            commitmentCandidates.Add(inferredCommitment);
+        }
+
+        foreach (var candidate in commitmentCandidates)
         {
             if (this.StoreCommitment(npc, state, candidate, maxPendingCommitmentsPerNpc))
             {
@@ -3948,6 +3957,213 @@ internal sealed class BehaviorMemory
             .Take(12)
             .ToList();
         return true;
+    }
+
+    private static bool TryInferAcceptedCommitment(
+        string playerText,
+        string npcResponse,
+        out ValleyTalkCommitmentCandidate commitment)
+    {
+        commitment = new ValleyTalkCommitmentCandidate();
+        if (string.IsNullOrWhiteSpace(playerText) || string.IsNullOrWhiteSpace(npcResponse))
+        {
+            return false;
+        }
+
+        string request = playerText.Trim();
+        string requestLower = request.ToLowerInvariant();
+        string responseLower = npcResponse.ToLowerInvariant();
+        if (!LooksLikeAppointmentRequest(requestLower)
+            || LooksLikeAppointmentDecline(responseLower)
+            || !LooksLikeAppointmentAcceptance(responseLower))
+        {
+            return false;
+        }
+
+        int dueInDays = InferCommitmentDueInDays(requestLower, responseLower);
+        if (dueInDays < 0)
+        {
+            return false;
+        }
+
+        string location = InferCommitmentLocation(requestLower);
+        if (string.IsNullOrWhiteSpace(location))
+        {
+            return false;
+        }
+
+        int timeOfDay = InferCommitmentTimeOfDay(request);
+        string type = ContainsAny(requestLower, "一起去", "一起走", "同行", "陪我", "一起", "go together", "walk together")
+            ? "go_together"
+            : "meet_again";
+        string locationLabel = GetCommitmentLocationLabel(location);
+        string dayLabel = dueInDays switch
+        {
+            0 => "today",
+            1 => "tomorrow",
+            2 => "the day after tomorrow",
+            _ => $"in {dueInDays} days"
+        };
+
+        commitment = new ValleyTalkCommitmentCandidate
+        {
+            Type = type,
+            Summary = $"Meet the farmer at {locationLabel} around {FormatCommitmentTime(timeOfDay)} {dayLabel}.",
+            DueInDays = dueInDays,
+            TimeOfDay = timeOfDay,
+            Location = location,
+            LocationLabel = locationLabel
+        };
+        return true;
+    }
+
+    private static bool LooksLikeAppointmentRequest(string text)
+    {
+        return ContainsAny(text, "明天", "后天", "今天", "tomorrow", "today", "later")
+            && ContainsAny(text, "点", "上午", "早上", "下午", "晚上", "来", "见", "约", "一起", "农场", "meet", "come", "visit", "at ");
+    }
+
+    private static bool LooksLikeAppointmentDecline(string text)
+    {
+        return ContainsAny(
+            text,
+            "不行",
+            "不能",
+            "没法",
+            "没办法",
+            "抱歉",
+            "对不起",
+            "改天",
+            "下次",
+            "不可以",
+            "can't",
+            "cannot",
+            "won't",
+            "another time",
+            "not sure"
+        );
+    }
+
+    private static bool LooksLikeAppointmentAcceptance(string text)
+    {
+        return ContainsAny(
+            text,
+            "可以",
+            "应该可以",
+            "我会",
+            "我来",
+            "会去",
+            "没问题",
+            "当然",
+            "好",
+            "行",
+            "sure",
+            "okay",
+            "ok",
+            "i can",
+            "i'll",
+            "i will"
+        );
+    }
+
+    private static int InferCommitmentDueInDays(string requestLower, string responseLower)
+    {
+        if (ContainsAny(requestLower, "后天", "day after tomorrow"))
+        {
+            return 2;
+        }
+
+        if (ContainsAny(requestLower, "明天", "tomorrow") || ContainsAny(responseLower, "明天", "tomorrow"))
+        {
+            return 1;
+        }
+
+        if (ContainsAny(requestLower, "今天", "today", "later"))
+        {
+            return 0;
+        }
+
+        return -1;
+    }
+
+    private static string InferCommitmentLocation(string requestLower)
+    {
+        if (ContainsAny(requestLower, "农场", "farm"))
+        {
+            return "Farm";
+        }
+
+        if (ContainsAny(requestLower, "图书馆", "博物馆", "library", "museum"))
+        {
+            return "ArchaeologyHouse";
+        }
+
+        if (ContainsAny(requestLower, "酒吧", "saloon"))
+        {
+            return "Saloon";
+        }
+
+        if (ContainsAny(requestLower, "海滩", "海边", "beach"))
+        {
+            return "Beach";
+        }
+
+        if (ContainsAny(requestLower, "森林", "forest"))
+        {
+            return "Forest";
+        }
+
+        if (ContainsAny(requestLower, "山", "mountain"))
+        {
+            return "Mountain";
+        }
+
+        if (ContainsAny(requestLower, "镇", "广场", "town", "square"))
+        {
+            return "Town";
+        }
+
+        return string.Empty;
+    }
+
+    private static int InferCommitmentTimeOfDay(string text)
+    {
+        var match = Regex.Match(text, @"(?<!\d)(\d{1,2})\s*(?:点|:|：)\s*(\d{1,2})?");
+        if (!match.Success)
+        {
+            return 900;
+        }
+
+        int hour = int.TryParse(match.Groups[1].Value, out int parsedHour)
+            ? parsedHour
+            : 9;
+        int minute = match.Groups[2].Success && int.TryParse(match.Groups[2].Value, out int parsedMinute)
+            ? parsedMinute
+            : 0;
+        string lower = text.ToLowerInvariant();
+        if ((ContainsAny(lower, "下午", "晚上", "傍晚", "pm") || lower.Contains("p.m."))
+            && hour > 0
+            && hour < 12)
+        {
+            hour += 12;
+        }
+
+        if (ContainsAny(lower, "早上", "上午", "清晨", "morning", "am") && hour == 12)
+        {
+            hour = 0;
+        }
+
+        hour = System.Math.Clamp(hour, 6, 26);
+        minute = System.Math.Clamp(minute, 0, 59);
+        minute = (minute / 10) * 10;
+        return (hour * 100) + minute;
+    }
+
+    private static string FormatCommitmentTime(int timeOfDay)
+    {
+        int hour = timeOfDay / 100;
+        int minute = timeOfDay % 100;
+        return $"{hour:00}:{minute:00}";
     }
 
     private bool StoreHelpRequest(
