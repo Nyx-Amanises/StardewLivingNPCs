@@ -493,6 +493,7 @@ internal sealed class BehaviorMemory
                     npc,
                     state,
                     candidate,
+                    playerText,
                     maxPendingHelpRequestsPerNpc,
                     helpRequestCooldownDays,
                     minRelationshipTrustForHelpRequests))
@@ -3953,6 +3954,7 @@ internal sealed class BehaviorMemory
         NPC npc,
         LivingNpcState state,
         ValleyTalkHelpRequestCandidate candidate,
+        string playerText,
         int maxPendingHelpRequestsPerNpc,
         int helpRequestCooldownDays,
         int minRelationshipTrustForHelpRequests)
@@ -3993,6 +3995,8 @@ internal sealed class BehaviorMemory
             return true;
         }
 
+        bool requiresAcceptance = candidate.RequiresAcceptance && !IsFarmerExplicitlyOfferingHelp(playerText);
+
         state.HelpRequests.Add(new NpcHelpRequestFact
         {
             NpcDisplayName = npc.displayName,
@@ -4006,12 +4010,12 @@ internal sealed class BehaviorMemory
             QuestionTopic = firstStep.QuestionTopic,
             DueTotalDays = Game1.Date.TotalDays + candidate.DueInDays,
             Reason = candidate.Reason.Trim(),
-            Status = candidate.RequiresAcceptance ? "Offered" : "Pending",
+            Status = requiresAcceptance ? "Offered" : "Pending",
             FollowUpPotential = NormalizeHelpRequestFollowUpPotential(candidate.FollowUpPotential),
             CreatedTotalDays = Game1.Date.TotalDays,
             CreatedTimeOfDay = Game1.timeOfDay,
-            AcceptedTotalDays = candidate.RequiresAcceptance ? -1 : Game1.Date.TotalDays,
-            AcceptedTimeOfDay = candidate.RequiresAcceptance ? 0 : Game1.timeOfDay,
+            AcceptedTotalDays = requiresAcceptance ? -1 : Game1.Date.TotalDays,
+            AcceptedTimeOfDay = requiresAcceptance ? 0 : Game1.timeOfDay,
             LastUpdatedTotalDays = Game1.Date.TotalDays,
             LastUpdatedTimeOfDay = Game1.timeOfDay,
             RewardFriendship = DetermineHelpRequestFriendshipReward(
@@ -4030,6 +4034,38 @@ internal sealed class BehaviorMemory
             .Take(12)
             .ToList();
         return true;
+    }
+
+    private static bool IsFarmerExplicitlyOfferingHelp(string playerText)
+    {
+        if (string.IsNullOrWhiteSpace(playerText))
+        {
+            return false;
+        }
+
+        string text = playerText.ToLowerInvariant();
+        if (ContainsAny(text, "不需要帮", "不用帮", "不必帮", "don't need help", "do not need help"))
+        {
+            return false;
+        }
+
+        return ContainsAny(
+            text,
+            "需要帮忙",
+            "需要帮",
+            "有什么要帮",
+            "有什么需要",
+            "我能帮",
+            "需要我",
+            "帮得上",
+            "可以帮",
+            "要不要我帮",
+            "anything i can help",
+            "need help",
+            "can i help",
+            "help you",
+            "what can i do"
+        );
     }
 
     private List<NpcHelpRequestStepFact> BuildHelpRequestSteps(ValleyTalkHelpRequestCandidate candidate)
