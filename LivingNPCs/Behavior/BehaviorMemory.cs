@@ -224,7 +224,7 @@ internal sealed class BehaviorMemory
 
     public IEnumerable<LivingNpcState> GetTrackedStates()
     {
-        return this.statesByNpc.Values;
+        return this.statesByNpc.Values.ToList();
     }
 
     public IReadOnlyList<CommunityImpressionFact> GetRetellableCommunityImpressions(LivingNpcState state, int maxCount)
