@@ -34,6 +34,7 @@ internal sealed class BehaviorEngine
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
     private readonly List<PendingAmbientRemark> pendingAmbientRemarks = new();
     private readonly List<PendingWalkTogether> pendingWalks = new();
+    private readonly List<PendingEscortToLocation> pendingEscorts = new();
     private readonly List<PendingDelayedTravelAction> pendingDelayedTravelActions = new();
     private readonly Dictionary<string, int> lastConversationMemoryTimeByNpc = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
@@ -124,6 +125,7 @@ internal sealed class BehaviorEngine
         this.pendingRequests.Clear();
         this.pendingAmbientRemarks.Clear();
         this.pendingWalks.Clear();
+        this.pendingEscorts.Clear();
         this.pendingDelayedTravelActions.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
         this.TryPropagateCommunityImpressions();
@@ -137,6 +139,7 @@ internal sealed class BehaviorEngine
         this.pendingRequests.Clear();
         this.pendingAmbientRemarks.Clear();
         this.pendingWalks.Clear();
+        this.pendingEscorts.Clear();
         this.pendingDelayedTravelActions.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
     }
@@ -232,6 +235,7 @@ internal sealed class BehaviorEngine
 
         this.TryShowPendingAmbientRemarks();
         this.TryStartPendingDelayedTravelActions();
+        this.TryUpdatePendingEscorts();
         this.TryUpdatePendingWalks();
         this.TryShowCommitmentMorningReminders();
         this.TryShowHelpRequestFollowUps();
@@ -689,6 +693,11 @@ internal sealed class BehaviorEngine
         if (this.ContainsAny(text, "森林", "煤矿森林", "forest"))
         {
             return "Forest";
+        }
+
+        if (this.ContainsAny(text, "矿井", "矿洞", "矿山", "mine", "mines"))
+        {
+            return "Mine";
         }
 
         if (this.ContainsAny(text, "山上", "山地", "mountain"))
@@ -1275,25 +1284,536 @@ internal sealed class BehaviorEngine
 
         string targetLocation = BehaviorMemory.NormalizeCommitmentLocation(action.TargetLocation, string.Empty);
 
-        if (!this.TryStartWalkTogether(npc, action, out reason))
+        if (!this.CanUseWorldAction(npc, "escort_to_location", requireFriendly: false, out reason, allowDistantWhenExplicit: true))
         {
             return false;
         }
 
         var state = this.memory.GetState(npc);
+        if (state == null)
+        {
+            reason = "there is no NPC state yet";
+            return false;
+        }
+
+        if (state.LastAiWalkTogetherTotalDays == Game1.Date.TotalDays)
+        {
+            reason = "walk or escort action was already used today";
+            return false;
+        }
+
+        if (!this.IsKnownEscortTarget(targetLocation))
+        {
+            reason = $"escort target {targetLocation} is not supported yet";
+            return false;
+        }
+
+        int durationMinutes = System.Math.Clamp(
+            action.DurationMinutes <= 0 ? this.config.MaxAiWalkTogetherMinutes : action.DurationMinutes,
+            10,
+            System.Math.Max(10, this.config.MaxAiWalkTogetherMinutes)
+        );
+        string targetLabel = this.GetEscortTargetLabel(targetLocation);
+
+        npc.controller = null;
+        npc.Halt();
+        this.pendingWalks.RemoveAll(walk => walk.NpcName == npc.Name);
+        this.pendingEscorts.RemoveAll(escort => escort.NpcName == npc.Name);
+        this.pendingEscorts.Add(new PendingEscortToLocation(
+            npc.Name,
+            Game1.Date.TotalDays,
+            targetLocation,
+            targetLabel,
+            this.AddMinutesToTime(Game1.timeOfDay, durationMinutes),
+            Game1.currentLocation?.Name ?? string.Empty,
+            Game1.player.TilePoint
+        ));
+
+        state.LastAiWalkTogetherTotalDays = Game1.Date.TotalDays;
+        this.memory.RecordNpcWorldAction(
+            npc,
+            "StartedEscortToLocation",
+            this.BuildWorldActionReason(action.Reason, $"they agreed to guide the farmer toward {targetLabel}"),
+            this.config.MaxMemoryEntriesPerNpc
+        );
+        this.MarkStateAfterWorldAction(state, $"they agreed to guide the farmer toward {targetLabel}");
+
+        if (this.IsEscortTargetReached(Game1.currentLocation, targetLocation))
+        {
+            this.CompleteEscortToLocation(npc, this.pendingEscorts.First(escort => escort.NpcName == npc.Name));
+            return true;
+        }
+
+        npc.showTextAboveHead(this.BuildEscortStartGreeting(targetLocation));
+        this.ShowFeedback($"LivingNPCs：{npc.displayName} 会带你去{targetLabel}。");
+        return true;
+    }
+
+    private void TryUpdatePendingEscorts()
+    {
+        if (this.pendingEscorts.Count == 0)
+        {
+            return;
+        }
+
+        if (Game1.eventUp)
+        {
+            foreach (var escort in this.pendingEscorts.ToList())
+            {
+                this.StopEscortToLocation(escort, Game1.getCharacterFromName(escort.NpcName), returnToSchedule: true);
+            }
+
+            return;
+        }
+
+        foreach (var escort in this.pendingEscorts.ToList())
+        {
+            NPC? npc = Game1.getCharacterFromName(escort.NpcName);
+            if (escort.TotalDays != Game1.Date.TotalDays
+                || Game1.timeOfDay >= escort.EndTimeOfDay
+                || npc == null
+                || Game1.currentLocation == null
+                || Game1.player == null)
+            {
+                this.StopEscortToLocation(escort, npc, returnToSchedule: true);
+                continue;
+            }
+
+            if (Game1.activeClickableMenu != null)
+            {
+                continue;
+            }
+
+            if (npc.currentLocation != Game1.currentLocation)
+            {
+                if (!this.TryMoveNpcNearPlayerForEscort(npc, Game1.currentLocation, out _))
+                {
+                    this.StopEscortToLocation(escort, npc, returnToSchedule: true);
+                    continue;
+                }
+
+                if (!string.Equals(escort.LastLocationName, Game1.currentLocation.Name, StringComparison.OrdinalIgnoreCase))
+                {
+                    npc.showTextAboveHead(this.BuildEscortCaughtUpGreeting(escort));
+                    escort.LastLocationName = Game1.currentLocation.Name;
+                    escort.HintShownForLocation = false;
+                    escort.LastWaypointTile = Point.Zero;
+                    escort.LastAssignedController = null;
+                }
+            }
+            else if (!Game1.currentLocation.characters.Contains(npc))
+            {
+                Game1.currentLocation.characters.Add(npc);
+                npc.currentLocation = Game1.currentLocation;
+            }
+
+            if (!string.Equals(escort.LastLocationName, Game1.currentLocation.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                escort.LastLocationName = Game1.currentLocation.Name;
+                escort.HintShownForLocation = false;
+                escort.LastWaypointTile = Point.Zero;
+                escort.LastAssignedController = null;
+            }
+
+            if (this.IsEscortTargetReached(Game1.currentLocation, escort.TargetLocation))
+            {
+                this.CompleteEscortToLocation(npc, escort);
+                continue;
+            }
+
+            if (Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles + 8)
+            {
+                if (!this.TryMoveNpcNearPlayerForEscort(npc, Game1.currentLocation, out _))
+                {
+                    this.StopEscortToLocation(escort, npc, returnToSchedule: true);
+                    continue;
+                }
+            }
+
+            if (npc.controller != null && escort.LastAssignedController != null && npc.controller != escort.LastAssignedController)
+            {
+                npc.controller = null;
+                npc.Halt();
+            }
+
+            if (this.TryFindEscortWaypointTile(npc, escort, out Point waypointTile, out string nextLocation)
+                && Vector2.Distance(npc.Tile, new Vector2(waypointTile.X, waypointTile.Y)) > 1.5f)
+            {
+                if (escort.LastWaypointTile != waypointTile || npc.controller == null)
+                {
+                    npc.controller = new PathFindController(
+                        npc,
+                        Game1.currentLocation,
+                        waypointTile,
+                        this.GetDirectionTowardPlayerFromTile(waypointTile)
+                    );
+                    escort.LastWaypointTile = waypointTile;
+                    escort.LastAssignedController = npc.controller;
+                }
+
+                if (!escort.HintShownForLocation)
+                {
+                    npc.showTextAboveHead(this.BuildEscortDirectionHint(nextLocation));
+                    escort.HintShownForLocation = true;
+                }
+
+                continue;
+            }
+
+            escort.HintShownForLocation = true;
+            this.TryKeepEscortNearPlayer(npc, escort);
+        }
+    }
+
+    private bool TryKeepEscortNearPlayer(NPC npc, PendingEscortToLocation escort)
+    {
+        if (Vector2.Distance(npc.Tile, Game1.player.Tile) <= 1.75f)
+        {
+            this.TryFacePlayer(npc);
+            return true;
+        }
+
+        if (escort.LastPlayerTile == Game1.player.TilePoint && npc.controller != null)
+        {
+            return true;
+        }
+
+        if (!this.TryFindApproachTile(npc, out Point targetTile))
+        {
+            return false;
+        }
+
+        npc.controller = new PathFindController(
+            npc,
+            Game1.currentLocation,
+            targetTile,
+            this.GetDirectionTowardPlayerFromTile(targetTile)
+        );
+        escort.LastPlayerTile = Game1.player.TilePoint;
+        escort.LastAssignedController = npc.controller;
+        return true;
+    }
+
+    private bool TryFindEscortWaypointTile(NPC npc, PendingEscortToLocation escort, out Point waypointTile, out string nextLocation)
+    {
+        waypointTile = Point.Zero;
+        nextLocation = string.Empty;
+        if (Game1.currentLocation == null
+            || !this.TryGetNextEscortLocation(Game1.currentLocation, escort.TargetLocation, out nextLocation))
+        {
+            return false;
+        }
+
+        if (this.TryFindWarpTileToward(Game1.currentLocation, nextLocation, npc, out waypointTile))
+        {
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool TryGetNextEscortLocation(GameLocation currentLocation, string targetLocation, out string nextLocation)
+    {
+        nextLocation = string.Empty;
+        string current = BehaviorMemory.NormalizeCommitmentLocation(currentLocation.Name, currentLocation.Name);
+        if (string.Equals(current, targetLocation, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        if (this.HasWarpToLocation(currentLocation, targetLocation))
+        {
+            nextLocation = targetLocation;
+            return true;
+        }
+
+        string targetHub = this.GetEscortHubLocation(targetLocation);
+        if (!string.Equals(current, targetHub, StringComparison.OrdinalIgnoreCase)
+            && this.HasWarpToLocation(currentLocation, targetHub))
+        {
+            nextLocation = targetHub;
+            return true;
+        }
+
+        nextLocation = current switch
+        {
+            "Farm" => targetLocation == "Farm" ? string.Empty : "BusStop",
+            "BusStop" => targetLocation == "Farm" ? "Farm" : "Town",
+            "Town" => this.GetTownEscortExit(targetLocation),
+            "Mountain" => targetLocation == "Mine" ? "Mine" : "Town",
+            "Mine" => "Mountain",
+            "Beach" => "Town",
+            "Forest" => targetLocation == "Farm" && this.HasWarpToLocation(currentLocation, "Farm") ? "Farm" : "Town",
+            "Saloon" or "SeedShop" or "ArchaeologyHouse" or "Hospital" => "Town",
+            _ => string.Empty
+        };
+        return !string.IsNullOrWhiteSpace(nextLocation);
+    }
+
+    private string GetTownEscortExit(string targetLocation)
+    {
+        return targetLocation switch
+        {
+            "Farm" => "BusStop",
+            "BusStop" => "BusStop",
+            "Mountain" or "Mine" => "Mountain",
+            "Beach" => "Beach",
+            "Forest" => "Forest",
+            "Saloon" or "SeedShop" or "ArchaeologyHouse" or "Hospital" => targetLocation,
+            _ => string.Empty
+        };
+    }
+
+    private string GetEscortHubLocation(string targetLocation)
+    {
+        return targetLocation switch
+        {
+            "Mine" => "Mountain",
+            "Saloon" or "SeedShop" or "ArchaeologyHouse" or "Hospital" => "Town",
+            _ => targetLocation
+        };
+    }
+
+    private bool HasWarpToLocation(GameLocation location, string targetLocation)
+    {
+        return location.warps.Any(warp =>
+            string.Equals(
+                BehaviorMemory.NormalizeCommitmentLocation(GetWarpTargetName(warp), string.Empty),
+                targetLocation,
+                StringComparison.OrdinalIgnoreCase
+            ));
+    }
+
+    private bool TryFindWarpTileToward(GameLocation location, string targetLocation, NPC npc, out Point targetTile)
+    {
+        foreach (var warp in location.warps
+            .Where(warp => string.Equals(
+                BehaviorMemory.NormalizeCommitmentLocation(GetWarpTargetName(warp), string.Empty),
+                targetLocation,
+                StringComparison.OrdinalIgnoreCase))
+            .OrderBy(warp => Vector2.Distance(new Vector2(warp.X, warp.Y), npc.Tile)))
+        {
+            foreach (var candidate in this.GetTilesAround(new Point(warp.X, warp.Y), 3)
+                .OrderBy(tile => Vector2.Distance(new Vector2(tile.X, tile.Y), npc.Tile)))
+            {
+                if (this.IsSafeDestinationTile(location, candidate, npc))
+                {
+                    targetTile = candidate;
+                    return true;
+                }
+            }
+        }
+
+        targetTile = Point.Zero;
+        return false;
+    }
+
+    private bool TryMoveNpcNearPlayerForEscort(NPC npc, GameLocation location, out Point targetTile)
+    {
+        targetTile = Point.Zero;
+        foreach (var candidate in this.GetTilesAround(Game1.player.TilePoint, 4)
+            .Where(tile => tile != Game1.player.TilePoint)
+            .OrderBy(tile => Vector2.Distance(new Vector2(tile.X, tile.Y), Game1.player.Tile)))
+        {
+            if (!this.IsSafeDestinationTile(location, candidate, npc))
+            {
+                continue;
+            }
+
+            npc.controller = null;
+            npc.Halt();
+            npc.currentLocation?.characters.Remove(npc);
+            if (!location.characters.Contains(npc))
+            {
+                location.characters.Add(npc);
+            }
+
+            npc.currentLocation = location;
+            npc.Position = new Vector2(candidate.X * Game1.tileSize, candidate.Y * Game1.tileSize);
+            npc.faceDirection(this.GetDirectionTowardPlayerFromTile(candidate));
+            targetTile = candidate;
+            return true;
+        }
+
+        return false;
+    }
+
+    private bool IsEscortTargetReached(GameLocation? location, string targetLocation)
+    {
+        if (location == null)
+        {
+            return false;
+        }
+
+        string current = BehaviorMemory.NormalizeCommitmentLocation(location.Name, location.Name);
+        return string.Equals(current, targetLocation, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool IsKnownEscortTarget(string targetLocation)
+    {
+        return targetLocation is "Farm" or "Town" or "Mountain" or "Mine" or "Beach" or "Forest" or "BusStop"
+            or "Saloon" or "SeedShop" or "ArchaeologyHouse" or "Hospital";
+    }
+
+    private void CompleteEscortToLocation(NPC npc, PendingEscortToLocation escort)
+    {
+        npc.controller = null;
+        npc.Halt();
+        npc.showTextAboveHead(this.BuildEscortArrivalGreeting(escort));
+        var state = this.memory.GetState(npc);
         if (state != null)
         {
             this.memory.RecordNpcWorldAction(
                 npc,
-                "EscortedTowardLocation",
-                this.BuildWorldActionReason(action.Reason, $"they agreed to accompany the farmer toward {targetLocation} within the current safe path limits"),
+                "CompletedEscortToLocation",
+                $"they guided the farmer to {escort.TargetLocationLabel}",
                 this.config.MaxMemoryEntriesPerNpc
             );
-            this.MarkStateAfterWorldAction(state, "they agreed to accompany the farmer toward a place");
+            this.MarkStateAfterWorldAction(state, $"they guided the farmer to {escort.TargetLocationLabel}");
         }
 
-        this.ShowFeedback($"LivingNPCs：{npc.displayName} 会先陪你往约定地点走一段。");
+        this.SpreadCommunityRipple(
+            npc,
+            "shared_experience",
+            $"the farmer went with {npc.displayName} to {escort.TargetLocationLabel}",
+            importance: 58
+        );
+        this.pendingEscorts.Remove(escort);
+        this.ShowFeedback($"LivingNPCs：{npc.displayName} 已带你到{escort.TargetLocationLabel}。");
+    }
+
+    private void StopEscortToLocation(PendingEscortToLocation escort, NPC? npc, bool returnToSchedule)
+    {
+        if (npc != null && npc.controller == escort.LastAssignedController)
+        {
+            npc.controller = null;
+            npc.Halt();
+        }
+
+        if (npc != null && returnToSchedule)
+        {
+            this.TryReturnNpcToCurrentSchedule(npc);
+        }
+
+        this.pendingEscorts.Remove(escort);
+    }
+
+    private bool TryReturnNpcToCurrentSchedule(NPC npc)
+    {
+        if (npc.Schedule == null || npc.Schedule.Count == 0)
+        {
+            return false;
+        }
+
+        object? scheduleEntry = npc.Schedule
+            .Where(entry => entry.Key <= Game1.timeOfDay)
+            .OrderByDescending(entry => entry.Key)
+            .Select(entry => entry.Value)
+            .FirstOrDefault();
+        if (scheduleEntry == null
+            || !TryReadScheduleDestination(scheduleEntry, out string locationName, out Point targetTile, out int facingDirection))
+        {
+            return false;
+        }
+
+        GameLocation? location;
+        try
+        {
+            location = Game1.getLocationFromName(locationName);
+        }
+        catch
+        {
+            location = null;
+        }
+
+        if (location == null)
+        {
+            return false;
+        }
+
+        if (!this.IsSafeDestinationTile(location, targetTile, npc)
+            && !this.TryFindOpenTileNear(location, targetTile, npc, out targetTile))
+        {
+            return false;
+        }
+
+        npc.currentLocation?.characters.Remove(npc);
+        if (!location.characters.Contains(npc))
+        {
+            location.characters.Add(npc);
+        }
+
+        npc.currentLocation = location;
+        npc.Position = new Vector2(targetTile.X * Game1.tileSize, targetTile.Y * Game1.tileSize);
+        if (facingDirection is >= 0 and <= 3)
+        {
+            npc.faceDirection(facingDirection);
+        }
+
         return true;
+    }
+
+    private string BuildEscortStartGreeting(string targetLocation)
+    {
+        return targetLocation switch
+        {
+            "Mine" => "我带你往矿井走，跟紧一点。",
+            "Beach" => "我带你往海边走。",
+            "ArchaeologyHouse" => "我带你去图书馆。",
+            "Farm" => "我跟你去农场看看。",
+            _ => "我带路，你跟着我。"
+        };
+    }
+
+    private string BuildEscortCaughtUpGreeting(PendingEscortToLocation escort)
+    {
+        return $"我跟上了，我们继续去{escort.TargetLocationLabel}。";
+    }
+
+    private string BuildEscortDirectionHint(string nextLocation)
+    {
+        return nextLocation switch
+        {
+            "Mine" => "矿井入口就在前面。",
+            "Mountain" => "先往山上走。",
+            "Town" => "先回镇上。",
+            "BusStop" => "先往巴士站那边走。",
+            "Beach" => "从这边去海边。",
+            "Forest" => "从这边去森林。",
+            "Farm" => "从这边回农场。",
+            _ => "从这边走。"
+        };
+    }
+
+    private string BuildEscortArrivalGreeting(PendingEscortToLocation escort)
+    {
+        return escort.TargetLocation switch
+        {
+            "Mine" => "到了，这里就是矿井。小心点。",
+            "Beach" => "到了，海边就在这里。",
+            "ArchaeologyHouse" => "到了，这里就是图书馆。",
+            "Farm" => "到了，你的农场就在这里。",
+            _ => $"到了，就是{escort.TargetLocationLabel}。"
+        };
+    }
+
+    private string GetEscortTargetLabel(string targetLocation)
+    {
+        return targetLocation switch
+        {
+            "Farm" => "农场",
+            "Town" => "鹈鹕镇",
+            "Mountain" => "山上",
+            "Mine" => "矿井",
+            "Beach" => "海边",
+            "Forest" => "煤矿森林",
+            "BusStop" => "巴士站",
+            "Saloon" => "星之果实酒吧",
+            "SeedShop" => "皮埃尔的杂货店",
+            "ArchaeologyHouse" => "博物馆和图书馆",
+            "Hospital" => "诊所",
+            _ => targetLocation
+        };
     }
 
     private bool TryFestivalInteraction(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
@@ -3945,6 +4465,39 @@ internal sealed record PendingDelayedTravelAction(
     int DurationMinutes,
     string Reason
 );
+
+internal sealed class PendingEscortToLocation
+{
+    public PendingEscortToLocation(
+        string npcName,
+        int totalDays,
+        string targetLocation,
+        string targetLocationLabel,
+        int endTimeOfDay,
+        string lastLocationName,
+        Point lastPlayerTile
+    )
+    {
+        this.NpcName = npcName;
+        this.TotalDays = totalDays;
+        this.TargetLocation = targetLocation;
+        this.TargetLocationLabel = targetLocationLabel;
+        this.EndTimeOfDay = endTimeOfDay;
+        this.LastLocationName = lastLocationName;
+        this.LastPlayerTile = lastPlayerTile;
+    }
+
+    public string NpcName { get; }
+    public int TotalDays { get; }
+    public string TargetLocation { get; }
+    public string TargetLocationLabel { get; }
+    public int EndTimeOfDay { get; }
+    public string LastLocationName { get; set; }
+    public Point LastPlayerTile { get; set; }
+    public Point LastWaypointTile { get; set; } = Point.Zero;
+    public PathFindController? LastAssignedController { get; set; }
+    public bool HintShownForLocation { get; set; }
+}
 
 internal sealed class PendingWalkTogether
 {
