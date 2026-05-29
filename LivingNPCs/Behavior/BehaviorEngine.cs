@@ -1384,6 +1384,36 @@ internal sealed class BehaviorEngine
                 continue;
             }
 
+            if (escort.WaitingInNextLocation)
+            {
+                if (npc.currentLocation != Game1.currentLocation)
+                {
+                    string npcLocation = BehaviorMemory.NormalizeCommitmentLocation(npc.currentLocation?.Name ?? string.Empty, string.Empty);
+                    if (string.Equals(npcLocation, escort.WaitingLocationName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    escort.WaitingInNextLocation = false;
+                    escort.WaitingLocationName = string.Empty;
+                    escort.WaitingSourceLocationName = string.Empty;
+                }
+                else
+                {
+                    escort.WaitingInNextLocation = false;
+                    escort.WaitingLocationName = string.Empty;
+                    escort.WaitingSourceLocationName = string.Empty;
+                    escort.LastLocationName = Game1.currentLocation.Name;
+                    escort.HintShownForLocation = false;
+                    escort.LastWaypointTile = Point.Zero;
+                    escort.LastAssignedController = null;
+                    if (!this.IsEscortTargetReached(Game1.currentLocation, escort.TargetLocation))
+                    {
+                        npc.showTextAboveHead(this.BuildEscortCaughtUpGreeting(escort));
+                    }
+                }
+            }
+
             if (npc.currentLocation != Game1.currentLocation)
             {
                 if (!this.TryMoveNpcNearPlayerForEscort(npc, Game1.currentLocation, out _))
@@ -1436,24 +1466,44 @@ internal sealed class BehaviorEngine
                 npc.Halt();
             }
 
-            if (this.TryFindEscortWaypointTile(npc, escort, out Point waypointTile, out string nextLocation)
-                && Vector2.Distance(npc.Tile, new Vector2(waypointTile.X, waypointTile.Y)) > 1.5f)
+            if (this.TryFindEscortWaypointTile(npc, escort, out Point waypointTile, out string nextLocation))
             {
-                if (escort.LastWaypointTile != waypointTile || npc.controller == null)
+                float distanceToWaypoint = Vector2.Distance(npc.Tile, new Vector2(waypointTile.X, waypointTile.Y));
+                if (distanceToWaypoint > 1.5f)
                 {
-                    npc.controller = new PathFindController(
-                        npc,
-                        Game1.currentLocation,
-                        waypointTile,
-                        this.GetDirectionTowardPlayerFromTile(waypointTile)
-                    );
-                    escort.LastWaypointTile = waypointTile;
-                    escort.LastAssignedController = npc.controller;
+                    if (escort.LastWaypointTile != waypointTile || npc.controller == null)
+                    {
+                        npc.controller = new PathFindController(
+                            npc,
+                            Game1.currentLocation,
+                            waypointTile,
+                            this.GetDirectionTowardPlayerFromTile(waypointTile)
+                        );
+                        escort.LastWaypointTile = waypointTile;
+                        escort.LastAssignedController = npc.controller;
+                    }
+
+                    if (!escort.HintShownForLocation)
+                    {
+                        npc.showTextAboveHead(this.BuildEscortDirectionHint(nextLocation));
+                        escort.HintShownForLocation = true;
+                    }
+
+                    continue;
+                }
+
+                npc.controller = null;
+                npc.Halt();
+                this.TryFacePlayer(npc);
+                if (this.IsPlayerCloseEnoughToFollowEscort(npc, waypointTile)
+                    && this.TryAdvanceEscortNpcToNextLocation(npc, escort, nextLocation))
+                {
+                    continue;
                 }
 
                 if (!escort.HintShownForLocation)
                 {
-                    npc.showTextAboveHead(this.BuildEscortDirectionHint(nextLocation));
+                    npc.showTextAboveHead(this.BuildEscortExitWaitHint(nextLocation));
                     escort.HintShownForLocation = true;
                 }
 
@@ -1494,6 +1544,72 @@ internal sealed class BehaviorEngine
         return true;
     }
 
+    private bool IsPlayerCloseEnoughToFollowEscort(NPC npc, Point waypointTile)
+    {
+        var waypoint = new Vector2(waypointTile.X, waypointTile.Y);
+        return Vector2.Distance(Game1.player.Tile, npc.Tile) <= 3f
+            || Vector2.Distance(Game1.player.Tile, waypoint) <= 3.5f;
+    }
+
+    private bool TryAdvanceEscortNpcToNextLocation(NPC npc, PendingEscortToLocation escort, string nextLocation)
+    {
+        GameLocation? source = npc.currentLocation;
+        GameLocation? destination = this.ResolveEscortLocation(nextLocation);
+        if (source == null || destination == null)
+        {
+            return false;
+        }
+
+        string sourceName = BehaviorMemory.NormalizeCommitmentLocation(source.Name, source.Name);
+        string destinationName = BehaviorMemory.NormalizeCommitmentLocation(destination.Name, destination.Name);
+        if (string.IsNullOrWhiteSpace(destinationName))
+        {
+            return false;
+        }
+
+        if (!this.TryReadWarpDestinationTile(source, nextLocation, out Point targetTile)
+            && !this.TryFindReverseWarpEntryTile(destination, sourceName, npc, out targetTile))
+        {
+            targetTile = this.GetLocationCenterTile(destination);
+        }
+
+        if (!this.IsSafeDestinationTile(destination, targetTile, npc)
+            && !this.TryFindOpenTileNear(destination, targetTile, npc, out targetTile)
+            && !this.TryFindOpenTileNear(destination, this.GetLocationCenterTile(destination), npc, out targetTile))
+        {
+            return false;
+        }
+
+        try
+        {
+            npc.controller = null;
+            npc.Halt();
+            source.characters.Remove(npc);
+            if (!destination.characters.Contains(npc))
+            {
+                destination.characters.Add(npc);
+            }
+
+            npc.currentLocation = destination;
+            npc.Position = new Vector2(targetTile.X * Game1.tileSize, targetTile.Y * Game1.tileSize);
+            npc.faceDirection(2);
+
+            escort.WaitingInNextLocation = true;
+            escort.WaitingLocationName = destinationName;
+            escort.WaitingSourceLocationName = sourceName;
+            escort.LastLocationName = destination.Name;
+            escort.LastWaypointTile = Point.Zero;
+            escort.LastAssignedController = null;
+            escort.HintShownForLocation = false;
+            return true;
+        }
+        catch (Exception ex)
+        {
+            this.monitor.Log($"Could not advance {npc.Name} during LivingNPCs escort: {ex.Message}", LogLevel.Warn);
+            return false;
+        }
+    }
+
     private bool TryFindEscortWaypointTile(NPC npc, PendingEscortToLocation escort, out Point waypointTile, out string nextLocation)
     {
         waypointTile = Point.Zero;
@@ -1510,6 +1626,88 @@ internal sealed class BehaviorEngine
         }
 
         return false;
+    }
+
+    private GameLocation? ResolveEscortLocation(string locationName)
+    {
+        try
+        {
+            return BehaviorMemory.NormalizeCommitmentLocation(locationName, locationName) == "Farm"
+                ? Game1.getFarm()
+                : Game1.getLocationFromName(locationName);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private bool TryReadWarpDestinationTile(GameLocation sourceLocation, string targetLocation, out Point targetTile)
+    {
+        foreach (var warp in sourceLocation.warps.Where(warp => string.Equals(
+            BehaviorMemory.NormalizeCommitmentLocation(GetWarpTargetName(warp), string.Empty),
+            targetLocation,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            if (TryReadWarpTargetTile(warp, out targetTile))
+            {
+                return true;
+            }
+        }
+
+        targetTile = Point.Zero;
+        return false;
+    }
+
+    private static bool TryReadWarpTargetTile(object warp, out Point targetTile)
+    {
+        bool hasX = TryReadNumericMember(warp, "TargetX", out int x)
+            || TryReadNumericMember(warp, "targetX", out x);
+        bool hasY = TryReadNumericMember(warp, "TargetY", out int y)
+            || TryReadNumericMember(warp, "targetY", out y);
+
+        if (hasX && hasY)
+        {
+            targetTile = new Point(x, y);
+            return true;
+        }
+
+        targetTile = Point.Zero;
+        return false;
+    }
+
+    private bool TryFindReverseWarpEntryTile(GameLocation destination, string sourceLocationName, NPC npc, out Point targetTile)
+    {
+        foreach (var warp in destination.warps.Where(warp => string.Equals(
+            BehaviorMemory.NormalizeCommitmentLocation(GetWarpTargetName(warp), string.Empty),
+            sourceLocationName,
+            StringComparison.OrdinalIgnoreCase)))
+        {
+            foreach (var candidate in this.GetTilesAround(new Point(warp.X, warp.Y), 4))
+            {
+                if (this.IsSafeDestinationTile(destination, candidate, npc))
+                {
+                    targetTile = candidate;
+                    return true;
+                }
+            }
+        }
+
+        targetTile = Point.Zero;
+        return false;
+    }
+
+    private Point GetLocationCenterTile(GameLocation location)
+    {
+        try
+        {
+            var layer = location.map.Layers[0];
+            return new Point(layer.LayerWidth / 2, layer.LayerHeight / 2);
+        }
+        catch
+        {
+            return new Point(10, 10);
+        }
     }
 
     private bool TryGetNextEscortLocation(GameLocation currentLocation, string targetLocation, out string nextLocation)
@@ -1767,7 +1965,7 @@ internal sealed class BehaviorEngine
 
     private string BuildEscortCaughtUpGreeting(PendingEscortToLocation escort)
     {
-        return $"我跟上了，我们继续去{escort.TargetLocationLabel}。";
+        return $"好，你跟上来了，我们继续去{escort.TargetLocationLabel}。";
     }
 
     private string BuildEscortDirectionHint(string nextLocation)
@@ -1782,6 +1980,21 @@ internal sealed class BehaviorEngine
             "Forest" => "从这边去森林。",
             "Farm" => "从这边回农场。",
             _ => "从这边走。"
+        };
+    }
+
+    private string BuildEscortExitWaitHint(string nextLocation)
+    {
+        return nextLocation switch
+        {
+            "Mine" => "我先去矿井入口那边等你。",
+            "Mountain" => "我先到山路那边等你。",
+            "Town" => "我先到镇上那边等你。",
+            "BusStop" => "我先到巴士站那边等你。",
+            "Beach" => "我先到海边那边等你。",
+            "Forest" => "我先到森林那边等你。",
+            "Farm" => "我先到农场那边等你。",
+            _ => "我先过去等你。"
         };
     }
 
@@ -4497,6 +4710,9 @@ internal sealed class PendingEscortToLocation
     public Point LastWaypointTile { get; set; } = Point.Zero;
     public PathFindController? LastAssignedController { get; set; }
     public bool HintShownForLocation { get; set; }
+    public bool WaitingInNextLocation { get; set; }
+    public string WaitingLocationName { get; set; } = string.Empty;
+    public string WaitingSourceLocationName { get; set; } = string.Empty;
 }
 
 internal sealed class PendingWalkTogether
