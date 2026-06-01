@@ -24,7 +24,18 @@ internal abstract class Llm
         };
         Llm instance = CreateInstance(llmType, paramsDict);
         Instance = instance;
-        DialogueBuilder.Instance.LlmDisabled = CheckConnection(apiKey, modelName).Result;
+        try
+        {
+            DialogueBuilder.Instance.LlmDisabled = CheckConnection(apiKey, modelName).GetAwaiter().GetResult();
+        }
+        catch (Exception ex)
+        {
+            ModEntry.SMonitor.Log(
+                $"Model connection check failed unexpectedly for {modelName ?? "(default)"} using provider {Instance.GetType().Name}: {ex.Message}",
+                StardewModdingAPI.LogLevel.Error
+            );
+            DialogueBuilder.Instance.LlmDisabled = true;
+        }
     }
 
     private static async Task<bool> CheckConnection(string apiKey, string modelName)
@@ -32,8 +43,21 @@ internal abstract class Llm
         if (ModEntry.Config.SuppressConnectionCheck)
             return false;
 
-        var response = await Instance.RunInference("You are performing LLM connection testing", "Please just ", "respond with ", "'Connection successful'", allowRetry: false);
-        if (!response.IsSuccess || response.Text.Length < 5)
+        LlmResponse response;
+        try
+        {
+            response = await Instance.RunInference("You are performing LLM connection testing", "Please just ", "respond with ", "'Connection successful'", allowRetry: false);
+        }
+        catch (Exception ex)
+        {
+            ModEntry.SMonitor.Log(
+                $"Failed to connect to the model {modelName ?? "(default)"} using provider {Instance.GetType().Name}: {ex.Message}",
+                StardewModdingAPI.LogLevel.Error
+            );
+            return true;
+        }
+
+        if (!response.IsSuccess || string.IsNullOrWhiteSpace(response.Text) || response.Text.Length < 5)
         {
             ModEntry.SMonitor.Log($"Failed to connect to the model {modelName} using provider {Instance.GetType().Name}. ", StardewModdingAPI.LogLevel.Error);
             if (!string.IsNullOrWhiteSpace(response.ErrorMessage))

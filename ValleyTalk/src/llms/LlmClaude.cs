@@ -128,9 +128,13 @@ internal class LlmClaude : Llm, IGetModelNames
             }
             catch (Exception ex)
             {
-                if (ex.InnerException is HttpRequestException)
+                if (ex.InnerException is HttpRequestException httpException && httpException.StatusCode.HasValue)
                 {
-                    apiResponseCode = (int)((HttpRequestException)ex.InnerException).StatusCode;
+                    apiResponseCode = (int)httpException.StatusCode.Value;
+                }
+                else if (ex is HttpRequestException directHttpException && directHttpException.StatusCode.HasValue)
+                {
+                    apiResponseCode = (int)directHttpException.StatusCode.Value;
                 }
                 Log.Debug(ex.Message);
                 Log.Debug("Retrying...");
