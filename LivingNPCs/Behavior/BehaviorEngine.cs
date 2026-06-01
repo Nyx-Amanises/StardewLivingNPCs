@@ -37,6 +37,7 @@ internal sealed class BehaviorEngine
     private readonly List<PendingEscortToLocation> pendingEscorts = new();
     private readonly List<PendingDelayedTravelAction> pendingDelayedTravelActions = new();
     private readonly Dictionary<string, int> lastConversationMemoryTimeByNpc = new();
+    private readonly Dictionary<string, double> nextSpeechBubbleTimeByNpc = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource cancellationTokenSource = new();
 
     public BehaviorEngine(IModHelper helper, IMonitor monitor, ModConfig config)
@@ -128,6 +129,7 @@ internal sealed class BehaviorEngine
         this.pendingEscorts.Clear();
         this.pendingDelayedTravelActions.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
+        this.nextSpeechBubbleTimeByNpc.Clear();
         this.TryPropagateCommunityImpressions();
         this.SyncHelpRequestsToQuestLog();
     }
@@ -142,6 +144,7 @@ internal sealed class BehaviorEngine
         this.pendingEscorts.Clear();
         this.pendingDelayedTravelActions.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
+        this.nextSpeechBubbleTimeByNpc.Clear();
     }
 
     private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
@@ -395,6 +398,24 @@ internal sealed class BehaviorEngine
         ));
     }
 
+    private bool TryShowNpcSpeechBubble(NPC npc, string text, int cooldownMilliseconds)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        double now = Game1.currentGameTime?.TotalGameTime.TotalMilliseconds ?? 0d;
+        if (this.nextSpeechBubbleTimeByNpc.TryGetValue(npc.Name, out double nextAllowed) && now < nextAllowed)
+        {
+            return false;
+        }
+
+        npc.showTextAboveHead(text);
+        this.nextSpeechBubbleTimeByNpc[npc.Name] = now + Math.Max(1000, cooldownMilliseconds);
+        return true;
+    }
+
     private void TryShowPendingAmbientRemarks()
     {
         if (!this.config.EnableDialogueFollowUps
@@ -505,10 +526,11 @@ internal sealed class BehaviorEngine
     {
         if (actions.Count > 0)
         {
+            this.TryCorrectTravelActionTargetFromVisibleDialogue(npc, actions, playerText, npcResponse);
             return actions;
         }
 
-        if (!this.TryBuildFallbackTravelAction(playerText, npcResponse, out ValleyTalkWorldActionRequest? action)
+        if (!this.TryBuildFallbackTravelAction(npc, playerText, npcResponse, out ValleyTalkWorldActionRequest? action)
             && !this.TryBuildImmediateTravelActionFromRecentCommitment(npc, npcResponse, out action)
             || action == null)
         {
@@ -524,6 +546,44 @@ internal sealed class BehaviorEngine
         }
 
         return new[] { action };
+    }
+
+    private void TryCorrectTravelActionTargetFromVisibleDialogue(
+        NPC npc,
+        IReadOnlyList<ValleyTalkWorldActionRequest> actions,
+        string playerText,
+        string npcResponse
+    )
+    {
+        var action = actions.FirstOrDefault(candidate => candidate.Type is "walk_together" or "escort_to_location");
+        if (action == null)
+        {
+            return;
+        }
+
+        string visibleTarget = this.TryDetectTravelTargetLocation(npc, $"{playerText} {npcResponse}");
+        if (string.IsNullOrWhiteSpace(visibleTarget))
+        {
+            return;
+        }
+
+        string currentTarget = BehaviorMemory.NormalizeCommitmentLocation(action.TargetLocation, string.Empty);
+        bool currentTargetIsGeneric = string.IsNullOrWhiteSpace(currentTarget)
+            || currentTarget is "Town" or "BusStop";
+        if (!currentTargetIsGeneric && string.Equals(currentTarget, visibleTarget, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        if (currentTargetIsGeneric || visibleTarget == this.ResolveNpcHomeEscortTarget(npc))
+        {
+            action.Type = "escort_to_location";
+            action.TargetLocation = visibleTarget;
+            action.Reason = this.BuildWorldActionReason(
+                action.Reason,
+                $"visible dialogue clarified the destination as {visibleTarget}"
+            );
+        }
     }
 
     private bool TryBuildImmediateTravelActionFromRecentCommitment(
@@ -564,6 +624,7 @@ internal sealed class BehaviorEngine
     }
 
     private bool TryBuildFallbackTravelAction(
+        NPC npc,
         string playerText,
         string npcResponse,
         out ValleyTalkWorldActionRequest? action
@@ -577,7 +638,7 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        string targetLocation = this.TryDetectTravelTargetLocation(combinedText);
+        string targetLocation = this.TryDetectTravelTargetLocation(npc, combinedText);
         action = new ValleyTalkWorldActionRequest
         {
             Type = string.IsNullOrWhiteSpace(targetLocation) ? "walk_together" : "escort_to_location",
@@ -673,8 +734,36 @@ internal sealed class BehaviorEngine
             : 0;
     }
 
-    private string TryDetectTravelTargetLocation(string text)
+    private string TryDetectTravelTargetLocation(NPC npc, string text)
     {
+        string npcHome = this.ResolveNpcHomeEscortTarget(npc);
+        if (!string.IsNullOrWhiteSpace(npcHome)
+            && this.ContainsAny(
+                text,
+                "你家",
+                "你的家",
+                "你家里",
+                "你住的地方",
+                "你住处",
+                "你房间",
+                "她家",
+                "他家",
+                "家里看看",
+                "回你家",
+                "去家里",
+                "your home",
+                "your house",
+                "where you live"
+            ))
+        {
+            return npcHome;
+        }
+
+        if (this.ContainsAny(text, "潘妮家", "潘妮的家", "潘妮家里", "帕姆家", "帕姆的家", "拖车", "penny's home", "penny's house", "trailer"))
+        {
+            return "Trailer";
+        }
+
         if (this.ContainsAny(text, "农场", "farm"))
         {
             return "Farm";
@@ -731,6 +820,28 @@ internal sealed class BehaviorEngine
         }
 
         return string.Empty;
+    }
+
+    private string ResolveNpcHomeEscortTarget(NPC npc)
+    {
+        return npc.Name switch
+        {
+            "Penny" or "Pam" => "Trailer",
+            "Alex" or "Evelyn" or "George" => "JoshHouse",
+            "Haley" or "Emily" => "HaleyHouse",
+            "Sam" or "Jodi" or "Vincent" or "Kent" => "SamHouse",
+            "Abigail" or "Pierre" or "Caroline" => "SeedShop",
+            "Sebastian" or "Maru" or "Demetrius" or "Robin" => "ScienceHouse",
+            "Leah" => "LeahHouse",
+            "Marnie" or "Jas" or "Shane" => "AnimalShop",
+            "Elliott" => "ElliottHouse",
+            "Gus" => "Saloon",
+            "Clint" => "Blacksmith",
+            "Willy" => "FishShop",
+            "Wizard" => "WizardHouse",
+            "Linus" => "Tent",
+            _ => string.Empty
+        };
     }
 
     private bool ContainsAny(string text, params string[] fragments)
@@ -1742,7 +1853,9 @@ internal sealed class BehaviorEngine
             "Mine" => "Mountain",
             "Beach" => "Town",
             "Forest" => targetLocation == "Farm" && this.HasWarpToLocation(currentLocation, "Farm") ? "Farm" : "Town",
-            "Saloon" or "SeedShop" or "ArchaeologyHouse" or "Hospital" => "Town",
+            "Saloon" or "SeedShop" or "ArchaeologyHouse" or "Hospital" or "Trailer"
+                or "JoshHouse" or "HaleyHouse" or "SamHouse" or "ScienceHouse" or "LeahHouse"
+                or "AnimalShop" or "ElliottHouse" or "Blacksmith" or "FishShop" or "WizardHouse" or "Tent" => "Town",
             _ => string.Empty
         };
         return !string.IsNullOrWhiteSpace(nextLocation);
@@ -1757,7 +1870,9 @@ internal sealed class BehaviorEngine
             "Mountain" or "Mine" => "Mountain",
             "Beach" => "Beach",
             "Forest" => "Forest",
-            "Saloon" or "SeedShop" or "ArchaeologyHouse" or "Hospital" => targetLocation,
+            "Saloon" or "SeedShop" or "ArchaeologyHouse" or "Hospital" or "Trailer"
+                or "JoshHouse" or "HaleyHouse" or "SamHouse" or "ScienceHouse" or "LeahHouse"
+                or "AnimalShop" or "ElliottHouse" or "Blacksmith" or "FishShop" or "WizardHouse" or "Tent" => targetLocation,
             _ => string.Empty
         };
     }
@@ -1767,7 +1882,9 @@ internal sealed class BehaviorEngine
         return targetLocation switch
         {
             "Mine" => "Mountain",
-            "Saloon" or "SeedShop" or "ArchaeologyHouse" or "Hospital" => "Town",
+            "Saloon" or "SeedShop" or "ArchaeologyHouse" or "Hospital" or "Trailer"
+                or "JoshHouse" or "HaleyHouse" or "SamHouse" or "ScienceHouse" or "LeahHouse"
+                or "AnimalShop" or "ElliottHouse" or "Blacksmith" or "FishShop" or "WizardHouse" or "Tent" => "Town",
             _ => targetLocation
         };
     }
@@ -1850,7 +1967,9 @@ internal sealed class BehaviorEngine
     private bool IsKnownEscortTarget(string targetLocation)
     {
         return targetLocation is "Farm" or "Town" or "Mountain" or "Mine" or "Beach" or "Forest" or "BusStop"
-            or "Saloon" or "SeedShop" or "ArchaeologyHouse" or "Hospital";
+            or "Saloon" or "SeedShop" or "ArchaeologyHouse" or "Hospital" or "Trailer"
+            or "JoshHouse" or "HaleyHouse" or "SamHouse" or "ScienceHouse" or "LeahHouse"
+            or "AnimalShop" or "ElliottHouse" or "Blacksmith" or "FishShop" or "WizardHouse" or "Tent";
     }
 
     private void CompleteEscortToLocation(NPC npc, PendingEscortToLocation escort)
@@ -1959,6 +2078,7 @@ internal sealed class BehaviorEngine
             "Beach" => "我带你往海边走。",
             "ArchaeologyHouse" => "我带你去图书馆。",
             "Farm" => "我跟你去农场看看。",
+            "Trailer" => "我带你去我家那边，跟上我。",
             _ => "我带路，你跟着我。"
         };
     }
@@ -1979,6 +2099,7 @@ internal sealed class BehaviorEngine
             "Beach" => "从这边去海边。",
             "Forest" => "从这边去森林。",
             "Farm" => "从这边回农场。",
+            "Trailer" => "我家就在镇上这边。",
             _ => "从这边走。"
         };
     }
@@ -1994,6 +2115,7 @@ internal sealed class BehaviorEngine
             "Beach" => "我先到海边那边等你。",
             "Forest" => "我先到森林那边等你。",
             "Farm" => "我先到农场那边等你。",
+            "Trailer" => "我先到家门口那边等你。",
             _ => "我先过去等你。"
         };
     }
@@ -2006,6 +2128,7 @@ internal sealed class BehaviorEngine
             "Beach" => "到了，海边就在这里。",
             "ArchaeologyHouse" => "到了，这里就是图书馆。",
             "Farm" => "到了，你的农场就在这里。",
+            "Trailer" => "到了，这里就是我家。",
             _ => $"到了，就是{escort.TargetLocationLabel}。"
         };
     }
@@ -2021,10 +2144,22 @@ internal sealed class BehaviorEngine
             "Beach" => "海边",
             "Forest" => "煤矿森林",
             "BusStop" => "巴士站",
+            "Trailer" => "潘妮和帕姆的家",
             "Saloon" => "星之果实酒吧",
             "SeedShop" => "皮埃尔的杂货店",
             "ArchaeologyHouse" => "博物馆和图书馆",
             "Hospital" => "诊所",
+            "JoshHouse" => "亚历克斯家",
+            "HaleyHouse" => "海莉和艾米丽家",
+            "SamHouse" => "山姆家",
+            "ScienceHouse" => "罗宾家",
+            "LeahHouse" => "莉亚家",
+            "AnimalShop" => "玛妮牧场",
+            "ElliottHouse" => "艾利欧特小屋",
+            "Blacksmith" => "铁匠铺",
+            "FishShop" => "鱼店",
+            "WizardHouse" => "法师塔",
+            "Tent" => "莱纳斯的帐篷",
             _ => targetLocation
         };
     }
@@ -2570,10 +2705,12 @@ internal sealed class BehaviorEngine
             {
                 if (commitment.Status == "Waiting" && !commitment.WaitingGreetingShown)
                 {
-                    npc.showTextAboveHead(this.BuildCommitmentWaitingGreeting(commitment));
-                    commitment.WaitingGreetingShown = true;
-                    commitment.LastMentionedTotalDays = Game1.Date.TotalDays;
-                    commitment.LastMentionedTimeOfDay = Game1.timeOfDay;
+                    if (this.TryShowNpcSpeechBubble(npc, this.BuildCommitmentWaitingGreeting(commitment), 5500))
+                    {
+                        commitment.WaitingGreetingShown = true;
+                        commitment.LastMentionedTotalDays = Game1.Date.TotalDays;
+                        commitment.LastMentionedTimeOfDay = Game1.timeOfDay;
+                    }
                 }
 
                 if (npc.controller == null)
@@ -2630,9 +2767,13 @@ internal sealed class BehaviorEngine
         }
     }
 
-    private void FulfillCommitment(NPC npc, NpcCommitmentFact commitment)
+    private bool FulfillCommitment(NPC npc, NpcCommitmentFact commitment)
     {
-        npc.showTextAboveHead(this.BuildCommitmentArrivalGreeting(commitment));
+        if (!this.TryShowNpcSpeechBubble(npc, this.BuildCommitmentArrivalGreeting(commitment), 5500))
+        {
+            return false;
+        }
+
         commitment.ArrivalGreetingShown = true;
         commitment.Status = "Fulfilled";
         commitment.FulfilledTotalDays = Game1.Date.TotalDays;
@@ -2653,6 +2794,7 @@ internal sealed class BehaviorEngine
             $"the farmer kept a plan with {npc.displayName}: {commitment.Summary}",
             importance: 72
         );
+        return true;
     }
 
     private bool TryMoveNpcToCommitmentRendezvous(NPC npc, NpcCommitmentFact commitment, GameLocation location, bool preferPlayerTile)
