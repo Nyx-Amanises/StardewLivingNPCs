@@ -22,10 +22,10 @@ namespace ValleyTalk
         private int _lastViewportWidth;
         private int _lastViewportHeight;
 
-        private const int TextInsetX = 40;
-        private const int TextInsetTop = 40;
-        private const int TextInsetBottom = 40;
-        private const int PortraitPanelWidth = 388;
+        private const int TextInsetX = 28;
+        private const int TextInsetTop = 32;
+        private const int TextInsetBottom = 32;
+        private const int PortraitPanelWidth = 360;
 
         // Positions
         private Rectangle _menuBounds;

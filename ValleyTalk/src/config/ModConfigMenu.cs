@@ -14,7 +14,6 @@ namespace ValleyTalk
         private static ModEntry _modEntry;
         private static bool _isRefreshingMenu;
         private static bool _refreshQueued;
-        private static bool _profileSelectionApplied;
 
         private static readonly string[] TypedResponseOptions = { "Always", "With Generated", "Never" };
 
@@ -22,8 +21,6 @@ namespace ValleyTalk
         {
             _modEntry = modEntry;
             var Config = ModEntry.Config;
-            Config.EnsureModelProfiles();
-            Config.ApplyModelProfile(Config.ActiveModelProfile);
 
             ModManifest = modEntry.ModManifest;
 
@@ -40,26 +37,10 @@ namespace ValleyTalk
                 reset: () =>
                 {
                     ModEntry.Config = new ModConfig();
-                    ModEntry.Config.EnsureModelProfiles();
                 },
                 save: () =>
                 {
-                    if (!string.IsNullOrWhiteSpace(ModEntry.Config.ModelProfileNameToSave))
-                    {
-                        ModEntry.Config.SaveCurrentAsModelProfile(ModEntry.Config.ModelProfileNameToSave);
-                        ModEntry.Config.ModelProfileNameToSave = string.Empty;
-                    }
-                    else if (_profileSelectionApplied)
-                    {
-                        ModEntry.Config.ApplyModelProfile(ModEntry.Config.ActiveModelProfile);
-                        _profileSelectionApplied = false;
-                        SetLlm();
-                    }
-                    else
-                    {
-                        ModEntry.Config.SaveCurrentToActiveModelProfile();
-                    }
-
+                    SetLlm();
                     modEntry.Helper.WriteConfig(ModEntry.Config);
                 }
             );
@@ -81,135 +62,11 @@ namespace ValleyTalk
                 setValue: value => Config.Debug = value
             );
 #endif
-            ConfigMenu.AddSectionTitle(
-                mod: ModManifest,
-                text: () => Util.GetString("configModelProfilesSection", returnNull: true) ?? "模型配置档案"
-            );
-
-            ConfigMenu.AddTextOption(
-                mod: ModManifest,
-                name: () => Util.GetString("configSaveModelProfile", returnNull: true) ?? "新档案名 / 覆盖档案名",
-                tooltip: () => Util.GetString("configSaveModelProfileTooltip", returnNull: true) ?? "输入档案名后，点击“保存为此档案”会把当前模型设置保存下来；如果同名档案已存在则覆盖。",
-                getValue: () => Config.ModelProfileNameToSave,
-                setValue: value =>
-                {
-                    Config.ModelProfileNameToSave = value?.Trim() ?? string.Empty;
-                },
-                fieldId: "ModelProfileNameToSave"
-            );
-
-            ConfigMenu.AddBoolOption(
-                mod: ModManifest,
-                name: () => Util.GetString("configSaveNamedModelProfile", returnNull: true) ?? "保存为此档案",
-                tooltip: () => Util.GetString("configSaveNamedModelProfileTooltip", returnNull: true) ?? "点右侧方框会立刻把当前模型设置保存到上面填写的档案名，并切换到该档案。",
-                getValue: () => false,
-                setValue: value =>
-                {
-                    if (!value)
-                    {
-                        return;
-                    }
-
-                    if (Config.SaveCurrentAsModelProfile(Config.ModelProfileNameToSave))
-                    {
-                        Config.ModelProfileNameToSave = string.Empty;
-                        _profileSelectionApplied = false;
-                        SetLlm();
-                        PersistConfig(saveActiveProfile: false);
-                        RefreshConfigMenu();
-                    }
-                },
-                fieldId: "SaveNamedModelProfile"
-            );
-
-            ConfigMenu.AddTextOption(
-                mod: ModManifest,
-                name: () => Util.GetString("configActiveModelProfile", returnNull: true) ?? "一键切换模型档案",
-                tooltip: () => Util.GetString("configActiveModelProfileTooltip", returnNull: true) ?? "选择要使用的模型档案。若下方字段没有立刻刷新，点“应用所选档案”即可立即写入 config.json。",
-                getValue: () => Config.ActiveModelProfile,
-                setValue: value =>
-                {
-                    if (string.Equals(value, Config.ActiveModelProfile, StringComparison.InvariantCultureIgnoreCase))
-                    {
-                        return;
-                    }
-
-                    if (Config.ApplyModelProfile(value))
-                    {
-                        _profileSelectionApplied = true;
-                        SetLlm();
-                        PersistConfig(saveActiveProfile: false);
-                        RefreshConfigMenu();
-                    }
-                },
-                allowedValues: Config.ModelProfiles.Select(profile => profile.Name).ToArray(),
-                fieldId: "ActiveModelProfile"
-            );
-
-            ConfigMenu.AddBoolOption(
-                mod: ModManifest,
-                name: () => Util.GetString("configApplySelectedModelProfile", returnNull: true) ?? "应用所选档案",
-                tooltip: () => Util.GetString("configApplySelectedModelProfileTooltip", returnNull: true) ?? "点右侧方框会立刻重新套用当前下拉框选择的模型档案，并写入 config.json。",
-                getValue: () => false,
-                setValue: value =>
-                {
-                    if (!value)
-                    {
-                        return;
-                    }
-
-                    if (Config.ApplyModelProfile(Config.ActiveModelProfile))
-                    {
-                        _profileSelectionApplied = true;
-                        SetLlm();
-                        PersistConfig(saveActiveProfile: false);
-                        RefreshConfigMenu();
-                    }
-                },
-                fieldId: "ApplySelectedModelProfile"
-            );
-
-            ConfigMenu.AddBoolOption(
-                mod: ModManifest,
-                name: () => Util.GetString("configSaveActiveModelProfile", returnNull: true) ?? "保存当前档案",
-                tooltip: () => Util.GetString("configSaveActiveModelProfileTooltip", returnNull: true) ?? "点右侧方框会立刻把当前 Provider、API Key、模型名、Base URL、超时等字段保存到当前档案。",
-                getValue: () => false,
-                setValue: value =>
-                {
-                    if (!value)
-                    {
-                        return;
-                    }
-
-                    Config.SaveCurrentToActiveModelProfile();
-                    _profileSelectionApplied = false;
-                    PersistConfig(saveActiveProfile: false);
-                    RefreshConfigMenu();
-                },
-                fieldId: "SaveActiveModelProfile"
-            );
-
-            ConfigMenu.AddParagraph(
-                mod: ModManifest,
-                text: () => Util.GetString(
-                    "configActiveModelProfileSummary",
-                    new
-                    {
-                        Profile = Config.ActiveModelProfile,
-                        Provider = Config.Provider,
-                        Model = string.IsNullOrWhiteSpace(Config.ModelName) ? "(default)" : Config.ModelName,
-                        Timeout = Config.QueryTimeout
-                    },
-                    returnNull: true
-                ) ?? $"当前档案：{Config.ActiveModelProfile}\nProvider：{Config.Provider}\n模型：{(string.IsNullOrWhiteSpace(Config.ModelName) ? "(default)" : Config.ModelName)}\n超时：{Config.QueryTimeout} 秒"
-            );
-
             // Create a string array of the options in the LlmType enum
             var llmTypes = ModEntry.LlmMap.Keys.ToArray();
             if (!ModEntry.LlmMap.ContainsKey(Config.Provider))
             {
                 Config.Provider = llmTypes.FirstOrDefault() ?? "Mistral";
-                Config.SaveCurrentToActiveModelProfile();
             }
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
@@ -218,12 +75,9 @@ namespace ValleyTalk
                 setValue: value => 
                 {
                     if (value == Config.Provider) return;
-                    if (_profileSelectionApplied) return;
-                    Config.SaveCurrentToActiveModelProfile();
                     Config.ApiKey = "";
                     Config.Provider = value; 
-                    SetLlm();
-                    PersistConfig(saveActiveProfile: false);
+                    PersistConfig();
                     RefreshConfigMenu();
                 },
                 allowedValues: llmTypes,
@@ -241,9 +95,7 @@ namespace ValleyTalk
                     getValue: () => Config.ApiKey,
                     setValue: (value) =>
                     {
-                        if (_profileSelectionApplied) return;
                         Config.ApiKey = value;
-                        SetLlm();
                     },
                     fieldId: "ApiKey"
                 );
@@ -258,9 +110,7 @@ namespace ValleyTalk
                     getValue: () => Config.ModelName,
                     setValue: (value) =>
                     {
-                        if (_profileSelectionApplied) return;
                         Config.ModelName = value;
-                        SetLlm();
                     },
                     fieldId: "ModelName"
                 );
@@ -274,9 +124,7 @@ namespace ValleyTalk
                     getValue: () => Config.ServerAddress,
                     setValue: (value) =>
                     {
-                        if (_profileSelectionApplied) return;
                         Config.ServerAddress = value;
-                        SetLlm();
                     }
                 );
             }
@@ -287,7 +135,6 @@ namespace ValleyTalk
                 getValue: () => Config.QueryTimeout,
                 setValue: (value) =>
                 {
-                    if (_profileSelectionApplied) return;
                     Config.QueryTimeout = value;
                 },
                 min: 5,
@@ -332,7 +179,6 @@ namespace ValleyTalk
                 getValue: () => Config.ApplyTranslation,
                 setValue: (value) =>
                 {
-                    if (_profileSelectionApplied) return;
                     Config.ApplyTranslation = value;
                 }
             );
@@ -418,13 +264,8 @@ namespace ValleyTalk
             };
         }
 
-        private static void PersistConfig(bool saveActiveProfile = true)
+        private static void PersistConfig()
         {
-            if (saveActiveProfile)
-            {
-                ModEntry.Config.SaveCurrentToActiveModelProfile();
-            }
-
             _modEntry.Helper.WriteConfig(ModEntry.Config);
         }
 

@@ -242,12 +242,15 @@ internal static class NativeDialogueTextInputController
 
     private static Rectangle GetInputBounds(DialogueBox dialogueBox)
     {
-        int rightPadding = dialogueBox.characterDialogue?.speaker?.Portrait != null ? 388 : 40;
+        int leftPadding = 16;
+        int topPadding = 64;
+        int rightPadding = dialogueBox.characterDialogue?.speaker?.Portrait != null ? 360 : 28;
+        int bottomPadding = 40;
         return new Rectangle(
-            dialogueBox.x + 16,
-            dialogueBox.y + 92,
-            Math.Max(120, dialogueBox.width - rightPadding - 88),
-            Math.Max(48, dialogueBox.height - 128)
+            dialogueBox.x + leftPadding,
+            dialogueBox.y + topPadding,
+            Math.Max(160, dialogueBox.width - rightPadding - leftPadding - 24),
+            Math.Max(80, dialogueBox.height - topPadding - bottomPadding)
         );
     }
 
