@@ -22,18 +22,8 @@ public class Prompts
         return new Prompts(Context, character);
     }
 
-    static Prompts()
-    {
-        LoadStardewSummary();
-    }
-
-    private static void LoadStardewSummary()
-    {
-        var builder = new GameSummaryBuilder();
-        _stardewSummary = builder.Build();
-    }
-
     static string _stardewSummary;
+    static string _optimizedStardewSummary;
     private string _system;
     public string System { get => _system ??= GetSystemPrompt(); internal set => _system = value; }
     private string _gameConstantContext;
@@ -143,8 +133,18 @@ public class Prompts
         var gameConstantPrompt = new StringBuilder();
         gameConstantPrompt.AppendLine(Util.GetString(Character,"gameContext"));
         gameConstantPrompt.AppendLine($"##{Util.GetString(Character,"gameSummaryHeading")}");
-        gameConstantPrompt.AppendLine(_stardewSummary);
+        gameConstantPrompt.AppendLine(GetStardewSummary());
         return gameConstantPrompt.ToString();
+    }
+
+    private static string GetStardewSummary()
+    {
+        if (ModEntry.Config?.UseOptimizedGameSummaryPrompt == true)
+        {
+            return _optimizedStardewSummary ??= new GameSummaryBuilder(VtConstants.OptimizedGameSummaryPath).Build();
+        }
+
+        return _stardewSummary ??= new GameSummaryBuilder(VtConstants.GameSummaryPath).Build();
     }
 
     private string GetNpcConstantContext()

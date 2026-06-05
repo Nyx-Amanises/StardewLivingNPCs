@@ -24,6 +24,7 @@ namespace ValleyTalk
         public bool GenerateAiForNormalRightClick { get; set; } = false;
         public string TypedResponses { get; set; } = "With Generated";
         public bool AllowLocalContentPackDialogueForAi { get; set; } = true;
+        public bool UseOptimizedGameSummaryPrompt { get; set; } = false;
         public string DisableCharacters
         {
             get => disableCharacters;

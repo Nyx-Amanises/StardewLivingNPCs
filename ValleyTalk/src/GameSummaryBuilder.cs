@@ -12,6 +12,7 @@ namespace ValleyTalk;
 
 internal class GameSummaryBuilder
 {
+    private readonly string _gameSummaryPath;
     private GameSummary _gameSummaryDict;
 
     private GameSummary GameSummaryDict
@@ -20,24 +21,25 @@ internal class GameSummaryBuilder
         {
             if (_gameSummaryDict == null)
             {
-                _gameSummaryDict = Game1.content.LoadLocalized<GameSummary>(VtConstants.GameSummaryPath);
+                _gameSummaryDict = Game1.content.LoadLocalized<GameSummary>(_gameSummaryPath);
             }
             return _gameSummaryDict;
         }
     }
 
-    public GameSummaryBuilder()
+    public GameSummaryBuilder(string gameSummaryPath = null)
     {
+        _gameSummaryPath = gameSummaryPath ?? VtConstants.GameSummaryPath;
         ModEntry.SHelper.Events.Content.AssetRequested += (sender, e) =>
         {
-            if (e.Name.IsEquivalentTo(VtConstants.GameSummaryPath))
+            if (e.Name.IsEquivalentTo(VtConstants.GameSummaryPath) || e.Name.IsEquivalentTo(VtConstants.OptimizedGameSummaryPath))
             {
                 e.LoadFrom(() => new GameSummary(), AssetLoadPriority.High);
             }
         };
         ModEntry.SHelper.Events.Content.AssetsInvalidated += (object sender, AssetsInvalidatedEventArgs e) =>
         {
-            if (e.NamesWithoutLocale.Any(an => an.IsEquivalentTo(VtConstants.GameSummaryPath)))
+            if (e.NamesWithoutLocale.Any(an => an.IsEquivalentTo(VtConstants.GameSummaryPath) || an.IsEquivalentTo(VtConstants.OptimizedGameSummaryPath)))
             {
                 _gameSummaryDict = null;
             }

@@ -1,0 +1,126 @@
+{
+  "Changes": [
+    {
+      "Action": "EditData",
+      "Target": "ValleyTalk/GameSummaryOptimized",
+      "TargetField": [ "Villagers", "Entries" ],
+      "Entries": {
+        "Alesia": {
+          "id": "Alesia",
+          "Name": "Alesia",
+          "Description": "Skilled archer and monster hunter from Castle Village who helps Marlon and the Adventurer's Guild."
+        },
+        "Andy": {
+          "id": "Andy",
+          "Name": "Andy",
+          "Description": "Gruff elderly farmer at Fairhaven Farm; stubborn, traditional, and knowledgeable about farming and foraging."
+        },
+        "Apples": {
+          "id": "Apples",
+          "Name": "Apples",
+          "Description": "Energetic young Junimo living at Aurora Vineyard, which she reshaped into a magical forest home."
+        },
+        "Camilla": {
+          "id": "Camilla",
+          "Name": "Camilla",
+          "Description": "Powerful witch from Castle Village who protects the region and sometimes aids the farmer."
+        },
+        "Claire": {
+          "id": "Claire",
+          "Name": "Claire",
+          "Description": "Shy JojaMart worker who later works at the movie theater; dreams of acting and loves dance."
+        },
+        "Gunther": {
+          "id": "Gunther",
+          "Name": "Gunther",
+          "Description": "Museum and library curator, serious about archaeology, history, and preserving local culture."
+        },
+        "Hank": {
+          "id": "Hank",
+          "Name": "Hank",
+          "Description": "Friendly Grampleton handyman, married to Treyvon and stepfather to Scarlett."
+        },
+        "Henchman": {
+          "id": "Henchman",
+          "Name": "Henchman",
+          "Description": "Goblin in the marshlands who resents losing his job with the witch but can become friendlier."
+        },
+        "Isaac": {
+          "id": "Isaac",
+          "Name": "Isaac",
+          "Description": "Abrasive but highly skilled Adventurer's Guild warrior active in the badlands."
+        },
+        "Jadu": {
+          "id": "Jadu",
+          "Name": "Jadu",
+          "Description": "Aloof desert sentry and adventurer guarding access near Calico Desert."
+        },
+        "Jolyne": {
+          "id": "Jolyne",
+          "Name": "Jolyne",
+          "Description": "Fiery leader of the First Slash, an adventurer group protecting the Fern Islands."
+        },
+        "Lance": {
+          "id": "Lance",
+          "Name": "Lance",
+          "Description": "Adventurer-researcher from Galdora studying magic relics, crops, and monsters around the valley."
+        },
+        "Marlon": {
+          "id": "Marlon",
+          "Name": "Marlon",
+          "Description": "One-eyed leader of the Adventurer's Guild, mentor and weapon supplier for monster hunters."
+        },
+        "Martin": {
+          "id": "Martin",
+          "Name": "Martin",
+          "Description": "Kind shy JojaMart worker, Claire's best friend, searching for his birth parents."
+        },
+        "Morgan": {
+          "id": "Morgan",
+          "Name": "Morgan",
+          "Description": "Young non-binary apprentice assigned to study magic under the Wizard."
+        },
+        "Morris": {
+          "id": "Morris",
+          "Name": "Morris",
+          "Description": "Ambitious Joja manager seeking to expand Joja's influence in the valley."
+        },
+        "Olivia": {
+          "id": "Olivia",
+          "Name": "Olivia",
+          "Description": "Wealthy refined widow from the Gotoro Empire; Victor's mother and a part-time stock trader."
+        },
+        "Peaches": {
+          "id": "Peaches",
+          "Name": "Peaches",
+          "Description": "Cheerful Junimo, close friend of Apples, often helps with magical starfruit friends."
+        },
+        "Scarlett": {
+          "id": "Scarlett",
+          "Name": "Scarlett",
+          "Description": "Warm Grampleton farmhand and Sophia's close friend."
+        },
+        "Sophia": {
+          "id": "Sophia",
+          "Name": "Sophia",
+          "Description": "Young pink-haired owner of Blue Moon Vineyard; anxious, anime/cosplay-loving, and grieving her parents."
+        },
+        "Susan": {
+          "id": "Susan",
+          "Name": "Susan",
+          "Description": "Elderly farmer at Emerald Farm, skilled in farming and crafting and curious about the world."
+        },
+        "Treyvon": {
+          "id": "Treyvon",
+          "Name": "Treyvon",
+          "Description": "Scarlett's father and Hank's husband; runs Treyvon's Essentials in Grampleton."
+        },
+        "Victor": {
+          "id": "Victor",
+          "Name": "Victor",
+          "Description": "Olivia's son, engineering graduate from Pellcar University and apprentice bridge engineer."
+        }
+      }
+    }
+  ]
+}

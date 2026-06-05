@@ -160,6 +160,13 @@ namespace ValleyTalk
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
+                name: () => Util.GetString("configUseOptimizedGameSummaryPrompt", returnNull: true) ?? "启用优化后的世界设定提示词",
+                tooltip: () => Util.GetString("configUseOptimizedGameSummaryPromptTooltip", returnNull: true) ?? "关闭时使用当前完整世界摘要；开启后改用精简世界摘要，便于对比 token 消耗和对白质量。",
+                getValue: () => Config.UseOptimizedGameSummaryPrompt,
+                setValue: (value) =>{ Config.UseOptimizedGameSummaryPrompt = value; }
+            );
+            ConfigMenu.AddBoolOption(
+                mod: ModManifest,
                 name: () => Util.GetString("configGenerateAiForNormalRightClick", returnNull: true) ?? "普通右键也生成 AI 对话",
                 tooltip: () => Util.GetString("configGenerateAiForNormalRightClickTooltip", returnNull: true) ?? "关闭时，普通右键保留原版对白；只有按住设置的热键点击 NPC 才会开启 ValleyTalk AI 聊天。",
                 getValue: () => Config.GenerateAiForNormalRightClick,

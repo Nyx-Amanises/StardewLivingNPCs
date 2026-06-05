@@ -287,6 +287,8 @@
             "configTypedResponsesNever": "{{i18n:configTypedResponsesNever}}",
             "configAllowLocalContentPackDialogueForAi": "{{i18n:configAllowLocalContentPackDialogueForAi}}",
             "configAllowLocalContentPackDialogueForAiTooltip": "{{i18n:configAllowLocalContentPackDialogueForAiTooltip}}",
+            "configUseOptimizedGameSummaryPrompt": "{{i18n:configUseOptimizedGameSummaryPrompt}}",
+            "configUseOptimizedGameSummaryPromptTooltip": "{{i18n:configUseOptimizedGameSummaryPromptTooltip}}",
             "configGenerateAiForNormalRightClick": "{{i18n:configGenerateAiForNormalRightClick}}",
             "configGenerateAiForNormalRightClickTooltip": "{{i18n:configGenerateAiForNormalRightClickTooltip}}",
             "configKeybind": "{{i18n:configKeybind}}",

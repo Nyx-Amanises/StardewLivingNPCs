@@ -305,6 +305,8 @@
   "configTranslationTooltip": "Translate the AI model outputs to the game language (without i18n pack).",
   "configAllowLocalContentPackDialogueForAi": "允许本地内容包对白进入 AI 上下文",
   "configAllowLocalContentPackDialogueForAiTooltip": "本地分支选项：即使内容包没有声明 PermitAiUse，也允许已加载的内容包对白（包括 SVE/RSV）进入 AI 上下文。",
+  "configUseOptimizedGameSummaryPrompt": "Use optimized world-summary prompt",
+  "configUseOptimizedGameSummaryPromptTooltip": "Use the compact optimized world summary instead of the current full GameSummary. Leave disabled to preserve existing prompt behavior.",
   "configGenerateAiForNormalRightClick": "普通右键也生成 AI 对话",
   "configGenerateAiForNormalRightClickTooltip": "关闭时，普通右键保留原版对白；只有按住设置的热键点击 NPC 才会开启 ValleyTalk AI 聊天。",
   "configFrequencyGeneral": "Frequency of general lines",

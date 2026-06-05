@@ -11,6 +11,14 @@
         },
         {
             "Action": "Include",
+            "FromFile": "assets/LocationsOptimized.json"
+        },
+        {
+            "Action": "Include",
+            "FromFile": "assets/GameSummaryOptimized.json"
+        },
+        {
+            "Action": "Include",
             "FromFile": "assets/bio/Sophia.json"
         },
         {

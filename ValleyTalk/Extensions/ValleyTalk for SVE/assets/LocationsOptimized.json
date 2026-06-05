@@ -1,0 +1,47 @@
+{
+  "Changes": [
+    {
+      "Action": "EditData",
+      "Target": "ValleyTalk/GameSummaryOptimized",
+      "TargetField": [ "Locations", "Entries" ],
+      "Entries": {
+        "BlueMoonVineyard": {
+          "id": "BlueMoonVineyard",
+          "Region": "Cindersap Forest",
+          "Name": "Blue Moon Vineyard",
+          "Description": "Sophia's wine vineyard, inherited after her parents died."
+        },
+        "CindersapForest": {
+          "id": "CindersapForest",
+          "Region": "Cindersap Forest",
+          "Name": "Cindersap Forest",
+          "Description": "Forest with Leah's cabin, Marnie's Ranch, Wizard's Tower, Blue Moon Vineyard, Fairhaven Farm, foraging, and the traveling cart."
+        },
+        "FairhavenFarm": {
+          "id": "FairhavenFarm",
+          "Region": "Cindersap Forest",
+          "Name": "Fairhaven Farm",
+          "Description": "Andy's traditional farm in Cindersap Forest."
+        },
+        "AuroraVineyard": {
+          "id": "AuroraVineyard",
+          "Region": "West Cindersap Forest",
+          "Name": "Aurora Vineyard",
+          "Description": "Magical vineyard and forest home of Apples the Junimo."
+        },
+        "Grampleton": {
+          "id": "Grampleton",
+          "Region": "Grampleton",
+          "Name": "Grampleton",
+          "Description": "Neighboring town reached by Shearwater Bridge, linked to Scarlett, Hank, Treyvon, and Andy's family."
+        },
+        "Highlands": {
+          "id": "Highlands",
+          "Region": "Highlands",
+          "Name": "Highlands",
+          "Description": "Mountainous explorable area with Lance, monsters, and late-game challenges."
+        }
+      }
+    }
+  ]
+}

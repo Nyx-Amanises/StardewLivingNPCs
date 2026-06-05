@@ -11,6 +11,10 @@
         },
         {
             "Action": "Include",
+            "FromFile": "assets/GameSummaryOptimized.json"
+        },
+        {
+            "Action": "Include",
             "FromFile": "assets/bio/Abigail.json"
         },
         {
