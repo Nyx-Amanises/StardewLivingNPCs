@@ -380,6 +380,13 @@ public class Character
         long promptBuildMilliseconds = 0;
         long inferenceMilliseconds = 0;
         int promptCharacters = 0;
+        int systemPromptCharacters = 0;
+        int gameConstantContextCharacters = 0;
+        int npcConstantContextCharacters = 0;
+        int corePromptCharacters = 0;
+        int instructionsCharacters = 0;
+        int commandCharacters = 0;
+        int responseStartCharacters = 0;
         int responseCharacters = 0;
         Exception lastException = null;
         LlmResponse result;
@@ -392,7 +399,7 @@ public class Character
             }
 
             ModEntry.SMonitor.Log(
-                $"[ValleyTalk timing] {Name}: {outcome}; total={totalWatch.ElapsedMilliseconds}ms, promptInit={promptInitWatch.ElapsedMilliseconds}ms, promptBuild={promptBuildMilliseconds}ms, model={inferenceMilliseconds}ms, promptChars={promptCharacters}, responseChars={responseCharacters}, attempts={retryCount}, lines={dialogueLines}.",
+                $"[ValleyTalk timing] {Name}: {outcome}; total={totalWatch.ElapsedMilliseconds}ms, promptInit={promptInitWatch.ElapsedMilliseconds}ms, promptBuild={promptBuildMilliseconds}ms, model={inferenceMilliseconds}ms, promptChars={promptCharacters}, promptSections={{system={systemPromptCharacters}, game={gameConstantContextCharacters}, npc={npcConstantContextCharacters}, core={corePromptCharacters}, instructions={instructionsCharacters}, command={commandCharacters}, responseStart={responseStartCharacters}}}, responseChars={responseCharacters}, attempts={retryCount}, lines={dialogueLines}.",
                 StardewModdingAPI.LogLevel.Info
             );
         }
@@ -420,16 +427,28 @@ public class Character
                     string systemPrompt = prompts.System;
                     string gameConstantContext = prompts.GameConstantContext;
                     string npcConstantContext = prompts.NpcConstantContext;
-                    string generatedPrompt = $"{prompts.CorePrompt}{prompts.Instructions}{prompts.Command}";
+                    string corePrompt = prompts.CorePrompt;
+                    string instructions = prompts.Instructions;
+                    string command = prompts.Command;
+                    string generatedPrompt = $"{corePrompt}{instructions}{command}";
                     string responseStart = prompts.ResponseStart;
                     promptBuildWatch.Stop();
 
                     promptBuildMilliseconds += promptBuildWatch.ElapsedMilliseconds;
-                    promptCharacters = systemPrompt.Length
-                        + gameConstantContext.Length
-                        + npcConstantContext.Length
-                        + generatedPrompt.Length
-                        + responseStart.Length;
+                    systemPromptCharacters = systemPrompt.Length;
+                    gameConstantContextCharacters = gameConstantContext.Length;
+                    npcConstantContextCharacters = npcConstantContext.Length;
+                    corePromptCharacters = corePrompt.Length;
+                    instructionsCharacters = instructions.Length;
+                    commandCharacters = command.Length;
+                    responseStartCharacters = responseStart.Length;
+                    promptCharacters = systemPromptCharacters
+                        + gameConstantContextCharacters
+                        + npcConstantContextCharacters
+                        + corePromptCharacters
+                        + instructionsCharacters
+                        + commandCharacters
+                        + responseStartCharacters;
 
                     var inferenceWatch = Stopwatch.StartNew();
                     try

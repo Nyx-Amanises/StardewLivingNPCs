@@ -1213,12 +1213,12 @@ public class Prompts
         instructions.AppendLine(Util.GetString(Character,"instructionsBreaks"));
         instructions.AppendLine(Util.GetString(Character,"instructionsSingleLine"));
         instructions.AppendLine(Util.GetString(Character,"instructionsResponses", new { Name= Name }));
-        instructions.AppendLine(Util.GetString(Character,"instructionsLivingNpcMetadata"));
-        instructions.AppendLine(Util.GetString(Character,"instructionsLivingNpcGiftIds"));
-        instructions.AppendLine(Util.GetString(Character,"instructionsLivingNpcImmediateTravel"));
-        instructions.AppendLine(Util.GetString(Character,"instructionsLivingNpcCommitmentDepth"));
-        instructions.AppendLine(Util.GetString(Character,"instructionsLivingNpcHelpRequests"));
-        instructions.AppendLine(Util.GetString(Character,"instructionsLivingNpcEmotionDepth"));
+        instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcMetadata")));
+        instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcGiftIds")));
+        instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcImmediateTravel")));
+        instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcCommitmentDepth")));
+        instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcHelpRequests")));
+        instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcEmotionDepth")));
         if (!Character.Bio.ExtraPortraits.ContainsKey("!"))
         {
             var extraPortraits = new StringBuilder();
@@ -1233,6 +1233,11 @@ public class Prompts
             instructions.AppendLine(Llm.Instance.ExtraInstructions);
         }
         return instructions.ToString();
+    }
+
+    private static string LivingNpcInstructionKey(string key)
+    {
+        return ModEntry.Config?.UseOptimizedLivingNpcMetadataPrompt == true ? $"{key}Optimized" : key;
     }
 
     private string GetResponseStart()

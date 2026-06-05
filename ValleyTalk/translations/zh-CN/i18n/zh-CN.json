@@ -272,6 +272,8 @@
   "configAllowLocalContentPackDialogueForAiTooltip": "本地 fork 选项：允许已加载的内容包对话（包括 SVE/RSV）作为 AI 上下文使用，即使内容包没有声明 PermitAiUse。",
   "configUseOptimizedGameSummaryPrompt": "启用优化后的世界设定提示词",
   "configUseOptimizedGameSummaryPromptTooltip": "关闭时使用当前完整世界摘要；开启后改用精简世界摘要，便于对比 token 消耗和对白质量。",
+  "configUseOptimizedLivingNpcMetadataPrompt": "启用优化后的 LivingNPCs 元数据说明",
+  "configUseOptimizedLivingNpcMetadataPromptTooltip": "关闭时使用当前完整 LivingNPCs 隐藏元数据说明；开启后改用精简说明，便于对比 token 消耗和行为稳定性。",
   "dateTimeEarlyMorningNormal.maleNpc": "${\u8FD9\u662F\u519C\u6C11\u8D77\u5E8A\u6D3B\u52A8\u7684\u6B63\u5E38\u65F6\u95F4\u3002^\u8FD9\u662F\u519C\u5987\u5E73\u65F6\u8D77\u5E8A\u6D3B\u52A8\u7684\u65F6\u95F4\u3002}$",
   "dateTimeEarlyMorningNormal.femaleNpc": "${\u8FD9\u662F\u519C\u592B\u8D77\u5E8A\u6D3B\u52A8\u7684\u6B63\u5E38\u65F6\u95F4\u3002^\u8FD9\u662F\u519C\u6C11\u8D77\u5E8A\u6D3B\u52A8\u7684\u6B63\u5E38\u65F6\u95F4\u3002}$",
   "dateTimeNewThisYear.maleNpc": "${\u8FD9\u4F4D\u519C\u6C11\u4ECA\u5E74\u662F\u7B2C\u4E00\u6B21\u6765\u4F69\u5229\u5EB7\u9547\u3002^\u8FD9\u4F4D\u519C\u6C11\u4ECA\u5E74\u662F\u7B2C\u4E00\u6B21\u6765\u9E48\u9E55\u9547\u3002}$",
