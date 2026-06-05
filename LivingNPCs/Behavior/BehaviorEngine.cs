@@ -21,6 +21,7 @@ internal sealed class BehaviorEngine
     private const string SaveDataKey = "behavior-memory";
     private const string HelpRequestQuestMarkerKey = "LivingNPCs/HelpRequestQuest";
     private const string HelpRequestQuestIdKey = "LivingNPCs/HelpRequestQuestId";
+    private const string HelpRequestRewardMailKeyPrefix = "LivingNPCs.HelpRequestReward.";
     private const int SmallGiftMinFriendshipHearts = 2;
     private const int SmallGiftMinFamiliarity = 15;
     private const int MeaningfulGiftMinFriendshipHearts = 5;
@@ -66,6 +67,7 @@ internal sealed class BehaviorEngine
         this.helper.Events.GameLoop.TimeChanged += this.OnTimeChanged;
         this.helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
         this.helper.Events.Input.ButtonPressed += this.OnButtonPressed;
+        this.helper.Events.Content.AssetRequested += this.OnAssetRequested;
         this.RegisterConsoleCommands();
     }
 
@@ -99,6 +101,7 @@ internal sealed class BehaviorEngine
         this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
         this.lastConversationMemoryTimeByNpc.Clear();
         this.valleyTalkBridge.TryInitialize();
+        this.helper.GameContent.InvalidateCache("Data/mail");
         this.SyncHelpRequestsToQuestLog();
 
         if (this.config.Debug)
@@ -138,7 +141,29 @@ internal sealed class BehaviorEngine
         this.lastConversationMemoryTimeByNpc.Clear();
         this.nextSpeechBubbleTimeByNpc.Clear();
         this.TryPropagateCommunityImpressions();
+        this.helper.GameContent.InvalidateCache("Data/mail");
         this.SyncHelpRequestsToQuestLog();
+    }
+
+    private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
+    {
+        if (!e.Name.IsEquivalentTo("Data/mail"))
+        {
+            return;
+        }
+
+        e.Edit(asset =>
+        {
+            var data = asset.AsDictionary<string, string>().Data;
+            foreach (var request in this.GetHelpRequestRewardMailRequests())
+            {
+                string key = this.GetHelpRequestRewardMailKey(request);
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    data[key] = this.BuildHelpRequestRewardMailText(request);
+                }
+            }
+        });
     }
 
     private void OnReturnedToTitle(object? sender, ReturnedToTitleEventArgs e)
@@ -1239,6 +1264,11 @@ internal sealed class BehaviorEngine
             );
         }
 
+        if (!request.RewardMoneyGranted)
+        {
+            this.GrantOrScheduleHelpRequestMoneyReward(npc, request);
+        }
+
         if (!request.RewardGiftGiven)
         {
             this.TryGiveHelpRequestRewardGift(npc, request);
@@ -1293,6 +1323,110 @@ internal sealed class BehaviorEngine
 
         this.ShowFeedbackAfterDialogue($"LivingNPCs：{npc.displayName} 又送给你了 {gift.DisplayName} 作为谢礼。");
         return true;
+    }
+
+    private void GrantOrScheduleHelpRequestMoneyReward(NPC npc, NpcHelpRequestFact request)
+    {
+        if (Game1.player == null)
+        {
+            return;
+        }
+
+        int amount = System.Math.Clamp(request.RewardMoney <= 0 ? 200 : request.RewardMoney, 200, 10000);
+        request.RewardMoney = amount;
+        if (this.ShouldSendHelpRequestMoneyByMail(request))
+        {
+            string mailKey = this.GetHelpRequestRewardMailKey(request);
+            request.RewardMoneyByMail = true;
+            request.RewardMoneyMailKey = mailKey;
+            request.RewardMoneyMailTotalDays = Game1.Date.TotalDays + 1;
+            request.RewardMoneyGranted = true;
+
+            if (!Game1.player.mailForTomorrow.Contains(mailKey) && !Game1.player.mailReceived.Contains(mailKey))
+            {
+                Game1.player.mailForTomorrow.Add(mailKey);
+            }
+
+            this.helper.GameContent.InvalidateCache("Data/mail");
+            this.memory.RecordNpcWorldAction(
+                npc,
+                "ScheduledHelpRequestMoneyReward",
+                $"the help request system scheduled a {amount}g mail reward for tomorrow: {request.Summary}",
+                this.config.MaxMemoryEntriesPerNpc
+            );
+            this.ShowFeedbackAfterDialogue($"LivingNPCs：系统将在明天通过信件发放 {amount}g 求助奖励。");
+            return;
+        }
+
+        Game1.player.Money += amount;
+        request.RewardMoneyByMail = false;
+        request.RewardMoneyMailKey = string.Empty;
+        request.RewardMoneyMailTotalDays = -1;
+        request.RewardMoneyGranted = true;
+        this.memory.RecordNpcWorldAction(
+            npc,
+            "GrantedHelpRequestMoneyReward",
+            $"the help request system granted a {amount}g reward: {request.Summary}",
+            this.config.MaxMemoryEntriesPerNpc
+        );
+        this.ShowFeedbackAfterDialogue($"LivingNPCs：系统发放求助奖励 {amount}g。");
+    }
+
+    private bool ShouldSendHelpRequestMoneyByMail(NpcHelpRequestFact request)
+    {
+        int chance = request.RewardMoney switch
+        {
+            >= 5000 => 60,
+            >= 1000 => 45,
+            _ => 25
+        };
+
+        unchecked
+        {
+            string seed = $"{request.QuestLogId}:{request.Summary}:{request.RequestedItemId}:{request.RewardMoney}";
+            int hash = 17;
+            foreach (char character in seed)
+            {
+                hash = (hash * 31) + character;
+            }
+
+            return System.Math.Abs(hash % 100) < chance;
+        }
+    }
+
+    private IEnumerable<NpcHelpRequestFact> GetHelpRequestRewardMailRequests()
+    {
+        return this.memory.GetTrackedStates()
+            .SelectMany(state => state.HelpRequests)
+            .Where(request => request.RewardMoneyByMail
+                && request.RewardMoney > 0
+                && !string.IsNullOrWhiteSpace(request.RewardMoneyMailKey));
+    }
+
+    private string GetHelpRequestRewardMailKey(NpcHelpRequestFact request)
+    {
+        if (!string.IsNullOrWhiteSpace(request.RewardMoneyMailKey))
+        {
+            return request.RewardMoneyMailKey.Trim();
+        }
+
+        string id = string.IsNullOrWhiteSpace(request.QuestLogId)
+            ? SanitizeFileName($"{request.NpcDisplayName}-{request.Summary}")
+            : request.QuestLogId.Trim();
+        return $"{HelpRequestRewardMailKeyPrefix}{id}";
+    }
+
+    private string BuildHelpRequestRewardMailText(NpcHelpRequestFact request)
+    {
+        int amount = System.Math.Clamp(request.RewardMoney <= 0 ? 200 : request.RewardMoney, 200, 10000);
+        string npcName = string.IsNullOrWhiteSpace(request.NpcDisplayName)
+            ? "镇上的居民"
+            : request.NpcDisplayName.Trim();
+        string itemLabel = string.IsNullOrWhiteSpace(request.RequestedItemLabel)
+            ? "那件东西"
+            : request.RequestedItemLabel.Trim();
+
+        return $"@，谢谢你之前帮{npcName}带来{itemLabel}。这份谢礼由镇上的互助基金代为发放，请收下。^^    - LivingNPCs%money {amount} %%[#]互助谢礼";
     }
 
     private bool TryGiveMoney(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
@@ -3708,6 +3842,7 @@ internal sealed class BehaviorEngine
 
             var request = state.HelpRequests.FirstOrDefault(candidate =>
                 candidate.Status == "Fulfilled"
+                && candidate.SpecialFollowUpPlanned
                 && candidate.FollowUpEligibleTotalDays <= Game1.Date.TotalDays
                 && candidate.FollowUpShownTotalDays < 0
                 && candidate.FulfilledTotalDays >= Game1.Date.TotalDays - 7
@@ -3754,6 +3889,20 @@ internal sealed class BehaviorEngine
 
     private string BuildHelpRequestFollowUp(NpcHelpRequestFact request)
     {
+        if (request.RewardMoneyByMail)
+        {
+            return request.Type == "question_request"
+                ? "上次那件事我后来又想了想。信应该也送到了吧？"
+                : "上次你带来的东西很有用，信应该也送到了吧？";
+        }
+
+        if (request.RewardMoney >= 1000)
+        {
+            return request.Type == "question_request"
+                ? "上次那件事真的帮我理清了不少。"
+                : "上次你带来的东西，真的解了我的急。";
+        }
+
         return request.Type switch
         {
             "question_request" => "上次你说的那些，我后来还想了想。",
@@ -4078,9 +4227,21 @@ internal sealed class BehaviorEngine
                 lines.Add($"- LivingNPCs already granted the configured friendship reward (+{request.RewardFriendship}).");
             }
 
+            if (request.Status == "Fulfilled" && request.RewardMoneyGranted)
+            {
+                lines.Add(request.RewardMoneyByMail
+                    ? $"- LivingNPCs scheduled a system mail reward of {request.RewardMoney}g for tomorrow."
+                    : $"- LivingNPCs already granted a system money reward of {request.RewardMoney}g.");
+            }
+
             if (request.RewardGiftGiven)
             {
                 lines.Add("- LivingNPCs also gave the farmer a small item reward; mention it only if it feels natural.");
+            }
+
+            if (request.SpecialFollowUpPlanned)
+            {
+                lines.Add("- A later in-person follow-up may happen; do not promise it as guaranteed.");
             }
         }
 

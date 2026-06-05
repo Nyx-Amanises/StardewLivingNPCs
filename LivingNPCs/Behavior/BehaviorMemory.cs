@@ -4436,6 +4436,7 @@ internal sealed class BehaviorMemory
                 candidate,
                 normalizedType
             ),
+            RewardMoney = DetermineHelpRequestMoneyReward(steps),
             TimesReinforced = 1
         });
         state.LastHelpRequestTotalDays = Game1.Date.TotalDays;
@@ -4706,7 +4707,10 @@ internal sealed class BehaviorMemory
             16,
             $"the farmer helped with a personal request: {request.Summary}"
         );
-        request.FollowUpEligibleTotalDays = Game1.Date.TotalDays + 1;
+        request.SpecialFollowUpPlanned = ShouldPlanHelpRequestFollowUp(state, request);
+        request.FollowUpEligibleTotalDays = request.SpecialFollowUpPlanned
+            ? Game1.Date.TotalDays + 1
+            : -1;
         this.StoreHelpRequestSharedExperience(state, request);
         state.LastInteraction = $"the farmer helped with a personal request: {request.Summary}";
         state.LastUpdatedTotalDays = Game1.Date.TotalDays;
@@ -4771,6 +4775,109 @@ internal sealed class BehaviorMemory
             }
 
             return 50 + System.Math.Abs(hash % 51);
+        }
+    }
+
+    internal static int DetermineHelpRequestMoneyReward(IReadOnlyList<NpcHelpRequestStepFact> steps)
+    {
+        int total = 0;
+        foreach (var step in steps.Where(step => step.Type == "item_request"))
+        {
+            total += DetermineHelpRequestItemMoneyReward(step.RequestedItemId);
+        }
+
+        return System.Math.Clamp(total <= 0 ? 200 : total, 200, 10000);
+    }
+
+    private static int DetermineHelpRequestItemMoneyReward(string itemId)
+    {
+        string normalized = NormalizeQualifiedObjectId(itemId);
+        if (normalized is "(O)16" or "(O)20")
+        {
+            return 200;
+        }
+
+        if (normalized == "(O)74")
+        {
+            return 10000;
+        }
+
+        int basePrice = TryGetObjectBasePrice(normalized);
+        if (basePrice <= 80)
+        {
+            return 200;
+        }
+
+        int reward = basePrice * 5;
+        reward = ((reward + 24) / 25) * 25;
+        return System.Math.Clamp(reward, 200, 10000);
+    }
+
+    private static int TryGetObjectBasePrice(string itemId)
+    {
+        string objectId = NormalizeQualifiedObjectId(itemId);
+        if (objectId.StartsWith("(O)", System.StringComparison.OrdinalIgnoreCase))
+        {
+            objectId = objectId.Substring(3);
+        }
+
+        if (Game1.objectData != null && Game1.objectData.TryGetValue(objectId, out var data))
+        {
+            return data.Price;
+        }
+
+        try
+        {
+            var item = ItemRegistry.Create<StardewValley.Object>(NormalizeQualifiedObjectId(itemId));
+            return item.salePrice(false);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
+    private static string NormalizeQualifiedObjectId(string itemId)
+    {
+        string value = itemId?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        if (value.StartsWith("(O)", System.StringComparison.OrdinalIgnoreCase))
+        {
+            return $"(O){value.Substring(3)}";
+        }
+
+        return $"(O){value}";
+    }
+
+    private static bool ShouldPlanHelpRequestFollowUp(LivingNpcState state, NpcHelpRequestFact request)
+    {
+        int chance = request.FollowUpPotential switch
+        {
+            "deeper_relationship" => 75,
+            "shared_activity" => 65,
+            "new_commitment" => 60,
+            _ => 45
+        };
+
+        if (request.RewardMoney >= 1000)
+        {
+            chance += 10;
+        }
+
+        unchecked
+        {
+            string seed = $"{state.NpcName}:{request.Summary}:{request.RequestedItemId}:{request.FulfilledTotalDays}:{request.FollowUpPotential}";
+            int hash = 17;
+            foreach (char character in seed)
+            {
+                hash = (hash * 31) + character;
+            }
+
+            return System.Math.Abs(hash % 100) < System.Math.Clamp(chance, 0, 90);
         }
     }
 
@@ -5917,7 +6024,13 @@ internal sealed class NpcHelpRequestFact
     public int FollowUpShownTimeOfDay { get; set; }
     public int RewardFriendship { get; set; }
     public bool RewardGranted { get; set; }
+    public int RewardMoney { get; set; }
+    public bool RewardMoneyGranted { get; set; }
+    public bool RewardMoneyByMail { get; set; }
+    public string RewardMoneyMailKey { get; set; } = string.Empty;
+    public int RewardMoneyMailTotalDays { get; set; } = -1;
     public bool RewardGiftGiven { get; set; }
+    public bool SpecialFollowUpPlanned { get; set; }
     public int TimesReinforced { get; set; }
 
     public string PromptLabel =>
@@ -6847,6 +6960,23 @@ internal sealed class LivingNpcState
                 request.RewardFriendship = request.RewardFriendship <= 0
                     ? 50
                     : System.Math.Clamp(request.RewardFriendship, 0, 100);
+                request.RewardMoney = request.RewardMoney <= 0
+                    ? BehaviorMemory.DetermineHelpRequestMoneyReward(request.Steps)
+                    : System.Math.Clamp(request.RewardMoney, 200, 10000);
+                request.RewardMoneyMailKey = request.RewardMoneyMailKey?.Trim() ?? string.Empty;
+                if (!request.RewardMoneyByMail)
+                {
+                    request.RewardMoneyMailTotalDays = -1;
+                }
+
+                if (!request.SpecialFollowUpPlanned
+                    && request.Status == "Fulfilled"
+                    && request.FollowUpEligibleTotalDays > 0
+                    && request.FollowUpShownTotalDays < 0)
+                {
+                    request.SpecialFollowUpPlanned = true;
+                }
+
                 return request;
             })
             .Where(request => request.Type != "none")
@@ -7270,7 +7400,13 @@ internal sealed class LivingNpcState
                     FollowUpShownTimeOfDay = request.FollowUpShownTimeOfDay,
                     RewardFriendship = request.RewardFriendship,
                     RewardGranted = request.RewardGranted,
+                    RewardMoney = request.RewardMoney,
+                    RewardMoneyGranted = request.RewardMoneyGranted,
+                    RewardMoneyByMail = request.RewardMoneyByMail,
+                    RewardMoneyMailKey = request.RewardMoneyMailKey,
+                    RewardMoneyMailTotalDays = request.RewardMoneyMailTotalDays,
                     RewardGiftGiven = request.RewardGiftGiven,
+                    SpecialFollowUpPlanned = request.SpecialFollowUpPlanned,
                     TimesReinforced = request.TimesReinforced
                 })
                 .ToList(),
