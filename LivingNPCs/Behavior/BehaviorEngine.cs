@@ -22,6 +22,7 @@ internal sealed class BehaviorEngine
     private const string HelpRequestQuestMarkerKey = "LivingNPCs/HelpRequestQuest";
     private const string HelpRequestQuestIdKey = "LivingNPCs/HelpRequestQuestId";
     private const string HelpRequestRewardMailKeyPrefix = "LivingNPCs.HelpRequestReward.";
+    private const string GiftMailKeyPrefix = "LivingNPCs.GiftMail.";
     private const int SmallGiftMinFriendshipHearts = 2;
     private const int SmallGiftMinFamiliarity = 15;
     private const int MeaningfulGiftMinFriendshipHearts = 5;
@@ -101,6 +102,7 @@ internal sealed class BehaviorEngine
         this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
         this.lastConversationMemoryTimeByNpc.Clear();
         this.valleyTalkBridge.TryInitialize();
+        this.TryQueueDueGiftMailsForTomorrow();
         this.helper.GameContent.InvalidateCache("Data/mail");
         this.SyncHelpRequestsToQuestLog();
 
@@ -141,6 +143,7 @@ internal sealed class BehaviorEngine
         this.lastConversationMemoryTimeByNpc.Clear();
         this.nextSpeechBubbleTimeByNpc.Clear();
         this.TryPropagateCommunityImpressions();
+        this.TryQueueDueGiftMailsForTomorrow();
         this.helper.GameContent.InvalidateCache("Data/mail");
         this.SyncHelpRequestsToQuestLog();
     }
@@ -161,6 +164,15 @@ internal sealed class BehaviorEngine
                 if (!string.IsNullOrWhiteSpace(key))
                 {
                     data[key] = this.BuildHelpRequestRewardMailText(request);
+                }
+            }
+
+            foreach (var mail in this.GetGiftMailRequests())
+            {
+                string key = this.GetGiftMailKey(mail);
+                if (!string.IsNullOrWhiteSpace(key))
+                {
+                    data[key] = this.BuildGiftMailText(mail);
                 }
             }
         });
@@ -1188,10 +1200,33 @@ internal sealed class BehaviorEngine
         }
 
         SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
+        string motive = this.DetermineGiftMotive(action, selection, GiftTier.Small);
         if (!Game1.player.addItemToInventoryBool(gift))
         {
-            reason = "player inventory is full";
-            return false;
+            string giftReason = this.BuildWorldActionReason(
+                action.Reason,
+                this.BuildGiftSelectionReason(
+                    $"they tried to give the farmer {gift.DisplayName} after an AI conversation, but the farmer's inventory was full",
+                    selection
+                )
+            );
+            if (!this.ScheduleGiftMail(npc, state, selection, "inventory_full", giftReason, dueInDays: 1))
+            {
+                reason = "player inventory is full";
+                return false;
+            }
+
+            state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
+            this.ClearGiftOpportunities(state);
+            this.memory.RecordNpcWorldAction(
+                npc,
+                "ScheduledSmallGiftMail",
+                giftReason,
+                this.config.MaxMemoryEntriesPerNpc
+            );
+            this.MarkStateAfterWorldAction(state, "they mailed the farmer a small gift after the farmer's inventory was full");
+            this.ShowFeedbackAfterDialogue($"LivingNPCs：你的背包满了，{npc.displayName} 会把 {gift.DisplayName} 明天寄给你。");
+            return true;
         }
 
         state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
@@ -1217,7 +1252,7 @@ internal sealed class BehaviorEngine
             );
         }
 
-        this.ShowFeedbackAfterDialogue($"LivingNPCs：{npc.displayName} 送给你了 {gift.DisplayName}。");
+        this.ShowFeedbackAfterDialogue(this.BuildGiftHudMessage(npc, gift.DisplayName, motive));
         return true;
     }
 
@@ -1297,7 +1332,27 @@ internal sealed class BehaviorEngine
         SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
         if (!Game1.player.addItemToInventoryBool(gift))
         {
-            return false;
+            string giftReason = this.BuildGiftSelectionReason(
+                $"they tried to give the farmer {gift.DisplayName} after a fulfilled personal help request, but the farmer's inventory was full",
+                selection
+            );
+            if (!this.ScheduleGiftMail(npc, state, selection, "inventory_full", giftReason, dueInDays: 1))
+            {
+                return false;
+            }
+
+            request.RewardGiftGiven = true;
+            state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
+            this.ClearGiftOpportunities(state);
+            this.memory.RecordNpcWorldAction(
+                npc,
+                "ScheduledHelpRequestRewardGiftMail",
+                giftReason,
+                this.config.MaxMemoryEntriesPerNpc
+            );
+            this.MarkStateAfterWorldAction(state, "they mailed the farmer a help request reward gift after the farmer's inventory was full");
+            this.ShowFeedbackAfterDialogue($"LivingNPCs：你的背包满了，{npc.displayName} 会把 {gift.DisplayName} 明天寄给你作为谢礼。");
+            return true;
         }
 
         request.RewardGiftGiven = true;
@@ -1321,7 +1376,7 @@ internal sealed class BehaviorEngine
             );
         }
 
-        this.ShowFeedbackAfterDialogue($"LivingNPCs：{npc.displayName} 又送给你了 {gift.DisplayName} 作为谢礼。");
+        this.ShowFeedbackAfterDialogue(this.BuildGiftHudMessage(npc, gift.DisplayName, "thanks"));
         return true;
     }
 
@@ -1429,6 +1484,90 @@ internal sealed class BehaviorEngine
         return $"@，谢谢你之前帮{npcName}带来{itemLabel}。这份谢礼由镇上的互助基金代为发放，请收下。^^    - LivingNPCs%money {amount} %%[#]互助谢礼";
     }
 
+    private IEnumerable<NpcGiftMailFact> GetGiftMailRequests()
+    {
+        return this.memory.GetTrackedStates()
+            .SelectMany(state => state.GiftMails ?? new List<NpcGiftMailFact>())
+            .Where(mail => !string.IsNullOrWhiteSpace(mail.MailKey)
+                && !string.IsNullOrWhiteSpace(mail.ItemId)
+                && !string.IsNullOrWhiteSpace(mail.ItemLabel));
+    }
+
+    private string GetGiftMailKey(NpcGiftMailFact mail)
+    {
+        return string.IsNullOrWhiteSpace(mail.MailKey)
+            ? $"{GiftMailKeyPrefix}{System.Guid.NewGuid():N}"
+            : mail.MailKey.Trim();
+    }
+
+    private string BuildGiftMailText(NpcGiftMailFact mail)
+    {
+        string npcName = string.IsNullOrWhiteSpace(mail.NpcDisplayName)
+            ? "镇上的居民"
+            : mail.NpcDisplayName.Trim();
+        string itemLabel = string.IsNullOrWhiteSpace(mail.ItemLabel)
+            ? "这件小东西"
+            : mail.ItemLabel.Trim();
+        string sourceGift = string.IsNullOrWhiteSpace(mail.SourceGiftName)
+            ? "你送来的礼物"
+            : mail.SourceGiftName.Trim();
+        string body = mail.Motive switch
+        {
+            "reciprocal" => $"@，那天你送我的{sourceGift}，我一直记着。这个{itemLabel}算是一点回礼，希望你会喜欢。",
+            "inventory_full" => $"@，刚才想把{itemLabel}交给你，不过你的背包好像满了。我把它放进信里寄过来了，记得收下。",
+            "meaningful" => $"@，有些话当面反而不好说清楚。这个{itemLabel}想送给你，希望它能把我的心意带到。",
+            "thanks" => $"@，谢谢你之前帮的忙。这个{itemLabel}是我的一点谢意，请收下。",
+            "preference" => $"@，我记得你似乎会喜欢这样的东西，所以把{itemLabel}寄给你。希望它来得正好。",
+            _ => $"@，今天想起你，觉得这个{itemLabel}也许会派上用场。请收下吧。"
+        };
+        string title = mail.Motive switch
+        {
+            "reciprocal" => $"{npcName}的回礼",
+            "inventory_full" => $"{npcName}寄来的礼物",
+            "meaningful" => $"{npcName}的心意",
+            "thanks" => $"{npcName}的谢礼",
+            _ => $"{npcName}的礼物"
+        };
+        string itemId = GetMailObjectId(mail.ItemId);
+        return $"{body}^^    - {npcName}%item object {itemId} 1 %%[#]{title}";
+    }
+
+    private static string GetMailObjectId(string itemId)
+    {
+        string trimmed = itemId.Trim();
+        if (trimmed.StartsWith("(O)", StringComparison.OrdinalIgnoreCase))
+        {
+            trimmed = trimmed[3..];
+        }
+
+        return trimmed;
+    }
+
+    private void TryQueueDueGiftMailsForTomorrow()
+    {
+        if (!Context.IsWorldReady || Game1.player == null)
+        {
+            return;
+        }
+
+        foreach (var state in this.memory.GetTrackedStates())
+        {
+            foreach (var mail in state.GiftMails.Where(mail =>
+                         !mail.QueuedForDelivery
+                         && mail.DueTotalDays <= Game1.Date.TotalDays + 1))
+            {
+                string key = this.GetGiftMailKey(mail);
+                mail.MailKey = key;
+                if (!Game1.player.mailForTomorrow.Contains(key) && !Game1.player.mailReceived.Contains(key))
+                {
+                    Game1.player.mailForTomorrow.Add(key);
+                }
+
+                mail.QueuedForDelivery = true;
+            }
+        }
+    }
+
     private bool TryGiveMoney(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
     {
         reason = string.Empty;
@@ -1515,10 +1654,33 @@ internal sealed class BehaviorEngine
         }
 
         SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
+        string motive = this.DetermineGiftMotive(action, selection, GiftTier.Meaningful);
         if (!Game1.player.addItemToInventoryBool(gift))
         {
-            reason = "player inventory is full";
-            return false;
+            string giftReason = this.BuildWorldActionReason(
+                action.Reason,
+                this.BuildGiftSelectionReason(
+                    $"they tried to give the farmer a meaningful {gift.DisplayName}, but the farmer's inventory was full",
+                    selection
+                )
+            );
+            if (!this.ScheduleGiftMail(npc, state, selection, "inventory_full", giftReason, dueInDays: 1))
+            {
+                reason = "player inventory is full";
+                return false;
+            }
+
+            state.LastAiMeaningfulGiftTotalDays = Game1.Date.TotalDays;
+            this.ClearGiftOpportunities(state);
+            this.memory.RecordNpcWorldAction(
+                npc,
+                "ScheduledMeaningfulGiftMail",
+                giftReason,
+                this.config.MaxMemoryEntriesPerNpc
+            );
+            this.MarkStateAfterWorldAction(state, "they mailed the farmer a meaningful gift after the farmer's inventory was full");
+            this.ShowFeedbackAfterDialogue($"LivingNPCs：你的背包满了，{npc.displayName} 会把 {gift.DisplayName} 明天寄给你。");
+            return true;
         }
 
         state.LastAiMeaningfulGiftTotalDays = Game1.Date.TotalDays;
@@ -1544,7 +1706,7 @@ internal sealed class BehaviorEngine
             );
         }
 
-        this.ShowFeedbackAfterDialogue($"LivingNPCs：{npc.displayName} 送给你了 {gift.DisplayName}。");
+        this.ShowFeedbackAfterDialogue(this.BuildGiftHudMessage(npc, gift.DisplayName, motive));
         return true;
     }
 
@@ -2792,6 +2954,98 @@ internal sealed class BehaviorEngine
         state.PendingReciprocalGiftReason = string.Empty;
     }
 
+    private bool HasPendingGiftMail(LivingNpcState state, string motive)
+    {
+        return state.GiftMails.Any(mail =>
+            mail.DueTotalDays >= Game1.Date.TotalDays
+            && string.Equals(mail.Motive, motive, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private bool ScheduleGiftMail(
+        NPC npc,
+        LivingNpcState state,
+        GiftSelection selection,
+        string motive,
+        string reason,
+        int dueInDays,
+        string sourceGiftName = ""
+    )
+    {
+        if (Game1.player == null)
+        {
+            return false;
+        }
+
+        state.GiftMails ??= new List<NpcGiftMailFact>();
+        string itemLabel = selection.DebugName;
+        try
+        {
+            SObject preview = ItemRegistry.Create<SObject>(selection.ItemId);
+            itemLabel = string.IsNullOrWhiteSpace(preview.DisplayName) ? itemLabel : preview.DisplayName;
+        }
+        catch
+        {
+            // Keep the selector's debug name if the item preview cannot be created yet.
+        }
+
+        var mail = new NpcGiftMailFact
+        {
+            MailKey = $"{GiftMailKeyPrefix}{SanitizeFileName(npc.Name)}.{Game1.Date.TotalDays}.{Game1.timeOfDay}.{this.random.Next(100000):D5}",
+            NpcDisplayName = npc.displayName,
+            ItemId = selection.ItemId,
+            ItemLabel = itemLabel,
+            Motive = motive,
+            Reason = reason,
+            SourceGiftName = sourceGiftName,
+            Tier = selection.Tier == GiftTier.Meaningful ? "meaningful" : "small",
+            CreatedTotalDays = Game1.Date.TotalDays,
+            CreatedTimeOfDay = Game1.timeOfDay,
+            DueTotalDays = Game1.Date.TotalDays + System.Math.Max(1, dueInDays)
+        };
+        state.GiftMails.Add(mail);
+        this.TryQueueDueGiftMailsForTomorrow();
+        this.helper.GameContent.InvalidateCache("Data/mail");
+        return true;
+    }
+
+    private string DetermineGiftMotive(ValleyTalkWorldActionRequest action, GiftSelection selection, GiftTier tier, string fallback = "daily")
+    {
+        string reason = action.Reason ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(selection.MatchedPlayerPreference))
+        {
+            return "preference";
+        }
+
+        if (this.ContainsAny(reason, "recently gave", "return gift", "reciprocal", "回礼"))
+        {
+            return "reciprocal";
+        }
+
+        if (this.ContainsAny(reason, "thank", "thanks", "谢礼", "感谢", "help request"))
+        {
+            return "thanks";
+        }
+
+        if (tier == GiftTier.Meaningful)
+        {
+            return "meaningful";
+        }
+
+        return fallback;
+    }
+
+    private string BuildGiftHudMessage(NPC npc, string itemLabel, string motive)
+    {
+        return motive switch
+        {
+            "preference" => $"LivingNPCs：{npc.displayName} 记得你的喜好，送给你了 {itemLabel}。",
+            "reciprocal" => $"LivingNPCs：{npc.displayName} 回送给你了 {itemLabel}。",
+            "thanks" => $"LivingNPCs：{npc.displayName} 送给你了 {itemLabel} 作为谢礼。",
+            "meaningful" => $"LivingNPCs：{npc.displayName} 送给你了一份用心的礼物：{itemLabel}。",
+            _ => $"LivingNPCs：{npc.displayName} 送给你了 {itemLabel}。"
+        };
+    }
+
     private string BuildWorldActionReason(string requestedReason, string fallback)
     {
         return string.IsNullOrWhiteSpace(requestedReason)
@@ -4028,7 +4282,9 @@ internal sealed class BehaviorEngine
             || !this.config.AllowAiSmallGifts
             || !this.IsEligibleForSmallGift(npc, state)
             || state.HighestUnresolvedConflictSeverity >= 30
-            || gift.TasteScore is 4 or 6)
+            || gift.TasteScore is 4 or 6
+            || this.HasPendingGiftMail(state, "reciprocal")
+            || state.PendingReciprocalGiftDueTotalDays >= Game1.Date.TotalDays)
         {
             return;
         }
@@ -4059,6 +4315,28 @@ internal sealed class BehaviorEngine
         if (delayDays == 0 && this.HasAiGiftToday(state))
         {
             delayDays = 1;
+        }
+
+        if (delayDays > 0)
+        {
+            GiftSelection selection = this.giftSelector.Choose(npc, state, gift.ItemName, gift.TastePromptLabel);
+            string mailReason = this.BuildGiftSelectionReason(
+                $"they planned a delayed return gift because the farmer recently gave {npc.displayName} {gift.ItemName}, a {gift.TastePromptLabel}",
+                selection
+            );
+            if (this.ScheduleGiftMail(npc, state, selection, "reciprocal", mailReason, delayDays, gift.ItemName))
+            {
+                state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
+                this.ClearGiftOpportunities(state);
+                this.memory.RecordNpcWorldAction(
+                    npc,
+                    "ScheduledReciprocalGiftMail",
+                    mailReason,
+                    this.config.MaxMemoryEntriesPerNpc
+                );
+            }
+
+            return;
         }
 
         state.PendingReciprocalGiftDueTotalDays = Game1.Date.TotalDays + delayDays;

@@ -6058,6 +6058,22 @@ internal sealed class NpcHelpRequestFact
     }
 }
 
+internal sealed class NpcGiftMailFact
+{
+    public string MailKey { get; set; } = string.Empty;
+    public string NpcDisplayName { get; set; } = string.Empty;
+    public string ItemId { get; set; } = string.Empty;
+    public string ItemLabel { get; set; } = string.Empty;
+    public string Motive { get; set; } = "daily";
+    public string Reason { get; set; } = string.Empty;
+    public string SourceGiftName { get; set; } = string.Empty;
+    public string Tier { get; set; } = "small";
+    public int CreatedTotalDays { get; set; } = -1;
+    public int CreatedTimeOfDay { get; set; }
+    public int DueTotalDays { get; set; } = -1;
+    public bool QueuedForDelivery { get; set; }
+}
+
 internal sealed class NpcHelpRequestStepFact
 {
     public string Type { get; set; } = "item_request";
@@ -6293,6 +6309,7 @@ internal sealed class LivingNpcState
     public int PendingReciprocalGiftDueTotalDays { get; set; } = -1;
     public string PendingReciprocalGiftSourceGiftName { get; set; } = string.Empty;
     public string PendingReciprocalGiftReason { get; set; } = string.Empty;
+    public List<NpcGiftMailFact> GiftMails { get; set; } = new();
     public int LastAiFarmHelpTotalDays { get; set; } = -1;
     public int LastAiWalkTogetherTotalDays { get; set; } = -1;
     public int LastHelpRequestTotalDays { get; set; } = -1;
@@ -7174,6 +7191,43 @@ internal sealed class LivingNpcState
             this.PendingReciprocalGiftSourceGiftName = string.Empty;
             this.PendingReciprocalGiftReason = string.Empty;
         }
+
+        this.GiftMails ??= new List<NpcGiftMailFact>();
+        this.GiftMails = this.GiftMails
+            .Where(mail => mail != null
+                && !string.IsNullOrWhiteSpace(mail.ItemId)
+                && !string.IsNullOrWhiteSpace(mail.ItemLabel))
+            .Select(mail =>
+            {
+                mail.MailKey = string.IsNullOrWhiteSpace(mail.MailKey)
+                    ? System.Guid.NewGuid().ToString("N")
+                    : mail.MailKey.Trim();
+                mail.NpcDisplayName = mail.NpcDisplayName?.Trim() ?? string.Empty;
+                mail.ItemId = mail.ItemId?.Trim() ?? string.Empty;
+                mail.ItemLabel = mail.ItemLabel?.Trim() ?? string.Empty;
+                mail.Motive = mail.Motive switch
+                {
+                    "reciprocal" => "reciprocal",
+                    "inventory_full" => "inventory_full",
+                    "meaningful" => "meaningful",
+                    "thanks" => "thanks",
+                    "preference" => "preference",
+                    _ => "daily"
+                };
+                mail.Reason = mail.Reason?.Trim() ?? string.Empty;
+                mail.SourceGiftName = mail.SourceGiftName?.Trim() ?? string.Empty;
+                mail.Tier = mail.Tier == "meaningful" ? "meaningful" : "small";
+                mail.DueTotalDays = mail.DueTotalDays < 0
+                    ? Game1.Date.TotalDays + 1
+                    : mail.DueTotalDays;
+                return mail;
+            })
+            .OrderBy(mail => mail.QueuedForDelivery)
+            .ThenBy(mail => mail.DueTotalDays)
+            .ThenByDescending(mail => mail.CreatedTotalDays)
+            .ThenByDescending(mail => mail.CreatedTimeOfDay)
+            .Take(12)
+            .ToList();
     }
 
     public LivingNpcState Clone()
@@ -7408,6 +7462,23 @@ internal sealed class LivingNpcState
                     RewardGiftGiven = request.RewardGiftGiven,
                     SpecialFollowUpPlanned = request.SpecialFollowUpPlanned,
                     TimesReinforced = request.TimesReinforced
+                })
+                .ToList(),
+            GiftMails = this.GiftMails
+                .Select(mail => new NpcGiftMailFact
+                {
+                    MailKey = mail.MailKey,
+                    NpcDisplayName = mail.NpcDisplayName,
+                    ItemId = mail.ItemId,
+                    ItemLabel = mail.ItemLabel,
+                    Motive = mail.Motive,
+                    Reason = mail.Reason,
+                    SourceGiftName = mail.SourceGiftName,
+                    Tier = mail.Tier,
+                    CreatedTotalDays = mail.CreatedTotalDays,
+                    CreatedTimeOfDay = mail.CreatedTimeOfDay,
+                    DueTotalDays = mail.DueTotalDays,
+                    QueuedForDelivery = mail.QueuedForDelivery
                 })
                 .ToList(),
             Conflicts = this.Conflicts

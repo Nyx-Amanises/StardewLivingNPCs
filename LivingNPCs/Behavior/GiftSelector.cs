@@ -170,6 +170,54 @@ internal sealed class GiftSelector
         ["Zayne"] = ["adventurous", "practical"]
     };
 
+    private static readonly Dictionary<string, string[]> ExplicitNpcPreferredItemIds = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["Abigail"] = ["(O)66", "(O)80", "(O)82", "(O)223"],
+        ["Alex"] = ["(O)216", "(O)240", "(O)395"],
+        ["Caroline"] = ["(O)18", "(O)22", "(O)402", "(O)597"],
+        ["Clint"] = ["(O)86", "(O)82", "(O)80", "(O)395"],
+        ["Demetrius"] = ["(O)404", "(O)414", "(O)395"],
+        ["Elliott"] = ["(O)395", "(O)402", "(O)591", "(O)597"],
+        ["Emily"] = ["(O)66", "(O)72", "(O)595", "(O)402"],
+        ["Evelyn"] = ["(O)591", "(O)595", "(O)223", "(O)221"],
+        ["Gus"] = ["(O)216", "(O)220", "(O)223", "(O)395"],
+        ["Haley"] = ["(O)421", "(O)221", "(O)402", "(O)591"],
+        ["Harvey"] = ["(O)395", "(O)216", "(O)597"],
+        ["Jas"] = ["(O)223", "(O)221", "(O)398", "(O)402"],
+        ["Jodi"] = ["(O)220", "(O)240", "(O)216"],
+        ["Kent"] = ["(O)395", "(O)408", "(O)216"],
+        ["Leah"] = ["(O)406", "(O)404", "(O)402", "(O)595"],
+        ["Linus"] = ["(O)16", "(O)20", "(O)22", "(O)404", "(O)412"],
+        ["Marnie"] = ["(O)240", "(O)608", "(O)216"],
+        ["Maru"] = ["(O)80", "(O)86", "(O)395"],
+        ["Pam"] = ["(O)395", "(O)216", "(O)410"],
+        ["Penny"] = ["(O)22", "(O)18", "(O)223", "(O)591", "(O)597"],
+        ["Pierre"] = ["(O)395", "(O)216", "(O)408"],
+        ["Robin"] = ["(O)395", "(O)216", "(O)20"],
+        ["Sam"] = ["(O)223", "(O)395", "(O)398"],
+        ["Sandy"] = ["(O)402", "(O)418", "(O)221", "(O)595"],
+        ["Sebastian"] = ["(O)395", "(O)84", "(O)80"],
+        ["Shane"] = ["(O)216", "(O)395", "(O)410"],
+        ["Vincent"] = ["(O)223", "(O)398", "(O)221"],
+        ["Willy"] = ["(O)408", "(O)412", "(O)414"],
+        ["Wizard"] = ["(O)82", "(O)66", "(O)86", "(O)414"],
+
+        ["Andy"] = ["(O)20", "(O)408", "(O)240"],
+        ["Claire"] = ["(O)395", "(O)223", "(O)402"],
+        ["Lance"] = ["(O)82", "(O)414", "(O)240"],
+        ["Magnus"] = ["(O)82", "(O)86", "(O)414"],
+        ["Morgan"] = ["(O)80", "(O)84", "(O)597"],
+        ["Olivia"] = ["(O)221", "(O)220", "(O)72"],
+        ["Sophia"] = ["(O)221", "(O)402", "(O)593"],
+        ["Victor"] = ["(O)80", "(O)395", "(O)216"],
+
+        ["June"] = ["(O)402", "(O)591", "(O)597"],
+        ["Flor"] = ["(O)223", "(O)597", "(O)395"],
+        ["Maddie"] = ["(O)223", "(O)398", "(O)221"],
+        ["Blair"] = ["(O)221", "(O)402", "(O)72"],
+        ["Daia"] = ["(O)421", "(O)595", "(O)402"]
+    };
+
     private readonly Random random;
 
     public GiftSelector(Random random)
@@ -304,13 +352,14 @@ internal sealed class GiftSelector
         string season = Game1.season.ToString().ToLowerInvariant();
         var disposition = NpcDisposition.For(npc);
         var npcTags = this.BuildNpcTags(npc, disposition);
+        var npcPreferredItemIds = BuildNpcPreferredItemIds(npc);
         var topicTags = BuildConversationTags(playerText, npcResponse);
         var memoryTags = BuildMemoryTags(state);
         var playerPreferences = BuildPlayerPreferenceSignals(state);
 
         var scored = pool
             .Where(candidate => string.IsNullOrWhiteSpace(candidate.Season) || candidate.Season == season)
-            .Select(candidate => new ScoredGift(candidate, Score(candidate, tier, npcTags, topicTags, memoryTags, playerPreferences, state)))
+            .Select(candidate => new ScoredGift(candidate, Score(candidate, tier, npcTags, npcPreferredItemIds, topicTags, memoryTags, playerPreferences, state)))
             .ToList();
 
         int bestScore = scored.Max(candidate => candidate.Score);
@@ -324,9 +373,16 @@ internal sealed class GiftSelector
             chosen.Candidate.ItemId,
             chosen.Candidate.DebugName,
             tier,
-            $"profile tags: {FormatTags(npcTags)}; conversation tags: {FormatTags(topicTags)}; memory tags: {FormatTags(memoryTags)}; player-liked tags: {FormatTags(playerPreferences.LikedTags)}; player-disliked tags: {FormatTags(playerPreferences.DislikedTags)}; score: {chosen.Score}",
+            $"profile tags: {FormatTags(npcTags)}; preferred item ids: {FormatTags(npcPreferredItemIds)}; chosen preferred: {npcPreferredItemIds.Contains(chosen.Candidate.ItemId)}; conversation tags: {FormatTags(topicTags)}; memory tags: {FormatTags(memoryTags)}; player-liked tags: {FormatTags(playerPreferences.LikedTags)}; player-disliked tags: {FormatTags(playerPreferences.DislikedTags)}; score: {chosen.Score}",
             matchedPlayerPreference
         );
+    }
+
+    private static HashSet<string> BuildNpcPreferredItemIds(NPC npc)
+    {
+        return ExplicitNpcPreferredItemIds.TryGetValue(npc.Name, out string[]? itemIds)
+            ? new HashSet<string>(itemIds, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
     }
 
     private HashSet<string> BuildNpcTags(NPC npc, NpcDispositionProfile disposition)
@@ -555,6 +611,7 @@ internal sealed class GiftSelector
         GiftCandidate candidate,
         GiftTier tier,
         IReadOnlySet<string> npcTags,
+        IReadOnlySet<string> npcPreferredItemIds,
         IReadOnlySet<string> topicTags,
         IReadOnlySet<string> memoryTags,
         PlayerPreferenceSignals playerPreferences,
@@ -562,6 +619,11 @@ internal sealed class GiftSelector
     )
     {
         int score = 10;
+        if (npcPreferredItemIds.Contains(candidate.ItemId))
+        {
+            score += 18;
+        }
+
         score += candidate.Tags.Count(tag => npcTags.Contains(tag)) * 5;
         score += candidate.Tags.Count(tag => topicTags.Contains(tag)) * 8;
         score += candidate.Tags.Count(tag => memoryTags.Contains(tag)) * 7;
