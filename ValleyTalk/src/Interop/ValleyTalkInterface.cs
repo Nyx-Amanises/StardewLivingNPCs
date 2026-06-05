@@ -24,6 +24,32 @@ public class ValleyTalkInterface : IValleyTalkInterface
         return DialogueBuilder.Instance.PatchNpc(character);
     }
 
+    public bool RequestGiftDialogue(NPC character, StardewValley.Object gift, int taste)
+    {
+        if (character == null || gift == null)
+        {
+            return false;
+        }
+
+        if (!DialogueBuilder.Instance.PatchNpc(character, probability: 4))
+        {
+            return false;
+        }
+
+        if (AsyncBuilder.Instance.AwaitingGeneration)
+        {
+            return false;
+        }
+
+        if (!NetworkAvailabilityChecker.IsNetworkAvailableWithRetry())
+        {
+            return false;
+        }
+
+        AsyncBuilder.Instance.RequestNpcGiftResponse(character, gift, taste);
+        return true;
+    }
+
     public void RegisterPromptOverride(string characterName, string promptElement, string overrideText)
     {
         ModInteropManager.Instance.RegisterPromptOverride(_modName, characterName, promptElement, overrideText);

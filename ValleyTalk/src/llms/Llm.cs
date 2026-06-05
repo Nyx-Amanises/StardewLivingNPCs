@@ -26,7 +26,16 @@ internal abstract class Llm
         Instance = instance;
         try
         {
-            DialogueBuilder.Instance.LlmDisabled = CheckConnection(apiKey, modelName).GetAwaiter().GetResult();
+            bool checkFailed = CheckConnection(apiKey, modelName).GetAwaiter().GetResult();
+            DialogueBuilder.Instance.LlmDisabled = false;
+            if (checkFailed)
+            {
+                ModEntry.SMonitor.Log(
+                    Util.GetString("modelCheckNonBlocking", returnNull: true)
+                    ?? "The startup model check failed, but ValleyTalk will stay enabled and try the real dialogue request when you talk to an NPC.",
+                    StardewModdingAPI.LogLevel.Warn
+                );
+            }
         }
         catch (Exception ex)
         {
@@ -34,7 +43,7 @@ internal abstract class Llm
                 $"Model connection check failed unexpectedly for {modelName ?? "(default)"} using provider {Instance.GetType().Name}: {ex.Message}",
                 StardewModdingAPI.LogLevel.Error
             );
-            DialogueBuilder.Instance.LlmDisabled = true;
+            DialogueBuilder.Instance.LlmDisabled = false;
         }
     }
 

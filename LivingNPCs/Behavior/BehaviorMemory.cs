@@ -197,6 +197,30 @@ internal sealed class BehaviorMemory
         "(O)418"
     };
 
+    private static readonly IReadOnlyList<HelpRequestItemHint> HelpRequestItemHints =
+    [
+        new("(O)16", "野山葵", ["wild horseradish", "horseradish", "野山葵", "辣根", "(o)16"]),
+        new("(O)18", "黄水仙", ["daffodil", "黄水仙", "水仙", "(o)18"]),
+        new("(O)20", "韭葱", ["leek", "韭葱", "(o)20"]),
+        new("(O)22", "蒲公英", ["dandelion", "蒲公英", "(o)22"]),
+        new("(O)66", "紫水晶", ["amethyst", "紫水晶", "(o)66"]),
+        new("(O)80", "石英", ["quartz", "普通石英", "石英", "(o)80"]),
+        new("(O)216", "面包", ["bread", "面包", "(o)216"]),
+        new("(O)223", "饼干", ["cookie", "cookies", "饼干", "(o)223"]),
+        new("(O)395", "咖啡", ["coffee", "咖啡", "(o)395"]),
+        new("(O)396", "香味浆果", ["spice berry", "香味浆果", "(o)396"]),
+        new("(O)398", "葡萄", ["grape", "grapes", "葡萄", "(o)398"]),
+        new("(O)402", "甜豌豆", ["sweet pea", "甜豌豆", "(o)402"]),
+        new("(O)404", "普通蘑菇", ["common mushroom", "mushroom", "普通蘑菇", "蘑菇", "(o)404"]),
+        new("(O)406", "野梅", ["wild plum", "plum", "野梅", "(o)406"]),
+        new("(O)408", "榛子", ["hazelnut", "榛子", "(o)408"]),
+        new("(O)410", "黑莓", ["blackberry", "blackberries", "黑莓", "(o)410"]),
+        new("(O)412", "冬根", ["winter root", "冬根", "(o)412"]),
+        new("(O)414", "水晶果", ["crystal fruit", "水晶果", "(o)414"]),
+        new("(O)416", "雪山药", ["snow yam", "雪山药", "(o)416"]),
+        new("(O)418", "番红花", ["crocus", "番红花", "(o)418"])
+    ];
+
     private readonly Dictionary<string, List<BehaviorMemoryEntry>> entriesByNpc = new();
     private readonly Dictionary<string, int> dailyCountsByNpc = new();
     private readonly Dictionary<string, LivingNpcState> statesByNpc = new();
@@ -529,6 +553,7 @@ internal sealed class BehaviorMemory
             .Where(commitment => maxPendingCommitmentsPerNpc > 0 && !string.IsNullOrWhiteSpace(commitment.Summary))
             .Take(2)
             .ToList();
+        var storedCommitmentCandidates = new List<ValleyTalkCommitmentCandidate>();
         if (commitmentCandidates.Count == 0
             && maxPendingCommitmentsPerNpc > 0
             && TryInferAcceptedCommitment(playerText, npcResponse, out var inferredCommitment))
@@ -540,6 +565,7 @@ internal sealed class BehaviorMemory
         {
             if (this.StoreCommitment(npc, state, candidate, maxPendingCommitmentsPerNpc))
             {
+                storedCommitmentCandidates.Add(candidate);
                 storedCommitments++;
                 var entry = this.CreateEntry(
                     npc,
@@ -551,8 +577,18 @@ internal sealed class BehaviorMemory
             }
         }
 
+        var explicitHelpRequestCandidates = analysis.HelpRequests
+            .Where(request =>
+                maxPendingHelpRequestsPerNpc > 0
+                && !string.IsNullOrWhiteSpace(request.Summary)
+                && NormalizeHelpRequestType(request.Type) == "item_request")
+            .Take(1)
+            .ToList();
         foreach (var candidate in analysis.HelpRequests
-                     .Where(request => maxPendingHelpRequestsPerNpc > 0 && !string.IsNullOrWhiteSpace(request.Summary))
+                     .Where(request =>
+                         maxPendingHelpRequestsPerNpc > 0
+                         && !string.IsNullOrWhiteSpace(request.Summary)
+                         && NormalizeHelpRequestType(request.Type) == "item_request")
                      .Take(1))
         {
             if (this.StoreHelpRequest(
@@ -572,6 +608,31 @@ internal sealed class BehaviorMemory
                     candidate.Summary
                 );
                 this.AddEntry(entry, maxEntriesPerNpc);
+            }
+        }
+
+        if (storedHelpRequests == 0 && explicitHelpRequestCandidates.Count == 0)
+        {
+            foreach (var candidate in storedCommitmentCandidates.Where(IsItemLikeHelpTaskCommitment).Take(1))
+            {
+                if (this.TryStoreHelpRequestFromHelpTaskCommitment(
+                        npc,
+                        state,
+                        candidate,
+                        playerText,
+                        maxPendingHelpRequestsPerNpc,
+                        helpRequestCooldownDays,
+                        minRelationshipTrustForHelpRequests))
+                {
+                    storedHelpRequests++;
+                    var entry = this.CreateEntry(
+                        npc,
+                        "HelpRequest",
+                        "item_request",
+                        candidate.Summary
+                    );
+                    this.AddEntry(entry, maxEntriesPerNpc);
+                }
             }
         }
 
@@ -4019,6 +4080,82 @@ internal sealed class BehaviorMemory
         return true;
     }
 
+    private bool TryStoreHelpRequestFromHelpTaskCommitment(
+        NPC npc,
+        LivingNpcState state,
+        ValleyTalkCommitmentCandidate commitment,
+        string playerText,
+        int maxPendingHelpRequestsPerNpc,
+        int helpRequestCooldownDays,
+        int minRelationshipTrustForHelpRequests)
+    {
+        if (!TryInferHelpRequestItemFromText(commitment.Summary, out string itemId, out string itemLabel))
+        {
+            return false;
+        }
+
+        int dueInDays = System.Math.Clamp(commitment.DueInDays <= 0 ? 3 : commitment.DueInDays, 1, 7);
+        var candidate = new ValleyTalkHelpRequestCandidate
+        {
+            Type = "item_request",
+            Summary = commitment.Summary.Trim(),
+            RequiresAcceptance = false,
+            RequestedItemId = itemId,
+            RequestedItemLabel = itemLabel,
+            DueInDays = dueInDays,
+            Reason = string.IsNullOrWhiteSpace(commitment.Summary)
+                ? $"The farmer agreed to help {npc.displayName} with a small item request."
+                : commitment.Summary.Trim(),
+            FollowUpPotential = "deeper_relationship"
+        };
+
+        return this.StoreHelpRequest(
+            npc,
+            state,
+            candidate,
+            playerText,
+            maxPendingHelpRequestsPerNpc,
+            helpRequestCooldownDays,
+            minRelationshipTrustForHelpRequests
+        );
+    }
+
+    private static bool IsItemLikeHelpTaskCommitment(ValleyTalkCommitmentCandidate commitment)
+    {
+        return commitment.Type == "help_task"
+            && TryInferHelpRequestItemFromText(commitment.Summary, out _, out _);
+    }
+
+    private static bool TryInferHelpRequestItemFromText(string text, out string itemId, out string itemLabel)
+    {
+        itemId = string.Empty;
+        itemLabel = string.Empty;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        foreach (var hint in HelpRequestItemHints)
+        {
+            if (!AllowedHelpRequestItemIds.Contains(hint.ItemId)
+                || !HelpRequestAdvisor.IsCurrentlyRequestableItem(hint.ItemId))
+            {
+                continue;
+            }
+
+            if (hint.Tokens.Any(token =>
+                    !string.IsNullOrWhiteSpace(token)
+                    && text.IndexOf(token, System.StringComparison.OrdinalIgnoreCase) >= 0))
+            {
+                itemId = hint.ItemId;
+                itemLabel = hint.ItemLabel;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool TryInferAcceptedCommitment(
         string playerText,
         string npcResponse,
@@ -4252,7 +4389,7 @@ internal sealed class BehaviorMemory
             return false;
         }
 
-        var steps = this.BuildHelpRequestSteps(candidate);
+        var steps = this.BuildHelpRequestSteps(npc, candidate);
         if (steps.Count == 0)
         {
             return false;
@@ -4344,7 +4481,7 @@ internal sealed class BehaviorMemory
         );
     }
 
-    private List<NpcHelpRequestStepFact> BuildHelpRequestSteps(ValleyTalkHelpRequestCandidate candidate)
+    private List<NpcHelpRequestStepFact> BuildHelpRequestSteps(NPC npc, ValleyTalkHelpRequestCandidate candidate)
     {
         candidate.Steps ??= new List<ValleyTalkHelpRequestStepCandidate>();
         var rawSteps = candidate.Steps.Count > 0
@@ -4368,14 +4505,7 @@ internal sealed class BehaviorMemory
             if (type == "item_request")
             {
                 if (!AllowedHelpRequestItemIds.Contains(rawStep.RequestedItemId)
-                    || !HelpRequestAdvisor.IsCurrentlyRequestableItem(rawStep.RequestedItemId))
-                {
-                    continue;
-                }
-            }
-            else if (type == "question_request")
-            {
-                if (string.IsNullOrWhiteSpace(rawStep.QuestionTopic))
+                    || !HelpRequestAdvisor.IsCurrentlyRequestableItem(rawStep.RequestedItemId, npc))
                 {
                     continue;
                 }
@@ -5471,6 +5601,12 @@ internal sealed class BehaviorMemory
             }
         }
     }
+
+    private sealed record HelpRequestItemHint(
+        string ItemId,
+        string ItemLabel,
+        IReadOnlyList<string> Tokens
+    );
 }
 
 internal sealed class BehaviorMemorySaveData
@@ -5685,6 +5821,7 @@ internal sealed class NpcCommitmentFact
     public string WaitingLocationName { get; set; } = string.Empty;
     public int WaitingTileX { get; set; } = -1;
     public int WaitingTileY { get; set; } = -1;
+    public bool NpcArrivedAfterPlayer { get; set; }
     public bool ArrivalGreetingShown { get; set; }
     public int FulfilledTotalDays { get; set; } = -1;
     public int FulfilledTimeOfDay { get; set; }
@@ -6036,6 +6173,13 @@ internal sealed class LivingNpcState
     public int LastAiSmallGiftTotalDays { get; set; } = -1;
     public int LastAiMeaningfulGiftTotalDays { get; set; } = -1;
     public int LastAiMoneyGiftTotalDays { get; set; } = -1;
+    public int LastDailyGiftOpportunityRollTotalDays { get; set; } = -1;
+    public int DailyGiftOpportunityTotalDays { get; set; } = -1;
+    public int DailyGiftOpportunityChancePercent { get; set; }
+    public string DailyGiftOpportunityReason { get; set; } = string.Empty;
+    public int PendingReciprocalGiftDueTotalDays { get; set; } = -1;
+    public string PendingReciprocalGiftSourceGiftName { get; set; } = string.Empty;
+    public string PendingReciprocalGiftReason { get; set; } = string.Empty;
     public int LastAiFarmHelpTotalDays { get; set; } = -1;
     public int LastAiWalkTogetherTotalDays { get; set; } = -1;
     public int LastHelpRequestTotalDays { get; set; } = -1;
@@ -6885,6 +7029,21 @@ internal sealed class LivingNpcState
         {
             this.AiFriendshipGainedToday = 0;
         }
+
+        if (this.LastDailyGiftOpportunityRollTotalDays != Game1.Date.TotalDays)
+        {
+            this.DailyGiftOpportunityTotalDays = -1;
+            this.DailyGiftOpportunityChancePercent = 0;
+            this.DailyGiftOpportunityReason = string.Empty;
+        }
+
+        if (this.PendingReciprocalGiftDueTotalDays >= 0
+            && this.PendingReciprocalGiftDueTotalDays + 3 < Game1.Date.TotalDays)
+        {
+            this.PendingReciprocalGiftDueTotalDays = -1;
+            this.PendingReciprocalGiftSourceGiftName = string.Empty;
+            this.PendingReciprocalGiftReason = string.Empty;
+        }
     }
 
     public LivingNpcState Clone()
@@ -7008,6 +7167,7 @@ internal sealed class LivingNpcState
                     WaitingLocationName = commitment.WaitingLocationName,
                     WaitingTileX = commitment.WaitingTileX,
                     WaitingTileY = commitment.WaitingTileY,
+                    NpcArrivedAfterPlayer = commitment.NpcArrivedAfterPlayer,
                     ArrivalGreetingShown = commitment.ArrivalGreetingShown,
                     FulfilledTotalDays = commitment.FulfilledTotalDays,
                     FulfilledTimeOfDay = commitment.FulfilledTimeOfDay,
@@ -7157,6 +7317,13 @@ internal sealed class LivingNpcState
             LastAiSmallGiftTotalDays = this.LastAiSmallGiftTotalDays,
             LastAiMeaningfulGiftTotalDays = this.LastAiMeaningfulGiftTotalDays,
             LastAiMoneyGiftTotalDays = this.LastAiMoneyGiftTotalDays,
+            LastDailyGiftOpportunityRollTotalDays = this.LastDailyGiftOpportunityRollTotalDays,
+            DailyGiftOpportunityTotalDays = this.DailyGiftOpportunityTotalDays,
+            DailyGiftOpportunityChancePercent = this.DailyGiftOpportunityChancePercent,
+            DailyGiftOpportunityReason = this.DailyGiftOpportunityReason,
+            PendingReciprocalGiftDueTotalDays = this.PendingReciprocalGiftDueTotalDays,
+            PendingReciprocalGiftSourceGiftName = this.PendingReciprocalGiftSourceGiftName,
+            PendingReciprocalGiftReason = this.PendingReciprocalGiftReason,
             LastAiFarmHelpTotalDays = this.LastAiFarmHelpTotalDays,
             LastAiWalkTogetherTotalDays = this.LastAiWalkTogetherTotalDays,
             LastHelpRequestTotalDays = this.LastHelpRequestTotalDays,

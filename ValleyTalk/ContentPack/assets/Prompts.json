@@ -215,6 +215,7 @@
             "instructionsSingleLine": "{{i18n:instructionsSingleLine}}",
             "instructionsResponses": "{{i18n:instructionsResponses}}",
             "instructionsLivingNpcMetadata": "{{i18n:instructionsLivingNpcMetadata}}",
+            "instructionsLivingNpcGiftIds": "{{i18n:instructionsLivingNpcGiftIds}}",
             "instructionsTranslate": "{{i18n:instructionsTranslate}}",
             "responseStart": "{{i18n:responseStart}}",
             "generalMale": "{{i18n:generalMale}}",

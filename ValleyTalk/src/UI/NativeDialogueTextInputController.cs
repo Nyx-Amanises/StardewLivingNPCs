@@ -14,6 +14,7 @@ namespace ValleyTalk;
 internal static class NativeDialogueTextInputController
 {
     private const int CharacterLimit = 500;
+    private const int WrapSafetyPixels = 96;
 
     private static bool active;
     private static NPC currentNpc;
@@ -261,9 +262,10 @@ internal static class NativeDialogueTextInputController
             return;
         }
 
-        int lineHeight = GetLineHeight(bounds.Width);
+        int wrapWidth = Math.Max(1, bounds.Width - WrapSafetyPixels);
+        int lineHeight = GetLineHeight(wrapWidth);
         int maxLines = Math.Max(1, bounds.Height / lineHeight);
-        string[] lines = WrapText(value, bounds.Width);
+        string[] lines = WrapText(value, wrapWidth);
         if (lines.Length > maxLines)
         {
             lines = lines.Skip(lines.Length - maxLines).ToArray();
@@ -283,7 +285,7 @@ internal static class NativeDialogueTextInputController
                 bounds.X,
                 y,
                 999999,
-                bounds.Width,
+                wrapWidth,
                 lineHeight,
                 1f,
                 0.88f,

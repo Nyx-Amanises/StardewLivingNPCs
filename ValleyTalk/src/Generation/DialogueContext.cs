@@ -317,6 +317,7 @@ public class DialogueContext
         NextScheduleLocation = context.NextScheduleLocation;
         MinutesUntilNextSchedule = context.MinutesUntilNextSchedule;
         LastLineIsPlayerInput = context.LastLineIsPlayerInput;
+        LivingNpcExtraPrompt = context.LivingNpcExtraPrompt;
     }
 
     private string _value;
@@ -360,6 +361,7 @@ public class DialogueContext
     public List<string> Weather { get; internal set; }
     public string ScheduleLine { get; internal set; }
     public bool CanGiveGift { get; internal set; } = false;
+    public string LivingNpcExtraPrompt { get; set; } = string.Empty;
 
     // Add a method to return a value representing how different two contexts are - this will be used to find the most similar context to the current context
     public int CompareTo(DialogueContext other)

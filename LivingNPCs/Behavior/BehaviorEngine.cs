@@ -21,6 +21,11 @@ internal sealed class BehaviorEngine
     private const string SaveDataKey = "behavior-memory";
     private const string HelpRequestQuestMarkerKey = "LivingNPCs/HelpRequestQuest";
     private const string HelpRequestQuestIdKey = "LivingNPCs/HelpRequestQuestId";
+    private const int SmallGiftMinFriendshipHearts = 2;
+    private const int SmallGiftMinFamiliarity = 15;
+    private const int MeaningfulGiftMinFriendshipHearts = 5;
+    private const int MeaningfulGiftNoCooldownFriendshipHearts = 8;
+    private const int PendingReciprocalGiftExpirationDays = 3;
 
     private readonly IModHelper helper;
     private readonly IMonitor monitor;
@@ -36,6 +41,7 @@ internal sealed class BehaviorEngine
     private readonly List<PendingWalkTogether> pendingWalks = new();
     private readonly List<PendingEscortToLocation> pendingEscorts = new();
     private readonly List<PendingDelayedTravelAction> pendingDelayedTravelActions = new();
+    private readonly Queue<string> pendingHudMessages = new();
     private readonly Dictionary<string, int> lastConversationMemoryTimeByNpc = new();
     private readonly Dictionary<string, double> nextSpeechBubbleTimeByNpc = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource cancellationTokenSource = new();
@@ -128,6 +134,7 @@ internal sealed class BehaviorEngine
         this.pendingWalks.Clear();
         this.pendingEscorts.Clear();
         this.pendingDelayedTravelActions.Clear();
+        this.pendingHudMessages.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
         this.nextSpeechBubbleTimeByNpc.Clear();
         this.TryPropagateCommunityImpressions();
@@ -143,6 +150,7 @@ internal sealed class BehaviorEngine
         this.pendingWalks.Clear();
         this.pendingEscorts.Clear();
         this.pendingDelayedTravelActions.Clear();
+        this.pendingHudMessages.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
         this.nextSpeechBubbleTimeByNpc.Clear();
     }
@@ -236,6 +244,7 @@ internal sealed class BehaviorEngine
             this.TryExecute(npc, intent, request.Source);
         }
 
+        this.TryShowPendingHudMessages();
         this.TryShowPendingAmbientRemarks();
         this.TryStartPendingDelayedTravelActions();
         this.TryUpdatePendingEscorts();
@@ -350,6 +359,11 @@ internal sealed class BehaviorEngine
 
         if (!result.HasEffect)
         {
+            if (this.config.EnableAiWorldActions)
+            {
+                this.TryExecuteConversationActions(npc, result.Actions, playerText, npcResponse);
+            }
+
             return false;
         }
 
@@ -385,6 +399,36 @@ internal sealed class BehaviorEngine
         return true;
     }
 
+    public string GetGiftResponseContext(string npcName, string npcDisplayName, string giftItemId, string giftName, int taste)
+    {
+        if (!this.config.EnableConversationMemory || !this.config.EnableNpcState)
+        {
+            return string.Empty;
+        }
+
+        if (!this.TryFindNpcInCurrentLocation(npcName, out NPC? npc) || npc == null)
+        {
+            return string.Empty;
+        }
+
+        if (taste is 4 or 6)
+        {
+            return string.Empty;
+        }
+
+        var labels = this.DescribeGiftTaste(taste);
+        var gift = new GiftMemoryDetails(
+            giftItemId ?? string.Empty,
+            string.IsNullOrWhiteSpace(giftName) ? "a gift" : giftName,
+            labels.DebugLabel,
+            labels.PromptLabel,
+            taste
+        );
+        LivingNpcState state = this.memory.GetState(npc) ?? this.memory.UpdateStateForGift(npc, gift);
+        this.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
+        return this.BuildGiftOpportunityPromptContext(npc);
+    }
+
     private void QueueAmbientRemark(NPC npc, string text, int delayMinutes)
     {
         this.pendingAmbientRemarks.RemoveAll(remark => remark.NpcName == npc.Name);
@@ -398,7 +442,7 @@ internal sealed class BehaviorEngine
         ));
     }
 
-    private bool TryShowNpcSpeechBubble(NPC npc, string text, int cooldownMilliseconds)
+    private bool TryShowNpcSpeechBubble(NPC npc, string text, int? cooldownMilliseconds = null)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -411,9 +455,16 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        npc.showTextAboveHead(text);
-        this.nextSpeechBubbleTimeByNpc[npc.Name] = now + Math.Max(1000, cooldownMilliseconds);
+        int durationMilliseconds = GetSpeechBubbleDurationMilliseconds(text);
+        npc.showTextAboveHead(text, null, 2, durationMilliseconds, 0);
+        this.nextSpeechBubbleTimeByNpc[npc.Name] = now + Math.Max(durationMilliseconds, cooldownMilliseconds ?? durationMilliseconds);
         return true;
+    }
+
+    private static int GetSpeechBubbleDurationMilliseconds(string text)
+    {
+        int visibleLength = (text ?? string.Empty).Trim().Length;
+        return System.Math.Clamp(4000 + System.Math.Max(0, visibleLength - 8) * 140, 4000, 10000);
     }
 
     private void TryShowPendingAmbientRemarks()
@@ -448,7 +499,11 @@ internal sealed class BehaviorEngine
                 continue;
             }
 
-            npc.showTextAboveHead(remark.Text);
+            if (!this.TryShowNpcSpeechBubble(npc, remark.Text))
+            {
+                continue;
+            }
+
             this.pendingAmbientRemarks.Remove(remark);
 
             if (this.config.Debug)
@@ -530,6 +585,20 @@ internal sealed class BehaviorEngine
             return actions;
         }
 
+        if (this.TryBuildFallbackGiftAction(npc, playerText, npcResponse, out ValleyTalkWorldActionRequest? giftAction)
+            && giftAction != null)
+        {
+            if (this.config.Debug)
+            {
+                this.monitor.Log(
+                    $"Synthesized fallback AI gift action {giftAction.Type} from visible dialogue.",
+                    LogLevel.Debug
+                );
+            }
+
+            return new[] { giftAction };
+        }
+
         if (!this.TryBuildFallbackTravelAction(npc, playerText, npcResponse, out ValleyTalkWorldActionRequest? action)
             && !this.TryBuildImmediateTravelActionFromRecentCommitment(npc, npcResponse, out action)
             || action == null)
@@ -546,6 +615,121 @@ internal sealed class BehaviorEngine
         }
 
         return new[] { action };
+    }
+
+    private bool TryBuildFallbackGiftAction(
+        NPC npc,
+        string playerText,
+        string npcResponse,
+        out ValleyTalkWorldActionRequest? action
+    )
+    {
+        action = null;
+        if (!this.LooksLikeImmediateGiftOffer(npcResponse)
+            || this.LooksLikeGiftOfferRejection(npcResponse))
+        {
+            return false;
+        }
+
+        var state = this.memory.GetState(npc);
+        if (state == null)
+        {
+            return false;
+        }
+
+        bool meaningfulCue = this.LooksLikeMeaningfulGiftOffer(playerText, npcResponse);
+        string type = meaningfulCue && this.IsEligibleForMeaningfulGift(npc, state, out _)
+            ? "give_meaningful_gift"
+            : "give_small_gift";
+        if (type == "give_small_gift" && !this.IsEligibleForSmallGift(npc, state))
+        {
+            return false;
+        }
+
+        action = new ValleyTalkWorldActionRequest
+        {
+            Type = type,
+            Reason = "the visible dialogue naturally offered the farmer a gift"
+        };
+
+        GiftTier tier = type == "give_meaningful_gift"
+            ? GiftTier.Meaningful
+            : GiftTier.Small;
+        if (this.giftSelector.TryChooseMentioned(npcResponse, tier, out GiftSelection? mentioned)
+            && mentioned != null)
+        {
+            action.ItemId = mentioned.ItemId;
+            action.ItemLabel = mentioned.DebugName;
+            action.Reason = this.BuildWorldActionReason(
+                action.Reason,
+                $"visible dialogue named {mentioned.DebugName}"
+            );
+        }
+
+        return true;
+    }
+
+    private bool LooksLikeImmediateGiftOffer(string npcResponse)
+    {
+        return this.ContainsAny(
+            npcResponse,
+            "给你",
+            "送你",
+            "拿着",
+            "收下",
+            "带给你",
+            "留给你",
+            "一点心意",
+            "小礼物",
+            "回礼",
+            "谢礼",
+            "这个给",
+            "这个是给",
+            "this is for you",
+            "this one's for you",
+            "take this",
+            "take it",
+            "i brought you",
+            "i saved this for you",
+            "small gift",
+            "return the favor",
+            "to thank you"
+        );
+    }
+
+    private bool LooksLikeGiftOfferRejection(string npcResponse)
+    {
+        return this.ContainsAny(
+            npcResponse,
+            "不能给你",
+            "没法给你",
+            "下次再给",
+            "以后再给",
+            "改天再给",
+            "not today",
+            "next time",
+            "another day",
+            "can't give"
+        );
+    }
+
+    private bool LooksLikeMeaningfulGiftOffer(string playerText, string npcResponse)
+    {
+        string combined = $"{playerText} {npcResponse}";
+        return this.ContainsAny(
+            combined,
+            "有意义",
+            "特别",
+            "重要",
+            "珍藏",
+            "用心",
+            "记得你喜欢",
+            "special",
+            "meaningful",
+            "important",
+            "saved this",
+            "remembered you like"
+        );
     }
 
     private void TryCorrectTravelActionTargetFromVisibleDialogue(
@@ -931,7 +1115,7 @@ internal sealed class BehaviorEngine
 
             if (started)
             {
-                npc.showTextAboveHead("好了，我们走吧。");
+                this.TryShowNpcSpeechBubble(npc, "好了，我们走吧。");
             }
         }
     }
@@ -945,7 +1129,7 @@ internal sealed class BehaviorEngine
     )
     {
         reason = string.Empty;
-        if (!this.CanUseWorldAction(npc, "small_gift", requireFriendly: false, out reason))
+        if (!this.CanUseWorldAction(npc, "small_gift", requireFriendly: false, out reason, allowDistantWhenExplicit: true))
         {
             return false;
         }
@@ -953,10 +1137,15 @@ internal sealed class BehaviorEngine
         var state = this.memory.GetState(npc);
         if (!this.config.AllowAiSmallGifts
             || state == null
-            || state.LastAiSmallGiftTotalDays == Game1.Date.TotalDays
-            || state.LastAiMeaningfulGiftTotalDays == Game1.Date.TotalDays)
+            || this.HasAiGiftToday(state))
         {
             reason = "small gifts are disabled or another AI gift was already used today";
+            return false;
+        }
+
+        if (!this.IsEligibleForSmallGift(npc, state))
+        {
+            reason = $"small gifts require at least {SmallGiftMinFriendshipHearts} hearts or familiarity {SmallGiftMinFamiliarity}";
             return false;
         }
 
@@ -981,6 +1170,7 @@ internal sealed class BehaviorEngine
         }
 
         state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
+        this.ClearGiftOpportunities(state);
         this.memory.RecordNpcWorldAction(
             npc,
             "GaveSmallGift",
@@ -1002,19 +1192,23 @@ internal sealed class BehaviorEngine
             );
         }
 
-        this.ShowFeedback($"LivingNPCs：{npc.displayName} 给了你 {gift.DisplayName}。");
+        this.ShowFeedbackAfterDialogue($"LivingNPCs：{npc.displayName} 送给你了 {gift.DisplayName}。");
         return true;
     }
 
-    private void RewardFulfilledHelpRequests(NPC npc, IReadOnlyList<NpcHelpRequestFact> requests)
+    private void RewardFulfilledHelpRequests(
+        NPC npc,
+        IReadOnlyList<NpcHelpRequestFact> requests,
+        bool queueAmbientThanks = true
+    )
     {
         foreach (var request in requests.Where(request => request.Status == "Fulfilled"))
         {
-            this.RewardFulfilledHelpRequest(npc, request);
+            this.RewardFulfilledHelpRequest(npc, request, queueAmbientThanks);
         }
     }
 
-    private void RewardFulfilledHelpRequest(NPC npc, NpcHelpRequestFact request)
+    private void RewardFulfilledHelpRequest(NPC npc, NpcHelpRequestFact request, bool queueAmbientThanks)
     {
         if (!request.RewardGranted)
         {
@@ -1031,7 +1225,11 @@ internal sealed class BehaviorEngine
                 $"the farmer completed a personal help request and earned {friendshipReward} friendship: {request.Summary}",
                 this.config.MaxMemoryEntriesPerNpc
             );
-            this.QueueAmbientRemark(npc, "谢谢你，真的帮上忙了。", 0);
+            if (queueAmbientThanks)
+            {
+                this.QueueAmbientRemark(npc, "谢谢你，真的帮上忙了。", 0);
+            }
+
             this.ShowFeedback($"LivingNPCs：完成 {npc.displayName} 的求助，额外好感 +{friendshipReward}。");
             this.SpreadCommunityRipple(
                 npc,
@@ -1060,6 +1258,11 @@ internal sealed class BehaviorEngine
             return false;
         }
 
+        if (this.HasAiGiftToday(state))
+        {
+            return false;
+        }
+
         GiftSelection selection = this.giftSelector.Choose(npc, state, request.Summary, request.Resolution);
         SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
         if (!Game1.player.addItemToInventoryBool(gift))
@@ -1068,6 +1271,8 @@ internal sealed class BehaviorEngine
         }
 
         request.RewardGiftGiven = true;
+        state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
+        this.ClearGiftOpportunities(state);
         this.memory.RecordNpcWorldAction(
             npc,
             "GaveHelpRequestRewardGift",
@@ -1086,7 +1291,7 @@ internal sealed class BehaviorEngine
             );
         }
 
-        this.ShowFeedback($"LivingNPCs：{npc.displayName} 又送了你 {gift.DisplayName} 作为谢礼。");
+        this.ShowFeedbackAfterDialogue($"LivingNPCs：{npc.displayName} 又送给你了 {gift.DisplayName} 作为谢礼。");
         return true;
     }
 
@@ -1115,7 +1320,7 @@ internal sealed class BehaviorEngine
             this.config.MaxMemoryEntriesPerNpc
         );
         this.MarkStateAfterWorldAction(state, "they gave the farmer some money");
-        this.ShowFeedback($"LivingNPCs：{npc.displayName} 给了你 {amount}g。");
+        this.ShowFeedbackAfterDialogue($"LivingNPCs：{npc.displayName} 给了你 {amount}g。");
         return true;
     }
 
@@ -1128,7 +1333,7 @@ internal sealed class BehaviorEngine
     )
     {
         reason = string.Empty;
-        if (!this.CanUseWorldAction(npc, "meaningful_gift", requireFriendly: true, out reason))
+        if (!this.CanUseWorldAction(npc, "meaningful_gift", requireFriendly: true, out reason, allowDistantWhenExplicit: true))
         {
             return false;
         }
@@ -1140,28 +1345,25 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        if (state.LastAiSmallGiftTotalDays == Game1.Date.TotalDays)
+        if (this.HasAiGiftToday(state))
         {
             reason = "another AI gift was already used today";
+            return false;
+        }
+
+        if (!this.IsEligibleForMeaningfulGift(npc, state, out reason))
+        {
             return false;
         }
 
         int daysSinceLastMeaningfulGift = state.LastAiMeaningfulGiftTotalDays < 0
             ? int.MaxValue
             : Game1.Date.TotalDays - state.LastAiMeaningfulGiftTotalDays;
-        if (daysSinceLastMeaningfulGift < this.config.AiMeaningfulGiftCooldownDays)
+        int friendshipHearts = WorldContext.For(npc).FriendshipHearts;
+        bool bypassCooldown = friendshipHearts >= MeaningfulGiftNoCooldownFriendshipHearts;
+        if (!bypassCooldown && daysSinceLastMeaningfulGift < this.config.AiMeaningfulGiftCooldownDays)
         {
             reason = "meaningful gift cooldown is active";
-            return false;
-        }
-
-        bool highRelationship = state.InteractionComfortTier is "Trusted" or "Intimate";
-        bool recentSpecialEvent = !string.IsNullOrWhiteSpace(state.LastEventContext)
-            && state.LastEventTotalDays >= Game1.Date.TotalDays - 1;
-        bool meaningfulMemoryCue = this.giftSelector.HasMeaningfulMemoryCue(state, playerText, npcResponse);
-        if (!highRelationship && !recentSpecialEvent && !meaningfulMemoryCue)
-        {
-            reason = "meaningful gifts require a strong relationship, recent event, or important memory cue";
             return false;
         }
 
@@ -1186,6 +1388,7 @@ internal sealed class BehaviorEngine
         }
 
         state.LastAiMeaningfulGiftTotalDays = Game1.Date.TotalDays;
+        this.ClearGiftOpportunities(state);
         this.memory.RecordNpcWorldAction(
             npc,
             "GaveMeaningfulGift",
@@ -1207,7 +1410,7 @@ internal sealed class BehaviorEngine
             );
         }
 
-        this.ShowFeedback($"LivingNPCs：{npc.displayName} 给了你 {gift.DisplayName}。");
+        this.ShowFeedbackAfterDialogue($"LivingNPCs：{npc.displayName} 送给你了 {gift.DisplayName}。");
         return true;
     }
 
@@ -1352,19 +1555,26 @@ internal sealed class BehaviorEngine
             return false;
         }
 
+        int maxWalkMinutes = System.Math.Max(8, this.config.MaxAiWalkTogetherMinutes);
         int durationMinutes = System.Math.Clamp(
-            action.DurationMinutes <= 0 ? 10 : action.DurationMinutes,
-            5,
-            this.config.MaxAiWalkTogetherMinutes
+            action.DurationMinutes <= 0 ? 12 : action.DurationMinutes,
+            8,
+            maxWalkMinutes
         );
-        this.pendingWalks.RemoveAll(walk => walk.NpcName == npc.Name);
+        this.StopTravelActionsForNpc(npc, returnToSchedule: true);
+        bool originalIgnoreScheduleToday = npc.ignoreScheduleToday;
+        bool originalFollowSchedule = npc.followSchedule;
+        npc.ignoreScheduleToday = true;
+        npc.followSchedule = false;
         this.pendingWalks.Add(new PendingWalkTogether(
             npc.Name,
             Game1.Date.TotalDays,
             npc.currentLocation?.Name ?? string.Empty,
             this.AddMinutesToTime(Game1.timeOfDay, durationMinutes),
             Game1.player.TilePoint,
-            null
+            null,
+            originalIgnoreScheduleToday,
+            originalFollowSchedule
         ));
         state.LastAiWalkTogetherTotalDays = Game1.Date.TotalDays;
         this.memory.RecordNpcWorldAction(
@@ -1400,6 +1610,11 @@ internal sealed class BehaviorEngine
             return false;
         }
 
+        if (IsProtectedEscortScene(npc, out reason))
+        {
+            return false;
+        }
+
         var state = this.memory.GetState(npc);
         if (state == null)
         {
@@ -1426,10 +1641,13 @@ internal sealed class BehaviorEngine
         );
         string targetLabel = this.GetEscortTargetLabel(targetLocation);
 
+        this.StopTravelActionsForNpc(npc, returnToSchedule: true);
+        bool originalIgnoreScheduleToday = npc.ignoreScheduleToday;
+        bool originalFollowSchedule = npc.followSchedule;
+        npc.ignoreScheduleToday = true;
+        npc.followSchedule = false;
         npc.controller = null;
         npc.Halt();
-        this.pendingWalks.RemoveAll(walk => walk.NpcName == npc.Name);
-        this.pendingEscorts.RemoveAll(escort => escort.NpcName == npc.Name);
         this.pendingEscorts.Add(new PendingEscortToLocation(
             npc.Name,
             Game1.Date.TotalDays,
@@ -1437,7 +1655,9 @@ internal sealed class BehaviorEngine
             targetLabel,
             this.AddMinutesToTime(Game1.timeOfDay, durationMinutes),
             Game1.currentLocation?.Name ?? string.Empty,
-            Game1.player.TilePoint
+            Game1.player.TilePoint,
+            originalIgnoreScheduleToday,
+            originalFollowSchedule
         ));
 
         state.LastAiWalkTogetherTotalDays = Game1.Date.TotalDays;
@@ -1455,7 +1675,7 @@ internal sealed class BehaviorEngine
             return true;
         }
 
-        npc.showTextAboveHead(this.BuildEscortStartGreeting(targetLocation));
+        this.TryShowNpcSpeechBubble(npc, this.BuildEscortStartGreeting(targetLocation));
         this.ShowFeedback($"LivingNPCs：{npc.displayName} 会带你去{targetLabel}。");
         return true;
     }
@@ -1520,27 +1740,16 @@ internal sealed class BehaviorEngine
                     escort.LastAssignedController = null;
                     if (!this.IsEscortTargetReached(Game1.currentLocation, escort.TargetLocation))
                     {
-                        npc.showTextAboveHead(this.BuildEscortCaughtUpGreeting(escort));
+                        this.TryShowNpcSpeechBubble(npc, this.BuildEscortCaughtUpGreeting(escort));
                     }
                 }
             }
 
             if (npc.currentLocation != Game1.currentLocation)
             {
-                if (!this.TryMoveNpcNearPlayerForEscort(npc, Game1.currentLocation, out _))
-                {
-                    this.StopEscortToLocation(escort, npc, returnToSchedule: true);
-                    continue;
-                }
-
-                if (!string.Equals(escort.LastLocationName, Game1.currentLocation.Name, StringComparison.OrdinalIgnoreCase))
-                {
-                    npc.showTextAboveHead(this.BuildEscortCaughtUpGreeting(escort));
-                    escort.LastLocationName = Game1.currentLocation.Name;
-                    escort.HintShownForLocation = false;
-                    escort.LastWaypointTile = Point.Zero;
-                    escort.LastAssignedController = null;
-                }
+                this.StopEscortToLocation(escort, npc, returnToSchedule: false);
+                this.ShowFeedback($"LivingNPCs：{npc.displayName} 没跟上，护送中断了。");
+                continue;
             }
             else if (!Game1.currentLocation.characters.Contains(npc))
             {
@@ -1564,10 +1773,9 @@ internal sealed class BehaviorEngine
 
             if (Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles + 8)
             {
-                if (!this.TryMoveNpcNearPlayerForEscort(npc, Game1.currentLocation, out _))
+                if (!escort.HintShownForLocation)
                 {
-                    this.StopEscortToLocation(escort, npc, returnToSchedule: true);
-                    continue;
+                    escort.HintShownForLocation = this.TryShowNpcSpeechBubble(npc, "你离得有点远了，先跟上我。");
                 }
             }
 
@@ -1596,8 +1804,7 @@ internal sealed class BehaviorEngine
 
                     if (!escort.HintShownForLocation)
                     {
-                        npc.showTextAboveHead(this.BuildEscortDirectionHint(nextLocation));
-                        escort.HintShownForLocation = true;
+                        escort.HintShownForLocation = this.TryShowNpcSpeechBubble(npc, this.BuildEscortDirectionHint(nextLocation));
                     }
 
                     continue;
@@ -1614,8 +1821,7 @@ internal sealed class BehaviorEngine
 
                 if (!escort.HintShownForLocation)
                 {
-                    npc.showTextAboveHead(this.BuildEscortExitWaitHint(nextLocation));
-                    escort.HintShownForLocation = true;
+                    escort.HintShownForLocation = this.TryShowNpcSpeechBubble(npc, this.BuildEscortExitWaitHint(nextLocation));
                 }
 
                 continue;
@@ -1976,7 +2182,7 @@ internal sealed class BehaviorEngine
     {
         npc.controller = null;
         npc.Halt();
-        npc.showTextAboveHead(this.BuildEscortArrivalGreeting(escort));
+        this.TryShowNpcSpeechBubble(npc, this.BuildEscortArrivalGreeting(escort));
         var state = this.memory.GetState(npc);
         if (state != null)
         {
@@ -1997,6 +2203,8 @@ internal sealed class BehaviorEngine
         );
         this.pendingEscorts.Remove(escort);
         this.ShowFeedback($"LivingNPCs：{npc.displayName} 已带你到{escort.TargetLocationLabel}。");
+        RestoreNpcScheduleControl(npc, escort.OriginalIgnoreScheduleToday, escort.OriginalFollowSchedule);
+        this.TryReturnNpcToCurrentSchedule(npc, allowCrossLocationTeleport: false);
     }
 
     private void StopEscortToLocation(PendingEscortToLocation escort, NPC? npc, bool returnToSchedule)
@@ -2009,14 +2217,136 @@ internal sealed class BehaviorEngine
 
         if (npc != null && returnToSchedule)
         {
+            RestoreNpcScheduleControl(npc, escort.OriginalIgnoreScheduleToday, escort.OriginalFollowSchedule);
             this.TryReturnNpcToCurrentSchedule(npc);
+            var state = this.memory.GetState(npc);
+            if (state != null && state.LastAiWalkTogetherTotalDays == Game1.Date.TotalDays)
+            {
+                state.LastAiWalkTogetherTotalDays = -1;
+            }
+        }
+        else if (npc != null)
+        {
+            RestoreNpcScheduleControl(npc, escort.OriginalIgnoreScheduleToday, escort.OriginalFollowSchedule);
         }
 
         this.pendingEscorts.Remove(escort);
     }
 
-    private bool TryReturnNpcToCurrentSchedule(NPC npc)
+    private void StopTravelActionsForNpc(NPC npc, bool returnToSchedule)
     {
+        foreach (var walk in this.pendingWalks.Where(walk => walk.NpcName == npc.Name).ToList())
+        {
+            this.StopWalkTogether(walk, npc, returnToSchedule);
+        }
+
+        foreach (var escort in this.pendingEscorts.Where(escort => escort.NpcName == npc.Name).ToList())
+        {
+            this.StopEscortToLocation(escort, npc, returnToSchedule);
+        }
+    }
+
+    private static void RestoreNpcScheduleControl(NPC npc, bool ignoreScheduleToday, bool followSchedule)
+    {
+        npc.ignoreScheduleToday = ignoreScheduleToday;
+        npc.followSchedule = followSchedule;
+    }
+
+    private bool TryReturnNpcToCurrentSchedule(NPC npc, bool allowCrossLocationTeleport = true)
+    {
+        return this.TryResumeNpcCurrentSchedule(npc, "LivingNPCs escort", allowCrossLocationTeleport);
+    }
+
+    private bool TryResumeNpcCurrentSchedule(NPC npc, string context, bool allowCrossLocationTeleport = true)
+    {
+        if (!this.TryResolveCurrentScheduleTarget(npc, out GameLocation? location, out Point targetTile, out int facingDirection)
+            || location == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            npc.controller = null;
+            npc.Halt();
+
+            bool sameLocation = string.Equals(npc.currentLocation?.Name, location.Name, StringComparison.OrdinalIgnoreCase);
+            if (sameLocation)
+            {
+                if (!location.characters.Contains(npc))
+                {
+                    npc.currentLocation?.characters.Remove(npc);
+                    location.characters.Add(npc);
+                    npc.currentLocation = location;
+                }
+
+                if (Vector2.Distance(npc.Tile, new Vector2(targetTile.X, targetTile.Y)) > 0.75f)
+                {
+                    npc.controller = new PathFindController(
+                        npc,
+                        location,
+                        targetTile,
+                        facingDirection is >= 0 and <= 3 ? facingDirection : 2
+                    );
+                }
+                else if (facingDirection is >= 0 and <= 3)
+                {
+                    npc.faceDirection(facingDirection);
+                }
+
+                if (this.config.Debug)
+                {
+                    this.monitor.Log($"Resumed {npc.Name}'s schedule from current position after {context}.", LogLevel.Debug);
+                }
+
+                return true;
+            }
+
+            if (!allowCrossLocationTeleport)
+            {
+                if (this.config.Debug)
+                {
+                    this.monitor.Log(
+                        $"Left {npc.Name} at the current escort location after {context}; current schedule target is in {location.Name}.",
+                        LogLevel.Debug
+                    );
+                }
+
+                return false;
+            }
+
+            npc.currentLocation?.characters.Remove(npc);
+            if (!location.characters.Contains(npc))
+            {
+                location.characters.Add(npc);
+            }
+
+            npc.currentLocation = location;
+            npc.Position = new Vector2(targetTile.X * Game1.tileSize, targetTile.Y * Game1.tileSize);
+            if (facingDirection is >= 0 and <= 3)
+            {
+                npc.faceDirection(facingDirection);
+            }
+
+            if (this.config.Debug)
+            {
+                this.monitor.Log($"Returned {npc.Name} to schedule location after {context}.", LogLevel.Debug);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            this.monitor.Log($"Could not resume {npc.Name}'s schedule after {context}: {ex.Message}", LogLevel.Warn);
+            return false;
+        }
+    }
+
+    private bool TryResolveCurrentScheduleTarget(NPC npc, out GameLocation? location, out Point targetTile, out int facingDirection)
+    {
+        location = null;
+        targetTile = Point.Zero;
+        facingDirection = -1;
         if (npc.Schedule == null || npc.Schedule.Count == 0)
         {
             return false;
@@ -2028,12 +2358,14 @@ internal sealed class BehaviorEngine
             .Select(entry => entry.Value)
             .FirstOrDefault();
         if (scheduleEntry == null
-            || !TryReadScheduleDestination(scheduleEntry, out string locationName, out Point targetTile, out int facingDirection))
+            || !TryReadScheduleDestination(scheduleEntry, out string locationName, out Point scheduledTile, out int scheduledFacingDirection))
         {
             return false;
         }
 
-        GameLocation? location;
+        targetTile = scheduledTile;
+        facingDirection = scheduledFacingDirection;
+
         try
         {
             location = Game1.getLocationFromName(locationName);
@@ -2054,20 +2386,25 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        npc.currentLocation?.characters.Remove(npc);
-        if (!location.characters.Contains(npc))
-        {
-            location.characters.Add(npc);
-        }
-
-        npc.currentLocation = location;
-        npc.Position = new Vector2(targetTile.X * Game1.tileSize, targetTile.Y * Game1.tileSize);
-        if (facingDirection is >= 0 and <= 3)
-        {
-            npc.faceDirection(facingDirection);
-        }
-
         return true;
+    }
+
+    private static bool IsProtectedEscortScene(NPC npc, out string reason)
+    {
+        if (Game1.eventUp || Game1.currentLocation?.currentEvent != null)
+        {
+            reason = "escort is blocked during events or festivals";
+            return true;
+        }
+
+        if (npc.IsInvisible || npc.isSleeping.Value)
+        {
+            reason = "escort is blocked while the NPC cannot naturally interact";
+            return true;
+        }
+
+        reason = string.Empty;
+        return false;
     }
 
     private string BuildEscortStartGreeting(string targetLocation)
@@ -2285,6 +2622,42 @@ internal sealed class BehaviorEngine
         return true;
     }
 
+    private bool HasAiGiftToday(LivingNpcState state)
+    {
+        return state.LastAiSmallGiftTotalDays == Game1.Date.TotalDays
+            || state.LastAiMeaningfulGiftTotalDays == Game1.Date.TotalDays;
+    }
+
+    private bool IsEligibleForSmallGift(NPC npc, LivingNpcState state)
+    {
+        int friendshipHearts = WorldContext.For(npc).FriendshipHearts;
+        return friendshipHearts >= SmallGiftMinFriendshipHearts
+            || state.Familiarity >= SmallGiftMinFamiliarity;
+    }
+
+    private bool IsEligibleForMeaningfulGift(NPC npc, LivingNpcState state, out string reason)
+    {
+        reason = string.Empty;
+        int friendshipHearts = WorldContext.For(npc).FriendshipHearts;
+        if (friendshipHearts < MeaningfulGiftMinFriendshipHearts)
+        {
+            reason = $"meaningful gifts require at least {MeaningfulGiftMinFriendshipHearts} hearts";
+            return false;
+        }
+
+        return true;
+    }
+
+    private void ClearGiftOpportunities(LivingNpcState state)
+    {
+        state.DailyGiftOpportunityTotalDays = -1;
+        state.DailyGiftOpportunityChancePercent = 0;
+        state.DailyGiftOpportunityReason = string.Empty;
+        state.PendingReciprocalGiftDueTotalDays = -1;
+        state.PendingReciprocalGiftSourceGiftName = string.Empty;
+        state.PendingReciprocalGiftReason = string.Empty;
+    }
+
     private string BuildWorldActionReason(string requestedReason, string fallback)
     {
         return string.IsNullOrWhiteSpace(requestedReason)
@@ -2319,7 +2692,7 @@ internal sealed class BehaviorEngine
             foreach (var walk in this.pendingWalks.ToList())
             {
                 this.TryFindNpcInCurrentLocation(walk.NpcName, out NPC? npc);
-                this.StopWalkTogether(walk, npc);
+                this.StopWalkTogether(walk, npc, returnToSchedule: true);
             }
 
             return;
@@ -2334,7 +2707,7 @@ internal sealed class BehaviorEngine
                 || npc == null
                 || npc.currentLocation?.Name != walk.LocationName)
             {
-                this.StopWalkTogether(walk, npc);
+                this.StopWalkTogether(walk, npc, returnToSchedule: true);
                 continue;
             }
 
@@ -2345,19 +2718,19 @@ internal sealed class BehaviorEngine
 
             if (Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles + 4)
             {
-                this.StopWalkTogether(walk, npc);
+                this.StopWalkTogether(walk, npc, returnToSchedule: true);
                 continue;
             }
 
             if (npc.controller != null && walk.LastAssignedController != null && npc.controller != walk.LastAssignedController)
             {
-                this.StopWalkTogether(walk, npc);
+                this.StopWalkTogether(walk, npc, returnToSchedule: true);
                 continue;
             }
 
             if (npc.controller != null && walk.LastAssignedController == null)
             {
-                this.StopWalkTogether(walk, npc);
+                this.StopWalkTogether(walk, npc, returnToSchedule: true);
                 continue;
             }
 
@@ -2475,7 +2848,11 @@ internal sealed class BehaviorEngine
                 new ValleyTalkWorldActionRequest
                 {
                     Type = "walk_together",
-                    DurationMinutes = System.Math.Clamp(8 + (influence.Intensity / 15), 5, this.config.MaxAiWalkTogetherMinutes),
+                    DurationMinutes = System.Math.Clamp(
+                        12 + (influence.Intensity / 12),
+                        10,
+                        System.Math.Max(10, this.config.MaxAiWalkTogetherMinutes)
+                    ),
                     Reason = influence.Summary
                 },
                 out _
@@ -2564,7 +2941,7 @@ internal sealed class BehaviorEngine
         }
 
         this.TryFacePlayer(npc);
-        npc.showTextAboveHead(this.BuildDialogueInfluenceLocationRemark(influence));
+        this.TryShowNpcSpeechBubble(npc, this.BuildDialogueInfluenceLocationRemark(influence));
         return true;
     }
 
@@ -2705,7 +3082,7 @@ internal sealed class BehaviorEngine
             {
                 if (commitment.Status == "Waiting" && !commitment.WaitingGreetingShown)
                 {
-                    if (this.TryShowNpcSpeechBubble(npc, this.BuildCommitmentWaitingGreeting(commitment), 5500))
+                    if (this.TryShowNpcSpeechBubble(npc, this.BuildCommitmentWaitingGreeting(commitment)))
                     {
                         commitment.WaitingGreetingShown = true;
                         commitment.LastMentionedTotalDays = Game1.Date.TotalDays;
@@ -2769,7 +3146,7 @@ internal sealed class BehaviorEngine
 
     private bool FulfillCommitment(NPC npc, NpcCommitmentFact commitment)
     {
-        if (!this.TryShowNpcSpeechBubble(npc, this.BuildCommitmentArrivalGreeting(commitment), 5500))
+        if (!this.TryShowNpcSpeechBubble(npc, this.BuildCommitmentArrivalGreeting(commitment)))
         {
             return false;
         }
@@ -2829,6 +3206,7 @@ internal sealed class BehaviorEngine
                 commitment.WaitingLocationName = BehaviorMemory.NormalizeCommitmentLocation(location.Name, commitment.LocationName);
                 commitment.WaitingTileX = targetTile.X;
                 commitment.WaitingTileY = targetTile.Y;
+                commitment.NpcArrivedAfterPlayer = preferPlayerTile;
                 commitment.LastUpdatedTotalDays = Game1.Date.TotalDays;
                 commitment.LastUpdatedTimeOfDay = Game1.timeOfDay;
                 this.memory.RecordNpcWorldAction(
@@ -2850,75 +3228,16 @@ internal sealed class BehaviorEngine
 
     private bool TryReturnNpcToSchedule(NPC npc, NpcCommitmentFact commitment)
     {
-        if (npc.Schedule == null || npc.Schedule.Count == 0)
+        bool returned = this.TryResumeNpcCurrentSchedule(npc, $"LivingNPCs commitment at {commitment.LocationName}");
+        if (returned && this.config.Debug)
         {
-            return false;
+            this.monitor.Log(
+                $"Returned {npc.Name} to schedule after missed LivingNPCs commitment at {commitment.LocationName}.",
+                LogLevel.Debug
+            );
         }
 
-        object? scheduleEntry = npc.Schedule
-            .Where(entry => entry.Key <= Game1.timeOfDay)
-            .OrderByDescending(entry => entry.Key)
-            .Select(entry => entry.Value)
-            .FirstOrDefault();
-        if (scheduleEntry == null
-            || !TryReadScheduleDestination(scheduleEntry, out string locationName, out Point targetTile, out int facingDirection))
-        {
-            return false;
-        }
-
-        GameLocation? location;
-        try
-        {
-            location = Game1.getLocationFromName(locationName);
-        }
-        catch
-        {
-            location = null;
-        }
-
-        if (location == null)
-        {
-            return false;
-        }
-
-        if (!this.IsSafeDestinationTile(location, targetTile, npc)
-            && !this.TryFindOpenTileNear(location, targetTile, npc, out targetTile))
-        {
-            return false;
-        }
-
-        try
-        {
-            npc.controller = null;
-            npc.Halt();
-            npc.currentLocation?.characters.Remove(npc);
-            if (!location.characters.Contains(npc))
-            {
-                location.characters.Add(npc);
-            }
-
-            npc.currentLocation = location;
-            npc.Position = new Vector2(targetTile.X * Game1.tileSize, targetTile.Y * Game1.tileSize);
-            if (facingDirection is >= 0 and <= 3)
-            {
-                npc.faceDirection(facingDirection);
-            }
-
-            if (this.config.Debug)
-            {
-                this.monitor.Log(
-                    $"Returned {npc.Name} to schedule after missed LivingNPCs commitment at {commitment.LocationName}.",
-                    LogLevel.Debug
-                );
-            }
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            this.monitor.Log($"Could not return {npc.Name} to schedule after LivingNPCs commitment: {ex.Message}", LogLevel.Warn);
-            return false;
-        }
+        return returned;
     }
 
     private bool TryFindOpenTileNear(GameLocation location, Point center, NPC ignoredNpc, out Point targetTile)
@@ -3253,25 +3572,33 @@ internal sealed class BehaviorEngine
 
     private string BuildCommitmentArrivalGreeting(NpcCommitmentFact commitment)
     {
+        string arrival = commitment.NpcArrivedAfterPlayer ? "我来了" : "你来了";
+        string place = string.IsNullOrWhiteSpace(commitment.LocationLabel) ? "这里" : commitment.LocationLabel;
         return commitment.Type switch
         {
-            "go_together" => "你来了，我们按约定一起走吧。",
-            "help_task" => "你来了，我记得答应过要帮你。",
-            "celebrate_together" => "你来了，正好一起庆祝。",
-            "share_activity" => "你来了，我们按说好的去做点什么吧。",
-            _ => "你来了，我记得我们的约定。"
+            "go_together" when commitment.NpcArrivedAfterPlayer => $"{arrival}，我们就在{place}碰头，然后按说好的走吧。",
+            "go_together" => $"{arrival}，我在{place}等着呢，我们按约定一起走吧。",
+            "help_task" when commitment.NpcArrivedAfterPlayer => $"{arrival}，说好的事就在{place}处理吧。",
+            "help_task" => $"{arrival}，说好的事现在办吧。",
+            "celebrate_together" when commitment.NpcArrivedAfterPlayer => $"{arrival}，正好在{place}一起庆祝。",
+            "celebrate_together" => $"{arrival}，正好一起庆祝。",
+            "share_activity" when commitment.NpcArrivedAfterPlayer => $"{arrival}，我们按说好的在{place}做那件事吧。",
+            "share_activity" => $"{arrival}，我们按说好的去做点什么吧。",
+            _ when commitment.NpcArrivedAfterPlayer => $"{arrival}，我们就在{place}碰头吧。",
+            _ => $"{arrival}，我们按说好的来。"
         };
     }
 
     private string BuildCommitmentWaitingGreeting(NpcCommitmentFact commitment)
     {
+        string place = string.IsNullOrWhiteSpace(commitment.LocationLabel) ? "这里" : commitment.LocationLabel;
         return commitment.Type switch
         {
-            "go_together" => "我到了，会在这里等你一会儿。",
-            "help_task" => "我到了，等你来我们就开始。",
-            "celebrate_together" => "我到了，等你一起庆祝。",
-            "share_activity" => "我到了，等你来一起做那件事。",
-            _ => "我到了，会在这里等你一会儿。"
+            "go_together" => $"我先到{place}了，会在这里等你一会儿。",
+            "help_task" => $"我先到{place}了，等你来我们就开始。",
+            "celebrate_together" => $"我先到{place}了，等你一起庆祝。",
+            "share_activity" => $"我先到{place}了，等你来一起做那件事。",
+            _ => $"我先到{place}了，会在这里等你一会儿。"
         };
     }
 
@@ -3308,7 +3635,11 @@ internal sealed class BehaviorEngine
                 continue;
             }
 
-            npc.showTextAboveHead(this.BuildCommitmentMorningReminder(commitment));
+            if (!this.TryShowNpcSpeechBubble(npc, this.BuildCommitmentMorningReminder(commitment)))
+            {
+                continue;
+            }
+
             commitment.MorningReminderShown = true;
             commitment.LastMentionedTotalDays = Game1.Date.TotalDays;
             commitment.LastMentionedTimeOfDay = Game1.timeOfDay;
@@ -3345,7 +3676,11 @@ internal sealed class BehaviorEngine
                 continue;
             }
 
-            npc.showTextAboveHead(this.BuildSharedExperienceFollowUp(experience));
+            if (!this.TryShowNpcSpeechBubble(npc, this.BuildSharedExperienceFollowUp(experience)))
+            {
+                continue;
+            }
+
             experience.FollowUpShownTotalDays = Game1.Date.TotalDays;
             experience.FollowUpShownTimeOfDay = Game1.timeOfDay;
         }
@@ -3382,7 +3717,11 @@ internal sealed class BehaviorEngine
                 continue;
             }
 
-            npc.showTextAboveHead(this.BuildHelpRequestFollowUp(request));
+            if (!this.TryShowNpcSpeechBubble(npc, this.BuildHelpRequestFollowUp(request)))
+            {
+                continue;
+            }
+
             request.FollowUpShownTotalDays = Game1.Date.TotalDays;
             request.FollowUpShownTimeOfDay = Game1.timeOfDay;
         }
@@ -3404,12 +3743,12 @@ internal sealed class BehaviorEngine
     {
         return experience.Type switch
         {
-            "celebrate_together" => "上次一起庆祝，我到现在还记得。",
-            "share_activity" => "上次一起做那件事，挺开心的。",
-            "go_together" => $"上次一起去{experience.LocationLabel}，感觉不错。",
-            "help_task" => "上次一起把事情做完，我很高兴。",
-            "help_request" => "上次你愿意帮我，我一直记得。",
-            _ => "上次一起度过的时间，我还记得。"
+            "celebrate_together" => "那次一起庆祝，气氛挺好的。",
+            "share_activity" => "那次一起做那件事，挺开心的。",
+            "go_together" => $"那次一起去{experience.LocationLabel}，感觉不错。",
+            "help_task" => "那件事一起做完以后，轻松多了。",
+            "help_request" => "上次你帮那一下，真的省了我不少心。",
+            _ => "那次一起待了一会儿，感觉挺好。"
         };
     }
 
@@ -3471,7 +3810,7 @@ internal sealed class BehaviorEngine
         return (hours * 60) + minutes;
     }
 
-    private void StopWalkTogether(PendingWalkTogether walk, NPC? npc)
+    private void StopWalkTogether(PendingWalkTogether walk, NPC? npc, bool returnToSchedule)
     {
         if (npc != null && npc.controller == walk.LastAssignedController)
         {
@@ -3479,7 +3818,103 @@ internal sealed class BehaviorEngine
             npc.Halt();
         }
 
+        if (npc != null)
+        {
+            RestoreNpcScheduleControl(npc, walk.OriginalIgnoreScheduleToday, walk.OriginalFollowSchedule);
+            if (returnToSchedule)
+            {
+                this.TryReturnNpcToCurrentSchedule(npc);
+            }
+        }
+
         this.pendingWalks.Remove(walk);
+    }
+
+    private void TryPrepareDailyGiftOpportunity(NPC npc, LivingNpcState state)
+    {
+        if (!this.config.EnableAiWorldActions
+            || !this.config.AllowAiSmallGifts
+            || this.HasAiGiftToday(state)
+            || state.HighestUnresolvedConflictSeverity >= 30
+            || state.DailyGiftOpportunityTotalDays == Game1.Date.TotalDays)
+        {
+            return;
+        }
+
+        if (WorldContext.For(npc).FriendshipHearts < MeaningfulGiftMinFriendshipHearts)
+        {
+            return;
+        }
+
+        int minChance = System.Math.Clamp(
+            System.Math.Min(this.config.AiDailyGiftChanceMinPercent, this.config.AiDailyGiftChanceMaxPercent),
+            0,
+            100
+        );
+        int maxChance = System.Math.Clamp(
+            System.Math.Max(this.config.AiDailyGiftChanceMinPercent, this.config.AiDailyGiftChanceMaxPercent),
+            0,
+            100
+        );
+        if (state.LastDailyGiftOpportunityRollTotalDays == Game1.Date.TotalDays)
+        {
+            return;
+        }
+
+        state.LastDailyGiftOpportunityRollTotalDays = Game1.Date.TotalDays;
+        int chance = this.random.Next(minChance, maxChance + 1);
+        if (this.random.Next(100) >= chance)
+        {
+            return;
+        }
+
+        state.DailyGiftOpportunityTotalDays = Game1.Date.TotalDays;
+        state.DailyGiftOpportunityChancePercent = chance;
+        state.DailyGiftOpportunityReason = $"{npc.displayName} is at {WorldContext.For(npc).FriendshipHearts} hearts and may naturally offer a small everyday gift during this conversation";
+    }
+
+    private void TryScheduleReciprocalGiftOpportunity(NPC npc, LivingNpcState state, GiftMemoryDetails gift)
+    {
+        if (!this.config.EnableAiWorldActions
+            || !this.config.AllowAiSmallGifts
+            || !this.IsEligibleForSmallGift(npc, state)
+            || state.HighestUnresolvedConflictSeverity >= 30
+            || gift.TasteScore is 4 or 6)
+        {
+            return;
+        }
+
+        if (state.PendingReciprocalGiftDueTotalDays >= Game1.Date.TotalDays)
+        {
+            return;
+        }
+
+        int chance = gift.TasteScore switch
+        {
+            0 => 70,
+            2 => 50,
+            8 => 20,
+            _ => 0
+        };
+        if (chance <= 0 || this.random.Next(100) >= chance)
+        {
+            return;
+        }
+
+        int delayDays = gift.TasteScore switch
+        {
+            0 => this.random.Next(0, 3),
+            2 => this.random.Next(0, 4),
+            _ => this.random.Next(1, 4)
+        };
+        if (delayDays == 0 && this.HasAiGiftToday(state))
+        {
+            delayDays = 1;
+        }
+
+        state.PendingReciprocalGiftDueTotalDays = Game1.Date.TotalDays + delayDays;
+        state.PendingReciprocalGiftSourceGiftName = gift.ItemName;
+        state.PendingReciprocalGiftReason = $"the farmer recently gave {npc.displayName} {gift.ItemName}, a {gift.TastePromptLabel}; a small return gift would feel reciprocal";
     }
 
     private void TryRecordConversationStart(ButtonPressedEventArgs e)
@@ -3506,10 +3941,18 @@ internal sealed class BehaviorEngine
         if (heldGift != null)
         {
             var gift = this.BuildGiftMemoryDetails(npc, heldGift);
+            if (this.config.EnableHelpRequests && this.HasPendingItemHelpRequest(npc, gift))
+            {
+                this.helper.Input.Suppress(e.Button);
+                this.DeliverHelpRequestItem(npc, heldGift, gift);
+                return;
+            }
+
             this.memory.RecordGiftOffered(npc, gift, this.config.MaxMemoryEntriesPerNpc);
             if (this.config.EnableNpcState)
             {
-                this.memory.UpdateStateForGift(npc, gift);
+                LivingNpcState state = this.memory.UpdateStateForGift(npc, gift);
+                this.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
             }
 
             if (this.config.EnableHelpRequests)
@@ -3546,11 +3989,102 @@ internal sealed class BehaviorEngine
         if (this.config.EnableNpcState)
         {
             LivingNpcState state = this.memory.UpdateStateForConversationStart(npc);
+            this.TryPrepareDailyGiftOpportunity(npc, state);
             this.TrySpreadConversationSocialRipple(npc, state);
         }
 
         this.PushInteractionContext(npc, $"Recorded conversation start for {npc.Name}.");
         this.MarkCommitmentFollowUpsMentionedAfterPrompt(npc);
+    }
+
+    private bool HasPendingItemHelpRequest(NPC npc, GiftMemoryDetails gift)
+    {
+        var state = this.memory.GetState(npc);
+        return state?.HelpRequests.Any(request =>
+            request.Status == "Pending"
+            && request.Type == "item_request"
+            && string.Equals(request.RequestedItemId, gift.ItemId, StringComparison.OrdinalIgnoreCase)) == true;
+    }
+
+    private void DeliverHelpRequestItem(NPC npc, SObject heldItem, GiftMemoryDetails gift)
+    {
+        SObject deliveredItem = ItemRegistry.Create<SObject>(gift.ItemId);
+        deliveredItem.Quality = heldItem.Quality;
+        Game1.player.reduceActiveItemByOne();
+
+        IReadOnlyList<NpcHelpRequestFact> changedHelpRequests = this.memory.TryCompleteItemHelpRequests(
+            npc,
+            gift,
+            this.config.MaxMemoryEntriesPerNpc
+        );
+        if (changedHelpRequests.Count == 0)
+        {
+            if (this.config.Debug)
+            {
+                this.monitor.Log(
+                    $"Suppressed gift interaction for {npc.Name}, but no matching help request was completed for {gift.ItemId}.",
+                    LogLevel.Debug
+                );
+            }
+
+            return;
+        }
+
+        this.RewardFulfilledHelpRequests(npc, changedHelpRequests, queueAmbientThanks: false);
+        this.SyncHelpRequestsToQuestLog();
+
+        int fulfilledCount = changedHelpRequests.Count(request => request.Status == "Fulfilled");
+        int advancedCount = changedHelpRequests.Count - fulfilledCount;
+        this.PushInteractionContext(
+            npc,
+            $"Delivered {gift.ItemName} for {changedHelpRequests.Count} help request(s): {fulfilledCount} fulfilled, {advancedCount} advanced.",
+            this.BuildHelpRequestDeliveryPrompt(npc, gift, changedHelpRequests)
+        );
+
+        if (!this.valleyTalkBridge.TryRequestGiftDialogue(npc, deliveredItem, gift.TasteScore))
+        {
+            this.QueueAmbientRemark(
+                npc,
+                fulfilledCount > 0 ? "谢谢你，真的帮上忙了。" : "谢谢你，我先收下这个。",
+                0
+            );
+        }
+
+        if (fulfilledCount == 0)
+        {
+            this.ShowFeedback($"LivingNPCs：已把 {gift.ItemName} 交给 {npc.displayName}。");
+        }
+    }
+
+    private string BuildHelpRequestDeliveryPrompt(
+        NPC npc,
+        GiftMemoryDetails gift,
+        IReadOnlyList<NpcHelpRequestFact> changedHelpRequests
+    )
+    {
+        var lines = new List<string>
+        {
+            "## LivingNPCs Immediate Help Request Delivery",
+            $"- The farmer just handed {npc.displayName} {gift.ItemName} ({gift.ItemId}) for a LivingNPCs help request.",
+            "- This is a task hand-in, not an ordinary daily gift. Acknowledge the requested item even if the farmer has already given a normal gift today.",
+            "- Respond now with a natural thank-you or reaction to the completed request/step. Do not mention the game's daily gift limit."
+        };
+
+        foreach (var request in changedHelpRequests)
+        {
+            lines.Add($"- Help request status: {request.Status}; summary: {request.Summary}; resolution: {request.Resolution}");
+            if (request.Status == "Fulfilled" && request.RewardGranted)
+            {
+                lines.Add($"- LivingNPCs already granted the configured friendship reward (+{request.RewardFriendship}).");
+            }
+
+            if (request.RewardGiftGiven)
+            {
+                lines.Add("- LivingNPCs also gave the farmer a small item reward; mention it only if it feels natural.");
+            }
+        }
+
+        return string.Join("\n", lines);
     }
 
     private void TryRecordObservedRomanticInteraction(NPC targetNpc)
@@ -4008,7 +4542,7 @@ internal sealed class BehaviorEngine
         }
     }
 
-    private void PushInteractionContext(NPC npc, string debugMessage)
+    private void PushInteractionContext(NPC npc, string debugMessage, string immediatePromptContext = "")
     {
         string promptContext = this.memory.BuildPromptContext(
             npc,
@@ -4018,6 +4552,17 @@ internal sealed class BehaviorEngine
             this.config.HelpRequestCooldownDays,
             this.config.MinRelationshipTrustForHelpRequests
         );
+        string giftOpportunityContext = this.BuildGiftOpportunityPromptContext(npc);
+        if (!string.IsNullOrWhiteSpace(giftOpportunityContext))
+        {
+            promptContext = $"{promptContext}\n{giftOpportunityContext}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(immediatePromptContext))
+        {
+            promptContext = $"{promptContext}\n{immediatePromptContext}";
+        }
+
         bool pushedToValleyTalk = this.valleyTalkBridge.PushBehaviorContext(npc, promptContext);
 
         if (this.config.Debug)
@@ -4029,6 +4574,56 @@ internal sealed class BehaviorEngine
                 LogLevel.Debug
             );
         }
+    }
+
+    private string BuildGiftOpportunityPromptContext(NPC npc)
+    {
+        var state = this.memory.GetState(npc);
+        if (state == null
+            || !this.config.EnableAiWorldActions
+            || !this.config.AllowAiSmallGifts
+            || state.HighestUnresolvedConflictSeverity >= 30
+            || this.HasAiGiftToday(state))
+        {
+            return string.Empty;
+        }
+
+        int today = Game1.Date.TotalDays;
+        if (state.PendingReciprocalGiftDueTotalDays >= 0
+            && state.PendingReciprocalGiftDueTotalDays + PendingReciprocalGiftExpirationDays < today)
+        {
+            state.PendingReciprocalGiftDueTotalDays = -1;
+            state.PendingReciprocalGiftSourceGiftName = string.Empty;
+            state.PendingReciprocalGiftReason = string.Empty;
+        }
+
+        string cue = string.Empty;
+        if (state.PendingReciprocalGiftDueTotalDays >= 0 && state.PendingReciprocalGiftDueTotalDays <= today)
+        {
+            cue = string.IsNullOrWhiteSpace(state.PendingReciprocalGiftReason)
+                ? "The NPC has a natural opportunity to offer a small return gift for a recent gift from the farmer."
+                : state.PendingReciprocalGiftReason;
+        }
+        else if (state.DailyGiftOpportunityTotalDays == today)
+        {
+            cue = string.IsNullOrWhiteSpace(state.DailyGiftOpportunityReason)
+                ? "The relationship is warm enough that the NPC may offer a small everyday gift today."
+                : state.DailyGiftOpportunityReason;
+        }
+
+        if (string.IsNullOrWhiteSpace(cue))
+        {
+            return string.Empty;
+        }
+
+        return string.Join(
+            "\n",
+            "## LivingNPCs Gift Opportunity",
+            $"- Gift cue: {cue}.",
+            "- If it fits the visible reply, have the NPC naturally offer a small in-game gift now and include exactly one hidden action with type give_small_gift.",
+            "- If naming a specific gift, use an allowed itemId and itemLabel. Generic wording such as 'a small thing' is fine when no specific item is named.",
+            "- If the moment feels emotionally wrong, crowded, or abrupt, skip the gift rather than forcing it."
+        );
     }
 
     private GiftMemoryDetails BuildGiftMemoryDetails(NPC npc, SObject gift)
@@ -4451,6 +5046,11 @@ internal sealed class BehaviorEngine
             return false;
         }
 
+        if (!location.isTilePassable(tileVector))
+        {
+            return false;
+        }
+
         return !location.characters.Any(npc => npc != ignoredNpc && npc.TilePoint == tile);
     }
 
@@ -4769,6 +5369,32 @@ internal sealed class BehaviorEngine
         Game1.addHUDMessage(HUDMessage.ForCornerTextbox(message));
     }
 
+    private void ShowFeedbackAfterDialogue(string message)
+    {
+        if (!this.config.ShowHudMessages || string.IsNullOrWhiteSpace(message))
+        {
+            return;
+        }
+
+        if (Game1.activeClickableMenu == null)
+        {
+            this.ShowFeedback(message);
+            return;
+        }
+
+        this.pendingHudMessages.Enqueue(message);
+    }
+
+    private void TryShowPendingHudMessages()
+    {
+        if (this.pendingHudMessages.Count == 0 || Game1.activeClickableMenu != null)
+        {
+            return;
+        }
+
+        this.ShowFeedback(this.pendingHudMessages.Dequeue());
+    }
+
     private string DescribeIntent(BehaviorIntentType intentType)
     {
         return intentType switch
@@ -4830,7 +5456,9 @@ internal sealed class PendingEscortToLocation
         string targetLocationLabel,
         int endTimeOfDay,
         string lastLocationName,
-        Point lastPlayerTile
+        Point lastPlayerTile,
+        bool originalIgnoreScheduleToday,
+        bool originalFollowSchedule
     )
     {
         this.NpcName = npcName;
@@ -4840,6 +5468,8 @@ internal sealed class PendingEscortToLocation
         this.EndTimeOfDay = endTimeOfDay;
         this.LastLocationName = lastLocationName;
         this.LastPlayerTile = lastPlayerTile;
+        this.OriginalIgnoreScheduleToday = originalIgnoreScheduleToday;
+        this.OriginalFollowSchedule = originalFollowSchedule;
     }
 
     public string NpcName { get; }
@@ -4849,6 +5479,8 @@ internal sealed class PendingEscortToLocation
     public int EndTimeOfDay { get; }
     public string LastLocationName { get; set; }
     public Point LastPlayerTile { get; set; }
+    public bool OriginalIgnoreScheduleToday { get; }
+    public bool OriginalFollowSchedule { get; }
     public Point LastWaypointTile { get; set; } = Point.Zero;
     public PathFindController? LastAssignedController { get; set; }
     public bool HintShownForLocation { get; set; }
@@ -4865,7 +5497,9 @@ internal sealed class PendingWalkTogether
         string locationName,
         int endTimeOfDay,
         Point lastPlayerTile,
-        PathFindController? lastAssignedController
+        PathFindController? lastAssignedController,
+        bool originalIgnoreScheduleToday,
+        bool originalFollowSchedule
     )
     {
         this.NpcName = npcName;
@@ -4874,6 +5508,8 @@ internal sealed class PendingWalkTogether
         this.EndTimeOfDay = endTimeOfDay;
         this.LastPlayerTile = lastPlayerTile;
         this.LastAssignedController = lastAssignedController;
+        this.OriginalIgnoreScheduleToday = originalIgnoreScheduleToday;
+        this.OriginalFollowSchedule = originalFollowSchedule;
     }
 
     public string NpcName { get; }
@@ -4882,4 +5518,6 @@ internal sealed class PendingWalkTogether
     public int EndTimeOfDay { get; }
     public Point LastPlayerTile { get; set; }
     public PathFindController? LastAssignedController { get; set; }
+    public bool OriginalIgnoreScheduleToday { get; }
+    public bool OriginalFollowSchedule { get; }
 }

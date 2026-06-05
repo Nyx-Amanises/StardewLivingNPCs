@@ -53,6 +53,45 @@ internal sealed class GiftSelector
         new("(O)608", "Pumpkin Pie", ["food", "comfort", "special"], "fall")
     ];
 
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> GiftMentionAliases =
+        new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["(O)16"] = ["wild horseradish", "horseradish", "野山葵", "辣根"],
+            ["(O)18"] = ["daffodil", "黄水仙", "水仙"],
+            ["(O)20"] = ["leek", "韭葱"],
+            ["(O)22"] = ["dandelion", "蒲公英"],
+            ["(O)66"] = ["amethyst", "紫水晶"],
+            ["(O)72"] = ["diamond", "钻石"],
+            ["(O)80"] = ["quartz", "石英"],
+            ["(O)82"] = ["fire quartz", "火水晶"],
+            ["(O)84"] = ["frozen tear", "冰封泪晶", "冰泪"],
+            ["(O)86"] = ["earth crystal", "地晶"],
+            ["(O)216"] = ["bread", "面包"],
+            ["(O)220"] = ["chocolate cake", "巧克力蛋糕"],
+            ["(O)221"] = ["pink cake", "粉红蛋糕"],
+            ["(O)223"] = ["cookie", "cookies", "饼干"],
+            ["(O)234"] = ["blueberry tart", "蓝莓千层酥", "蓝莓挞"],
+            ["(O)240"] = ["farmer's lunch", "farmers lunch", "农夫午餐"],
+            ["(O)395"] = ["coffee", "咖啡"],
+            ["(O)396"] = ["spice berry", "香料浆果", "香味浆果"],
+            ["(O)398"] = ["grape", "grapes", "葡萄"],
+            ["(O)402"] = ["sweet pea", "甜豌豆"],
+            ["(O)404"] = ["common mushroom", "mushroom", "普通蘑菇", "蘑菇"],
+            ["(O)406"] = ["wild plum", "plum", "野梅"],
+            ["(O)408"] = ["hazelnut", "榛子"],
+            ["(O)410"] = ["blackberry", "blackberries", "黑莓"],
+            ["(O)412"] = ["winter root", "冬根"],
+            ["(O)414"] = ["crystal fruit", "水晶果"],
+            ["(O)416"] = ["snow yam", "雪山药"],
+            ["(O)418"] = ["crocus", "番红花"],
+            ["(O)421"] = ["sunflower", "向日葵"],
+            ["(O)591"] = ["tulip", "郁金香"],
+            ["(O)593"] = ["summer spangle", "夏季亮片"],
+            ["(O)595"] = ["fairy rose", "玫瑰仙子", "仙女玫瑰"],
+            ["(O)597"] = ["blue jazz", "蓝爵"],
+            ["(O)608"] = ["pumpkin pie", "南瓜派"]
+        };
+
     private static readonly Dictionary<string, string[]> ExplicitNpcTags = new(StringComparer.OrdinalIgnoreCase)
     {
         ["Abigail"] = ["adventurous", "curious"],
@@ -189,6 +228,41 @@ internal sealed class GiftSelector
             candidate.DebugName,
             tier,
             "the AI named this gift in hidden metadata and it passed the allowed gift pool check",
+            string.Empty
+        );
+        return true;
+    }
+
+    public bool TryChooseMentioned(
+        string text,
+        GiftTier tier,
+        out GiftSelection? selection
+    )
+    {
+        selection = null;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        string season = Game1.season.ToString().ToLowerInvariant();
+        IReadOnlyList<GiftCandidate> pool = tier == GiftTier.Meaningful
+            ? MeaningfulCandidates
+            : SmallCandidates;
+        GiftCandidate? candidate = pool.FirstOrDefault(candidate =>
+            (string.IsNullOrWhiteSpace(candidate.Season) || candidate.Season == season)
+            && this.TextMentionsCandidate(text, candidate)
+        );
+        if (candidate == null)
+        {
+            return false;
+        }
+
+        selection = new GiftSelection(
+            candidate.ItemId,
+            candidate.DebugName,
+            tier,
+            "the visible dialogue named this allowed gift",
             string.Empty
         );
         return true;
@@ -553,6 +627,17 @@ internal sealed class GiftSelector
         string normalizedCandidate = candidate.DebugName.Trim().ToLowerInvariant();
         return normalizedSubject.Contains(normalizedCandidate, StringComparison.OrdinalIgnoreCase)
             || normalizedCandidate.Contains(normalizedSubject, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private bool TextMentionsCandidate(string text, GiftCandidate candidate)
+    {
+        if (text.Contains(candidate.DebugName, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        return GiftMentionAliases.TryGetValue(candidate.ItemId, out IReadOnlyList<string>? aliases)
+            && aliases.Any(alias => text.Contains(alias, StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool ContainsAny(string text, params string[] needles)

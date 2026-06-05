@@ -224,6 +224,7 @@ public class Prompts
 
         DefaultOrOverride("SpecialDatesAndBirthday", GetSpecialDatesAndBirthday, prompt);
         DefaultOrOverride("Gift", GetGift, prompt);
+        DefaultOrOverride("LivingNpcExtraPrompt", GetLivingNpcExtraPrompt, prompt);
         DefaultOrOverride("SpouseAction", GetSpouseAction, prompt);
         if (!friendship.IsMarried())
         {
@@ -497,6 +498,14 @@ public class Prompts
                 giftName = LoadLocalised(giftName);
             }
             prompt.AppendLine(Util.GetString(Character,"giftGiving", new { Name= Name, GiftName= giftName }));
+        }
+    }
+
+    private void GetLivingNpcExtraPrompt(StringBuilder prompt)
+    {
+        if (!string.IsNullOrWhiteSpace(Context.LivingNpcExtraPrompt))
+        {
+            prompt.AppendLine(Context.LivingNpcExtraPrompt);
         }
     }
 
@@ -1205,6 +1214,7 @@ public class Prompts
         instructions.AppendLine(Util.GetString(Character,"instructionsSingleLine"));
         instructions.AppendLine(Util.GetString(Character,"instructionsResponses", new { Name= Name }));
         instructions.AppendLine(Util.GetString(Character,"instructionsLivingNpcMetadata"));
+        instructions.AppendLine(Util.GetString(Character,"instructionsLivingNpcGiftIds"));
         instructions.AppendLine(Util.GetString(Character,"instructionsLivingNpcImmediateTravel"));
         instructions.AppendLine(Util.GetString(Character,"instructionsLivingNpcCommitmentDepth"));
         instructions.AppendLine(Util.GetString(Character,"instructionsLivingNpcHelpRequests"));

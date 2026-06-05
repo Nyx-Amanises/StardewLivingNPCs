@@ -10,33 +10,40 @@ internal static class HelpRequestAdvisor
     private static readonly IReadOnlyDictionary<string, HelpRequestProfile> ExplicitProfiles =
         new Dictionary<string, HelpRequestProfile>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Gus"] = new("kitchen and hospitality", ["food", "practical"], ["a small ingredient", "what food the farmer has enjoyed lately"]),
-            ["Harvey"] = new("care and health", ["drink", "scholarly"], ["a simple observation", "how the farmer has been feeling"]),
-            ["Penny"] = new("books and children", ["scholarly", "comfort"], ["a small reading suggestion", "a thoughtful opinion"]),
-            ["Demetrius"] = new("field study and observation", ["scholarly", "nature"], ["a sample from outdoors", "a practical observation"]),
-            ["Maru"] = new("technical curiosity", ["scholarly", "practical"], ["a small material", "a practical explanation"]),
-            ["Robin"] = new("building and repairs", ["practical", "work"], ["a practical material", "a quick judgment call"]),
-            ["Clint"] = new("smithing and materials", ["mineral", "practical"], ["a common mineral", "a practical question"]),
-            ["Linus"] = new("foraging and living outdoors", ["forage", "nature"], ["a seasonal forage item", "an outdoor observation"]),
-            ["Leah"] = new("art and nature", ["flower", "nature", "artistic"], ["a seasonal flower", "an opinion about a natural detail"]),
-            ["Elliott"] = new("writing and aesthetics", ["flower", "artistic"], ["a flower", "a reflective answer"]),
-            ["Abigail"] = new("exploration", ["mineral", "adventurous"], ["a common mineral", "something about the mines"]),
-            ["Wizard"] = new("arcane study", ["mineral", "magical", "scholarly"], ["a quartz sample", "an unusual observation"]),
-            ["Claire"] = new("everyday fatigue and small comforts", ["drink", "practical"], ["coffee", "a grounded practical answer"]),
-            ["Sophia"] = new("vineyard life and small comforts", ["flower", "comfort"], ["a seasonal flower", "a gentle opinion"]),
-            ["Susan"] = new("farm work", ["food", "nature", "practical"], ["a seasonal forage item", "farm experience"]),
-            ["Victor"] = new("engineering and careful planning", ["scholarly", "practical"], ["a simple material", "a thoughtful answer"]),
-            ["Flor"] = new("study and emotional insight", ["scholarly", "comfort"], ["a thoughtful answer", "a small everyday comfort"]),
-            ["Kenneth"] = new("electrical work and problem solving", ["scholarly", "practical"], ["a practical material", "a clear explanation"]),
-            ["Pika"] = new("restaurant work", ["food", "comfort"], ["a small ingredient", "what flavors the farmer prefers"]),
-            ["Carmen"] = new("fishing and water life", ["nature", "practical"], ["an outdoor observation", "a practical answer"]),
-            ["June"] = new("performance and taste", ["flower", "artistic"], ["a flower", "an opinion about style or mood"])
+            ["Gus"] = new("kitchen and hospitality", ["food", "practical", "comfort"]),
+            ["Harvey"] = new("care and health", ["drink", "scholarly", "comfort"]),
+            ["Penny"] = new("books, children, and simple teaching examples", ["scholarly", "comfort", "flower", "forage", "mineral"]),
+            ["Demetrius"] = new("field study and observation", ["scholarly", "nature", "forage"]),
+            ["Maru"] = new("technical curiosity", ["scholarly", "practical", "mineral"]),
+            ["Robin"] = new("building and repairs", ["practical", "work", "forage"]),
+            ["Clint"] = new("smithing and materials", ["mineral", "practical"]),
+            ["Linus"] = new("foraging and living outdoors", ["forage", "nature", "food"]),
+            ["Leah"] = new("art and nature", ["flower", "nature", "artistic"]),
+            ["Elliott"] = new("writing and aesthetics", ["flower", "artistic", "comfort"]),
+            ["Abigail"] = new("exploration", ["mineral", "adventurous"]),
+            ["Wizard"] = new("arcane study", ["mineral", "magical", "scholarly"]),
+            ["Claire"] = new("everyday fatigue and small comforts", ["drink", "practical", "comfort"]),
+            ["Sophia"] = new("vineyard life and small comforts", ["flower", "comfort", "food"]),
+            ["Susan"] = new("farm work", ["food", "nature", "practical", "forage"]),
+            ["Victor"] = new("engineering and careful planning", ["scholarly", "practical", "mineral"]),
+            ["Flor"] = new("study and emotional insight", ["scholarly", "comfort", "flower"]),
+            ["Kenneth"] = new("electrical work and problem solving", ["scholarly", "practical", "mineral"]),
+            ["Pika"] = new("restaurant work", ["food", "comfort"]),
+            ["Carmen"] = new("fishing and water life", ["nature", "practical", "forage"]),
+            ["June"] = new("performance and taste", ["flower", "artistic", "comfort"])
         };
 
     private static readonly IReadOnlyList<HelpRequestItem> ProgressionItems =
     [
         new("(O)80", "Quartz", ["mineral", "scholarly", "magical"], HelpRequestAvailability.MinesOpen),
         new("(O)66", "Amethyst", ["mineral", "adventurous", "magical", "artistic"], HelpRequestAvailability.MineLevel40)
+    ];
+
+    private static readonly IReadOnlyList<HelpRequestItem> RelationshipItems =
+    [
+        new("(O)216", "Bread", ["food", "comfort", "hospitality", "practical"], HelpRequestAvailability.Always, 2),
+        new("(O)395", "Coffee", ["drink", "comfort", "work", "hospitality"], HelpRequestAvailability.Always, 4),
+        new("(O)223", "Cookie", ["food", "comfort", "sweet", "family"], HelpRequestAvailability.Always, 6)
     ];
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<HelpRequestItem>> SeasonalItems =
@@ -74,57 +81,32 @@ internal static class HelpRequestAdvisor
     public static string BuildPromptLabel(NPC npc, WorldProgressSnapshot progression)
     {
         var profile = GetProfile(npc);
-        var tags = new HashSet<string>(profile.Tags, StringComparer.OrdinalIgnoreCase);
-        var seasonal = GetSeasonalItems()
-            .Where(item => item.Tags.Any(tags.Contains))
-            .Take(3)
-            .ToList();
-        var progressionItems = GetProgressionItems()
-            .Where(item => item.Tags.Any(tags.Contains))
-            .Take(2)
-            .ToList();
-        var preferredItems = seasonal
-            .Concat(progressionItems)
-            .DistinctBy(item => item.ItemId)
-            .ToList();
-
+        var world = WorldContext.For(npc);
+        var preferredItems = GetPreferredItems(npc, progression);
         string itemText = preferredItems.Count == 0
-            ? "no currently reasonable item request; prefer a question request if the current conversation supports one"
+            ? "no currently reasonable item request; do not open a help request now"
             : string.Join(", ", preferredItems.Select(item => $"{item.Label} {item.ItemId}"));
-        string questionText = string.Join(", ", profile.QuestionPrompts);
         string stageText = BuildRequestDepthGuidance(progression);
         string routeText = BuildRouteGuidance(progression);
+        string relationshipText = BuildRelationshipGuidance(world.FriendshipHearts);
 
-        return $"theme {profile.Theme}; currently reasonable item requests: {itemText}; fitting question requests: {questionText}; request depth: {stageText}; world-stage constraint: {routeText}; only ask if the current conversation naturally creates a reason.";
+        return $"theme {profile.Theme}; currently reasonable item requests: {itemText}; allowed help request type: item_request only; never create question_request; request relationship tier: {relationshipText}; request depth: {stageText}; world-stage constraint: {routeText}; if the farmer directly asks whether they can help and item requests are listed, choose one concrete item_request from that list; if no listed item naturally fits, do not open a hidden help request and keep the visible reply as ordinary conversation.";
     }
 
     public static string BuildDebugLabel(NPC npc, WorldProgressSnapshot progression)
     {
         var profile = GetProfile(npc);
-        var tags = new HashSet<string>(profile.Tags, StringComparer.OrdinalIgnoreCase);
-        var seasonal = GetSeasonalItems()
-            .Where(item => item.Tags.Any(tags.Contains))
-            .Take(3)
-            .ToList();
-        var progressionItems = GetProgressionItems()
-            .Where(item => item.Tags.Any(tags.Contains))
-            .Take(2)
-            .ToList();
-        var preferredItems = seasonal
-            .Concat(progressionItems)
-            .DistinctBy(item => item.ItemId)
-            .ToList();
-
+        var world = WorldContext.For(npc);
+        var preferredItems = GetPreferredItems(npc, progression);
         string itemText = preferredItems.Count == 0
             ? "当前不建议物品求助"
             : string.Join("、", preferredItems.Select(item => $"{item.Label} {item.ItemId}"));
-        string questionText = string.Join("、", profile.QuestionPrompts);
         string depthText = progression.ResidentStage switch
         {
-            "first_spring_newcomer" => "第一年春，新人阶段：只适合低负担一步小忙或简单问题",
-            "first_year_settling_in" => "第一年安顿中：以一步小忙为主，强语境下可两步",
-            "second_year_established" => "第二年已融入：可出现适度个人请求",
-            _ => "老住户阶段：高信任时可出现更完整请求"
+            "first_spring_newcomer" => "第一年春，新人阶段：只适合低负担一步物品求助",
+            "first_year_settling_in" => "第一年安顿中：以一步物品求助为主",
+            "second_year_established" => "第二年已融入：可出现适度个人化物品求助",
+            _ => "老住户阶段：高信任时可出现更贴角色的物品求助"
         };
         string routeText = progression.Route switch
         {
@@ -132,8 +114,15 @@ internal static class HelpRequestAdvisor
             "joja" => "Joja 路线已完成",
             _ => "路线未定"
         };
+        string relationshipText = world.FriendshipHearts switch
+        {
+            < 2 => "0-1 心：只允许很轻的当季物品",
+            < 4 => "2-3 心：可加入便宜日常物品",
+            < 6 => "4-5 心：可加入更贴生活习惯的物品",
+            _ => "6 心以上：可加入更有人情味的物品"
+        };
 
-        return $"主题：{profile.Theme}；候选物品：{itemText}；候选问题：{questionText}；深度：{depthText}；路线：{routeText}";
+        return $"主题：{profile.Theme}；候选物品：{itemText}；类型：仅物品求助；关系：{relationshipText}；深度：{depthText}；路线：{routeText}";
     }
 
     public static bool IsCurrentlyRequestableItem(string itemId)
@@ -141,6 +130,45 @@ internal static class HelpRequestAdvisor
         return GetSeasonalItems()
             .Concat(GetProgressionItems())
             .Any(item => item.ItemId.Equals(itemId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public static bool IsCurrentlyRequestableItem(string itemId, NPC npc)
+    {
+        return GetPreferredItems(npc, WorldProgression.Current())
+            .Any(item => item.ItemId.Equals(itemId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static List<HelpRequestItem> GetPreferredItems(NPC npc, WorldProgressSnapshot progression)
+    {
+        var profile = GetProfile(npc);
+        var tags = new HashSet<string>(profile.Tags, StringComparer.OrdinalIgnoreCase);
+        int friendshipHearts = WorldContext.For(npc).FriendshipHearts;
+        var seasonal = GetSeasonalItems().ToList();
+        var matchingSeasonal = seasonal
+            .Where(item => item.Tags.Any(tags.Contains))
+            .Take(3);
+        var matchingProgression = GetProgressionItems()
+            .Where(item => item.Tags.Any(tags.Contains))
+            .Take(friendshipHearts >= 4 || progression.Year > 1 ? 2 : 1);
+        var matchingRelationship = RelationshipItems
+            .Where(item => friendshipHearts >= item.MinFriendshipHearts && item.Tags.Any(tags.Contains))
+            .Take(friendshipHearts >= 6 ? 2 : 1);
+
+        var preferred = matchingSeasonal
+            .Concat(matchingProgression)
+            .Concat(matchingRelationship)
+            .DistinctBy(item => item.ItemId)
+            .Take(friendshipHearts >= 6 || progression.Year > 1 ? 5 : 4)
+            .ToList();
+
+        if (preferred.Count == 0)
+        {
+            preferred = seasonal
+                .Take(friendshipHearts >= 2 ? 2 : 1)
+                .ToList();
+        }
+
+        return preferred;
     }
 
     private static HelpRequestProfile GetProfile(NPC npc)
@@ -154,30 +182,30 @@ internal static class HelpRequestAdvisor
         string profileText = $"{disposition.PromptLabel} {disposition.BackgroundPrompt} {disposition.DialoguePrompt}".ToLowerInvariant();
         if (ContainsAny(profileText, "magical", "arcane", "adventurer", "danger"))
         {
-            return new HelpRequestProfile("exploration and unusual findings", ["mineral", "adventurous", "magical"], ["a common mineral", "something the farmer noticed while exploring"]);
+            return new HelpRequestProfile("exploration and unusual findings", ["mineral", "adventurous", "magical"]);
         }
 
         if (ContainsAny(profileText, "artist", "creative", "performer", "stylish"))
         {
-            return new HelpRequestProfile("aesthetics and expression", ["flower", "artistic"], ["a seasonal flower", "the farmer's opinion about mood or beauty"]);
+            return new HelpRequestProfile("aesthetics and expression", ["flower", "artistic", "comfort"]);
         }
 
         if (ContainsAny(profileText, "scholarly", "educated", "student", "technical", "engineering"))
         {
-            return new HelpRequestProfile("study and careful thinking", ["scholarly", "practical"], ["a thoughtful answer", "a small observation relevant to their work"]);
+            return new HelpRequestProfile("study and careful thinking", ["scholarly", "practical", "mineral"]);
         }
 
         if (ContainsAny(profileText, "farm", "rural", "work", "practical"))
         {
-            return new HelpRequestProfile("practical daily work", ["practical", "forage", "food"], ["a useful everyday item", "a grounded practical answer"]);
+            return new HelpRequestProfile("practical daily work", ["practical", "forage", "food"]);
         }
 
         if (ContainsAny(profileText, "warm", "family", "gentle", "community"))
         {
-            return new HelpRequestProfile("everyday care and comfort", ["comfort", "food", "flower"], ["a small comfort item", "a thoughtful personal answer"]);
+            return new HelpRequestProfile("everyday care and comfort", ["comfort", "food", "flower"]);
         }
 
-        return new HelpRequestProfile("small everyday favors", ["practical", "comfort"], ["a modest practical answer", "a small everyday item"]);
+        return new HelpRequestProfile("small everyday favors", ["practical", "comfort", "forage"]);
     }
 
     private static IEnumerable<HelpRequestItem> GetSeasonalItems()
@@ -225,13 +253,24 @@ internal static class HelpRequestAdvisor
         return progression.ResidentStage switch
         {
             "first_spring_newcomer" =>
-                "prefer a one-step, low-stakes favor or simple question; avoid requests that assume long shared history",
+                "prefer one-step, low-stakes item requests; avoid requests that assume long shared history",
             "first_year_settling_in" =>
-                "small one-step favors fit best; a modest two-step request is okay only when the current conversation strongly supports it",
+                "small one-step item requests fit best; a modest two-step item request is okay only when the current conversation strongly supports it",
             "second_year_established" =>
-                "modest personal requests and occasional two-step favors can fit when trust and conversation support them",
+                "modest personal item requests and occasional two-step item favors can fit when trust and conversation support them",
             _ =>
-                "deeper personal requests or fuller multi-step favors can fit when trust is high and the conversation earns them"
+                "deeper personal item requests or fuller multi-step item favors can fit when trust is high and the conversation earns them"
+        };
+    }
+
+    private static string BuildRelationshipGuidance(int friendshipHearts)
+    {
+        return friendshipHearts switch
+        {
+            < 2 => "distant; choose only very easy seasonal forage or flowers",
+            < 4 => "familiar; cheap everyday items may fit if character-specific",
+            < 6 => "friendly; modest comfort items can fit",
+            _ => "trusted; more personal low-value comfort items can fit"
         };
     }
 
@@ -257,19 +296,20 @@ internal static class HelpRequestAdvisor
 
     private sealed record HelpRequestProfile(
         string Theme,
-        IReadOnlyCollection<string> Tags,
-        IReadOnlyCollection<string> QuestionPrompts
+        IReadOnlyCollection<string> Tags
     );
 
     private sealed record HelpRequestItem(
         string ItemId,
         string Label,
         IReadOnlyCollection<string> Tags,
-        HelpRequestAvailability Availability = HelpRequestAvailability.CurrentSeason
+        HelpRequestAvailability Availability = HelpRequestAvailability.CurrentSeason,
+        int MinFriendshipHearts = 0
     );
 
     private enum HelpRequestAvailability
     {
+        Always,
         CurrentSeason,
         MinesOpen,
         MineLevel40

@@ -117,9 +117,17 @@ namespace ValleyTalk
             DialogueContext context = GetBasicContext(instance);
             context.Accept = gift;
             context.GiftTaste = taste;
+            context.LivingNpcExtraPrompt = LivingNpcConversationBridge.GetGiftResponseContext(instance, gift, taste);
             LastContext = context;
             var theLine = await character.CreateBasicDialogue(context);
             string formattedLine = FormatLine(theLine);
+            string giftName = string.IsNullOrWhiteSpace(gift.DisplayName) ? gift.Name : gift.DisplayName;
+            LivingNpcConversationBridge.RecordExchange(
+                instance,
+                $"The farmer offered {giftName}.",
+                formattedLine,
+                character.LastConversationAnalysis.ToJson()
+            );
             var newDialogue = new Dialogue(instance, $"Accept_{gift.Name}", formattedLine);
             return newDialogue;
         }

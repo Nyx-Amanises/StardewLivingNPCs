@@ -1,5 +1,6 @@
 using StardewModdingAPI;
 using StardewValley;
+using SObject = StardewValley.Object;
 
 namespace LivingNPCs.Behavior;
 
@@ -47,6 +48,34 @@ internal sealed class ValleyTalkPromptBridge
 
         this.api.RegisterPromptOverride(npc.Name, PromptElement, promptText);
         return true;
+    }
+
+    public bool TryRequestGiftDialogue(NPC npc, SObject gift, int taste)
+    {
+        if (npc == null || gift == null)
+        {
+            return false;
+        }
+
+        if (this.api == null)
+        {
+            this.TryInitialize();
+        }
+
+        if (this.api == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return this.api.RequestGiftDialogue(npc, gift, taste);
+        }
+        catch (System.Exception ex)
+        {
+            this.monitor.Log($"ValleyTalk forced gift dialogue failed for {npc.Name}: {ex.Message}", LogLevel.Debug);
+            return false;
+        }
     }
 
     public void ClearAll()

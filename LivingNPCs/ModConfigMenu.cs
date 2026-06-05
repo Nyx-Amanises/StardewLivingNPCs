@@ -328,6 +328,28 @@ internal static class ModConfigMenu
             interval: 1
         );
 
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "5 心每日送礼概率下限",
+            tooltip: () => "NPC 达到 5 心后，每天第一次合适对话中尝试自然送小礼物的概率下限。",
+            getValue: () => config.AiDailyGiftChanceMinPercent,
+            setValue: value => config.AiDailyGiftChanceMinPercent = value,
+            min: 0,
+            max: 100,
+            interval: 5
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => "5 心每日送礼概率上限",
+            tooltip: () => "NPC 达到 5 心后，每天第一次合适对话中尝试自然送小礼物的概率上限。",
+            getValue: () => config.AiDailyGiftChanceMaxPercent,
+            setValue: value => config.AiDailyGiftChanceMaxPercent = value,
+            min: 0,
+            max: 100,
+            interval: 5
+        );
+
         configMenu.AddBoolOption(
             mod: manifest,
             name: () => "允许 NPC 送钱",

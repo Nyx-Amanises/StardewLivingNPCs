@@ -68,6 +68,16 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
             {
                 // Use Android-compatible network helper
                 responseString = await NetworkHelper.MakeRequestAsync(fullUrl, inputString, CancellationToken.None, apiKey);
+                if (TryExtractOpenAiContent(responseString, out string parsedText, out TokenUsage parsedUsage))
+                {
+                    return new LlmResponse(parsedText, usage: parsedUsage);
+                }
+                if (LooksLikeServerSentEvents(responseString))
+                {
+                    retry--;
+                    continue;
+                }
+
                 var responseJson = JObject.Parse(responseString);
 
                 if (responseJson == null)
@@ -312,12 +322,96 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         }
     }
 
+    private static bool TryExtractOpenAiContent(string payload, out string text, out TokenUsage usage)
+    {
+        text = string.Empty;
+        usage = new TokenUsage();
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return false;
+        }
+
+        if (LooksLikeServerSentEvents(payload))
+        {
+            var fullText = new StringBuilder();
+            foreach (string rawLine in payload.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
+            {
+                string line = rawLine.Trim();
+                if (string.IsNullOrWhiteSpace(line) || !line.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                string data = line["data:".Length..].Trim();
+                if (data == "[DONE]")
+                {
+                    break;
+                }
+
+                if (!TryParseOpenAiJsonContent(data, out string token, out TokenUsage tokenUsage))
+                {
+                    continue;
+                }
+
+                if (!string.IsNullOrEmpty(token))
+                {
+                    fullText.Append(token);
+                }
+                if (tokenUsage.TotalTokens > 0 || tokenUsage.PromptTokens > 0 || tokenUsage.CompletionTokens > 0)
+                {
+                    usage = tokenUsage;
+                }
+            }
+
+            text = fullText.ToString();
+            return !string.IsNullOrWhiteSpace(text);
+        }
+
+        return TryParseOpenAiJsonContent(payload, out text, out usage) && !string.IsNullOrWhiteSpace(text);
+    }
+
+    private static bool TryParseOpenAiJsonContent(string payload, out string text, out TokenUsage usage)
+    {
+        text = string.Empty;
+        usage = new TokenUsage();
+        if (string.IsNullOrWhiteSpace(payload))
+        {
+            return false;
+        }
+
+        try
+        {
+            var json = JObject.Parse(payload);
+            usage = TokenUsage.FromOpenAiUsage(json["usage"] as JObject);
+            text =
+                json["choices"]?[0]?["message"]?["content"]?.ToString()
+                ?? json["choices"]?[0]?["delta"]?["content"]?.ToString()
+                ?? json["choices"]?[0]?["text"]?.ToString()
+                ?? string.Empty;
+            return true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private static bool LooksLikeServerSentEvents(string payload)
+    {
+        return payload.TrimStart().StartsWith("data:", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool TryExtractNonStreamingContent(string payload, out string text)
     {
         text = string.Empty;
         if (string.IsNullOrWhiteSpace(payload))
         {
             return false;
+        }
+
+        if (TryExtractOpenAiContent(payload, out text, out _))
+        {
+            return true;
         }
 
         try

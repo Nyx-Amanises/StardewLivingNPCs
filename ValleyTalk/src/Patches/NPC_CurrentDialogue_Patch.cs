@@ -25,6 +25,11 @@ namespace ValleyTalk
             {
                 List<StardewValley.DialogueLine> theLine;
                 var allLines = __result.Peek().dialogues;
+                if (allLines == null || allLines.Count == 0)
+                {
+                    return;
+                }
+
                 var nextLine = allLines.First();
 
                 string originalLine = string.Empty;

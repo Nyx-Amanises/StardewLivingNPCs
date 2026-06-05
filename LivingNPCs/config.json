@@ -17,6 +17,8 @@
   "AllowAiSmallGifts": true,
   "AllowAiMeaningfulGifts": true,
   "AiMeaningfulGiftCooldownDays": 7,
+  "AiDailyGiftChanceMinPercent": 30,
+  "AiDailyGiftChanceMaxPercent": 50,
   "AllowAiMoneyGifts": true,
   "MaxAiMoneyGiftAmount": 250,
   "AllowAiFarmHelp": true,

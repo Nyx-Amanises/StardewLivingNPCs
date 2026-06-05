@@ -51,6 +51,11 @@ public sealed class LivingNPCsApi
         this.engine = engine;
     }
 
+    public string GetGiftResponseContext(string npcName, string npcDisplayName, string giftItemId, string giftName, int taste)
+    {
+        return this.engine?.GetGiftResponseContext(npcName, npcDisplayName, giftItemId, giftName, taste) ?? string.Empty;
+    }
+
     public bool RecordValleyTalkExchange(string npcName, string npcDisplayName, string playerText, string npcResponse, string analysisJson)
     {
         return this.engine?.RecordValleyTalkExchange(npcName, npcDisplayName, playerText, npcResponse, analysisJson) == true;
