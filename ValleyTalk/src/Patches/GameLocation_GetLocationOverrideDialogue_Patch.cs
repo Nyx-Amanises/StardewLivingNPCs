@@ -1,4 +1,5 @@
 using HarmonyLib;
+using StardewModdingAPI;
 using StardewValley;
 
 namespace ValleyTalk
@@ -13,6 +14,28 @@ namespace ValleyTalk
             {
                 return true;
             }
+
+            var triggerKey = ModEntry.Config.InitiateTypedDialogueKey;
+            bool wasTriggerKeyDown = triggerKey != SButton.None && ModEntry.SHelper.Input.IsDown(triggerKey);
+            if (wasTriggerKeyDown
+                && !character.IsInvisible
+                && !character.isSleeping.Value
+                && Game1.player?.CanMove == true
+                && DialogueBuilder.Instance.PatchNpc(character))
+            {
+                DialogueBuilder.Instance.ClearContext();
+                var valleyTalkCharacter = DialogueBuilder.Instance.GetCharacter(character);
+                var prompt = Util.GetString(
+                    valleyTalkCharacter,
+                    "uiStartConversation",
+                    new { Name = character.displayName },
+                    returnNull: true
+                ) ?? "你想说什么？";
+                TextInputManager.RequestTextInput(prompt, character);
+                __result = string.Empty;
+                return false;
+            }
+
             if (!DialogueBuilder.Instance.PatchPassiveNpc(character, ModEntry.Config.GeneralFrequency, true))
             {
                 return true;
