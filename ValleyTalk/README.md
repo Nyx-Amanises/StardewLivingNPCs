@@ -15,6 +15,17 @@
 - 📚 **Content Pack Support**: Full Content Patcher support and content pack for SVE.
 - ⚙️ **Highly Configurable**: Extensive configuration options through Generic Mod Config Menu
 
+## Local fork additions
+
+This repository uses a local ValleyTalk fork for LivingNPCs integration and Chinese-first testing. Compared with the upstream baseline, this fork adds:
+
+- Native free-text dialogue entry by holding the configured key and clicking an NPC, including festival and event scenes.
+- Optional use of loaded local content-pack dialogue as AI context, so SVE / RSV and other custom NPCs can keep more of their in-game voice.
+- A LivingNPCs bridge that can pass hidden continuity context into the prompt and return hidden metadata for memories, emotions, commitments, help requests, and controlled world actions.
+- Optional compact prompt modes: `UseOptimizedGameSummaryPrompt` and `UseOptimizedLivingNpcMetadataPrompt`.
+- Debug timing logs that break prompt size into sections: system, game summary, NPC context, core prompt, instructions, command, and response start.
+- Filtering for hidden `!LIVINGNPCS_META` output so metadata does not leak into visible dialogue.
+
 ## Configuration
 
 ValleyTalk requires configuration of an AI language model provider. The mod supports:

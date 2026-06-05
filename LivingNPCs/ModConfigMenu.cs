@@ -182,7 +182,7 @@ internal static class ModConfigMenu
         configMenu.AddBoolOption(
             mod: manifest,
             name: () => "启用 NPC 主动求助",
-            tooltip: () => "允许关系足够自然时，NPC 在 AI 对话中向玩家提出一个轻量小忙，例如找一件物品或回答一个问题。",
+            tooltip: () => "允许关系足够自然时，NPC 在 AI 对话中向玩家提出一个轻量物品求助。",
             getValue: () => config.EnableHelpRequests,
             setValue: value => config.EnableHelpRequests = value
         );

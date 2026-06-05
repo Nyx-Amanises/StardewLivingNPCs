@@ -39,7 +39,7 @@ var tests = new List<RegressionCheck>
         [
             "BuildDebugLabel",
             "候选物品",
-            "候选问题",
+            "仅物品求助",
             "深度"
         ]
     ),
