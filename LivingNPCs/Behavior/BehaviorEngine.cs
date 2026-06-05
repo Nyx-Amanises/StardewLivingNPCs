@@ -5442,13 +5442,16 @@ internal sealed class BehaviorEngine
             : request.NpcDisplayName;
         string due = this.BuildHelpRequestDueText(request);
         string stepText = this.BuildHelpRequestStepProgressText(request);
+        string rewardText = this.BuildHelpRequestRewardText(request);
         quest.questTitle = $"求助：{npcDisplayName}";
         quest.questDescription = request.Type == "item_request"
-            ? $"{npcDisplayName} 请你帮忙找一件东西。{stepText}{this.BuildHelpRequestDetailText(request)}\n{due}"
-            : $"{npcDisplayName} 想就一件事请教你。{stepText}{this.BuildHelpRequestDetailText(request)}\n{due}";
+            ? $"{npcDisplayName} 请你帮忙找一件东西。{stepText}{this.BuildHelpRequestDetailText(request)}\n{due}\n{rewardText}"
+            : $"{npcDisplayName} 想就一件事请教你。{stepText}{this.BuildHelpRequestDetailText(request)}\n{due}\n{rewardText}";
         quest.currentObjective = request.Type == "item_request"
             ? $"{stepText}把 {this.GetHelpRequestItemLabel(request)} 交给 {npcDisplayName}。{due}"
             : $"{stepText}和 {npcDisplayName} 继续聊聊：{this.GetHelpRequestQuestionLabel(request)}。{due}";
+        quest.moneyReward.Value = this.GetHelpRequestQuestMoneyReward(request);
+        quest.rewardDescription.Value = this.BuildHelpRequestRewardDescription(request);
     }
 
     private string BuildHelpRequestStepProgressText(NpcHelpRequestFact request)
@@ -5494,6 +5497,51 @@ internal sealed class BehaviorEngine
             1 => "明天到期。",
             _ => $"还剩 {daysRemaining} 天。"
         };
+    }
+
+    private string BuildHelpRequestRewardText(NpcHelpRequestFact request)
+    {
+        int money = this.GetHelpRequestQuestMoneyReward(request);
+        int friendship = this.GetHelpRequestQuestFriendshipReward(request);
+        string delivery = this.WillSendHelpRequestMoneyByMail(request)
+            ? "金币次日来信"
+            : "金币当场发放";
+        string gift = this.config.AllowAiSmallGifts
+            ? "，可能有小礼物"
+            : string.Empty;
+        return $"预计奖励：{money}g、好感 +{friendship}（{delivery}{gift}）。";
+    }
+
+    private string BuildHelpRequestRewardDescription(NpcHelpRequestFact request)
+    {
+        string delivery = this.WillSendHelpRequestMoneyByMail(request)
+            ? "金币次日来信"
+            : "金币当场发放";
+        string gift = this.config.AllowAiSmallGifts
+            ? "；可能有小礼物"
+            : string.Empty;
+        return $"好感 +{this.GetHelpRequestQuestFriendshipReward(request)}；{delivery}{gift}";
+    }
+
+    private int GetHelpRequestQuestMoneyReward(NpcHelpRequestFact request)
+    {
+        int amount = request.RewardMoney <= 0
+            ? BehaviorMemory.DetermineHelpRequestMoneyReward(request.Steps)
+            : request.RewardMoney;
+        return System.Math.Clamp(amount, 200, 10000);
+    }
+
+    private int GetHelpRequestQuestFriendshipReward(NpcHelpRequestFact request)
+    {
+        int minReward = System.Math.Min(this.config.MinHelpRequestFriendshipReward, this.config.MaxHelpRequestFriendshipReward);
+        int maxReward = System.Math.Max(this.config.MinHelpRequestFriendshipReward, this.config.MaxHelpRequestFriendshipReward);
+        return System.Math.Clamp(request.RewardFriendship <= 0 ? minReward : request.RewardFriendship, minReward, maxReward);
+    }
+
+    private bool WillSendHelpRequestMoneyByMail(NpcHelpRequestFact request)
+    {
+        return request.RewardMoneyByMail
+            || (!request.RewardMoneyGranted && this.ShouldSendHelpRequestMoneyByMail(request));
     }
 
     private bool TryFindNearestNpcIgnoringDailyBudget(out NPC? nearest)
