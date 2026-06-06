@@ -38,6 +38,8 @@ public class Prompts
     public string ResponseStart { get => _responseStart ??= GetResponseStart(); internal set => _responseStart = value; }
     private string _instructions;
     public string Instructions { get => _instructions ??= GetInstructions(); internal set => _instructions = value; }
+    private readonly Dictionary<string, int> _corePromptSections = new();
+    public IReadOnlyDictionary<string, int> CorePromptSections => _corePromptSections;
 
     public string Name { get; internal set; }
     
@@ -94,6 +96,35 @@ public class Prompts
                     prompt.AppendLine(overrideText);
                 }
             }
+        }
+    }
+
+    private void AppendCoreSection(string promptElement, Action<StringBuilder> defaultPromptFunction, StringBuilder prompt)
+    {
+        int startLength = prompt.Length;
+        DefaultOrOverride(promptElement, defaultPromptFunction, prompt);
+        RecordCorePromptSection(promptElement, prompt.Length - startLength);
+    }
+
+    private void AppendCoreSection(string sectionName, Action<StringBuilder> appendFunction, StringBuilder prompt, bool useOverrides)
+    {
+        int startLength = prompt.Length;
+        if (useOverrides)
+        {
+            DefaultOrOverride(sectionName, appendFunction, prompt);
+        }
+        else
+        {
+            appendFunction(prompt);
+        }
+        RecordCorePromptSection(sectionName, prompt.Length - startLength);
+    }
+
+    private void RecordCorePromptSection(string sectionName, int length)
+    {
+        if (!_corePromptSections.TryAdd(sectionName, length))
+        {
+            _corePromptSections[sectionName] += length;
         }
     }
 
@@ -185,56 +216,63 @@ public class Prompts
 
     private string GetCorePrompt()
     {
+        _corePromptSections.Clear();
         var prompt = new StringBuilder();
-        DefaultOrOverride("GameState",GetGameState,prompt);
-        DefaultOrOverride("SampleDialogue",GetSampleDialogue,prompt);
-        DefaultOrOverride("EventHistory",GetEventHistory,prompt);
+        AppendCoreSection("GameState", GetGameState, prompt);
+        AppendCoreSection("SampleDialogue", GetSampleDialogue, prompt);
+        AppendCoreSection("EventHistory", GetEventHistory, prompt);
 
-        prompt.AppendLine($"## {Util.GetString(Character,"coreInstructionHeading")}");
-        prompt.AppendLine($"### {Util.GetString(Character,"coreContextHeading")}");
-        prompt.AppendLine(Util.GetString(Character,"coreFarmerGender"));
-        DefaultOrOverride("DateAndTime", GetDateAndTime, prompt);
-        DefaultOrOverride("Weather", GetWeather, prompt);
-        DefaultOrOverride("OtherNpcs", GetOtherNpcs, prompt);
+        AppendCoreSection("CoreHeader", p =>
+        {
+            p.AppendLine($"## {Util.GetString(Character,"coreInstructionHeading")}");
+            p.AppendLine($"### {Util.GetString(Character,"coreContextHeading")}");
+            p.AppendLine(Util.GetString(Character,"coreFarmerGender"));
+        }, prompt, useOverrides: false);
+        AppendCoreSection("DateAndTime", GetDateAndTime, prompt);
+        AppendCoreSection("Weather", GetWeather, prompt);
+        AppendCoreSection("OtherNpcs", GetOtherNpcs, prompt);
         Game1.getPlayerOrEventFarmer().friendshipData.TryGetValue(Character.Name, out Friendship friendship);
         if (friendship.IsMarried() || friendship.IsRoommate())
         {
             if (friendship.IsRoommate())
             {
-                DefaultOrOverride("coreRoommates", p => { p.AppendLine(Util.GetString(Character, "coreRoommates", new { Name = Name })); }, prompt);
+                AppendCoreSection("coreRoommates", p => { p.AppendLine(Util.GetString(Character, "coreRoommates", new { Name = Name })); }, prompt);
             }
             else
             {
-                prompt.AppendLine(Util.GetString(Character,"coreMarried", new { Name= Name, Pronoun = npcIsMale ? "his" : "her" }));
-                var dateNow = new StardewTime(Game1.Date,600);
-                var whenMarried = dateNow.AddDays(-friendship.DaysMarried);
-                prompt.AppendLine(Util.GetString(Character,"coreMarriedSince", new { Name= Name, RelativeDate = whenMarried.SinceDescription(dateNow) }));
-                DefaultOrOverride("Children", p => GetChildren(p, friendship), prompt);
+                AppendCoreSection("MarriageStatus", p =>
+                {
+                    p.AppendLine(Util.GetString(Character,"coreMarried", new { Name= Name, Pronoun = npcIsMale ? "his" : "her" }));
+                    var dateNow = new StardewTime(Game1.Date,600);
+                    var whenMarried = dateNow.AddDays(-friendship.DaysMarried);
+                    p.AppendLine(Util.GetString(Character,"coreMarriedSince", new { Name= Name, RelativeDate = whenMarried.SinceDescription(dateNow) }));
+                }, prompt, useOverrides: false);
+                AppendCoreSection("Children", p => GetChildren(p, friendship), prompt);
             }
 
-            DefaultOrOverride("Spouse", GetSpouse, prompt);
-            DefaultOrOverride("FarmContents", GetFarmContents, prompt);
-            DefaultOrOverride("Wealth", GetWealth, prompt);
-            DefaultOrOverride("MarriageFeelings", GetMarriageFeelings, prompt);
+            AppendCoreSection("Spouse", GetSpouse, prompt);
+            AppendCoreSection("FarmContents", GetFarmContents, prompt);
+            AppendCoreSection("Wealth", GetWealth, prompt);
+            AppendCoreSection("MarriageFeelings", GetMarriageFeelings, prompt);
         }
-        DefaultOrOverride("Location", GetLocation, prompt);
-        DefaultOrOverride("Trinkets", GetTrinkets, prompt);
-        DefaultOrOverride("RecentEvents", GetRecentEvents, prompt);
-        DefaultOrOverride("ThirdPartyContext", _ => { }, prompt);
+        AppendCoreSection("Location", GetLocation, prompt);
+        AppendCoreSection("Trinkets", GetTrinkets, prompt);
+        AppendCoreSection("RecentEvents", GetRecentEvents, prompt);
+        AppendCoreSection("ThirdPartyContext", _ => { }, prompt);
 
-        DefaultOrOverride("SpecialDatesAndBirthday", GetSpecialDatesAndBirthday, prompt);
-        DefaultOrOverride("Gift", GetGift, prompt);
-        DefaultOrOverride("LivingNpcExtraPrompt", GetLivingNpcExtraPrompt, prompt);
-        DefaultOrOverride("SpouseAction", GetSpouseAction, prompt);
+        AppendCoreSection("SpecialDatesAndBirthday", GetSpecialDatesAndBirthday, prompt);
+        AppendCoreSection("Gift", GetGift, prompt);
+        AppendCoreSection("LivingNpcExtraPrompt", GetLivingNpcExtraPrompt, prompt);
+        AppendCoreSection("SpouseAction", GetSpouseAction, prompt);
         if (!friendship.IsMarried())
         {
-            DefaultOrOverride("NonSpouseFriendshipLevel", GetNonSpouseFriendshipLevel, prompt);
-            DefaultOrOverride("Spouse", GetSpouse, prompt);
-            DefaultOrOverride("SpecialRelationshipStatus", p => GetSpecialRelationshipStatus(p, friendship), prompt);
+            AppendCoreSection("NonSpouseFriendshipLevel", GetNonSpouseFriendshipLevel, prompt);
+            AppendCoreSection("Spouse", GetSpouse, prompt);
+            AppendCoreSection("SpecialRelationshipStatus", p => GetSpecialRelationshipStatus(p, friendship), prompt);
         }
-        DefaultOrOverride("coreGenderReferences", p => p.AppendLine(Util.GetString(Character,"coreGenderReferences")), prompt);
-        DefaultOrOverride("Preoccupation", GetPreoccupation, prompt);
-        DefaultOrOverride("CurrentConversation", GetCurrentConversation, prompt);
+        AppendCoreSection("coreGenderReferences", p => p.AppendLine(Util.GetString(Character,"coreGenderReferences")), prompt);
+        AppendCoreSection("Preoccupation", GetPreoccupation, prompt);
+        AppendCoreSection("CurrentConversation", GetCurrentConversation, prompt);
 
         return prompt.ToString();
     }

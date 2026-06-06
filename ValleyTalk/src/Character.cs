@@ -387,6 +387,7 @@ public class Character
         int instructionsCharacters = 0;
         int commandCharacters = 0;
         int responseStartCharacters = 0;
+        string corePromptSectionCharacters = "none";
         int responseCharacters = 0;
         Exception lastException = null;
         LlmResponse result;
@@ -399,7 +400,7 @@ public class Character
             }
 
             ModEntry.SMonitor.Log(
-                $"[ValleyTalk timing] {Name}: {outcome}; total={totalWatch.ElapsedMilliseconds}ms, promptInit={promptInitWatch.ElapsedMilliseconds}ms, promptBuild={promptBuildMilliseconds}ms, model={inferenceMilliseconds}ms, promptChars={promptCharacters}, promptSections={{system={systemPromptCharacters}, game={gameConstantContextCharacters}, npc={npcConstantContextCharacters}, core={corePromptCharacters}, instructions={instructionsCharacters}, command={commandCharacters}, responseStart={responseStartCharacters}}}, responseChars={responseCharacters}, attempts={retryCount}, lines={dialogueLines}.",
+                $"[ValleyTalk timing] {Name}: {outcome}; total={totalWatch.ElapsedMilliseconds}ms, promptInit={promptInitWatch.ElapsedMilliseconds}ms, promptBuild={promptBuildMilliseconds}ms, model={inferenceMilliseconds}ms, promptChars={promptCharacters}, promptSections={{system={systemPromptCharacters}, game={gameConstantContextCharacters}, npc={npcConstantContextCharacters}, core={corePromptCharacters}, instructions={instructionsCharacters}, command={commandCharacters}, responseStart={responseStartCharacters}}}, coreSections={{{corePromptSectionCharacters}}}, responseChars={responseCharacters}, attempts={retryCount}, lines={dialogueLines}.",
                 StardewModdingAPI.LogLevel.Info
             );
         }
@@ -439,6 +440,16 @@ public class Character
                     gameConstantContextCharacters = gameConstantContext.Length;
                     npcConstantContextCharacters = npcConstantContext.Length;
                     corePromptCharacters = corePrompt.Length;
+                    corePromptSectionCharacters = string.Join(
+                        ", ",
+                        prompts.CorePromptSections
+                            .Where(section => section.Value > 0)
+                            .Select(section => $"{section.Key}={section.Value}")
+                    );
+                    if (string.IsNullOrWhiteSpace(corePromptSectionCharacters))
+                    {
+                        corePromptSectionCharacters = "none";
+                    }
                     instructionsCharacters = instructions.Length;
                     commandCharacters = command.Length;
                     responseStartCharacters = responseStart.Length;
