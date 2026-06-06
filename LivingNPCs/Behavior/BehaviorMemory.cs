@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
 using StardewValley;
 
@@ -13,165 +12,6 @@ internal sealed class BehaviorMemory
     internal const int MaxPlayerPreferenceMemoriesPerNpc = 24;
     internal const int MaxDialogueBehaviorInfluencesPerNpc = 12;
     internal const int MaxCommunityImpressionsPerNpc = 16;
-
-    private static readonly HashSet<string> AllowedPlayerPreferenceTags = new(System.StringComparer.OrdinalIgnoreCase)
-    {
-        "food",
-        "drink",
-        "flower",
-        "mineral",
-        "forage",
-        "nature",
-        "sweet",
-        "comfort",
-        "practical",
-        "scholarly",
-        "adventurous",
-        "magical",
-        "artistic",
-        "refined",
-        "work",
-        "active",
-        "fishing",
-        "mining",
-        "farming",
-        "morning",
-        "night"
-    };
-
-    private static readonly IReadOnlyDictionary<string, IReadOnlyCollection<string>> MemoryKeywordTags =
-        new Dictionary<string, IReadOnlyCollection<string>>(System.StringComparer.OrdinalIgnoreCase)
-        {
-            ["farm"] = ["farming", "work", "nature"],
-            ["农场"] = ["farming", "work", "nature"],
-            ["crop"] = ["farming", "work"],
-            ["作物"] = ["farming", "work"],
-            ["mine"] = ["mining", "adventurous", "mineral"],
-            ["mines"] = ["mining", "adventurous", "mineral"],
-            ["矿"] = ["mining", "adventurous", "mineral"],
-            ["fish"] = ["fishing", "nature"],
-            ["fishing"] = ["fishing", "nature"],
-            ["钓鱼"] = ["fishing", "nature"],
-            ["beach"] = ["fishing", "nature"],
-            ["海边"] = ["fishing", "nature"],
-            ["海滩"] = ["fishing", "nature"],
-            ["flower"] = ["flower", "nature", "artistic"],
-            ["花"] = ["flower", "nature", "artistic"],
-            ["food"] = ["food", "comfort"],
-            ["吃"] = ["food", "comfort"],
-            ["料理"] = ["food", "comfort"],
-            ["coffee"] = ["drink", "comfort", "work"],
-            ["咖啡"] = ["drink", "comfort", "work"],
-            ["book"] = ["scholarly"],
-            ["library"] = ["scholarly"],
-            ["书"] = ["scholarly"],
-            ["图书馆"] = ["scholarly"],
-            ["magic"] = ["magical"],
-            ["魔法"] = ["magical"],
-            ["art"] = ["artistic"],
-            ["画"] = ["artistic"],
-            ["艺术"] = ["artistic"],
-            ["morning"] = ["morning"],
-            ["早"] = ["morning"],
-            ["night"] = ["night"],
-            ["晚"] = ["night"]
-        };
-
-    private static readonly Dictionary<string, string> TravelLocationAliases = new(System.StringComparer.OrdinalIgnoreCase)
-    {
-        ["Farm"] = "Farm",
-        ["农场"] = "Farm",
-        ["Town"] = "Town",
-        ["Pelican Town"] = "Town",
-        ["鹈鹕镇"] = "Town",
-        ["Mountain"] = "Mountain",
-        ["山地"] = "Mountain",
-        ["山上"] = "Mountain",
-        ["Mine"] = "Mine",
-        ["Mines"] = "Mine",
-        ["The Mines"] = "Mine",
-        ["矿井"] = "Mine",
-        ["矿洞"] = "Mine",
-        ["矿山"] = "Mine",
-        ["Beach"] = "Beach",
-        ["海滩"] = "Beach",
-        ["Forest"] = "Forest",
-        ["Cindersap Forest"] = "Forest",
-        ["森林"] = "Forest",
-        ["煤矿森林"] = "Forest",
-        ["BusStop"] = "BusStop",
-        ["Bus Stop"] = "BusStop",
-        ["巴士站"] = "BusStop",
-        ["Trailer"] = "Trailer",
-        ["Penny's Trailer"] = "Trailer",
-        ["Pam's Trailer"] = "Trailer",
-        ["Penny's House"] = "Trailer",
-        ["Pam's House"] = "Trailer",
-        ["Penny's Home"] = "Trailer",
-        ["Pam's Home"] = "Trailer",
-        ["潘妮家"] = "Trailer",
-        ["潘妮的家"] = "Trailer",
-        ["潘妮家里"] = "Trailer",
-        ["帕姆家"] = "Trailer",
-        ["帕姆的家"] = "Trailer",
-        ["拖车"] = "Trailer",
-        ["JoshHouse"] = "JoshHouse",
-        ["Alex's House"] = "JoshHouse",
-        ["亚历克斯家"] = "JoshHouse",
-        ["HaleyHouse"] = "HaleyHouse",
-        ["Haley's House"] = "HaleyHouse",
-        ["Emily's House"] = "HaleyHouse",
-        ["海莉家"] = "HaleyHouse",
-        ["艾米丽家"] = "HaleyHouse",
-        ["SamHouse"] = "SamHouse",
-        ["Sam's House"] = "SamHouse",
-        ["山姆家"] = "SamHouse",
-        ["ScienceHouse"] = "ScienceHouse",
-        ["Robin's House"] = "ScienceHouse",
-        ["Sebastian's House"] = "ScienceHouse",
-        ["Maru's House"] = "ScienceHouse",
-        ["罗宾家"] = "ScienceHouse",
-        ["塞巴斯蒂安家"] = "ScienceHouse",
-        ["玛鲁家"] = "ScienceHouse",
-        ["LeahHouse"] = "LeahHouse",
-        ["Leah's Cottage"] = "LeahHouse",
-        ["莉亚家"] = "LeahHouse",
-        ["AnimalShop"] = "AnimalShop",
-        ["Marnie's Ranch"] = "AnimalShop",
-        ["玛妮牧场"] = "AnimalShop",
-        ["玛妮家"] = "AnimalShop",
-        ["ElliottHouse"] = "ElliottHouse",
-        ["Elliott's Cabin"] = "ElliottHouse",
-        ["艾利欧特家"] = "ElliottHouse",
-        ["Blacksmith"] = "Blacksmith",
-        ["铁匠铺"] = "Blacksmith",
-        ["FishShop"] = "FishShop",
-        ["鱼店"] = "FishShop",
-        ["WizardHouse"] = "WizardHouse",
-        ["Wizard's Tower"] = "WizardHouse",
-        ["法师塔"] = "WizardHouse",
-        ["Tent"] = "Tent",
-        ["Linus's Tent"] = "Tent",
-        ["莱纳斯帐篷"] = "Tent",
-        ["Saloon"] = "Saloon",
-        ["Stardrop Saloon"] = "Saloon",
-        ["酒吧"] = "Saloon",
-        ["星之果实酒吧"] = "Saloon",
-        ["SeedShop"] = "SeedShop",
-        ["Pierre's"] = "SeedShop",
-        ["Pierre's General Store"] = "SeedShop",
-        ["杂货店"] = "SeedShop",
-        ["皮埃尔的杂货店"] = "SeedShop",
-        ["ArchaeologyHouse"] = "ArchaeologyHouse",
-        ["Museum"] = "ArchaeologyHouse",
-        ["Library"] = "ArchaeologyHouse",
-        ["博物馆"] = "ArchaeologyHouse",
-        ["图书馆"] = "ArchaeologyHouse",
-        ["Hospital"] = "Hospital",
-        ["Clinic"] = "Hospital",
-        ["诊所"] = "Hospital",
-        ["医院"] = "Hospital"
-    };
 
     private static readonly HashSet<string> AllowedHelpRequestItemIds = new(System.StringComparer.OrdinalIgnoreCase)
     {
@@ -2155,18 +1995,7 @@ internal sealed class BehaviorMemory
             tokens.Add(token);
         }
 
-        foreach (var pair in MemoryKeywordTags)
-        {
-            if (!text.Contains(pair.Key, System.StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            foreach (string tag in pair.Value)
-            {
-                tags.Add(tag);
-            }
-        }
+        BehaviorValueNormalizer.AddInferredTags(text, tags);
     }
 
     private static IEnumerable<string> ExtractRecallTokens(string text)
@@ -3030,138 +2859,7 @@ internal sealed class BehaviorMemory
 
     private static ValleyTalkExchangeAnalysis ParseExchangeAnalysis(string analysisJson)
     {
-        if (string.IsNullOrWhiteSpace(analysisJson))
-        {
-            return new ValleyTalkExchangeAnalysis();
-        }
-
-        try
-        {
-            var analysis = JsonSerializer.Deserialize<ValleyTalkExchangeAnalysis>(
-                analysisJson,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
-            ) ?? new ValleyTalkExchangeAnalysis();
-
-            analysis.RapportDelta = System.Math.Clamp(analysis.RapportDelta, 0, 30);
-            analysis.AmbientFollowUp ??= new ValleyTalkAmbientFollowUp();
-            analysis.AmbientFollowUp.Text = analysis.AmbientFollowUp.Text?.Trim() ?? string.Empty;
-            analysis.AmbientFollowUp.DelayMinutes = System.Math.Clamp(analysis.AmbientFollowUp.DelayMinutes, 0, 120);
-            analysis.EmotionImpact ??= new ValleyTalkEmotionImpact();
-            analysis.EmotionImpact.Emotion = NormalizeEmotion(analysis.EmotionImpact.Emotion);
-            analysis.EmotionImpact.IntensityDelta = System.Math.Clamp(analysis.EmotionImpact.IntensityDelta, -100, 100);
-            analysis.EmotionImpact.RepairDelta = System.Math.Clamp(analysis.EmotionImpact.RepairDelta, 0, 100);
-            analysis.EmotionImpact.Reason = analysis.EmotionImpact.Reason?.Trim() ?? string.Empty;
-            analysis.Memories = analysis.Memories
-                .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
-                .Select(memory =>
-                {
-                    memory.Kind = NormalizeLongTermMemoryKind(memory.Kind);
-                    memory.Summary = memory.Summary.Trim();
-                    memory.Importance = System.Math.Clamp(memory.Importance, 0, 100);
-                    memory.PlayerPreferenceKind = NormalizePlayerPreferenceKind(memory.PlayerPreferenceKind);
-                    memory.Subject = memory.Subject?.Trim() ?? string.Empty;
-                    memory.Tags = NormalizeMemoryTags(memory.Tags, memory.Subject, memory.Summary);
-                    memory.PlayerPreference = memory.PlayerPreference && memory.PlayerPreferenceKind != "none";
-                    return memory;
-                })
-                .Take(4)
-                .ToList();
-            analysis.Actions = analysis.Actions
-                .Where(action => action != null)
-                .Select(action =>
-                {
-                    action.Type = NormalizeWorldActionType(action.Type);
-                    action.Reason = action.Reason?.Trim() ?? string.Empty;
-                    action.Amount = System.Math.Clamp(action.Amount, 0, 250);
-                    action.TileCount = System.Math.Clamp(action.TileCount, 0, 12);
-                    action.DurationMinutes = System.Math.Clamp(action.DurationMinutes, 0, 20);
-                    action.DelayMinutes = System.Math.Clamp(action.DelayMinutes, 0, 20);
-                    action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
-                    action.QuestHint = action.QuestHint?.Trim() ?? string.Empty;
-                    action.ItemId = action.ItemId?.Trim() ?? string.Empty;
-                    action.ItemLabel = action.ItemLabel?.Trim() ?? string.Empty;
-                    return action;
-                })
-                .Where(action => action.Type != "none")
-                .Take(1)
-                .ToList();
-            analysis.BehaviorInfluences = analysis.BehaviorInfluences
-                .Where(influence => influence != null && !string.IsNullOrWhiteSpace(influence.Summary))
-                .Select(influence =>
-                {
-                    influence.Type = NormalizeDialogueBehaviorInfluenceType(influence.Type);
-                    influence.Summary = influence.Summary.Trim();
-                    influence.TargetLocation = NormalizeTravelLocation(influence.TargetLocation, string.Empty);
-                    influence.TargetLocationLabel = influence.TargetLocationLabel?.Trim() ?? string.Empty;
-                    influence.DurationDays = System.Math.Clamp(influence.DurationDays, 0, 7);
-                    influence.Intensity = System.Math.Clamp(influence.Intensity, 0, 100);
-                    influence.MaxTriggers = System.Math.Clamp(influence.MaxTriggers, 0, 4);
-                    return influence;
-                })
-                .Where(influence => influence.Type != "none")
-                .Take(2)
-                .ToList();
-            analysis.HelpRequests = analysis.HelpRequests
-                .Where(request => request != null && !string.IsNullOrWhiteSpace(request.Summary))
-                .Select(request =>
-                {
-                    request.Type = NormalizeHelpRequestType(request.Type);
-                    request.Summary = request.Summary.Trim();
-                    request.RequestedItemId = request.RequestedItemId?.Trim() ?? string.Empty;
-                    request.RequestedItemLabel = request.RequestedItemLabel?.Trim() ?? string.Empty;
-                    request.QuestionTopic = request.QuestionTopic?.Trim() ?? string.Empty;
-                    request.DueInDays = System.Math.Clamp(request.DueInDays, 1, 7);
-                    request.Reason = request.Reason?.Trim() ?? string.Empty;
-                    request.FollowUpPotential = NormalizeHelpRequestFollowUpPotential(request.FollowUpPotential);
-                    request.Steps = (request.Steps ?? new List<ValleyTalkHelpRequestStepCandidate>())
-                        .Where(step => step != null)
-                        .Select(step =>
-                        {
-                            step.Type = NormalizeHelpRequestType(step.Type);
-                            step.Summary = step.Summary?.Trim() ?? string.Empty;
-                            step.RequestedItemId = step.RequestedItemId?.Trim() ?? string.Empty;
-                            step.RequestedItemLabel = step.RequestedItemLabel?.Trim() ?? string.Empty;
-                            step.QuestionTopic = step.QuestionTopic?.Trim() ?? string.Empty;
-                            return step;
-                        })
-                        .Where(step => step.Type != "none" && !string.IsNullOrWhiteSpace(step.Summary))
-                        .Take(3)
-                        .ToList();
-                    return request;
-                })
-                .Where(request => request.Type != "none")
-                .Take(1)
-                .ToList();
-            analysis.HelpRequestUpdates = analysis.HelpRequestUpdates
-                .Where(update => update != null && !string.IsNullOrWhiteSpace(update.Summary))
-                .Select(update =>
-                {
-                    update.Summary = update.Summary.Trim();
-                    update.Status = NormalizeHelpRequestUpdateStatus(update.Status);
-                    update.Resolution = update.Resolution?.Trim() ?? string.Empty;
-                    return update;
-                })
-                .Where(update => update.Status != "none")
-                .Take(2)
-                .ToList();
-            analysis.Conflicts = analysis.Conflicts
-                .Where(conflict => conflict != null && !string.IsNullOrWhiteSpace(conflict.Summary))
-                .Select(conflict =>
-                {
-                    conflict.CauseKind = NormalizeConflictCauseKind(conflict.CauseKind);
-                    conflict.Summary = conflict.Summary.Trim();
-                    conflict.Severity = System.Math.Clamp(conflict.Severity, 0, 100);
-                    return conflict;
-                })
-                .Where(conflict => conflict.Severity > 0)
-                .Take(2)
-                .ToList();
-            return analysis;
-        }
-        catch
-        {
-            return new ValleyTalkExchangeAnalysis();
-        }
+        return ValleyTalkExchangeParser.Parse(analysisJson);
     }
 
     private bool ApplyDialogueEmotionImpact(LivingNpcState state, ValleyTalkEmotionImpact impact)
@@ -4459,61 +4157,27 @@ internal sealed class BehaviorMemory
 
     private static string NormalizeLongTermMemoryKind(string kind)
     {
-        return kind?.Trim().ToLowerInvariant() switch
-        {
-            "preference" => "preference",
-            "promise" => "promise",
-            "boundary" => "boundary",
-            "relationship" => "relationship",
-            _ => "fact"
-        };
+        return BehaviorValueNormalizer.NormalizeLongTermMemoryKind(kind);
     }
 
     internal static string NormalizePlayerPreferenceKind(string kind)
     {
-        return kind?.Trim().ToLowerInvariant() switch
-        {
-            "liked_item_category" => "liked_item_category",
-            "disliked_item" => "disliked_item",
-            "habit" => "habit",
-            "value" => "value",
-            "goal" => "goal",
-            _ => "none"
-        };
+        return BehaviorValueNormalizer.NormalizePlayerPreferenceKind(kind);
     }
 
     internal static string NormalizeCommunityImpressionKind(string kind)
     {
-        return kind?.Trim().ToLowerInvariant() switch
-        {
-            "helped" => "helped",
-            "shared_experience" => "shared_experience",
-            "relationship_trend" => "relationship_trend",
-            "romantic_attention" => "romantic_attention",
-            _ => "community_fact"
-        };
+        return BehaviorValueNormalizer.NormalizeCommunityImpressionKind(kind);
     }
 
     internal static string NormalizeCommunityImpressionSource(string source)
     {
-        return source?.Trim() switch
-        {
-            "Witnessed" => "Witnessed",
-            "CloseCircle" => "CloseCircle",
-            "Heard" => "CloseCircle",
-            "PublicRumor" => "PublicRumor",
-            _ => "PublicRumor"
-        };
+        return BehaviorValueNormalizer.NormalizeCommunityImpressionSource(source);
     }
 
     internal static string NormalizeCommunityImpressionVisibility(string visibility)
     {
-        return visibility?.Trim() switch
-        {
-            "Private" => "Private",
-            "Personal" => "Personal",
-            _ => "Public"
-        };
+        return BehaviorValueNormalizer.NormalizeCommunityImpressionVisibility(visibility);
     }
 
     private static string GetMoreRestrictiveCommunityVisibility(string first, string second)
@@ -4555,108 +4219,42 @@ internal sealed class BehaviorMemory
 
     private static string NormalizeWorldActionType(string type)
     {
-        return type?.Trim().ToLowerInvariant() switch
-        {
-            "give_small_gift" => "give_small_gift",
-            "give_meaningful_gift" => "give_meaningful_gift",
-            "give_money" => "give_money",
-            "water_nearby_crops" => "water_nearby_crops",
-            "walk_together" => "walk_together",
-            "escort_to_location" => "escort_to_location",
-            "festival_interaction" => "festival_interaction",
-            "assist_quest" => "assist_quest",
-            _ => "none"
-        };
+        return BehaviorValueNormalizer.NormalizeWorldActionType(type);
     }
 
     internal static string NormalizeDialogueBehaviorInfluenceType(string type)
     {
-        return type?.Trim().ToLowerInvariant() switch
-        {
-            "companion_walk" => "companion_walk",
-            "walk_together" => "companion_walk",
-            "visit_location" => "visit_location",
-            "go_to_location" => "visit_location",
-            "comforted" => "comforted",
-            "reassured" => "comforted",
-            "offended" => "offended",
-            "hurt" => "offended",
-            "give_space" => "give_space",
-            "needs_space" => "give_space",
-            "stay_near" => "stay_near",
-            "approach" => "stay_near",
-            "pause_to_talk" => "pause_to_talk",
-            "stop_to_talk" => "pause_to_talk",
-            _ => "none"
-        };
+        return BehaviorValueNormalizer.NormalizeDialogueBehaviorInfluenceType(type);
     }
 
     internal static string NormalizeEmotion(string emotion)
     {
-        return emotion?.Trim().ToLowerInvariant() switch
-        {
-            "happy" => "Happy",
-            "calm" => "Calm",
-            "jealous" => "Jealous",
-            "worried" => "Worried",
-            "grateful" => "Grateful",
-            "disappointed" => "Disappointed",
-            "uneasy" => "Uneasy",
-            "upset" => "Upset",
-            "angry" => "Angry",
-            "sad" => "Sad",
-            _ => "none"
-        };
+        return BehaviorValueNormalizer.NormalizeEmotion(emotion);
     }
 
     internal static string NormalizeConflictCauseKind(string causeKind)
     {
-        return causeKind?.Trim().ToLowerInvariant() switch
-        {
-            "dialogue" => "dialogue",
-            "gift" => "gift",
-            "boundary" => "boundary",
-            "promise" => "promise",
-            _ => "dialogue"
-        };
+        return BehaviorValueNormalizer.NormalizeConflictCauseKind(causeKind);
     }
 
     internal static string NormalizeHelpRequestType(string type)
     {
-        return type?.Trim().ToLowerInvariant() switch
-        {
-            "item_request" => "item_request",
-            "question_request" => "question_request",
-            _ => "none"
-        };
+        return BehaviorValueNormalizer.NormalizeHelpRequestType(type);
     }
 
     internal static string NormalizeHelpRequestUpdateStatus(string status)
     {
-        return status?.Trim().ToLowerInvariant() switch
-        {
-            "accepted" => "accepted",
-            "fulfilled" => "fulfilled",
-            "advanced" => "advanced",
-            "declined" => "declined",
-            _ => "none"
-        };
+        return BehaviorValueNormalizer.NormalizeHelpRequestUpdateStatus(status);
     }
 
     internal static string NormalizeHelpRequestFollowUpPotential(string value)
     {
-        return value?.Trim().ToLowerInvariant() switch
-        {
-            "deeper_relationship" => "deeper_relationship",
-            _ => "none"
-        };
+        return BehaviorValueNormalizer.NormalizeHelpRequestFollowUpPotential(value);
     }
 
     internal static string NormalizeSharedExperienceType(string type)
     {
-        return type?.Trim().ToLowerInvariant() == "help_request"
-            ? "help_request"
-            : "none";
+        return BehaviorValueNormalizer.NormalizeSharedExperienceType(type);
     }
 
     private static int GetDefaultDialogueBehaviorDurationDays(string type)
@@ -4717,141 +4315,52 @@ internal sealed class BehaviorMemory
 
     private static string NormalizeMemorySummary(string summary)
     {
-        return Regex.Replace(summary ?? string.Empty, @"\s+", " ").Trim().ToLowerInvariant();
+        return BehaviorValueNormalizer.NormalizeMemorySummary(summary);
     }
 
     internal static List<string> NormalizePlayerPreferenceTags(IEnumerable<string>? tags)
     {
-        return tags?
-            .Where(tag => !string.IsNullOrWhiteSpace(tag))
-            .Select(tag => tag.Trim().ToLowerInvariant())
-            .Where(tag => AllowedPlayerPreferenceTags.Contains(tag))
-            .Distinct(System.StringComparer.OrdinalIgnoreCase)
-            .Take(6)
-            .ToList()
-            ?? new List<string>();
+        return BehaviorValueNormalizer.NormalizePlayerPreferenceTags(tags);
     }
 
     private static List<string> NormalizeMemoryTags(IEnumerable<string>? tags, params string?[] texts)
     {
-        var allTags = new List<string>();
-        if (tags != null)
-        {
-            allTags.AddRange(tags);
-        }
-
-        foreach (string? text in texts)
-        {
-            if (string.IsNullOrWhiteSpace(text))
-            {
-                continue;
-            }
-
-            foreach (var pair in MemoryKeywordTags)
-            {
-                if (!text.Contains(pair.Key, System.StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                allTags.AddRange(pair.Value);
-            }
-        }
-
-        return NormalizePlayerPreferenceTags(allTags);
+        return BehaviorValueNormalizer.NormalizeMemoryTags(tags, texts);
     }
 
     private static string NormalizePlayerPreferenceKey(ValleyTalkMemoryCandidate candidate)
     {
-        return BuildPlayerPreferenceKey(candidate.PlayerPreferenceKind, candidate.Subject, candidate.Summary);
+        return BehaviorValueNormalizer.NormalizePlayerPreferenceKey(candidate);
     }
 
     private static string BuildPlayerPreferenceKey(string kind, string subject, string summary)
     {
-        string normalizedKind = NormalizePlayerPreferenceKind(kind);
-        string normalizedSubject = NormalizeMemorySummary(subject);
-        string normalizedSummary = NormalizeMemorySummary(summary);
-        string identity = string.IsNullOrWhiteSpace(normalizedSubject)
-            ? normalizedSummary
-            : normalizedSubject;
-        return normalizedKind == "none" || string.IsNullOrWhiteSpace(identity)
-            ? string.Empty
-            : $"{normalizedKind}:{identity}";
+        return BehaviorValueNormalizer.BuildPlayerPreferenceKey(kind, subject, summary);
     }
 
     private static string BuildLongTermMemoryKey(string kind, string subject, string summary)
     {
-        string normalizedKind = NormalizeLongTermMemoryKind(kind);
-        string normalizedSubject = NormalizeMemorySummary(subject);
-        string normalizedSummary = NormalizeMemorySummary(summary);
-        string identity = string.IsNullOrWhiteSpace(normalizedSubject)
-            ? normalizedSummary
-            : normalizedSubject;
-        return string.IsNullOrWhiteSpace(identity)
-            ? string.Empty
-            : $"{normalizedKind}:{identity}";
+        return BehaviorValueNormalizer.BuildLongTermMemoryKey(kind, subject, summary);
     }
 
     private static string BuildCommunityImpressionKey(string subjectNpcName, string kind, string summary)
     {
-        string normalizedSubject = NormalizeMemorySummary(subjectNpcName);
-        string normalizedKind = NormalizeCommunityImpressionKind(kind);
-        string normalizedSummary = NormalizeMemorySummary(summary);
-        return string.IsNullOrWhiteSpace(normalizedSubject) || string.IsNullOrWhiteSpace(normalizedSummary)
-            ? string.Empty
-            : $"{normalizedSubject}:{normalizedKind}:{normalizedSummary}";
+        return BehaviorValueNormalizer.BuildCommunityImpressionKey(subjectNpcName, kind, summary);
     }
 
     internal static string NormalizeTravelLocation(string value, string fallback)
     {
-        string candidate = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
-        if (TravelLocationAliases.TryGetValue(candidate, out string? mapped))
-        {
-            return mapped;
-        }
-
-        return string.IsNullOrWhiteSpace(candidate) ? "Town" : candidate;
+        return TravelLocationRules.Normalize(value, fallback);
     }
 
     private static string GetTravelLocationLabel(string locationName)
     {
-        return locationName switch
-        {
-            "Farm" => "the farm",
-            "Town" => "Pelican Town",
-            "Mountain" => "the mountain",
-            "Mine" => "the mines",
-            "Beach" => "the beach",
-            "Forest" => "Cindersap Forest",
-            "BusStop" => "the bus stop",
-            "Trailer" => "Penny and Pam's trailer",
-            "JoshHouse" => "Alex's house",
-            "HaleyHouse" => "Haley and Emily's house",
-            "SamHouse" => "Sam's house",
-            "ScienceHouse" => "Robin's house",
-            "LeahHouse" => "Leah's cottage",
-            "AnimalShop" => "Marnie's ranch",
-            "ElliottHouse" => "Elliott's cabin",
-            "Blacksmith" => "the blacksmith",
-            "FishShop" => "the fish shop",
-            "WizardHouse" => "the Wizard's tower",
-            "Tent" => "Linus's tent",
-            "Saloon" => "the Stardrop Saloon",
-            "SeedShop" => "Pierre's General Store",
-            "ArchaeologyHouse" => "the museum and library",
-            "Hospital" => "the clinic",
-            _ => locationName
-        };
+        return TravelLocationRules.GetLabel(locationName);
     }
 
     private static string BuildDialogueBehaviorInfluenceKey(string type, string summary, string targetLocation)
     {
-        string normalizedType = NormalizeDialogueBehaviorInfluenceType(type);
-        string normalizedSummary = NormalizeMemorySummary(summary);
-        string normalizedLocation = NormalizeTravelLocation(targetLocation, string.Empty);
-        return normalizedType == "none" || string.IsNullOrWhiteSpace(normalizedSummary)
-            ? string.Empty
-            : $"{normalizedType}:{normalizedSummary}:{normalizedLocation}";
+        return BehaviorValueNormalizer.BuildDialogueBehaviorInfluenceKey(type, summary, targetLocation);
     }
 
     internal static int HelpRequestStatusOrder(string status)
