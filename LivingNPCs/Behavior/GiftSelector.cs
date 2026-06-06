@@ -9,28 +9,34 @@ internal sealed class GiftSelector
 {
     private static readonly IReadOnlyList<GiftCandidate> SmallCandidates =
     [
+        new("(O)194", "Fried Egg", ["food", "comfort", "practical"]),
+        new("(O)195", "Omelet", ["food", "comfort", "practical"]),
+        new("(O)196", "Salad", ["food", "comfort", "refined"]),
+        new("(O)210", "Hashbrowns", ["food", "comfort", "practical"]),
+        new("(O)211", "Pancakes", ["food", "comfort", "sweet"]),
         new("(O)216", "Bread", ["food", "comfort", "practical"]),
         new("(O)223", "Cookie", ["food", "comfort", "sweet", "youthful"]),
+        new("(O)224", "Spaghetti", ["food", "comfort"]),
         new("(O)395", "Coffee", ["drink", "practical", "scholarly", "work"]),
+        new("(O)614", "Green Tea", ["drink", "comfort", "scholarly", "refined"]),
 
-        new("(O)16", "Wild Horseradish", ["nature", "forage", "practical"], "spring"),
-        new("(O)18", "Daffodil", ["nature", "forage", "flower", "artistic"], "spring"),
-        new("(O)20", "Leek", ["nature", "forage", "food", "practical"], "spring"),
-        new("(O)22", "Dandelion", ["nature", "forage", "flower"], "spring"),
+        new("(O)591", "Tulip", ["flower", "artistic", "comfort"], "spring"),
+        new("(O)597", "Blue Jazz", ["flower", "artistic", "comfort"], "spring"),
 
         new("(O)396", "Spice Berry", ["nature", "forage", "food", "sweet"], "summer"),
         new("(O)398", "Grape", ["nature", "forage", "food", "sweet"], "summer"),
         new("(O)402", "Sweet Pea", ["nature", "forage", "flower", "artistic"], "summer"),
+        new("(O)421", "Sunflower", ["flower", "artistic", "comfort"], "summer"),
 
-        new("(O)404", "Common Mushroom", ["nature", "forage", "practical", "adventurous"], "fall"),
         new("(O)406", "Wild Plum", ["nature", "forage", "food", "sweet"], "fall"),
         new("(O)408", "Hazelnut", ["nature", "forage", "food", "practical"], "fall"),
         new("(O)410", "Blackberry", ["nature", "forage", "food", "sweet"], "fall"),
+        new("(O)236", "Pumpkin Soup", ["food", "comfort", "special"], "fall"),
 
-        new("(O)412", "Winter Root", ["nature", "forage", "food", "practical"], "winter"),
+        new("(O)232", "Rice Pudding", ["food", "comfort", "sweet"], "winter"),
         new("(O)414", "Crystal Fruit", ["nature", "forage", "food", "adventurous", "magical"], "winter"),
-        new("(O)416", "Snow Yam", ["nature", "forage", "food", "practical"], "winter"),
-        new("(O)418", "Crocus", ["nature", "forage", "flower", "artistic"], "winter")
+        new("(O)418", "Crocus", ["nature", "forage", "flower", "artistic"], "winter"),
+        new("(O)244", "Roots Platter", ["food", "comfort", "practical"], "winter")
     ];
 
     private static readonly IReadOnlyList<GiftCandidate> MeaningfulCandidates =
@@ -56,22 +62,27 @@ internal sealed class GiftSelector
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<string>> GiftMentionAliases =
         new Dictionary<string, IReadOnlyList<string>>(StringComparer.OrdinalIgnoreCase)
         {
-            ["(O)16"] = ["wild horseradish", "horseradish", "野山葵", "辣根"],
-            ["(O)18"] = ["daffodil", "黄水仙", "水仙"],
-            ["(O)20"] = ["leek", "韭葱"],
-            ["(O)22"] = ["dandelion", "蒲公英"],
+            ["(O)194"] = ["fried egg", "煎蛋"],
+            ["(O)195"] = ["omelet", "omelette", "煎蛋卷", "菜肉蛋卷"],
+            ["(O)196"] = ["salad", "沙拉"],
             ["(O)66"] = ["amethyst", "紫水晶"],
             ["(O)72"] = ["diamond", "钻石"],
             ["(O)80"] = ["quartz", "石英"],
             ["(O)82"] = ["fire quartz", "火水晶"],
             ["(O)84"] = ["frozen tear", "冰封泪晶", "冰泪"],
             ["(O)86"] = ["earth crystal", "地晶"],
+            ["(O)210"] = ["hashbrowns", "hash browns", "薯饼"],
+            ["(O)211"] = ["pancakes", "pancake", "煎饼"],
             ["(O)216"] = ["bread", "面包"],
             ["(O)220"] = ["chocolate cake", "巧克力蛋糕"],
             ["(O)221"] = ["pink cake", "粉红蛋糕"],
             ["(O)223"] = ["cookie", "cookies", "饼干"],
+            ["(O)224"] = ["spaghetti", "意大利面", "意面"],
+            ["(O)232"] = ["rice pudding", "大米布丁", "米布丁"],
             ["(O)234"] = ["blueberry tart", "蓝莓千层酥", "蓝莓挞"],
+            ["(O)236"] = ["pumpkin soup", "南瓜汤"],
             ["(O)240"] = ["farmer's lunch", "farmers lunch", "农夫午餐"],
+            ["(O)244"] = ["roots platter", "块茎拼盘"],
             ["(O)395"] = ["coffee", "咖啡"],
             ["(O)396"] = ["spice berry", "香料浆果", "香味浆果"],
             ["(O)398"] = ["grape", "grapes", "葡萄"],
@@ -89,7 +100,8 @@ internal sealed class GiftSelector
             ["(O)593"] = ["summer spangle", "夏季亮片"],
             ["(O)595"] = ["fairy rose", "玫瑰仙子", "仙女玫瑰"],
             ["(O)597"] = ["blue jazz", "蓝爵"],
-            ["(O)608"] = ["pumpkin pie", "南瓜派"]
+            ["(O)608"] = ["pumpkin pie", "南瓜派"],
+            ["(O)614"] = ["green tea", "绿茶"]
         };
 
     private static readonly Dictionary<string, string[]> ExplicitNpcTags = new(StringComparer.OrdinalIgnoreCase)
@@ -174,7 +186,7 @@ internal sealed class GiftSelector
     {
         ["Abigail"] = ["(O)66", "(O)80", "(O)82", "(O)223"],
         ["Alex"] = ["(O)216", "(O)240", "(O)395"],
-        ["Caroline"] = ["(O)18", "(O)22", "(O)402", "(O)597"],
+        ["Caroline"] = ["(O)614", "(O)402", "(O)597", "(O)591"],
         ["Clint"] = ["(O)86", "(O)82", "(O)80", "(O)395"],
         ["Demetrius"] = ["(O)404", "(O)414", "(O)395"],
         ["Elliott"] = ["(O)395", "(O)402", "(O)591", "(O)597"],
@@ -186,14 +198,14 @@ internal sealed class GiftSelector
         ["Jas"] = ["(O)223", "(O)221", "(O)398", "(O)402"],
         ["Jodi"] = ["(O)220", "(O)240", "(O)216"],
         ["Kent"] = ["(O)395", "(O)408", "(O)216"],
-        ["Leah"] = ["(O)406", "(O)404", "(O)402", "(O)595"],
-        ["Linus"] = ["(O)16", "(O)20", "(O)22", "(O)404", "(O)412"],
+        ["Leah"] = ["(O)406", "(O)196", "(O)402", "(O)595"],
+        ["Linus"] = ["(O)216", "(O)408", "(O)414", "(O)244"],
         ["Marnie"] = ["(O)240", "(O)608", "(O)216"],
         ["Maru"] = ["(O)80", "(O)86", "(O)395"],
         ["Pam"] = ["(O)395", "(O)216", "(O)410"],
-        ["Penny"] = ["(O)22", "(O)18", "(O)223", "(O)591", "(O)597"],
+        ["Penny"] = ["(O)223", "(O)614", "(O)591", "(O)597", "(O)196"],
         ["Pierre"] = ["(O)395", "(O)216", "(O)408"],
-        ["Robin"] = ["(O)395", "(O)216", "(O)20"],
+        ["Robin"] = ["(O)395", "(O)216", "(O)210"],
         ["Sam"] = ["(O)223", "(O)395", "(O)398"],
         ["Sandy"] = ["(O)402", "(O)418", "(O)221", "(O)595"],
         ["Sebastian"] = ["(O)395", "(O)84", "(O)80"],
@@ -202,7 +214,7 @@ internal sealed class GiftSelector
         ["Willy"] = ["(O)408", "(O)412", "(O)414"],
         ["Wizard"] = ["(O)82", "(O)66", "(O)86", "(O)414"],
 
-        ["Andy"] = ["(O)20", "(O)408", "(O)240"],
+        ["Andy"] = ["(O)216", "(O)408", "(O)240"],
         ["Claire"] = ["(O)395", "(O)223", "(O)402"],
         ["Lance"] = ["(O)82", "(O)414", "(O)240"],
         ["Magnus"] = ["(O)82", "(O)86", "(O)414"],
@@ -353,13 +365,14 @@ internal sealed class GiftSelector
         var disposition = NpcDisposition.For(npc);
         var npcTags = this.BuildNpcTags(npc, disposition);
         var npcPreferredItemIds = BuildNpcPreferredItemIds(npc);
+        var recentGiftItemIds = new HashSet<string>(state.RecentAiGiftItemIds ?? new List<string>(), StringComparer.OrdinalIgnoreCase);
         var topicTags = BuildConversationTags(playerText, npcResponse);
         var memoryTags = BuildMemoryTags(state);
         var playerPreferences = BuildPlayerPreferenceSignals(state);
 
         var scored = pool
             .Where(candidate => string.IsNullOrWhiteSpace(candidate.Season) || candidate.Season == season)
-            .Select(candidate => new ScoredGift(candidate, Score(candidate, tier, npcTags, npcPreferredItemIds, topicTags, memoryTags, playerPreferences, state)))
+            .Select(candidate => new ScoredGift(candidate, Score(candidate, tier, npcTags, npcPreferredItemIds, recentGiftItemIds, topicTags, memoryTags, playerPreferences, state)))
             .ToList();
 
         int bestScore = scored.Max(candidate => candidate.Score);
@@ -373,7 +386,7 @@ internal sealed class GiftSelector
             chosen.Candidate.ItemId,
             chosen.Candidate.DebugName,
             tier,
-            $"profile tags: {FormatTags(npcTags)}; preferred item ids: {FormatTags(npcPreferredItemIds)}; chosen preferred: {npcPreferredItemIds.Contains(chosen.Candidate.ItemId)}; conversation tags: {FormatTags(topicTags)}; memory tags: {FormatTags(memoryTags)}; player-liked tags: {FormatTags(playerPreferences.LikedTags)}; player-disliked tags: {FormatTags(playerPreferences.DislikedTags)}; score: {chosen.Score}",
+            $"profile tags: {FormatTags(npcTags)}; preferred item ids: {FormatTags(npcPreferredItemIds)}; chosen preferred: {npcPreferredItemIds.Contains(chosen.Candidate.ItemId)}; recent AI gifts: {FormatTags(recentGiftItemIds)}; conversation tags: {FormatTags(topicTags)}; memory tags: {FormatTags(memoryTags)}; player-liked tags: {FormatTags(playerPreferences.LikedTags)}; player-disliked tags: {FormatTags(playerPreferences.DislikedTags)}; score: {chosen.Score}",
             matchedPlayerPreference
         );
     }
@@ -612,6 +625,7 @@ internal sealed class GiftSelector
         GiftTier tier,
         IReadOnlySet<string> npcTags,
         IReadOnlySet<string> npcPreferredItemIds,
+        IReadOnlySet<string> recentGiftItemIds,
         IReadOnlySet<string> topicTags,
         IReadOnlySet<string> memoryTags,
         PlayerPreferenceSignals playerPreferences,
@@ -622,6 +636,11 @@ internal sealed class GiftSelector
         if (npcPreferredItemIds.Contains(candidate.ItemId))
         {
             score += 18;
+        }
+
+        if (recentGiftItemIds.Contains(candidate.ItemId))
+        {
+            score -= 40;
         }
 
         score += candidate.Tags.Count(tag => npcTags.Contains(tag)) * 5;

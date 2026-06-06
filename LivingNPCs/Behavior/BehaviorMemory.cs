@@ -5494,6 +5494,7 @@ internal sealed class LivingNpcState
     public int LastAiSmallGiftTotalDays { get; set; } = -1;
     public int LastAiMeaningfulGiftTotalDays { get; set; } = -1;
     public int LastAiMoneyGiftTotalDays { get; set; } = -1;
+    public List<string> RecentAiGiftItemIds { get; set; } = new();
     public int LastDailyGiftOpportunityRollTotalDays { get; set; } = -1;
     public int DailyGiftOpportunityTotalDays { get; set; } = -1;
     public int DailyGiftOpportunityChancePercent { get; set; }
@@ -6274,6 +6275,14 @@ internal sealed class LivingNpcState
             this.AiFriendshipGainedToday = 0;
         }
 
+        this.RecentAiGiftItemIds ??= new List<string>();
+        this.RecentAiGiftItemIds = this.RecentAiGiftItemIds
+            .Where(itemId => !string.IsNullOrWhiteSpace(itemId))
+            .Select(itemId => itemId.Trim())
+            .Distinct(System.StringComparer.OrdinalIgnoreCase)
+            .Take(3)
+            .ToList();
+
         if (this.LastDailyGiftOpportunityRollTotalDays != Game1.Date.TotalDays)
         {
             this.DailyGiftOpportunityTotalDays = -1;
@@ -6579,6 +6588,7 @@ internal sealed class LivingNpcState
             LastAiSmallGiftTotalDays = this.LastAiSmallGiftTotalDays,
             LastAiMeaningfulGiftTotalDays = this.LastAiMeaningfulGiftTotalDays,
             LastAiMoneyGiftTotalDays = this.LastAiMoneyGiftTotalDays,
+            RecentAiGiftItemIds = this.RecentAiGiftItemIds.ToList(),
             LastDailyGiftOpportunityRollTotalDays = this.LastDailyGiftOpportunityRollTotalDays,
             DailyGiftOpportunityTotalDays = this.DailyGiftOpportunityTotalDays,
             DailyGiftOpportunityChancePercent = this.DailyGiftOpportunityChancePercent,
