@@ -287,7 +287,6 @@ internal sealed class BehaviorEngine
         this.TryUpdatePendingEscorts();
         this.TryUpdatePendingWalks();
         this.TryShowCommitmentMorningReminders();
-        this.TryShowHelpRequestFollowUps();
         this.TryShowSharedExperienceFollowUps();
         this.TryTriggerCommitmentArrivals();
         if (e.IsMultipleOf(120))
@@ -4055,7 +4054,8 @@ internal sealed class BehaviorEngine
             }
 
             var experience = state.SharedExperiences.FirstOrDefault(candidate =>
-                candidate.FollowUpEligibleTotalDays <= Game1.Date.TotalDays
+                candidate.Type != "help_request"
+                && candidate.FollowUpEligibleTotalDays <= Game1.Date.TotalDays
                 && candidate.FollowUpShownTotalDays < 0
                 && candidate.CreatedTotalDays >= Game1.Date.TotalDays - 7
             );
