@@ -460,68 +460,17 @@ internal static class BehaviorPromptContextBuilder
         int minRelationshipTrustForHelpRequests,
         int currentTotalDays)
     {
-        return CanOpenHelpRequest(
-                state,
-                world.FriendshipHearts,
-                maxPendingHelpRequestsPerNpc,
-                helpRequestCooldownDays,
-                minRelationshipTrustForHelpRequests,
-                currentTotalDays,
-                out string reason)
-            ? $"may naturally ask for one modest favor now; {reason}"
-            : $"should not open a new help request now; {reason}";
-    }
-
-    private static bool CanOpenHelpRequest(
-        LivingNpcState state,
-        int friendshipHearts,
-        int maxPendingHelpRequestsPerNpc,
-        int helpRequestCooldownDays,
-        int minRelationshipTrustForHelpRequests,
-        int currentTotalDays,
-        out string reason)
-    {
-        if (maxPendingHelpRequestsPerNpc <= 0)
-        {
-            reason = "help requests are disabled";
-            return false;
-        }
-
-        if (state.HelpRequests.Count(request => request.Status is "Offered" or "Pending") >= maxPendingHelpRequestsPerNpc)
-        {
-            reason = "an active help request is already pending";
-            return false;
-        }
-
-        if (state.HighestUnresolvedConflictSeverity >= 30)
-        {
-            reason = "unresolved conflict makes asking for help feel wrong";
-            return false;
-        }
-
-        bool enoughTrust = state.RelationshipTrust >= minRelationshipTrustForHelpRequests;
-        bool enoughFamiliarity = state.Familiarity >= 20 || friendshipHearts >= 2;
-        if (!enoughTrust || !enoughFamiliarity)
-        {
-            reason = "the relationship is not close enough yet";
-            return false;
-        }
-
-        if (state.CurrentEmotion is "Angry" or "Upset")
-        {
-            reason = "their current emotion is too strained";
-            return false;
-        }
-
-        if (state.LastHelpRequestTotalDays >= 0
-            && currentTotalDays - state.LastHelpRequestTotalDays < helpRequestCooldownDays)
-        {
-            reason = "a recent help request is still too fresh";
-            return false;
-        }
-
-        reason = "one modest favor would be natural if the conversation genuinely leads there";
-        return true;
+        var result = HelpRequestReadinessRules.Evaluate(
+            state,
+            world.FriendshipHearts,
+            maxPendingHelpRequestsPerNpc,
+            helpRequestCooldownDays,
+            minRelationshipTrustForHelpRequests,
+            currentTotalDays
+        );
+        return result.Allowed
+            ? $"may naturally ask for one modest favor now; {result.Reason}"
+            : $"should not open a new help request now; {result.Reason}";
     }
 
     private static string BuildTravelInvitationPolicyPromptLabel(LivingNpcState state)

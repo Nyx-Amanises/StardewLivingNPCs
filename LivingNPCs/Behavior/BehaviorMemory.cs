@@ -3047,48 +3047,17 @@ internal sealed class BehaviorMemory
         int minRelationshipTrustForHelpRequests,
         out string reason)
     {
-        if (maxPendingHelpRequestsPerNpc <= 0)
-        {
-            reason = "help requests are disabled";
-            return false;
-        }
-
-        if (state.HelpRequests.Count(request => request.Status is "Offered" or "Pending") >= maxPendingHelpRequestsPerNpc)
-        {
-            reason = "an active help request is already pending";
-            return false;
-        }
-
-        if (state.HighestUnresolvedConflictSeverity >= 30)
-        {
-            reason = "unresolved conflict makes asking for help feel wrong";
-            return false;
-        }
-
         var world = WorldContext.For(npc);
-        bool enoughTrust = state.RelationshipTrust >= minRelationshipTrustForHelpRequests;
-        bool enoughFamiliarity = state.Familiarity >= 20 || world.FriendshipHearts >= 2;
-        if (!enoughTrust || !enoughFamiliarity)
-        {
-            reason = "the relationship is not close enough yet";
-            return false;
-        }
-
-        if (state.CurrentEmotion is "Angry" or "Upset")
-        {
-            reason = "their current emotion is too strained";
-            return false;
-        }
-
-        if (state.LastHelpRequestTotalDays >= 0
-            && Game1.Date.TotalDays - state.LastHelpRequestTotalDays < helpRequestCooldownDays)
-        {
-            reason = "a recent help request is still too fresh";
-            return false;
-        }
-
-        reason = "one modest favor would be natural if the conversation genuinely leads there";
-        return true;
+        var result = HelpRequestReadinessRules.Evaluate(
+            state,
+            world.FriendshipHearts,
+            maxPendingHelpRequestsPerNpc,
+            helpRequestCooldownDays,
+            minRelationshipTrustForHelpRequests,
+            Game1.Date.TotalDays
+        );
+        reason = result.Reason;
+        return result.Allowed;
     }
 
         private bool StoreLongTermMemory(LivingNpcState state, ValleyTalkMemoryCandidate candidate)
