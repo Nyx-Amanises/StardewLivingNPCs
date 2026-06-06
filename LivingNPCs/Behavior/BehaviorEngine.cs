@@ -235,7 +235,6 @@ internal sealed class BehaviorEngine
             return;
         }
 
-        this.TryUpdateCommitmentTimers();
         this.TryUpdateHelpRequestTimers();
 
         if (!this.config.EnablePassiveBehaviors || Game1.activeClickableMenu != null)
@@ -286,9 +285,6 @@ internal sealed class BehaviorEngine
         this.TryStartPendingDelayedTravelActions();
         this.TryUpdatePendingEscorts();
         this.TryUpdatePendingWalks();
-        this.TryShowCommitmentMorningReminders();
-        this.TryShowSharedExperienceFollowUps();
-        this.TryTriggerCommitmentArrivals();
         if (e.IsMultipleOf(120))
         {
             this.TryApplyDialogueBehaviorInfluences();
@@ -385,7 +381,6 @@ internal sealed class BehaviorEngine
             npcResponse,
             analysisJson,
             this.config.MaxMemoryEntriesPerNpc,
-            this.config.EnableCommitments ? this.config.MaxPendingCommitmentsPerNpc : 0,
             this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
             this.config.HelpRequestCooldownDays,
             this.config.MinRelationshipTrustForHelpRequests,
@@ -430,7 +425,7 @@ internal sealed class BehaviorEngine
 
         this.PushInteractionContext(
             npc,
-            $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, {result.PlayerPreferencesStored} player preferences, {result.CommitmentsStored} commitments, {result.HelpRequestsStored} help requests, {result.HelpRequestsUpdated} help request updates, {result.ConflictsStored} conflicts, {result.BehaviorInfluencesStored} dialogue behavior influences, {result.ConflictsResolved} resolved conflicts, +{result.AppliedFriendshipDelta} extra friendship."
+            $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, {result.PlayerPreferencesStored} player preferences, {result.HelpRequestsStored} help requests, {result.HelpRequestsUpdated} help request updates, {result.ConflictsStored} conflicts, {result.BehaviorInfluencesStored} dialogue behavior influences, {result.ConflictsResolved} resolved conflicts, +{result.AppliedFriendshipDelta} extra friendship."
         );
         return true;
     }
@@ -636,7 +631,6 @@ internal sealed class BehaviorEngine
         }
 
         if (!this.TryBuildFallbackTravelAction(npc, playerText, npcResponse, out ValleyTalkWorldActionRequest? action)
-            && !this.TryBuildImmediateTravelActionFromRecentCommitment(npc, npcResponse, out action)
             || action == null)
         {
             return actions;
@@ -787,7 +781,7 @@ internal sealed class BehaviorEngine
             return;
         }
 
-        string currentTarget = BehaviorMemory.NormalizeCommitmentLocation(action.TargetLocation, string.Empty);
+        string currentTarget = BehaviorMemory.NormalizeTravelLocation(action.TargetLocation, string.Empty);
         bool currentTargetIsGeneric = string.IsNullOrWhiteSpace(currentTarget)
             || currentTarget is "Town" or "BusStop";
         if (!currentTargetIsGeneric && string.Equals(currentTarget, visibleTarget, StringComparison.OrdinalIgnoreCase))
@@ -804,43 +798,6 @@ internal sealed class BehaviorEngine
                 $"visible dialogue clarified the destination as {visibleTarget}"
             );
         }
-    }
-
-    private bool TryBuildImmediateTravelActionFromRecentCommitment(
-        NPC npc,
-        string npcResponse,
-        out ValleyTalkWorldActionRequest? action
-    )
-    {
-        action = null;
-        var state = this.memory.GetState(npc);
-        if (state == null)
-        {
-            return false;
-        }
-
-        var commitment = state.Commitments.FirstOrDefault(candidate =>
-            candidate.Type == "go_together"
-            && candidate.Status == "Pending"
-            && candidate.CreatedTotalDays == Game1.Date.TotalDays
-            && candidate.CreatedTimeOfDay == Game1.timeOfDay
-            && candidate.DueTotalDays == Game1.Date.TotalDays
-            && System.Math.Abs(this.ToDayMinutes(candidate.TimeOfDay) - this.ToDayMinutes(Game1.timeOfDay)) <= 20
-        );
-        if (commitment == null)
-        {
-            return false;
-        }
-
-        action = new ValleyTalkWorldActionRequest
-        {
-            Type = string.IsNullOrWhiteSpace(commitment.LocationName) ? "walk_together" : "escort_to_location",
-            TargetLocation = commitment.LocationName,
-            DurationMinutes = string.IsNullOrWhiteSpace(commitment.LocationName) ? 10 : 15,
-            DelayMinutes = this.DetectPreparationDelayMinutes(npcResponse),
-            Reason = $"a just-made same-time plan to go together: {commitment.Summary}"
-        };
-        return true;
     }
 
     private bool TryBuildFallbackTravelAction(
@@ -1898,7 +1855,7 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        string targetLocation = BehaviorMemory.NormalizeCommitmentLocation(action.TargetLocation, string.Empty);
+        string targetLocation = BehaviorMemory.NormalizeTravelLocation(action.TargetLocation, string.Empty);
 
         if (!this.CanUseWorldAction(npc, "escort_to_location", requireFriendly: false, out reason, allowDistantWhenExplicit: true))
         {
@@ -2014,7 +1971,7 @@ internal sealed class BehaviorEngine
             {
                 if (npc.currentLocation != Game1.currentLocation)
                 {
-                    string npcLocation = BehaviorMemory.NormalizeCommitmentLocation(npc.currentLocation?.Name ?? string.Empty, string.Empty);
+                    string npcLocation = BehaviorMemory.NormalizeTravelLocation(npc.currentLocation?.Name ?? string.Empty, string.Empty);
                     if (string.Equals(npcLocation, escort.WaitingLocationName, StringComparison.OrdinalIgnoreCase))
                     {
                         continue;
@@ -2172,8 +2129,8 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        string sourceName = BehaviorMemory.NormalizeCommitmentLocation(source.Name, source.Name);
-        string destinationName = BehaviorMemory.NormalizeCommitmentLocation(destination.Name, destination.Name);
+        string sourceName = BehaviorMemory.NormalizeTravelLocation(source.Name, source.Name);
+        string destinationName = BehaviorMemory.NormalizeTravelLocation(destination.Name, destination.Name);
         if (string.IsNullOrWhiteSpace(destinationName))
         {
             return false;
@@ -2244,7 +2201,7 @@ internal sealed class BehaviorEngine
     {
         try
         {
-            return BehaviorMemory.NormalizeCommitmentLocation(locationName, locationName) == "Farm"
+            return BehaviorMemory.NormalizeTravelLocation(locationName, locationName) == "Farm"
                 ? Game1.getFarm()
                 : Game1.getLocationFromName(locationName);
         }
@@ -2257,7 +2214,7 @@ internal sealed class BehaviorEngine
     private bool TryReadWarpDestinationTile(GameLocation sourceLocation, string targetLocation, out Point targetTile)
     {
         foreach (var warp in sourceLocation.warps.Where(warp => string.Equals(
-            BehaviorMemory.NormalizeCommitmentLocation(GetWarpTargetName(warp), string.Empty),
+            BehaviorMemory.NormalizeTravelLocation(GetWarpTargetName(warp), string.Empty),
             targetLocation,
             StringComparison.OrdinalIgnoreCase)))
         {
@@ -2291,7 +2248,7 @@ internal sealed class BehaviorEngine
     private bool TryFindReverseWarpEntryTile(GameLocation destination, string sourceLocationName, NPC npc, out Point targetTile)
     {
         foreach (var warp in destination.warps.Where(warp => string.Equals(
-            BehaviorMemory.NormalizeCommitmentLocation(GetWarpTargetName(warp), string.Empty),
+            BehaviorMemory.NormalizeTravelLocation(GetWarpTargetName(warp), string.Empty),
             sourceLocationName,
             StringComparison.OrdinalIgnoreCase)))
         {
@@ -2325,7 +2282,7 @@ internal sealed class BehaviorEngine
     private bool TryGetNextEscortLocation(GameLocation currentLocation, string targetLocation, out string nextLocation)
     {
         nextLocation = string.Empty;
-        string current = BehaviorMemory.NormalizeCommitmentLocation(currentLocation.Name, currentLocation.Name);
+        string current = BehaviorMemory.NormalizeTravelLocation(currentLocation.Name, currentLocation.Name);
         if (string.Equals(current, targetLocation, StringComparison.OrdinalIgnoreCase))
         {
             return false;
@@ -2394,7 +2351,7 @@ internal sealed class BehaviorEngine
     {
         return location.warps.Any(warp =>
             string.Equals(
-                BehaviorMemory.NormalizeCommitmentLocation(GetWarpTargetName(warp), string.Empty),
+                BehaviorMemory.NormalizeTravelLocation(GetWarpTargetName(warp), string.Empty),
                 targetLocation,
                 StringComparison.OrdinalIgnoreCase
             ));
@@ -2404,7 +2361,7 @@ internal sealed class BehaviorEngine
     {
         foreach (var warp in location.warps
             .Where(warp => string.Equals(
-                BehaviorMemory.NormalizeCommitmentLocation(GetWarpTargetName(warp), string.Empty),
+                BehaviorMemory.NormalizeTravelLocation(GetWarpTargetName(warp), string.Empty),
                 targetLocation,
                 StringComparison.OrdinalIgnoreCase))
             .OrderBy(warp => Vector2.Distance(new Vector2(warp.X, warp.Y), npc.Tile)))
@@ -2461,7 +2418,7 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        string current = BehaviorMemory.NormalizeCommitmentLocation(location.Name, location.Name);
+        string current = BehaviorMemory.NormalizeTravelLocation(location.Name, location.Name);
         return string.Equals(current, targetLocation, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -3334,7 +3291,7 @@ internal sealed class BehaviorEngine
 
     private bool IsDialogueInfluenceTargetLocationCurrent(DialogueBehaviorInfluenceFact influence)
     {
-        string currentLocation = BehaviorMemory.NormalizeCommitmentLocation(Game1.currentLocation?.Name ?? string.Empty, string.Empty);
+        string currentLocation = BehaviorMemory.NormalizeTravelLocation(Game1.currentLocation?.Name ?? string.Empty, string.Empty);
         return !string.IsNullOrWhiteSpace(influence.TargetLocation)
             && influence.TargetLocation == currentLocation;
     }
@@ -3349,48 +3306,6 @@ internal sealed class BehaviorEngine
             "Mountain" => "你提到山上后，我也有点在意这里。",
             _ => $"你刚才提到{influence.TargetLocationLabel}，我后来还想着这件事。"
         };
-    }
-
-    private void TryUpdateCommitmentTimers()
-    {
-        if (!this.config.EnableCommitments)
-        {
-            return;
-        }
-
-        foreach (var state in this.memory.GetTrackedStates())
-        {
-            foreach (var commitment in state.Commitments.Where(commitment => commitment.Status is "Pending" or "Waiting"))
-            {
-                if (this.IsPastCommitmentGraceWindow(commitment))
-                {
-                    commitment.Status = "Expired";
-                    commitment.LastUpdatedTotalDays = Game1.Date.TotalDays;
-                    commitment.LastUpdatedTimeOfDay = Game1.timeOfDay;
-                    this.memory.UpdateStateForExpiredCommitment(state, commitment);
-                    NPC? npc = Game1.getCharacterFromName(state.NpcName);
-                    if (npc != null)
-                    {
-                        this.memory.RecordNpcWorldAction(
-                            npc,
-                            "ExpiredCommitment",
-                            $"the farmer missed an agreed plan: {commitment.Summary}",
-                            this.config.MaxMemoryEntriesPerNpc
-                        );
-                        this.PushInteractionContext(npc, $"Expired commitment for {npc.Name}: {commitment.Summary}.");
-                        this.TryReturnNpcToSchedule(npc, commitment);
-                    }
-                    continue;
-                }
-
-                if (this.IsWithinCommitmentWindow(commitment))
-                {
-                    state.LastInteraction = "waiting around an agreed plan";
-                    state.LastUpdatedTotalDays = Game1.Date.TotalDays;
-                    state.LastUpdatedTimeOfDay = Game1.timeOfDay;
-                }
-            }
-        }
     }
 
     private void TryUpdateHelpRequestTimers()
@@ -3432,199 +3347,6 @@ internal sealed class BehaviorEngine
         {
             this.SyncHelpRequestsToQuestLog();
         }
-    }
-
-    private void TryTriggerCommitmentArrivals()
-    {
-        if (!this.config.EnableCommitments
-            || Game1.currentLocation == null
-            || Game1.player == null
-            || Game1.eventUp)
-        {
-            return;
-        }
-
-        this.TryDispatchPendingCommitmentNpcsToWaitingLocations();
-
-        foreach (var npc in Game1.currentLocation.characters.Where(candidate => !string.IsNullOrWhiteSpace(candidate.Name)))
-        {
-            var state = this.memory.GetState(npc);
-            if (state == null)
-            {
-                continue;
-            }
-
-            var commitment = state.Commitments.FirstOrDefault(candidate =>
-                candidate.Status is "Pending" or "Waiting"
-                && !candidate.ArrivalGreetingShown
-                && this.IsCommitmentForCurrentLocation(candidate)
-                && this.IsWithinCommitmentWindow(candidate)
-            );
-            if (commitment == null)
-            {
-                continue;
-            }
-
-            if (Vector2.Distance(npc.Tile, Game1.player.Tile) > 3f)
-            {
-                if (commitment.Status == "Waiting" && !commitment.WaitingGreetingShown)
-                {
-                    if (this.TryShowNpcSpeechBubble(npc, this.BuildCommitmentWaitingGreeting(commitment)))
-                    {
-                        commitment.WaitingGreetingShown = true;
-                        commitment.LastMentionedTotalDays = Game1.Date.TotalDays;
-                        commitment.LastMentionedTimeOfDay = Game1.timeOfDay;
-                    }
-                }
-
-                if (npc.controller == null)
-                {
-                    this.TryApproachPlayer(npc);
-                }
-
-                continue;
-            }
-
-            this.FulfillCommitment(npc, commitment);
-        }
-    }
-
-    private void TryDispatchPendingCommitmentNpcsToWaitingLocations()
-    {
-        if (Game1.player == null || Game1.eventUp)
-        {
-            return;
-        }
-
-        foreach (var state in this.memory.GetTrackedStates())
-        {
-            var commitment = state.Commitments.FirstOrDefault(candidate =>
-                candidate.Status is "Pending" or "Waiting"
-                && !candidate.ArrivalGreetingShown
-                && this.IsWithinCommitmentWindow(candidate)
-            );
-            if (commitment == null)
-            {
-                continue;
-            }
-
-            NPC? npc = Game1.getCharacterFromName(state.NpcName);
-            GameLocation? targetLocation = this.ResolveCommitmentLocation(commitment);
-            if (npc == null || targetLocation == null)
-            {
-                continue;
-            }
-
-            bool playerIsAtTarget = this.IsLocationForCommitment(Game1.currentLocation, commitment);
-            if (npc.currentLocation == targetLocation && commitment.Status == "Waiting")
-            {
-                continue;
-            }
-
-            if (this.TryMoveNpcToCommitmentRendezvous(npc, commitment, targetLocation, playerIsAtTarget) && this.config.Debug)
-            {
-                this.monitor.Log(
-                    $"Moved {npc.Name} to {targetLocation.Name} to wait for LivingNPCs commitment: {commitment.Summary}",
-                    LogLevel.Debug
-                );
-            }
-        }
-    }
-
-    private bool FulfillCommitment(NPC npc, NpcCommitmentFact commitment)
-    {
-        if (!this.TryShowNpcSpeechBubble(npc, this.BuildCommitmentArrivalGreeting(commitment)))
-        {
-            return false;
-        }
-
-        commitment.ArrivalGreetingShown = true;
-        commitment.Status = "Fulfilled";
-        commitment.FulfilledTotalDays = Game1.Date.TotalDays;
-        commitment.FulfilledTimeOfDay = Game1.timeOfDay;
-        commitment.LastUpdatedTotalDays = Game1.Date.TotalDays;
-        commitment.LastUpdatedTimeOfDay = Game1.timeOfDay;
-        this.memory.UpdateStateForFulfilledCommitment(npc, commitment);
-        this.memory.RecordNpcWorldAction(
-            npc,
-            "FulfilledCommitment",
-            $"they fulfilled an agreed plan with the farmer: {commitment.Summary}",
-            this.config.MaxMemoryEntriesPerNpc
-        );
-        this.PushInteractionContext(npc, $"Fulfilled commitment for {npc.Name}: {commitment.Summary}.");
-        this.SpreadCommunityRipple(
-            npc,
-            "shared_experience",
-            $"the farmer kept a plan with {npc.displayName}: {commitment.Summary}",
-            importance: 72
-        );
-        return true;
-    }
-
-    private bool TryMoveNpcToCommitmentRendezvous(NPC npc, NpcCommitmentFact commitment, GameLocation location, bool preferPlayerTile)
-    {
-        if (Game1.player == null || !this.TryFindCommitmentArrivalTile(location, commitment, preferPlayerTile, out Point targetTile))
-        {
-            return false;
-        }
-
-        try
-        {
-            npc.controller = null;
-            npc.Halt();
-            npc.currentLocation?.characters.Remove(npc);
-            if (!location.characters.Contains(npc))
-            {
-                location.characters.Add(npc);
-            }
-
-            npc.currentLocation = location;
-            npc.Position = new Vector2(targetTile.X * Game1.tileSize, targetTile.Y * Game1.tileSize);
-            if (location == Game1.currentLocation)
-            {
-                npc.faceDirection(this.GetDirectionTowardPlayerFromTile(targetTile));
-            }
-
-            if (commitment.Status != "Waiting")
-            {
-                commitment.Status = "Waiting";
-                commitment.WaitingStartedTotalDays = Game1.Date.TotalDays;
-                commitment.WaitingStartedTimeOfDay = Game1.timeOfDay;
-                commitment.WaitingLocationName = BehaviorMemory.NormalizeCommitmentLocation(location.Name, commitment.LocationName);
-                commitment.WaitingTileX = targetTile.X;
-                commitment.WaitingTileY = targetTile.Y;
-                commitment.NpcArrivedAfterPlayer = preferPlayerTile;
-                commitment.LastUpdatedTotalDays = Game1.Date.TotalDays;
-                commitment.LastUpdatedTimeOfDay = Game1.timeOfDay;
-                this.memory.RecordNpcWorldAction(
-                    npc,
-                    "ArrivedForCommitment",
-                    $"they came to {commitment.LocationLabel} to wait for an agreed plan: {commitment.Summary}",
-                    this.config.MaxMemoryEntriesPerNpc
-                );
-            }
-
-            return true;
-        }
-        catch (Exception ex)
-        {
-            this.monitor.Log($"Could not move {npc.Name} for LivingNPCs commitment: {ex.Message}", LogLevel.Warn);
-            return false;
-        }
-    }
-
-    private bool TryReturnNpcToSchedule(NPC npc, NpcCommitmentFact commitment)
-    {
-        bool returned = this.TryResumeNpcCurrentSchedule(npc, $"LivingNPCs commitment at {commitment.LocationName}");
-        if (returned && this.config.Debug)
-        {
-            this.monitor.Log(
-                $"Returned {npc.Name} to schedule after missed LivingNPCs commitment at {commitment.LocationName}.",
-                LogLevel.Debug
-            );
-        }
-
-        return returned;
     }
 
     private bool TryFindOpenTileNear(GameLocation location, Point center, NPC ignoredNpc, out Point targetTile)
@@ -3729,201 +3451,6 @@ internal sealed class BehaviorEngine
             ?? type.GetProperty(memberName)?.GetValue(source);
     }
 
-    private bool IsCommitmentForCurrentLocation(NpcCommitmentFact commitment)
-    {
-        return this.IsLocationForCommitment(Game1.currentLocation, commitment);
-    }
-
-    private bool IsLocationForCommitment(GameLocation? location, NpcCommitmentFact commitment)
-    {
-        string currentLocation = BehaviorMemory.NormalizeCommitmentLocation(location?.Name ?? string.Empty, string.Empty);
-        return !string.IsNullOrWhiteSpace(currentLocation)
-            && string.Equals(commitment.LocationName, currentLocation, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private GameLocation? ResolveCommitmentLocation(NpcCommitmentFact commitment)
-    {
-        try
-        {
-            return commitment.LocationName switch
-            {
-                "Farm" => Game1.getFarm(),
-                _ => Game1.getLocationFromName(commitment.LocationName)
-            };
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
-    private bool TryFindCommitmentArrivalTile(
-        GameLocation location,
-        NpcCommitmentFact commitment,
-        bool preferPlayerTile,
-        out Point targetTile)
-    {
-        targetTile = Point.Zero;
-        if (preferPlayerTile && location == Game1.currentLocation)
-        {
-            var playerTile = Game1.player.TilePoint;
-            var playerCandidates = new List<Point>();
-            for (int radius = 1; radius <= 3; radius++)
-            {
-                for (int dx = -radius; dx <= radius; dx++)
-                {
-                    for (int dy = -radius; dy <= radius; dy++)
-                    {
-                        if (Math.Abs(dx) != radius && Math.Abs(dy) != radius)
-                        {
-                            continue;
-                        }
-
-                        playerCandidates.Add(new Point(playerTile.X + dx, playerTile.Y + dy));
-                    }
-                }
-            }
-
-            foreach (var candidate in playerCandidates
-                .Distinct()
-                .OrderBy(tile => Vector2.Distance(new Vector2(tile.X, tile.Y), Game1.player.Tile)))
-            {
-                if (this.IsSafeDestinationTile(location, candidate))
-                {
-                    targetTile = candidate;
-                    return true;
-                }
-            }
-        }
-
-        foreach (var candidate in this.GetCommitmentAnchorCandidates(location, commitment.LocationName))
-        {
-            if (this.IsSafeDestinationTile(location, candidate))
-            {
-                targetTile = candidate;
-                return true;
-            }
-        }
-
-        var fallbackCenter = new Point(location.Map.Layers[0].LayerWidth / 2, location.Map.Layers[0].LayerHeight / 2);
-        foreach (var candidate in this.GetTilesAround(fallbackCenter, 8))
-        {
-            if (this.IsSafeDestinationTile(location, candidate))
-            {
-                targetTile = candidate;
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private IEnumerable<Point> GetCommitmentAnchorCandidates(GameLocation location, string normalizedLocationName)
-    {
-        if (normalizedLocationName == "Farm")
-        {
-            foreach (var warp in location.warps.Where(warp => IsFarmhouseWarp(warp)))
-            {
-                var warpTile = new Point(warp.X, warp.Y);
-                foreach (var tile in this.GetTilesAround(warpTile, 4))
-                {
-                    yield return tile;
-                }
-            }
-        }
-
-        Point[] preferred = normalizedLocationName switch
-        {
-            "Farm" =>
-            [
-                new Point(64, 15),
-                new Point(63, 15),
-                new Point(65, 15),
-                new Point(64, 16),
-                new Point(63, 16),
-                new Point(65, 16)
-            ],
-            "Town" =>
-            [
-                new Point(43, 57),
-                new Point(44, 57),
-                new Point(42, 57),
-                new Point(43, 56)
-            ],
-            "Beach" =>
-            [
-                new Point(36, 34),
-                new Point(37, 34),
-                new Point(35, 34)
-            ],
-            "Forest" =>
-            [
-                new Point(34, 49),
-                new Point(35, 49),
-                new Point(34, 50)
-            ],
-            "Mountain" =>
-            [
-                new Point(31, 20),
-                new Point(32, 20),
-                new Point(31, 21)
-            ],
-            "BusStop" =>
-            [
-                new Point(11, 23),
-                new Point(12, 23),
-                new Point(11, 24)
-            ],
-            "Saloon" =>
-            [
-                new Point(10, 18),
-                new Point(11, 18),
-                new Point(10, 17)
-            ],
-            "SeedShop" =>
-            [
-                new Point(6, 17),
-                new Point(7, 17),
-                new Point(6, 16)
-            ],
-            "ArchaeologyHouse" =>
-            [
-                new Point(12, 10),
-                new Point(13, 10),
-                new Point(12, 11)
-            ],
-            "Hospital" =>
-            [
-                new Point(12, 14),
-                new Point(13, 14),
-                new Point(12, 13)
-            ],
-            _ => []
-        };
-
-        foreach (var tile in preferred)
-        {
-            yield return tile;
-        }
-
-        foreach (var warp in location.warps)
-        {
-            var warpTile = new Point(warp.X, warp.Y);
-            foreach (var tile in this.GetTilesAround(warpTile, 3))
-            {
-                yield return tile;
-            }
-        }
-    }
-
-    private static bool IsFarmhouseWarp(object warp)
-    {
-        string targetName = GetWarpTargetName(warp);
-        return targetName.Equals("FarmHouse", StringComparison.OrdinalIgnoreCase)
-            || targetName.Equals("Farmhouse", StringComparison.OrdinalIgnoreCase)
-            || targetName.Equals("Cabin", StringComparison.OrdinalIgnoreCase);
-    }
-
     private static string GetWarpTargetName(object warp)
     {
         foreach (string memberName in new[] { "TargetName", "targetName", "TargetLocationName", "targetLocationName" })
@@ -3954,123 +3481,6 @@ internal sealed class BehaviorEngine
                     yield return new Point(center.X + dx, center.Y + dy);
                 }
             }
-        }
-    }
-
-    private string BuildCommitmentArrivalGreeting(NpcCommitmentFact commitment)
-    {
-        string arrival = commitment.NpcArrivedAfterPlayer ? "我来了" : "你来了";
-        string place = string.IsNullOrWhiteSpace(commitment.LocationLabel) ? "这里" : commitment.LocationLabel;
-        return commitment.Type switch
-        {
-            "go_together" when commitment.NpcArrivedAfterPlayer => $"{arrival}，我们就在{place}碰头，然后按说好的走吧。",
-            "go_together" => $"{arrival}，我在{place}等着呢，我们按约定一起走吧。",
-            "help_task" when commitment.NpcArrivedAfterPlayer => $"{arrival}，说好的事就在{place}处理吧。",
-            "help_task" => $"{arrival}，说好的事现在办吧。",
-            "celebrate_together" when commitment.NpcArrivedAfterPlayer => $"{arrival}，正好在{place}一起庆祝。",
-            "celebrate_together" => $"{arrival}，正好一起庆祝。",
-            "share_activity" when commitment.NpcArrivedAfterPlayer => $"{arrival}，我们按说好的在{place}做那件事吧。",
-            "share_activity" => $"{arrival}，我们按说好的去做点什么吧。",
-            _ when commitment.NpcArrivedAfterPlayer => $"{arrival}，我们就在{place}碰头吧。",
-            _ => $"{arrival}，我们按说好的来。"
-        };
-    }
-
-    private string BuildCommitmentWaitingGreeting(NpcCommitmentFact commitment)
-    {
-        string place = string.IsNullOrWhiteSpace(commitment.LocationLabel) ? "这里" : commitment.LocationLabel;
-        return commitment.Type switch
-        {
-            "go_together" => $"我先到{place}了，会在这里等你一会儿。",
-            "help_task" => $"我先到{place}了，等你来我们就开始。",
-            "celebrate_together" => $"我先到{place}了，等你一起庆祝。",
-            "share_activity" => $"我先到{place}了，等你来一起做那件事。",
-            _ => $"我先到{place}了，会在这里等你一会儿。"
-        };
-    }
-
-    private void TryShowCommitmentMorningReminders()
-    {
-        if (!this.config.EnableCommitments
-            || Game1.currentLocation == null
-            || Game1.player == null
-            || Game1.activeClickableMenu != null
-            || Game1.eventUp
-            || Game1.timeOfDay < 600
-            || Game1.timeOfDay > 1000)
-        {
-            return;
-        }
-
-        foreach (var npc in Game1.currentLocation.characters.Where(candidate => !string.IsNullOrWhiteSpace(candidate.Name)))
-        {
-            var state = this.memory.GetState(npc);
-            if (state == null)
-            {
-                continue;
-            }
-
-            var commitment = state.Commitments.FirstOrDefault(candidate =>
-                candidate.Status == "Pending"
-                && candidate.DueTotalDays == Game1.Date.TotalDays
-                && !candidate.MorningReminderShown
-                && this.ShouldShowMorningCommitmentReminder(candidate)
-            );
-            if (commitment == null
-                || Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles)
-            {
-                continue;
-            }
-
-            if (!this.TryShowNpcSpeechBubble(npc, this.BuildCommitmentMorningReminder(commitment)))
-            {
-                continue;
-            }
-
-            commitment.MorningReminderShown = true;
-            commitment.LastMentionedTotalDays = Game1.Date.TotalDays;
-            commitment.LastMentionedTimeOfDay = Game1.timeOfDay;
-        }
-    }
-
-    private void TryShowSharedExperienceFollowUps()
-    {
-        if (!this.config.EnableDialogueFollowUps
-            || Game1.currentLocation == null
-            || Game1.player == null
-            || Game1.activeClickableMenu != null
-            || Game1.eventUp)
-        {
-            return;
-        }
-
-        foreach (var npc in Game1.currentLocation.characters.Where(candidate => !string.IsNullOrWhiteSpace(candidate.Name)))
-        {
-            var state = this.memory.GetState(npc);
-            if (state == null
-                || Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles)
-            {
-                continue;
-            }
-
-            var experience = state.SharedExperiences.FirstOrDefault(candidate =>
-                candidate.Type != "help_request"
-                && candidate.FollowUpEligibleTotalDays <= Game1.Date.TotalDays
-                && candidate.FollowUpShownTotalDays < 0
-                && candidate.CreatedTotalDays >= Game1.Date.TotalDays - 7
-            );
-            if (experience == null)
-            {
-                continue;
-            }
-
-            if (!this.TryShowNpcSpeechBubble(npc, this.BuildSharedExperienceFollowUp(experience)))
-            {
-                continue;
-            }
-
-            experience.FollowUpShownTotalDays = Game1.Date.TotalDays;
-            experience.FollowUpShownTimeOfDay = Game1.timeOfDay;
         }
     }
 
@@ -4116,31 +3526,6 @@ internal sealed class BehaviorEngine
         }
     }
 
-    private string BuildCommitmentMorningReminder(NpcCommitmentFact commitment)
-    {
-        return commitment.Type switch
-        {
-            "celebrate_together" => $"别忘了，我们今天要一起庆祝。",
-            "share_activity" => $"别忘了，我们今天还约好一起活动。",
-            "go_together" => $"别忘了，我们今天还约好一起去{commitment.LocationLabel}。",
-            "help_task" => "别忘了，我们今天还约好要一起处理那件事。",
-            _ => $"别忘了，我们今天还约好在{commitment.LocationLabel}见面。"
-        };
-    }
-
-    private string BuildSharedExperienceFollowUp(SharedExperienceFact experience)
-    {
-        return experience.Type switch
-        {
-            "celebrate_together" => "那次一起庆祝，气氛挺好的。",
-            "share_activity" => "那次一起做那件事，挺开心的。",
-            "go_together" => $"那次一起去{experience.LocationLabel}，感觉不错。",
-            "help_task" => "那件事一起做完以后，轻松多了。",
-            "help_request" => "上次你帮那一下，真的省了我不少心。",
-            _ => "那次一起待了一会儿，感觉挺好。"
-        };
-    }
-
     private string BuildHelpRequestFollowUp(NpcHelpRequestFact request)
     {
         if (request.RewardMoneyByMail)
@@ -4162,55 +3547,6 @@ internal sealed class BehaviorEngine
             "question_request" => "上次你说的那些，我后来还想了想。",
             _ => "上次你带来的东西，正好派上了用场。"
         };
-    }
-
-    private bool ShouldShowMorningCommitmentReminder(NpcCommitmentFact commitment)
-    {
-        unchecked
-        {
-            string seed = $"{commitment.Type}:{commitment.Summary}:{commitment.DueTotalDays}:{commitment.LocationName}";
-            int hash = 17;
-            foreach (char character in seed)
-            {
-                hash = (hash * 31) + character;
-            }
-
-            return System.Math.Abs(hash % 100) < 45;
-        }
-    }
-
-    private bool IsWithinCommitmentWindow(NpcCommitmentFact commitment)
-    {
-        if (commitment.DueTotalDays != Game1.Date.TotalDays)
-        {
-            return false;
-        }
-
-        int now = this.ToDayMinutes(Game1.timeOfDay);
-        int due = this.ToDayMinutes(commitment.TimeOfDay);
-        return now >= due && now <= due + this.config.CommitmentGraceMinutes;
-    }
-
-    private bool IsPastCommitmentGraceWindow(NpcCommitmentFact commitment)
-    {
-        if (commitment.DueTotalDays < Game1.Date.TotalDays)
-        {
-            return true;
-        }
-
-        if (commitment.DueTotalDays > Game1.Date.TotalDays)
-        {
-            return false;
-        }
-
-        return this.ToDayMinutes(Game1.timeOfDay) > this.ToDayMinutes(commitment.TimeOfDay) + this.config.CommitmentGraceMinutes;
-    }
-
-    private int ToDayMinutes(int timeOfDay)
-    {
-        int hours = timeOfDay / 100;
-        int minutes = timeOfDay % 100;
-        return (hours * 60) + minutes;
     }
 
     private void StopWalkTogether(PendingWalkTogether walk, NPC? npc, bool returnToSchedule)
@@ -4421,7 +3757,7 @@ internal sealed class BehaviorEngine
         }
 
         this.PushInteractionContext(npc, $"Recorded conversation start for {npc.Name}.");
-        this.MarkCommitmentFollowUpsMentionedAfterPrompt(npc);
+        this.MarkConflictFollowUpsMentionedAfterPrompt(npc);
     }
 
     private bool HasPendingItemHelpRequest(NPC npc, GiftMemoryDetails gift)
@@ -4915,43 +4251,12 @@ internal sealed class BehaviorEngine
             && (friendship.IsDating() || friendship.IsEngaged() || friendship.IsMarried());
     }
 
-    private void MarkCommitmentFollowUpsMentionedAfterPrompt(NPC npc)
+    private void MarkConflictFollowUpsMentionedAfterPrompt(NPC npc)
     {
-        if (!this.config.EnableCommitments)
-        {
-            return;
-        }
-
         var state = this.memory.GetState(npc);
         if (state == null)
         {
             return;
-        }
-
-        foreach (var commitment in state.Commitments.Where(commitment =>
-                     commitment.Status == "Expired"
-                     && commitment.LastMentionedTotalDays < Game1.Date.TotalDays))
-        {
-            commitment.LastMentionedTotalDays = Game1.Date.TotalDays;
-            commitment.LastMentionedTimeOfDay = Game1.timeOfDay;
-        }
-
-        foreach (var commitment in state.Commitments.Where(commitment =>
-                     commitment.Status == "Pending"
-                     && commitment.DueTotalDays == Game1.Date.TotalDays + 1
-                     && commitment.DayBeforeReminderMentionedTotalDays < Game1.Date.TotalDays))
-        {
-            commitment.DayBeforeReminderMentionedTotalDays = Game1.Date.TotalDays;
-            commitment.DayBeforeReminderMentionedTimeOfDay = Game1.timeOfDay;
-        }
-
-        foreach (var commitment in state.Commitments.Where(commitment =>
-                     commitment.Status == "Fulfilled"
-                     && commitment.FulfilledTotalDays >= Game1.Date.TotalDays - 3
-                     && commitment.FollowUpMentionedTotalDays < 0))
-        {
-            commitment.FollowUpMentionedTotalDays = Game1.Date.TotalDays;
-            commitment.FollowUpMentionedTimeOfDay = Game1.timeOfDay;
         }
 
         foreach (var conflict in state.Conflicts.Where(conflict =>

@@ -1254,7 +1254,6 @@ public class Prompts
         instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcMetadata")));
         instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcGiftIds")));
         instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcImmediateTravel")));
-        instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcCommitmentDepth")));
         instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcHelpRequests")));
         instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcEmotionDepth")));
         if (!Character.Bio.ExtraPortraits.ContainsKey("!"))

@@ -10,7 +10,7 @@ internal static class StreamingDialoguePreview
     private static readonly Regex EmotionTokenPattern = new(@"\$[A-Za-z0-9]+", RegexOptions.Compiled);
     private static readonly Regex MetadataPattern = new(@"!+LIVINGNPCS_META\s*\{.*", RegexOptions.Compiled | RegexOptions.Singleline);
     private static readonly Regex BareMetadataTailPattern = new(
-        @"(?im)^\s*(rapportDelta|endConversation|ambientFollowUp|emotionImpact|actions|behaviorInfluences|commitments|helpRequests|helpRequestUpdates|conflicts|memories)\s*[:=].*$",
+        @"(?im)^\s*(rapportDelta|endConversation|ambientFollowUp|emotionImpact|actions|behaviorInfluences|helpRequests|helpRequestUpdates|conflicts|memories)\s*[:=].*$",
         RegexOptions.Compiled);
     private static readonly Regex DialogueCommandPattern = new(@"#\$(?:q|r|c)\b.*", RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase);
     private static readonly string[] InlineResponseMarkers =

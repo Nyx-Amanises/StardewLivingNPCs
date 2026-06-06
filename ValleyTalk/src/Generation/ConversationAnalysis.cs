@@ -56,9 +56,6 @@ internal sealed class ConversationAnalysis
     [JsonProperty("behaviorInfluences")]
     public List<ConversationBehaviorInfluenceCandidate> BehaviorInfluences { get; set; } = new();
 
-    [JsonProperty("commitments")]
-    public List<ConversationCommitmentCandidate> Commitments { get; set; } = new();
-
     [JsonProperty("helpRequests")]
     public List<ConversationHelpRequestCandidate> HelpRequests { get; set; } = new();
 
@@ -75,7 +72,6 @@ internal sealed class ConversationAnalysis
         || this.EmotionImpact.HasContent
         || this.Actions.Count > 0
         || this.BehaviorInfluences.Count > 0
-        || this.Commitments.Count > 0
         || this.HelpRequests.Count > 0
         || this.HelpRequestUpdates.Count > 0
         || this.Conflicts.Count > 0;
@@ -173,21 +169,6 @@ internal sealed class ConversationAnalysis
                     return influence;
                 })
                 .Where(influence => influence.Type != "none")
-                .Take(2)
-                .ToList();
-            analysis.Commitments = analysis.Commitments
-                .Where(commitment => commitment != null && !string.IsNullOrWhiteSpace(commitment.Summary))
-                .Select(commitment =>
-                {
-                    commitment.Type = NormalizeCommitmentType(commitment.Type);
-                    commitment.Summary = commitment.Summary.Trim();
-                    commitment.DueInDays = Math.Clamp(commitment.DueInDays, 0, 28);
-                    commitment.TimeOfDay = NormalizeTimeOfDay(commitment.TimeOfDay);
-                    commitment.Location = commitment.Location?.Trim() ?? string.Empty;
-                    commitment.LocationLabel = commitment.LocationLabel?.Trim() ?? string.Empty;
-                    return commitment;
-                })
-                .Where(commitment => commitment.Type != "none")
                 .Take(2)
                 .ToList();
             analysis.HelpRequests = analysis.HelpRequests
@@ -356,19 +337,6 @@ internal sealed class ConversationAnalysis
         };
     }
 
-    private static string NormalizeCommitmentType(string type)
-    {
-        return type?.Trim().ToLowerInvariant() switch
-        {
-            "meet_again" => "meet_again",
-            "go_together" => "go_together",
-            "help_task" => "help_task",
-            "celebrate_together" => "celebrate_together",
-            "share_activity" => "share_activity",
-            _ => "none"
-        };
-    }
-
     private static string NormalizeHelpRequestType(string type)
     {
         return type?.Trim().ToLowerInvariant() switch
@@ -395,8 +363,6 @@ internal sealed class ConversationAnalysis
     {
         return value?.Trim().ToLowerInvariant() switch
         {
-            "new_commitment" => "new_commitment",
-            "shared_activity" => "shared_activity",
             "deeper_relationship" => "deeper_relationship",
             _ => "none"
         };
@@ -430,19 +396,6 @@ internal sealed class ConversationAnalysis
             "promise" => "promise",
             _ => "dialogue"
         };
-    }
-
-    private static int NormalizeTimeOfDay(int value)
-    {
-        if (value <= 0)
-        {
-            return 900;
-        }
-
-        int hours = Math.Clamp(value / 100, 6, 26);
-        int minutes = Math.Clamp(value % 100, 0, 50);
-        minutes -= minutes % 10;
-        return (hours * 100) + minutes;
     }
 
     private static string NormalizePlayerPreferenceKind(string kind)
@@ -589,27 +542,6 @@ internal sealed class ConversationBehaviorInfluenceCandidate
 
     [JsonProperty("maxTriggers")]
     public int MaxTriggers { get; set; }
-}
-
-internal sealed class ConversationCommitmentCandidate
-{
-    [JsonProperty("type")]
-    public string Type { get; set; } = "none";
-
-    [JsonProperty("summary")]
-    public string Summary { get; set; } = string.Empty;
-
-    [JsonProperty("dueInDays")]
-    public int DueInDays { get; set; }
-
-    [JsonProperty("timeOfDay")]
-    public int TimeOfDay { get; set; } = 900;
-
-    [JsonProperty("location")]
-    public string Location { get; set; } = string.Empty;
-
-    [JsonProperty("locationLabel")]
-    public string LocationLabel { get; set; } = string.Empty;
 }
 
 internal sealed class ConversationHelpRequestCandidate

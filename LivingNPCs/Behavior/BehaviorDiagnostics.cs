@@ -77,7 +77,6 @@ internal static class BehaviorDiagnostics
         AppendBullet(report, "玩家偏好", state.PlayerPreferenceDebugLabel);
         AppendBullet(report, "社区印象", state.CommunityImpressionDebugLabel);
         AppendBullet(report, "对话驱动行为", state.DialogueBehaviorInfluenceDebugLabel);
-        AppendBullet(report, "长期约定", state.CommitmentDebugLabel);
         AppendBullet(report, "主动求助", state.HelpRequestDebugLabel);
         AppendBullet(report, "冲突记忆", state.ConflictDebugLabel);
         return report.ToString();
@@ -156,15 +155,9 @@ internal static class BehaviorDiagnostics
 
     private static string FormatPendingWork(LivingNpcState state)
     {
-        int commitments = state.Commitments.Count(commitment => commitment.Status == "Pending");
         int requests = state.HelpRequests.Count(request => request.Status is "Offered" or "Pending");
         int conflicts = state.Conflicts.Count(conflict => conflict.Status is "Active" or "Recovering");
         var parts = new List<string>();
-        if (commitments > 0)
-        {
-            parts.Add($"约定 {commitments}");
-        }
-
         if (requests > 0)
         {
             parts.Add($"求助 {requests}");

@@ -150,37 +150,6 @@ internal static class ModConfigMenu
 
         configMenu.AddBoolOption(
             mod: manifest,
-            name: () => "启用长期约定",
-            tooltip: () => "让 NPC 记住双方明确答应的再见面、同行或帮忙约定，并在到期时尝试响应。",
-            getValue: () => config.EnableCommitments,
-            setValue: value => config.EnableCommitments = value
-        );
-
-        configMenu.AddNumberOption(
-            mod: manifest,
-            name: () => "每个 NPC 最多待履行约定",
-            tooltip: () => "限制每个 NPC 同时最多保留多少条尚未完成的约定。",
-            getValue: () => config.MaxPendingCommitmentsPerNpc,
-            setValue: value => config.MaxPendingCommitmentsPerNpc = value,
-            min: 1,
-            max: 12,
-            interval: 1
-        );
-
-        configMenu.AddNumberOption(
-            mod: manifest,
-            name: () => "约定宽限分钟",
-            tooltip: () => "超过约定时间后，最多再给多少游戏分钟的宽限；之后会记为过期。",
-            getValue: () => config.CommitmentGraceMinutes,
-            setValue: value => config.CommitmentGraceMinutes = value,
-            min: 10,
-            max: 360,
-            interval: 10,
-            formatValue: value => $"{value} 分钟"
-        );
-
-        configMenu.AddBoolOption(
-            mod: manifest,
             name: () => "启用 NPC 主动求助",
             tooltip: () => "允许关系足够自然时，NPC 在 AI 对话中向玩家提出一个轻量物品求助。",
             getValue: () => config.EnableHelpRequests,
@@ -409,7 +378,7 @@ internal static class ModConfigMenu
 
         configMenu.AddBoolOption(
             mod: manifest,
-            name: () => "允许 NPC 陪去约定地点",
+            name: () => "允许 NPC 陪同前往地点",
             tooltip: () => "允许 AI 发起有时间限制、路径受限的同行请求；当前只做安全的短时陪走，不改永久日程。",
             getValue: () => config.AllowAiEscortToLocation,
             setValue: value => config.AllowAiEscortToLocation = value

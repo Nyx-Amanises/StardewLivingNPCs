@@ -14,9 +14,6 @@ internal sealed class ModConfig
     public int MaxMemoryEntriesPerNpc { get; set; } = 20;
     public int PromptMemoryEntries { get; set; } = 4;
     public bool EnableConversationMemory { get; set; } = true;
-    public bool EnableCommitments { get; set; } = true;
-    public int MaxPendingCommitmentsPerNpc { get; set; } = 4;
-    public int CommitmentGraceMinutes { get; set; } = 120;
     public bool EnableHelpRequests { get; set; } = true;
     public int MaxPendingHelpRequestsPerNpc { get; set; } = 1;
     public int HelpRequestCooldownDays { get; set; } = 3;
@@ -86,9 +83,6 @@ internal sealed class ModConfig
         this.MaxMemoryEntriesPerNpc = defaults.MaxMemoryEntriesPerNpc;
         this.PromptMemoryEntries = defaults.PromptMemoryEntries;
         this.EnableConversationMemory = defaults.EnableConversationMemory;
-        this.EnableCommitments = defaults.EnableCommitments;
-        this.MaxPendingCommitmentsPerNpc = defaults.MaxPendingCommitmentsPerNpc;
-        this.CommitmentGraceMinutes = defaults.CommitmentGraceMinutes;
         this.EnableHelpRequests = defaults.EnableHelpRequests;
         this.MaxPendingHelpRequestsPerNpc = defaults.MaxPendingHelpRequestsPerNpc;
         this.HelpRequestCooldownDays = defaults.HelpRequestCooldownDays;

@@ -735,7 +735,6 @@ public class Character
             || trimmed.StartsWith("emotionImpact", StringComparison.OrdinalIgnoreCase)
             || trimmed.StartsWith("actions", StringComparison.OrdinalIgnoreCase)
             || trimmed.StartsWith("behaviorInfluences", StringComparison.OrdinalIgnoreCase)
-            || trimmed.StartsWith("commitments", StringComparison.OrdinalIgnoreCase)
             || trimmed.StartsWith("helpRequests", StringComparison.OrdinalIgnoreCase)
             || trimmed.StartsWith("helpRequestUpdates", StringComparison.OrdinalIgnoreCase)
             || trimmed.StartsWith("conflicts", StringComparison.OrdinalIgnoreCase)
