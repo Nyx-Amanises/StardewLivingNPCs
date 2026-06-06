@@ -229,12 +229,7 @@ internal sealed class BehaviorMemory
         string normalizedSummary = NormalizeMemorySummary(summary);
         string normalizedSource = NormalizeCommunityImpressionSource(source);
         string normalizedVisibility = NormalizeCommunityImpressionVisibility(visibility);
-        int confidence = normalizedSource switch
-        {
-            "Witnessed" => 95,
-            "CloseCircle" => 68,
-            _ => 42
-        };
+        int confidence = CommunityPropagationRules.GetInitialConfidence(normalizedSource);
         int normalizedDepth = System.Math.Clamp(transmissionDepth, 0, 8);
         int normalizedDistortion = System.Math.Clamp(distortionLevel, 0, 100);
         var existing = state.CommunityImpressions.FirstOrDefault(memory =>

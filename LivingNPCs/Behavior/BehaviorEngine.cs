@@ -4126,7 +4126,7 @@ internal sealed class BehaviorEngine
 
             CommunityImpressionFact? impression = this.memory
                 .GetRetellableCommunityImpressions(speakerState, maxCount: 3)
-                .FirstOrDefault(candidate => this.CanRetellCommunityImpression(candidate));
+                .FirstOrDefault(candidate => CommunityPropagationRules.CanRetell(candidate, Game1.Date.TotalDays));
             if (impression == null)
             {
                 continue;
@@ -4144,19 +4144,14 @@ internal sealed class BehaviorEngine
                 .Where(target => !string.Equals(target.NpcName, subject.Name, StringComparison.OrdinalIgnoreCase))
                 .Where(target => impression.Visibility != "Personal" || target.AllowsPersonalNews)
                 .OrderBy(_ => this.random.Next())
-                .Take(this.GetDailyRetellingTargetLimit(reaction, impression))
+                .Take(CommunityPropagationRules.GetDailyRetellingTargetLimit(reaction, impression))
                 .ToList();
             if (targets.Count == 0)
             {
                 continue;
             }
 
-            int depth = System.Math.Min(8, impression.TransmissionDepth + 1);
-            int distortion = System.Math.Min(
-                100,
-                impression.DistortionLevel + this.GetRetellingDistortionGain(reaction, impression)
-            );
-            string retoldSummary = this.BuildRetoldCommunitySummary(subject, impression, depth, distortion);
+            var retelling = CommunityPropagationRules.BuildRetelling(impression, reaction, subject.displayName);
             int stored = 0;
             foreach (var target in targets)
             {
@@ -4170,14 +4165,14 @@ internal sealed class BehaviorEngine
                         recipient,
                         subject,
                         impression.Kind,
-                        retoldSummary,
-                        source: "CloseCircle",
-                        visibility: impression.Visibility,
-                        transmissionDepth: depth,
-                        distortionLevel: distortion,
+                        retelling.Summary,
+                        source: retelling.Source,
+                        visibility: retelling.Visibility,
+                        transmissionDepth: retelling.TransmissionDepth,
+                        distortionLevel: retelling.DistortionLevel,
                         heardFromNpcName: speaker.Name,
                         circleKey: target.CircleKey,
-                        importance: System.Math.Max(24, impression.Importance - 8),
+                        importance: retelling.Importance,
                         maxEntriesPerNpc: this.config.MaxMemoryEntriesPerNpc))
                 {
                     stored++;
@@ -4190,93 +4185,12 @@ internal sealed class BehaviorEngine
                 if (this.config.Debug)
                 {
                     this.monitor.Log(
-                        $"Propagated community impression from {speaker.Name} through {string.Join(", ", targets.Select(target => target.CircleKey).Distinct())}: depth {depth}, distortion {distortion}, recipients {stored}.",
+                        $"Propagated community impression from {speaker.Name} through {string.Join(", ", targets.Select(target => target.CircleKey).Distinct())}: depth {retelling.TransmissionDepth}, distortion {retelling.DistortionLevel}, recipients {stored}.",
                         LogLevel.Debug
                     );
                 }
             }
         }
-    }
-
-    private bool CanRetellCommunityImpression(CommunityImpressionFact impression)
-    {
-        if (impression.Visibility == "Private")
-        {
-            return false;
-        }
-
-        if (impression.FreshnessStage == "fading"
-            || impression.FreshnessStage == "expired"
-            || impression.Confidence < 35
-            || impression.TransmissionDepth >= 3)
-        {
-            return false;
-        }
-
-        return impression.LastSharedTotalDays < Game1.Date.TotalDays;
-    }
-
-    private int GetDailyRetellingTargetLimit(CommunityReactionCue reaction, CommunityImpressionFact impression)
-    {
-        if (impression.Visibility == "Personal")
-        {
-            return 1;
-        }
-
-        return reaction.SharePropensity switch
-        {
-            >= 60 => 2,
-            _ => 1
-        };
-    }
-
-    private int GetRetellingDistortionGain(CommunityReactionCue reaction, CommunityImpressionFact impression)
-    {
-        int baseGain = impression.Source switch
-        {
-            "Witnessed" => 8,
-            "CloseCircle" => 12,
-            _ => 16
-        };
-
-        return reaction.Key switch
-        {
-            "Expressive" => baseGain + 6,
-            "Curious" => baseGain + 4,
-            "Reserved" => System.Math.Max(4, baseGain - 4),
-            "Measured" => System.Math.Max(4, baseGain - 3),
-            _ => baseGain
-        };
-    }
-
-    private string BuildRetoldCommunitySummary(
-        NPC subject,
-        CommunityImpressionFact impression,
-        int depth,
-        int distortion)
-    {
-        if (depth <= 1 && distortion < 20)
-        {
-            return impression.Summary;
-        }
-
-        return impression.Kind switch
-        {
-            "relationship_trend" when depth >= 3 || distortion >= 35 =>
-                $"people have noticed the farmer and {subject.displayName} talking more lately",
-            "relationship_trend" =>
-                $"the farmer seems to have been spending more time with {subject.displayName} lately",
-            "helped" when depth >= 3 || distortion >= 35 =>
-                $"someone said the farmer did {subject.displayName} a favor recently",
-            "helped" =>
-                $"the farmer may have helped {subject.displayName} with something recently",
-            "shared_experience" when depth >= 3 || distortion >= 35 =>
-                $"the farmer and {subject.displayName} seem to have had some sort of plan together recently",
-            "shared_experience" =>
-                $"the farmer and {subject.displayName} seem to have spent some time together recently",
-            _ =>
-                $"there has been a little talk lately involving the farmer and {subject.displayName}"
-        };
     }
 
     private bool IsRomanticallyAttachedToFarmer(NPC npc)
