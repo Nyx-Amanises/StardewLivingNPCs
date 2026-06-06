@@ -1797,8 +1797,7 @@ internal sealed class BehaviorEngine
         this.StopTravelActionsForNpc(npc, returnToSchedule: true);
         bool originalIgnoreScheduleToday = npc.ignoreScheduleToday;
         bool originalFollowSchedule = npc.followSchedule;
-        npc.ignoreScheduleToday = true;
-        npc.followSchedule = false;
+        NpcTravelRuntime.SuppressSchedule(npc);
         this.pendingWalks.Add(new PendingWalkTogether(
             npc.Name,
             Game1.Date.TotalDays,
@@ -1877,8 +1876,7 @@ internal sealed class BehaviorEngine
         this.StopTravelActionsForNpc(npc, returnToSchedule: true);
         bool originalIgnoreScheduleToday = npc.ignoreScheduleToday;
         bool originalFollowSchedule = npc.followSchedule;
-        npc.ignoreScheduleToday = true;
-        npc.followSchedule = false;
+        NpcTravelRuntime.SuppressSchedule(npc);
         npc.controller = null;
         npc.Halt();
         this.pendingEscorts.Add(new PendingEscortToLocation(
@@ -2134,15 +2132,7 @@ internal sealed class BehaviorEngine
         {
             npc.controller = null;
             npc.Halt();
-            source.characters.Remove(npc);
-            if (!destination.characters.Contains(npc))
-            {
-                destination.characters.Add(npc);
-            }
-
-            npc.currentLocation = destination;
-            npc.Position = new Vector2(targetTile.X * Game1.tileSize, targetTile.Y * Game1.tileSize);
-            npc.faceDirection(2);
+            NpcTravelRuntime.PlaceInLocation(npc, destination, targetTile, 2);
 
             escort.WaitingInNextLocation = true;
             escort.WaitingLocationName = destinationName;
@@ -2481,8 +2471,7 @@ internal sealed class BehaviorEngine
 
     private static void RestoreNpcScheduleControl(NPC npc, bool ignoreScheduleToday, bool followSchedule)
     {
-        npc.ignoreScheduleToday = ignoreScheduleToday;
-        npc.followSchedule = followSchedule;
+        NpcTravelRuntime.RestoreSchedule(npc, ignoreScheduleToday, followSchedule);
     }
 
     private bool TryReturnNpcToCurrentSchedule(NPC npc, bool allowCrossLocationTeleport = true)
