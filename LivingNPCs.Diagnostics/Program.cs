@@ -13,9 +13,9 @@ if (string.IsNullOrWhiteSpace(root) || !Directory.Exists(root))
 
 var tests = new List<RegressionCheck>
 {
-    CheckFileContains(
+    CheckDirectoryContains(
         "状态摘要包含记忆召回原因",
-        Path.Combine(root, "LivingNPCs", "Behavior", "BehaviorMemory.cs"),
+        Path.Combine(root, "LivingNPCs", "Behavior"),
         [
             "当前检索长期记忆",
             "当前检索玩家偏好",
@@ -57,9 +57,9 @@ var tests = new List<RegressionCheck>
             "PoliteAnxious"
         ]
     ),
-    CheckFileContains(
+    CheckDirectoryContains(
         "游戏内调试命令仍存在",
-        Path.Combine(root, "LivingNPCs", "Behavior", "BehaviorEngine.cs"),
+        Path.Combine(root, "LivingNPCs", "Behavior"),
         [
             "livingnpcs_debug",
             "livingnpcs_prompt",
@@ -98,7 +98,8 @@ static string FindRepositoryRoot(string start)
     var directory = new DirectoryInfo(start);
     while (directory != null)
     {
-        if (File.Exists(Path.Combine(directory.FullName, "LivingNPCs", "Behavior", "BehaviorMemory.cs")))
+        if (Directory.Exists(Path.Combine(directory.FullName, "LivingNPCs", "Behavior"))
+            && File.Exists(Path.Combine(directory.FullName, "LivingNPCs", "LivingNPCs.csproj")))
         {
             return directory.FullName;
         }
@@ -123,6 +124,27 @@ static RegressionCheck CheckFileContains(string name, string path, IReadOnlyColl
 
     return missing.Count == 0
         ? new RegressionCheck(name, true, "关键片段存在")
+        : new RegressionCheck(name, false, $"缺少：{string.Join(", ", missing)}");
+}
+
+static RegressionCheck CheckDirectoryContains(string name, string path, IReadOnlyCollection<string> requiredSnippets)
+{
+    if (!Directory.Exists(path))
+    {
+        return new RegressionCheck(name, false, $"目录不存在：{path}");
+    }
+
+    var sourceFiles = Directory.GetFiles(path, "*.cs", SearchOption.AllDirectories);
+    string text = string.Join(
+        Environment.NewLine,
+        sourceFiles.Select(File.ReadAllText)
+    );
+    var missing = requiredSnippets
+        .Where(snippet => !text.Contains(snippet, StringComparison.Ordinal))
+        .ToList();
+
+    return missing.Count == 0
+        ? new RegressionCheck(name, true, $"已扫描 {sourceFiles.Length} 个源码文件")
         : new RegressionCheck(name, false, $"缺少：{string.Join(", ", missing)}");
 }
 
