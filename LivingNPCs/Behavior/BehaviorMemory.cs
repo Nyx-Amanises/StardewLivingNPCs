@@ -1804,27 +1804,32 @@ internal sealed class BehaviorMemory
         int preferenceCount)
     {
         this.RefreshMemoryStores(state);
-        MemoryRecallContext context = this.BuildMemoryRecallContext(state, world, recentEntries);
-        var longTermMemories = state.LongTermMemories
-            .Select(memory => this.ScoreLongTermMemory(memory, context))
-            .Where(selection => selection.Score >= 45)
-            .OrderByDescending(selection => selection.Score)
-            .ThenByDescending(selection => selection.Memory.Importance)
-            .ThenByDescending(selection => selection.Memory.LastUpdatedTotalDays)
-            .ThenByDescending(selection => selection.Memory.LastUpdatedTimeOfDay)
-            .Take(System.Math.Max(0, longTermCount))
-            .ToList();
-        var playerPreferences = state.PlayerPreferenceMemories
-            .Select(memory => this.ScorePlayerPreferenceMemory(memory, context))
-            .Where(selection => selection.Score >= 45)
-            .OrderByDescending(selection => selection.Score)
-            .ThenByDescending(selection => selection.Memory.Importance)
-            .ThenByDescending(selection => selection.Memory.LastUpdatedTotalDays)
-            .ThenByDescending(selection => selection.Memory.LastUpdatedTimeOfDay)
-            .Take(System.Math.Max(0, preferenceCount))
-            .ToList();
+        return MemoryRecallService.BuildPlan(
+            state,
+            world,
+            recentEntries,
+            longTermCount,
+            preferenceCount,
+            Game1.Date.TotalDays
+        );
+    }
 
-        return new MemoryRecallPlan(context, longTermMemories, playerPreferences);
+    internal MemoryRecallPlan BuildMemoryRecallPlanForTesting(
+        LivingNpcState state,
+        WorldContextSnapshot world,
+        IReadOnlyList<BehaviorMemoryEntry> recentEntries,
+        int longTermCount,
+        int preferenceCount,
+        int currentTotalDays)
+    {
+        return MemoryRecallService.BuildPlan(
+            state,
+            world,
+            recentEntries,
+            longTermCount,
+            preferenceCount,
+            currentTotalDays
+        );
     }
 
     private IReadOnlyList<CommunityImpressionSelection> BuildCommunityImpressionRecallPlan(
@@ -1832,417 +1837,47 @@ internal sealed class BehaviorMemory
         int maxCount)
     {
         this.RefreshMemoryStores(state);
-        return state.CommunityImpressions
-            .Select(this.ScoreCommunityImpression)
-            .Where(selection => selection.Score >= 45)
-            .OrderByDescending(selection => selection.Score)
-            .ThenByDescending(selection => selection.Memory.Importance)
-            .ThenByDescending(selection => selection.Memory.LastUpdatedTotalDays)
-            .ThenByDescending(selection => selection.Memory.LastUpdatedTimeOfDay)
-            .Take(System.Math.Max(0, maxCount))
-            .ToList();
-    }
-
-    private CommunityImpressionSelection ScoreCommunityImpression(CommunityImpressionFact memory)
-    {
-        int age = GetMemoryAge(memory.LastUpdatedTotalDays);
-        int freshnessScore = age switch
-        {
-            0 => 30,
-            1 => 24,
-            <= 3 => 18,
-            <= 7 => 10,
-            <= 14 => 4,
-            _ => -20
-        };
-        int sourceScore = memory.Source switch
-        {
-            "Witnessed" => 12,
-            "CloseCircle" => 5,
-            _ => 1
-        };
-        int lifecycleScore = memory.FreshnessStage switch
-        {
-            "fresh" => 10,
-            "settled" => 2,
-            "fading" => -8,
-            _ => -20
-        };
-        int recentRecallPenalty = memory.LastRecalledTotalDays == Game1.Date.TotalDays ? 18 : 0;
-        int score = memory.Importance
-            + (memory.Confidence / 5)
-            + freshnessScore
-            + sourceScore
-            + lifecycleScore
-            + (memory.TimesReinforced * 2)
-            - recentRecallPenalty
-            - (memory.DistortionLevel / 8);
-        string reason = memory.Source switch
-        {
-            "Witnessed" => $"目击，{FormatMemoryAge(memory.LastUpdatedTotalDays)}",
-            "CloseCircle" => $"熟人转述，{FormatMemoryAge(memory.LastUpdatedTotalDays)}",
-            _ => $"公共场所里听到一点，{FormatMemoryAge(memory.LastUpdatedTotalDays)}"
-        };
-        return new CommunityImpressionSelection(memory, score, reason);
-    }
-
-    private MemoryRecallContext BuildMemoryRecallContext(
-        LivingNpcState state,
-        WorldContextSnapshot world,
-        IReadOnlyList<BehaviorMemoryEntry> recentEntries)
-    {
-        var tags = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
-        var tokens = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
-        this.AddWorldRecallTags(world, tags);
-        this.AddRecallSignals(world.LocationName, tags, tokens);
-        this.AddRecallSignals(world.LocationDisplayName, tags, tokens);
-        this.AddRecallSignals(world.PromptLabel, tags, tokens);
-        this.AddRecallSignals(world.ProgressionKnowledge.PromptLabel, tags, tokens);
-        this.AddRecallSignals(state.LastGiftName, tags, tokens);
-        this.AddRecallSignals(state.LastEventContext, tags, tokens);
-        this.AddRecallSignals(state.LastInteraction, tags, tokens);
-        this.AddRecallSignals(state.LastEmotionReason, tags, tokens);
-
-        foreach (var entry in recentEntries.TakeLast(6))
-        {
-            this.AddRecallSignals(entry.Action, tags, tokens);
-            this.AddRecallSignals(entry.Reason, tags, tokens);
-        }
-
-        foreach (var request in state.HelpRequests.Where(request => request.Status == "Pending").Take(2))
-        {
-            this.AddRecallSignals(request.Summary, tags, tokens);
-            this.AddRecallSignals(request.QuestionTopic, tags, tokens);
-            this.AddRecallSignals(request.RequestedItemLabel, tags, tokens);
-        }
-
-        return new MemoryRecallContext(tags, tokens);
-    }
-
-    private void AddWorldRecallTags(WorldContextSnapshot world, ISet<string> tags)
-    {
-        switch (world.LocationName)
-        {
-            case "Farm":
-                tags.Add("farming");
-                tags.Add("work");
-                tags.Add("nature");
-                break;
-
-            case "Beach":
-                tags.Add("fishing");
-                tags.Add("nature");
-                break;
-
-            case "Mountain":
-                tags.Add("mining");
-                tags.Add("nature");
-                break;
-
-            case "ArchaeologyHouse":
-                tags.Add("scholarly");
-                break;
-
-            case "Saloon":
-                tags.Add("food");
-                tags.Add("drink");
-                tags.Add("comfort");
-                break;
-        }
-
-        if (world.TimeOfDay < 900)
-        {
-            tags.Add("morning");
-        }
-        else if (world.TimeOfDay >= 1800)
-        {
-            tags.Add("night");
-        }
-
-        if (world.Progression.GreenhouseRepaired)
-        {
-            tags.Add("farming");
-            tags.Add("work");
-        }
-
-        if (world.Progression.MinecartsRepaired)
-        {
-            tags.Add("mining");
-        }
-
-        if (world.Progression.GingerIslandUnlocked || world.Progression.BusRepaired)
-        {
-            tags.Add("adventurous");
-            tags.Add("nature");
-        }
-
-        if (world.Progression.MovieTheaterOpen)
-        {
-            tags.Add("artistic");
-            tags.Add("comfort");
-        }
-    }
-
-    private void AddRecallSignals(string? text, ISet<string> tags, ISet<string> tokens)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return;
-        }
-
-        foreach (string token in ExtractRecallTokens(text))
-        {
-            tokens.Add(token);
-        }
-
-        BehaviorValueNormalizer.AddInferredTags(text, tags);
-    }
-
-    private static IEnumerable<string> ExtractRecallTokens(string text)
-    {
-        return Regex.Matches(text.ToLowerInvariant(), @"[\p{L}\p{N}]+")
-            .Select(match => match.Value)
-            .Where(token => token.Length >= 2)
-            .Distinct(System.StringComparer.OrdinalIgnoreCase)
-            .Take(24);
-    }
-
-    private LongTermMemorySelection ScoreLongTermMemory(LongTermMemoryFact memory, MemoryRecallContext context)
-    {
-        var reasons = new List<string>();
-        int score = memory.Importance;
-        int reinforcementBonus = System.Math.Min(18, memory.TimesReinforced * 3);
-        score += reinforcementBonus;
-        if (reinforcementBonus > 0)
-        {
-            reasons.Add($"reinforced +{reinforcementBonus}");
-        }
-
-        int kindBonus = GetLongTermMemoryKindBonus(memory.Kind);
-        score += kindBonus;
-        if (kindBonus > 0)
-        {
-            reasons.Add($"{memory.Kind} +{kindBonus}");
-        }
-
-        int freshnessBonus = GetMemoryFreshnessBonus(memory.LastUpdatedTotalDays);
-        score += freshnessBonus;
-        if (freshnessBonus > 0)
-        {
-            reasons.Add($"fresh +{freshnessBonus}");
-        }
-
-        int tagOverlap = memory.Tags.Count(tag => context.Tags.Contains(tag));
-        if (tagOverlap > 0)
-        {
-            int tagBonus = tagOverlap * 14;
-            score += tagBonus;
-            reasons.Add($"tags +{tagBonus}");
-        }
-
-        int tokenOverlap = CountRecallTokenOverlap(memory.Subject, memory.Summary, context.Tokens);
-        if (tokenOverlap > 0)
-        {
-            int tokenBonus = tokenOverlap * 8;
-            score += tokenBonus;
-            reasons.Add($"topic +{tokenBonus}");
-        }
-
-        int recallPenalty = GetRecentRecallPenalty(memory.LastRecalledTotalDays);
-        score -= recallPenalty;
-        if (recallPenalty > 0)
-        {
-            reasons.Add($"recent recall -{recallPenalty}");
-        }
-
-        return new LongTermMemorySelection(memory, score, reasons.Count == 0 ? "base salience" : string.Join(", ", reasons));
-    }
-
-    private PlayerPreferenceSelection ScorePlayerPreferenceMemory(PlayerPreferenceFact memory, MemoryRecallContext context)
-    {
-        var reasons = new List<string>();
-        int score = memory.Importance;
-        int reinforcementBonus = System.Math.Min(18, memory.TimesReinforced * 3);
-        score += reinforcementBonus;
-        if (reinforcementBonus > 0)
-        {
-            reasons.Add($"reinforced +{reinforcementBonus}");
-        }
-
-        int freshnessBonus = GetMemoryFreshnessBonus(memory.LastUpdatedTotalDays);
-        score += freshnessBonus;
-        if (freshnessBonus > 0)
-        {
-            reasons.Add($"fresh +{freshnessBonus}");
-        }
-
-        int tagOverlap = memory.Tags.Count(tag => context.Tags.Contains(tag));
-        if (tagOverlap > 0)
-        {
-            int tagBonus = tagOverlap * 16;
-            score += tagBonus;
-            reasons.Add($"tags +{tagBonus}");
-        }
-
-        int tokenOverlap = CountRecallTokenOverlap(memory.Subject, memory.Summary, context.Tokens);
-        if (tokenOverlap > 0)
-        {
-            int tokenBonus = tokenOverlap * 10;
-            score += tokenBonus;
-            reasons.Add($"topic +{tokenBonus}");
-        }
-
-        int recallPenalty = GetRecentRecallPenalty(memory.LastRecalledTotalDays);
-        score -= recallPenalty;
-        if (recallPenalty > 0)
-        {
-            reasons.Add($"recent recall -{recallPenalty}");
-        }
-
-        return new PlayerPreferenceSelection(memory, score, reasons.Count == 0 ? "base salience" : string.Join(", ", reasons));
-    }
-
-    private static int CountRecallTokenOverlap(string subject, string summary, IReadOnlySet<string> contextTokens)
-    {
-        return ExtractRecallTokens($"{subject} {summary}")
-            .Count(contextTokens.Contains);
-    }
-
-    private static int GetMemoryFreshnessBonus(int totalDays)
-    {
-        return GetMemoryAge(totalDays) switch
-        {
-            0 => 18,
-            1 => 14,
-            <= 7 => 10,
-            <= 28 => 5,
-            _ => 0
-        };
-    }
-
-    private static int GetRecentRecallPenalty(int totalDays)
-    {
-        return GetMemoryAge(totalDays) switch
-        {
-            0 => 18,
-            1 => 10,
-            <= 3 => 4,
-            _ => 0
-        };
-    }
-
-    private static int GetLongTermMemoryKindBonus(string kind)
-    {
-        return NormalizeLongTermMemoryKind(kind) switch
-        {
-            "boundary" => 18,
-            "promise" => 16,
-            "relationship" => 12,
-            "preference" => 8,
-            _ => 0
-        };
+        return MemoryRecallService.BuildCommunityImpressionPlan(state, maxCount, Game1.Date.TotalDays);
     }
 
     private string FormatLongTermMemoryPromptLabel(IReadOnlyList<LongTermMemorySelection> selections)
     {
-        return selections.Count == 0
-            ? "no durable personal memory is especially relevant right now"
-            : string.Join("; ", selections.Select(selection => selection.Memory.Summary));
+        return MemoryRecallService.FormatLongTermMemoryPromptLabel(selections);
     }
 
     private string FormatPlayerPreferencePromptLabel(IReadOnlyList<PlayerPreferenceSelection> selections)
     {
-        return selections.Count == 0
-            ? "no durable farmer preference memory is especially relevant right now"
-            : string.Join("; ", selections.Select(selection => selection.Memory.Summary));
+        return MemoryRecallService.FormatPlayerPreferencePromptLabel(selections);
     }
 
     private string FormatCommunityImpressionPromptLabel(NPC npc, IReadOnlyList<CommunityImpressionSelection> selections)
     {
-        CommunityReactionCue reaction = CommunityReactionStyle.For(npc);
-        return selections.Count == 0
-            ? "no community impression is especially relevant right now"
-            : $"observer tendency: {reaction.PromptLabel}; retelling tendency: {reaction.RetellingPromptLabel}; {string.Join("; ", selections.Select(selection => selection.Memory.PromptLabel))}";
+        return MemoryRecallService.FormatCommunityImpressionPromptLabel(npc, selections);
     }
 
     private string FormatLongTermMemoryDebugLabel(IReadOnlyList<LongTermMemorySelection> selections)
     {
-        return selections.Count == 0
-            ? "暂无"
-            : string.Join("；", selections.Select(selection =>
-                $"{selection.Memory.Summary}（分数 {selection.Score}，{selection.Reason}）"));
+        return MemoryRecallService.FormatLongTermMemoryDebugLabel(selections);
     }
 
     private string FormatPlayerPreferenceDebugLabel(IReadOnlyList<PlayerPreferenceSelection> selections)
     {
-        return selections.Count == 0
-            ? "暂无"
-            : string.Join("；", selections.Select(selection =>
-                $"{selection.Memory.Summary}（分数 {selection.Score}，{selection.Reason}）"));
+        return MemoryRecallService.FormatPlayerPreferenceDebugLabel(selections);
     }
 
     private string FormatCommunityImpressionDebugLabel(IReadOnlyList<CommunityImpressionSelection> selections)
     {
-        return selections.Count == 0
-            ? "暂无"
-            : string.Join("；", selections.Select(selection =>
-                $"{selection.Memory.Summary}（{selection.Memory.Source}/{selection.Memory.Visibility}，分数 {selection.Score}，{selection.Reason}）"));
+        return MemoryRecallService.FormatCommunityImpressionDebugLabel(selections);
     }
 
     private void MarkMemoriesRecalled(MemoryRecallPlan recallPlan)
     {
-        foreach (var selection in recallPlan.LongTermMemories)
-        {
-            this.MarkMemoryRecalled(selection.Memory);
-        }
-
-        foreach (var selection in recallPlan.PlayerPreferences)
-        {
-            this.MarkMemoryRecalled(selection.Memory);
-        }
+        MemoryRecallService.MarkRecalled(recallPlan, Game1.Date.TotalDays, Game1.timeOfDay);
     }
 
     private void MarkCommunityImpressionsRecalled(IReadOnlyList<CommunityImpressionSelection> selections)
     {
-        foreach (var selection in selections)
-        {
-            var memory = selection.Memory;
-            if (memory.LastRecalledTotalDays == Game1.Date.TotalDays
-                && memory.LastRecalledTimeOfDay == Game1.timeOfDay)
-            {
-                continue;
-            }
-
-            memory.LastRecalledTotalDays = Game1.Date.TotalDays;
-            memory.LastRecalledTimeOfDay = Game1.timeOfDay;
-            memory.RecallCount += 1;
-        }
-    }
-
-    private void MarkMemoryRecalled(LongTermMemoryFact memory)
-    {
-        if (memory.LastRecalledTotalDays == Game1.Date.TotalDays
-            && memory.LastRecalledTimeOfDay == Game1.timeOfDay)
-        {
-            return;
-        }
-
-        memory.LastRecalledTotalDays = Game1.Date.TotalDays;
-        memory.LastRecalledTimeOfDay = Game1.timeOfDay;
-        memory.RecallCount += 1;
-    }
-
-    private void MarkMemoryRecalled(PlayerPreferenceFact memory)
-    {
-        if (memory.LastRecalledTotalDays == Game1.Date.TotalDays
-            && memory.LastRecalledTimeOfDay == Game1.timeOfDay)
-        {
-            return;
-        }
-
-        memory.LastRecalledTotalDays = Game1.Date.TotalDays;
-        memory.LastRecalledTimeOfDay = Game1.timeOfDay;
-        memory.RecallCount += 1;
+        MemoryRecallService.MarkCommunityImpressionsRecalled(selections, Game1.Date.TotalDays, Game1.timeOfDay);
     }
 
     private void RefreshMemoryStores(LivingNpcState state)
@@ -2564,7 +2199,7 @@ internal sealed class BehaviorMemory
         int score = memory.Importance;
         score += System.Math.Min(24, memory.TimesReinforced * 4);
         score += System.Math.Min(12, memory.RecallCount);
-        score += GetLongTermMemoryKindBonus(memory.Kind);
+        score += MemoryRecallService.GetLongTermMemoryKindBonus(memory.Kind);
         score += GetMemoryAge(memory.LastUpdatedTotalDays) switch
         {
             0 => 12,
