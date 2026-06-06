@@ -1874,6 +1874,7 @@ internal sealed class BehaviorEngine
         string targetLabel = this.GetEscortTargetLabel(targetLocation);
 
         this.StopTravelActionsForNpc(npc, returnToSchedule: true);
+        this.ClearPendingAmbientRemarksForNpc(npc.Name);
         bool originalIgnoreScheduleToday = npc.ignoreScheduleToday;
         bool originalFollowSchedule = npc.followSchedule;
         NpcTravelRuntime.SuppressSchedule(npc);
@@ -1945,6 +1946,8 @@ internal sealed class BehaviorEngine
             {
                 continue;
             }
+
+            NpcTravelRuntime.SuppressSchedule(npc);
 
             if (escort.WaitingInNextLocation)
             {
@@ -2428,6 +2431,11 @@ internal sealed class BehaviorEngine
         this.ShowFeedback($"LivingNPCs：{npc.displayName} 已带你到{escort.TargetLocationLabel}。");
         RestoreNpcScheduleControl(npc, escort.OriginalIgnoreScheduleToday, escort.OriginalFollowSchedule);
         this.TryReturnNpcToCurrentSchedule(npc, allowCrossLocationTeleport: false);
+    }
+
+    private void ClearPendingAmbientRemarksForNpc(string npcName)
+    {
+        this.pendingAmbientRemarks.RemoveAll(remark => string.Equals(remark.NpcName, npcName, StringComparison.OrdinalIgnoreCase));
     }
 
     private void StopEscortToLocation(PendingEscortToLocation escort, NPC? npc, bool returnToSchedule)
@@ -3047,6 +3055,8 @@ internal sealed class BehaviorEngine
             {
                 continue;
             }
+
+            NpcTravelRuntime.SuppressSchedule(npc);
 
             if (Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles + 4)
             {
