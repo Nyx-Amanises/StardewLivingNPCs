@@ -33,6 +33,7 @@ internal sealed class BehaviorEngine
     private readonly AiBehaviorClient aiBehaviorClient;
     private readonly BehaviorDebugCommandHandler debugCommands;
     private readonly BehaviorFeedbackService feedback;
+    private readonly CommunityRippleRuntime communityRipples;
     private readonly DialogueBehaviorInfluenceRuntime dialogueBehaviorInfluences;
     private readonly DelayedTravelActionRuntime delayedTravelActions;
     private readonly BehaviorMailService mailService;
@@ -54,6 +55,7 @@ internal sealed class BehaviorEngine
         this.planner = new AiBehaviorPlanner(new RuleBasedBehaviorPlanner(config, this.random, this.memory));
         this.aiBehaviorClient = new AiBehaviorClient(config, monitor);
         this.feedback = new BehaviorFeedbackService(config, monitor);
+        this.communityRipples = new CommunityRippleRuntime(config, monitor, this.memory, this.random);
         this.debugCommands = new BehaviorDebugCommandHandler(helper, monitor, config, this.memory, this.feedback.Show);
         this.mailService = new BehaviorMailService(helper, this.memory, this.random);
         this.helpRequestQuestLog = new HelpRequestQuestLogService(config, this.memory, this.mailService);
@@ -144,7 +146,7 @@ internal sealed class BehaviorEngine
         this.lastConversationMemoryTimeByNpc.Clear();
         this.feedback.Clear();
         this.delayedTravelActions.Clear();
-        this.TryPropagateCommunityImpressions();
+        this.communityRipples.TryPropagate();
         this.mailService.QueueDueGiftMailsForTomorrow();
         this.helper.GameContent.InvalidateCache("Data/mail");
         this.helpRequestQuestLog.Sync();
@@ -726,7 +728,7 @@ internal sealed class BehaviorEngine
             }
 
             this.feedback.Show($"LivingNPCs：完成 {npc.displayName} 的求助，额外好感 +{friendshipReward}。");
-            this.SpreadCommunityRipple(
+            this.communityRipples.Spread(
                 npc,
                 "helped",
                 $"the farmer helped {npc.displayName} with a personal request",
@@ -1752,7 +1754,7 @@ internal sealed class BehaviorEngine
             this.MarkStateAfterWorldAction(state, $"they guided the farmer to {escort.TargetLocationLabel}");
         }
 
-        this.SpreadCommunityRipple(
+        this.communityRipples.Spread(
             npc,
             "shared_experience",
             $"the farmer went with {npc.displayName} to {escort.TargetLocationLabel}",
@@ -2631,7 +2633,7 @@ internal sealed class BehaviorEngine
         {
             LivingNpcState state = this.memory.UpdateStateForConversationStart(npc);
             this.TryPrepareDailyGiftOpportunity(npc, state);
-            this.TrySpreadConversationSocialRipple(npc, state);
+            this.communityRipples.TrySpreadConversationSocialRipple(npc, state);
         }
 
         this.PushInteractionContext(npc, $"Recorded conversation start for {npc.Name}.");
@@ -2772,269 +2774,12 @@ internal sealed class BehaviorEngine
             this.PushInteractionContext(observer, $"Observed romantic interaction involving {targetNpc.Name}.");
         }
 
-        this.SpreadCommunityRipple(
+        this.communityRipples.Spread(
             targetNpc,
             "romantic_attention",
             $"the farmer has been giving romantic attention to {targetNpc.displayName}",
             importance: 70
         );
-    }
-
-    private void TrySpreadConversationSocialRipple(NPC npc, LivingNpcState state)
-    {
-        bool relationshipIsNoticeable = state.ConsecutiveConversationDays >= 3
-            || state.ConversationsToday >= 2
-            || state.InteractionComfortTier is "Friendly" or "Trusted" or "Intimate";
-        if (!relationshipIsNoticeable)
-        {
-            return;
-        }
-
-        int importance = state.InteractionComfortTier switch
-        {
-            "Intimate" => 74,
-            "Trusted" => 68,
-            "Friendly" => 60,
-            _ when state.ConsecutiveConversationDays >= 5 => 56,
-            _ => 48
-        };
-        this.SpreadCommunityRipple(
-            npc,
-            "relationship_trend",
-            $"the farmer has been speaking with {npc.displayName} more often lately",
-            importance
-        );
-    }
-
-    private void SpreadCommunityRipple(NPC subject, string kind, string summary, int importance)
-    {
-        if (Game1.currentLocation == null)
-        {
-            return;
-        }
-
-        string visibility = this.GetCommunityRippleVisibility(kind);
-        LivingNpcState? subjectState = this.memory.GetState(subject);
-        var directWitnesses = Game1.currentLocation.characters
-            .Where(candidate =>
-                candidate.Name != subject.Name
-                && !string.IsNullOrWhiteSpace(candidate.Name)
-                && Vector2.Distance(candidate.Tile, subject.Tile) <= 8f)
-            .ToList();
-
-        var directWitnessNames = directWitnesses
-            .Select(candidate => candidate.Name)
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-        int stored = 0;
-
-        foreach (var witness in directWitnesses)
-        {
-            if (this.memory.RecordCommunityImpression(
-                    witness,
-                    subject,
-                    kind,
-                    summary,
-                    source: "Witnessed",
-                    visibility: visibility,
-                    transmissionDepth: 0,
-                    distortionLevel: 0,
-                    heardFromNpcName: string.Empty,
-                    circleKey: "direct_witness",
-                    importance: importance,
-                    maxEntriesPerNpc: this.config.MaxMemoryEntriesPerNpc))
-            {
-                stored++;
-            }
-        }
-
-        IEnumerable<string> closeConnections = NpcSocialGraph.GetCloseConnections(subject.Name);
-        if (visibility == "Private")
-        {
-            closeConnections = closeConnections.Take(2);
-        }
-
-        if (this.CanSpreadToCloseCircle(visibility, subjectState))
-        {
-            foreach (string connectionName in closeConnections)
-            {
-                if (directWitnessNames.Contains(connectionName))
-                {
-                    continue;
-                }
-
-                NPC? connection = Game1.getCharacterFromName(connectionName);
-                if (connection == null
-                    || string.Equals(connection.Name, subject.Name, StringComparison.OrdinalIgnoreCase))
-                {
-                    continue;
-                }
-
-                if (this.memory.RecordCommunityImpression(
-                        connection,
-                        subject,
-                        kind,
-                        summary,
-                        source: "CloseCircle",
-                        visibility: visibility,
-                        transmissionDepth: 1,
-                        distortionLevel: 10,
-                        heardFromNpcName: subject.Name,
-                        circleKey: "close_connections",
-                        importance: System.Math.Max(40, importance - 14),
-                        maxEntriesPerNpc: this.config.MaxMemoryEntriesPerNpc))
-                {
-                    stored++;
-                }
-            }
-        }
-
-        if (visibility == "Public" && this.IsPublicRumorHub(Game1.currentLocation.Name))
-        {
-            foreach (var observer in Game1.currentLocation.characters
-                         .Where(candidate =>
-                             candidate.Name != subject.Name
-                             && !string.IsNullOrWhiteSpace(candidate.Name)
-                             && !directWitnessNames.Contains(candidate.Name))
-                         .OrderBy(candidate => Vector2.Distance(candidate.Tile, subject.Tile))
-                         .Take(4))
-            {
-                if (this.memory.RecordCommunityImpression(
-                        observer,
-                        subject,
-                        kind,
-                        summary,
-                        source: "PublicRumor",
-                        visibility: visibility,
-                        transmissionDepth: 1,
-                        distortionLevel: 18,
-                        heardFromNpcName: string.Empty,
-                        circleKey: "public_hub",
-                        importance: System.Math.Max(28, importance - 24),
-                        maxEntriesPerNpc: this.config.MaxMemoryEntriesPerNpc))
-                {
-                    stored++;
-                }
-            }
-        }
-
-        if (stored > 0 && this.config.Debug)
-        {
-            this.monitor.Log($"Spread community ripple for {subject.Name}: {summary} -> {stored} observer memory record(s).", LogLevel.Debug);
-        }
-    }
-
-    private string GetCommunityRippleVisibility(string kind)
-    {
-        return CommunityImpressionStore.NormalizeKind(kind) switch
-        {
-            "romantic_attention" => "Private",
-            "helped" or "shared_experience" => "Personal",
-            _ => "Public"
-        };
-    }
-
-    private bool CanSpreadToCloseCircle(string visibility, LivingNpcState? subjectState)
-    {
-        return visibility switch
-        {
-            "Private" => subjectState != null
-                && subjectState.RelationshipTrust >= 75
-                && subjectState.InteractionComfortTier is "Trusted" or "Intimate",
-            "Personal" => subjectState != null
-                && (subjectState.RelationshipTrust >= 45
-                    || subjectState.InteractionComfortTier is "Friendly" or "Trusted" or "Intimate"),
-            _ => true
-        };
-    }
-
-    private bool IsPublicRumorHub(string locationName)
-    {
-        return locationName is "Town" or "Saloon";
-    }
-
-    private void TryPropagateCommunityImpressions()
-    {
-        foreach (var speakerState in this.memory.GetTrackedStates())
-        {
-            NPC? speaker = Game1.getCharacterFromName(speakerState.NpcName);
-            if (speaker == null)
-            {
-                continue;
-            }
-
-            CommunityReactionCue reaction = CommunityReactionStyle.For(speaker);
-            if (this.random.Next(100) >= reaction.SharePropensity)
-            {
-                continue;
-            }
-
-            CommunityImpressionFact? impression = this.memory
-                .GetRetellableCommunityImpressions(speakerState, maxCount: 3)
-                .FirstOrDefault(candidate => CommunityPropagationRules.CanRetell(candidate, Game1.Date.TotalDays));
-            if (impression == null)
-            {
-                continue;
-            }
-
-            NPC? subject = Game1.getCharacterFromName(impression.SubjectNpcName);
-            if (subject == null)
-            {
-                continue;
-            }
-
-            var targets = NpcSocialGraph
-                .GetStablePropagationTargets(speaker.Name, impression.Visibility)
-                .Where(target => !string.Equals(target.NpcName, speaker.Name, StringComparison.OrdinalIgnoreCase))
-                .Where(target => !string.Equals(target.NpcName, subject.Name, StringComparison.OrdinalIgnoreCase))
-                .Where(target => impression.Visibility != "Personal" || target.AllowsPersonalNews)
-                .OrderBy(_ => this.random.Next())
-                .Take(CommunityPropagationRules.GetDailyRetellingTargetLimit(reaction, impression))
-                .ToList();
-            if (targets.Count == 0)
-            {
-                continue;
-            }
-
-            var retelling = CommunityPropagationRules.BuildRetelling(impression, reaction, subject.displayName);
-            int stored = 0;
-            foreach (var target in targets)
-            {
-                NPC? recipient = Game1.getCharacterFromName(target.NpcName);
-                if (recipient == null)
-                {
-                    continue;
-                }
-
-                if (this.memory.RecordCommunityImpression(
-                        recipient,
-                        subject,
-                        impression.Kind,
-                        retelling.Summary,
-                        source: retelling.Source,
-                        visibility: retelling.Visibility,
-                        transmissionDepth: retelling.TransmissionDepth,
-                        distortionLevel: retelling.DistortionLevel,
-                        heardFromNpcName: speaker.Name,
-                        circleKey: target.CircleKey,
-                        importance: retelling.Importance,
-                        maxEntriesPerNpc: this.config.MaxMemoryEntriesPerNpc))
-                {
-                    stored++;
-                }
-            }
-
-            if (stored > 0)
-            {
-                this.memory.MarkCommunityImpressionShared(impression);
-                if (this.config.Debug)
-                {
-                    this.monitor.Log(
-                        $"Propagated community impression from {speaker.Name} through {string.Join(", ", targets.Select(target => target.CircleKey).Distinct())}: depth {retelling.TransmissionDepth}, distortion {retelling.DistortionLevel}, recipients {stored}.",
-                        LogLevel.Debug
-                    );
-                }
-            }
-        }
     }
 
     private bool IsRomanticallyAttachedToFarmer(NPC npc)
