@@ -32,11 +32,11 @@ internal sealed class BehaviorEngine
     private readonly BehaviorMailService mailService;
     private readonly GiftActionRuntime giftActions;
     private readonly DirectWorldActionRuntime directWorldActions;
+    private readonly WalkTogetherRuntime walkTogether;
     private readonly HelpRequestRewardService helpRequestRewards;
     private readonly HelpRequestQuestLogService helpRequestQuestLog;
     private readonly HelpRequestRuntime helpRequests;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
-    private readonly List<PendingWalkTogether> pendingWalks = new();
     private readonly List<PendingEscortToLocation> pendingEscorts = new();
     private readonly Dictionary<string, int> lastConversationMemoryTimeByNpc = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
@@ -69,6 +69,18 @@ internal sealed class BehaviorEngine
             this.feedback,
             this.CanUseWorldAction
         );
+        this.walkTogether = new WalkTogetherRuntime(
+            config,
+            this.memory,
+            this.feedback,
+            this.CanUseWorldAction,
+            this.StopTravelActionsForNpc,
+            npcName => this.TryFindNpcInCurrentLocation(npcName, out NPC? npc) ? npc : null,
+            npc => this.TryFindApproachTile(npc, out Point targetTile) ? targetTile : null,
+            this.TryFacePlayer,
+            this.GetDirectionTowardPlayerFromTile,
+            npc => this.TryReturnNpcToCurrentSchedule(npc)
+        );
         this.helpRequestRewards = new HelpRequestRewardService(
             config,
             monitor,
@@ -84,7 +96,7 @@ internal sealed class BehaviorEngine
             monitor,
             this.memory,
             npcName => this.TryFindNpcInCurrentLocation(npcName, out NPC? npc) ? npc : null,
-            this.TryStartWalkTogether,
+            this.walkTogether.TryStart,
             this.TryStartEscortToLocation,
             (npc, text) => this.feedback.TryShowNpcSpeechBubble(npc, text)
         );
@@ -99,7 +111,7 @@ internal sealed class BehaviorEngine
         this.dialogueBehaviorInfluences = new DialogueBehaviorInfluenceRuntime(
             config,
             this.memory,
-            this.TryStartWalkTogether,
+            this.walkTogether.TryStart,
             this.TryApproachPlayer,
             this.TryStepAway,
             this.TryPause,
@@ -161,7 +173,7 @@ internal sealed class BehaviorEngine
         this.memory.ResetDaily();
         this.valleyTalkBridge.ClearAll();
         this.pendingRequests.Clear();
-        this.pendingWalks.Clear();
+        this.walkTogether.Clear();
         this.pendingEscorts.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
         this.feedback.Clear();
@@ -191,7 +203,7 @@ internal sealed class BehaviorEngine
         this.memory.ResetDaily();
         this.valleyTalkBridge.ClearAll();
         this.pendingRequests.Clear();
-        this.pendingWalks.Clear();
+        this.walkTogether.Clear();
         this.pendingEscorts.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
         this.feedback.Clear();
@@ -290,7 +302,7 @@ internal sealed class BehaviorEngine
         this.feedback.TryShowPendingAmbientRemarks();
         this.delayedTravelActions.TryStartPending();
         this.TryUpdatePendingEscorts();
-        this.TryUpdatePendingWalks();
+        this.walkTogether.TryUpdatePending();
         if (e.IsMultipleOf(120))
         {
             this.dialogueBehaviorInfluences.TryApply();
@@ -491,7 +503,7 @@ internal sealed class BehaviorEngine
                 "give_meaningful_gift" => this.giftActions.TryGiveMeaningfulGift(npc, action, playerText, npcResponse, out _),
                 "give_money" => this.giftActions.TryGiveMoney(npc, action, out _),
                 "water_nearby_crops" => this.directWorldActions.TryWaterNearbyCrops(npc, action, out _),
-                "walk_together" => this.TryStartWalkTogether(npc, action, out _),
+                "walk_together" => this.walkTogether.TryStart(npc, action, out _),
                 "escort_to_location" => this.TryStartEscortToLocation(npc, action, out _),
                 "festival_interaction" => this.directWorldActions.TryFestivalInteraction(npc, action, out _),
                 "assist_quest" => this.directWorldActions.TryAssistQuest(npc, action, out _),
@@ -610,59 +622,6 @@ internal sealed class BehaviorEngine
             );
         }
 
-        return true;
-    }
-
-    private bool TryStartWalkTogether(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
-    {
-        reason = string.Empty;
-        if (!this.CanUseWorldAction(npc, "walk_together", requireFriendly: false, out reason, allowDistantWhenExplicit: true))
-        {
-            return false;
-        }
-
-        var state = this.memory.GetState(npc);
-        if (!this.config.AllowAiWalkTogether || state == null || state.LastAiWalkTogetherTotalDays == Game1.Date.TotalDays)
-        {
-            reason = "walk together is disabled or already used today";
-            return false;
-        }
-
-        if (npc.controller != null)
-        {
-            reason = "the NPC is already moving";
-            return false;
-        }
-
-        int maxWalkMinutes = System.Math.Max(8, this.config.MaxAiWalkTogetherMinutes);
-        int durationMinutes = System.Math.Clamp(
-            action.DurationMinutes <= 0 ? 12 : action.DurationMinutes,
-            8,
-            maxWalkMinutes
-        );
-        this.StopTravelActionsForNpc(npc, returnToSchedule: true);
-        bool originalIgnoreScheduleToday = npc.ignoreScheduleToday;
-        bool originalFollowSchedule = npc.followSchedule;
-        NpcTravelRuntime.SuppressSchedule(npc);
-        this.pendingWalks.Add(new PendingWalkTogether(
-            npc.Name,
-            Game1.Date.TotalDays,
-            npc.currentLocation?.Name ?? string.Empty,
-            BehaviorTimeMath.AddMinutesToTime(Game1.timeOfDay, durationMinutes),
-            Game1.player.TilePoint,
-            null,
-            originalIgnoreScheduleToday,
-            originalFollowSchedule
-        ));
-        state.LastAiWalkTogetherTotalDays = Game1.Date.TotalDays;
-        this.memory.RecordNpcWorldAction(
-            npc,
-            "WalkedTogether",
-            this.BuildWorldActionReason(action.Reason, $"they agreed to walk with the farmer for about {durationMinutes} minutes"),
-            this.config.MaxMemoryEntriesPerNpc
-        );
-        this.MarkStateAfterWorldAction(state, "they agreed to walk with the farmer");
-        this.feedback.Show($"LivingNPCs：{npc.displayName} 会陪你走一会儿。");
         return true;
     }
 
@@ -1290,10 +1249,7 @@ internal sealed class BehaviorEngine
 
     private void StopTravelActionsForNpc(NPC npc, bool returnToSchedule)
     {
-        foreach (var walk in this.pendingWalks.Where(walk => walk.NpcName == npc.Name).ToList())
-        {
-            this.StopWalkTogether(walk, npc, returnToSchedule);
-        }
+        this.walkTogether.StopForNpc(npc, returnToSchedule);
 
         foreach (var escort in this.pendingEscorts.Where(escort => escort.NpcName == npc.Name).ToList())
         {
@@ -1615,89 +1571,6 @@ internal sealed class BehaviorEngine
         state.LastUpdatedTimeOfDay = Game1.timeOfDay;
     }
 
-    private void TryUpdatePendingWalks()
-    {
-        if (this.pendingWalks.Count == 0)
-        {
-            return;
-        }
-
-        if (Game1.eventUp)
-        {
-            foreach (var walk in this.pendingWalks.ToList())
-            {
-                this.TryFindNpcInCurrentLocation(walk.NpcName, out NPC? npc);
-                this.StopWalkTogether(walk, npc, returnToSchedule: true);
-            }
-
-            return;
-        }
-
-        foreach (var walk in this.pendingWalks.ToList())
-        {
-            NPC? npc = null;
-            if (walk.TotalDays != Game1.Date.TotalDays
-                || Game1.timeOfDay >= walk.EndTimeOfDay
-                || !this.TryFindNpcInCurrentLocation(walk.NpcName, out npc)
-                || npc == null
-                || npc.currentLocation?.Name != walk.LocationName)
-            {
-                this.StopWalkTogether(walk, npc, returnToSchedule: true);
-                continue;
-            }
-
-            if (Game1.activeClickableMenu != null)
-            {
-                continue;
-            }
-
-            NpcTravelRuntime.SuppressSchedule(npc);
-
-            if (Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles + 4)
-            {
-                this.StopWalkTogether(walk, npc, returnToSchedule: true);
-                continue;
-            }
-
-            if (npc.controller != null && walk.LastAssignedController != null && npc.controller != walk.LastAssignedController)
-            {
-                this.StopWalkTogether(walk, npc, returnToSchedule: true);
-                continue;
-            }
-
-            if (npc.controller != null && walk.LastAssignedController == null)
-            {
-                this.StopWalkTogether(walk, npc, returnToSchedule: true);
-                continue;
-            }
-
-            if (Vector2.Distance(npc.Tile, Game1.player.Tile) <= 1.5f)
-            {
-                this.TryFacePlayer(npc);
-                continue;
-            }
-
-            if (walk.LastPlayerTile == Game1.player.TilePoint && npc.controller != null)
-            {
-                continue;
-            }
-
-            if (!this.TryFindApproachTile(npc, out Point targetTile))
-            {
-                continue;
-            }
-
-            npc.controller = new PathFindController(
-                npc,
-                Game1.currentLocation,
-                targetTile,
-                this.GetDirectionTowardPlayerFromTile(targetTile)
-            );
-            walk.LastPlayerTile = Game1.player.TilePoint;
-            walk.LastAssignedController = npc.controller;
-        }
-    }
-
     private bool TryFindOpenTileNear(GameLocation location, Point center, NPC ignoredNpc, out Point targetTile)
     {
         foreach (var candidate in this.GetTilesAround(center, 5))
@@ -1731,26 +1604,6 @@ internal sealed class BehaviorEngine
                 }
             }
         }
-    }
-
-    private void StopWalkTogether(PendingWalkTogether walk, NPC? npc, bool returnToSchedule)
-    {
-        if (npc != null && npc.controller == walk.LastAssignedController)
-        {
-            npc.controller = null;
-            npc.Halt();
-        }
-
-        if (npc != null)
-        {
-            RestoreNpcScheduleControl(npc, walk.OriginalIgnoreScheduleToday, walk.OriginalFollowSchedule);
-            if (returnToSchedule)
-            {
-                this.TryReturnNpcToCurrentSchedule(npc);
-            }
-        }
-
-        this.pendingWalks.Remove(walk);
     }
 
     private void TryPrepareDailyGiftOpportunity(NPC npc, LivingNpcState state)
