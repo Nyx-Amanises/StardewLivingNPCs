@@ -4,7 +4,7 @@ internal static class CommunityPropagationRules
 {
     public static int GetInitialConfidence(string source)
     {
-        return BehaviorMemory.NormalizeCommunityImpressionSource(source) switch
+        return CommunityImpressionStore.NormalizeSource(source) switch
         {
             "Witnessed" => 95,
             "CloseCircle" => 68,
@@ -14,12 +14,12 @@ internal static class CommunityPropagationRules
 
     public static bool CanRetell(CommunityImpressionFact impression, int currentTotalDays)
     {
-        if (BehaviorMemory.NormalizeCommunityImpressionVisibility(impression.Visibility) == "Private")
+        if (CommunityImpressionStore.NormalizeVisibility(impression.Visibility) == "Private")
         {
             return false;
         }
 
-        string freshnessStage = GetFreshnessStage(impression, currentTotalDays);
+        string freshnessStage = CommunityImpressionStore.GetFreshnessStage(impression, currentTotalDays);
         if (freshnessStage is "fading" or "expired"
             || impression.Confidence < 35
             || impression.TransmissionDepth >= 3)
@@ -32,7 +32,7 @@ internal static class CommunityPropagationRules
 
     public static int GetDailyRetellingTargetLimit(CommunityReactionCue reaction, CommunityImpressionFact impression)
     {
-        if (BehaviorMemory.NormalizeCommunityImpressionVisibility(impression.Visibility) == "Personal")
+        if (CommunityImpressionStore.NormalizeVisibility(impression.Visibility) == "Personal")
         {
             return 1;
         }
@@ -42,7 +42,7 @@ internal static class CommunityPropagationRules
 
     public static int GetRetellingDistortionGain(CommunityReactionCue reaction, CommunityImpressionFact impression)
     {
-        int baseGain = BehaviorMemory.NormalizeCommunityImpressionSource(impression.Source) switch
+        int baseGain = CommunityImpressionStore.NormalizeSource(impression.Source) switch
         {
             "Witnessed" => 8,
             "CloseCircle" => 12,
@@ -75,7 +75,7 @@ internal static class CommunityPropagationRules
             depth,
             distortion,
             "CloseCircle",
-            BehaviorMemory.NormalizeCommunityImpressionVisibility(impression.Visibility),
+            CommunityImpressionStore.NormalizeVisibility(impression.Visibility),
             GetInitialConfidence("CloseCircle"),
             System.Math.Max(24, impression.Importance - 8)
         );
@@ -100,7 +100,7 @@ internal static class CommunityPropagationRules
             return impression.Summary;
         }
 
-        return BehaviorMemory.NormalizeCommunityImpressionKind(impression.Kind) switch
+        return CommunityImpressionStore.NormalizeKind(impression.Kind) switch
         {
             "relationship_trend" when depth >= 3 || distortion >= 35 =>
                 $"people have noticed the farmer and {displayName} talking more lately",
@@ -119,31 +119,6 @@ internal static class CommunityPropagationRules
         };
     }
 
-    internal static string GetFreshnessStage(CommunityImpressionFact impression, int currentTotalDays)
-    {
-        int age = impression.LastUpdatedTotalDays < 0
-            ? int.MaxValue
-            : System.Math.Max(0, currentTotalDays - impression.LastUpdatedTotalDays);
-        int remaining = impression.ExpiresTotalDays < 0
-            ? int.MaxValue
-            : impression.ExpiresTotalDays - currentTotalDays;
-        if (remaining < 0)
-        {
-            return "expired";
-        }
-
-        if (age <= 1)
-        {
-            return "fresh";
-        }
-
-        if (age <= 5 && remaining >= 2)
-        {
-            return "settled";
-        }
-
-        return "fading";
-    }
 }
 
 internal sealed record RetoldCommunityImpression(

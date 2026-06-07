@@ -4080,7 +4080,7 @@ internal sealed class BehaviorEngine
 
     private string GetCommunityRippleVisibility(string kind)
     {
-        return BehaviorMemory.NormalizeCommunityImpressionKind(kind) switch
+        return CommunityImpressionStore.NormalizeKind(kind) switch
         {
             "romantic_attention" => "Private",
             "helped" or "shared_experience" => "Personal",

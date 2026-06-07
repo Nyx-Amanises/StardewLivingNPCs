@@ -569,11 +569,11 @@ internal sealed class LivingNpcState
                 && !string.IsNullOrWhiteSpace(memory.SubjectNpcName)
                 && !string.IsNullOrWhiteSpace(memory.Summary)
                 && (memory.ExpiresTotalDays < 0 || memory.ExpiresTotalDays >= Game1.Date.TotalDays))
-            .Select(BehaviorMemory.NormalizeCommunityImpressionForStore)
-            .OrderByDescending(BehaviorMemory.GetCommunityImpressionRetentionScore)
+            .Select(memory => CommunityImpressionStore.NormalizeForStore(memory))
+            .OrderByDescending(CommunityImpressionStore.GetRetentionScore)
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
-            .Take(BehaviorMemory.MaxCommunityImpressionsPerNpc)
+            .Take(CommunityImpressionStore.MaxImpressionsPerNpc)
             .ToList();
         this.HelpRequests ??= new List<NpcHelpRequestFact>();
         this.HelpRequests = this.HelpRequests
@@ -1193,7 +1193,7 @@ internal sealed class LivingNpcState
     private IEnumerable<CommunityImpressionFact> GetTopCommunityImpressions(int count)
     {
         return this.CommunityImpressions
-            .OrderByDescending(memory => BehaviorMemory.GetCommunityImpressionRetentionScore(memory))
+            .OrderByDescending(CommunityImpressionStore.GetRetentionScore)
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
             .Take(count);
