@@ -547,11 +547,11 @@ internal sealed class LivingNpcState
         this.LongTermMemories ??= new List<LongTermMemoryFact>();
         this.LongTermMemories = this.LongTermMemories
             .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
-            .Select(BehaviorMemory.NormalizeLongTermMemoryForStore)
-            .OrderByDescending(BehaviorMemory.GetLongTermMemoryRetentionScore)
+            .Select(LongTermMemoryStore.NormalizeForStore)
+            .OrderByDescending(LongTermMemoryStore.GetRetentionScore)
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
-            .Take(BehaviorMemory.MaxLongTermMemoriesPerNpc)
+            .Take(LongTermMemoryStore.MaxMemoriesPerNpc)
             .ToList();
         this.PlayerPreferenceMemories ??= new List<PlayerPreferenceFact>();
         this.PlayerPreferenceMemories = this.PlayerPreferenceMemories

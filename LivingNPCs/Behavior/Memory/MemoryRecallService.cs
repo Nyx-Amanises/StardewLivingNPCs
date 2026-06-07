@@ -18,7 +18,7 @@ internal static class MemoryRecallService
         MemoryRecallContext context = BuildContext(state, world, recentEntries);
         var longTermMemories = state.LongTermMemories
             .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
-            .Select(BehaviorMemory.NormalizeLongTermMemoryForStore)
+            .Select(LongTermMemoryStore.NormalizeForStore)
             .Select(memory => ScoreLongTermMemory(memory, context, currentTotalDays))
             .Where(selection => selection.Score >= 45)
             .OrderByDescending(selection => selection.Score)
@@ -135,18 +135,6 @@ internal static class MemoryRecallService
             memory.LastRecalledTimeOfDay = currentTimeOfDay;
             memory.RecallCount += 1;
         }
-    }
-
-    public static int GetLongTermMemoryKindBonus(string kind)
-    {
-        return BehaviorValueNormalizer.NormalizeLongTermMemoryKind(kind) switch
-        {
-            "boundary" => 18,
-            "promise" => 16,
-            "relationship" => 12,
-            "preference" => 8,
-            _ => 0
-        };
     }
 
     private static CommunityImpressionSelection ScoreCommunityImpression(
@@ -329,7 +317,7 @@ internal static class MemoryRecallService
             reasons.Add($"reinforced +{reinforcementBonus}");
         }
 
-        int kindBonus = GetLongTermMemoryKindBonus(memory.Kind);
+        int kindBonus = LongTermMemoryStore.GetKindBonus(memory.Kind);
         score += kindBonus;
         if (kindBonus > 0)
         {
