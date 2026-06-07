@@ -33,18 +33,16 @@ internal sealed class BehaviorEngine
     private readonly IBehaviorPlanner planner;
     private readonly AiBehaviorClient aiBehaviorClient;
     private readonly BehaviorDebugCommandHandler debugCommands;
+    private readonly BehaviorFeedbackService feedback;
     private readonly DialogueBehaviorInfluenceRuntime dialogueBehaviorInfluences;
     private readonly BehaviorMailService mailService;
     private readonly HelpRequestQuestLogService helpRequestQuestLog;
     private readonly HelpRequestRuntime helpRequests;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
-    private readonly List<PendingAmbientRemark> pendingAmbientRemarks = new();
     private readonly List<PendingWalkTogether> pendingWalks = new();
     private readonly List<PendingEscortToLocation> pendingEscorts = new();
     private readonly List<PendingDelayedTravelAction> pendingDelayedTravelActions = new();
-    private readonly Queue<string> pendingHudMessages = new();
     private readonly Dictionary<string, int> lastConversationMemoryTimeByNpc = new();
-    private readonly Dictionary<string, double> nextSpeechBubbleTimeByNpc = new(StringComparer.OrdinalIgnoreCase);
     private readonly CancellationTokenSource cancellationTokenSource = new();
 
     public BehaviorEngine(IModHelper helper, IMonitor monitor, ModConfig config)
@@ -56,14 +54,15 @@ internal sealed class BehaviorEngine
         this.giftSelector = new GiftSelector(this.random);
         this.planner = new AiBehaviorPlanner(new RuleBasedBehaviorPlanner(config, this.random, this.memory));
         this.aiBehaviorClient = new AiBehaviorClient(config, monitor);
-        this.debugCommands = new BehaviorDebugCommandHandler(helper, monitor, config, this.memory, this.ShowFeedback);
+        this.feedback = new BehaviorFeedbackService(config, monitor);
+        this.debugCommands = new BehaviorDebugCommandHandler(helper, monitor, config, this.memory, this.feedback.Show);
         this.mailService = new BehaviorMailService(helper, this.memory, this.random);
         this.helpRequestQuestLog = new HelpRequestQuestLogService(config, this.memory, this.mailService);
         this.helpRequests = new HelpRequestRuntime(
             config,
             this.memory,
             npcName => this.TryFindNpcInCurrentLocation(npcName, out NPC? npc) ? npc : null,
-            (npc, text) => this.TryShowNpcSpeechBubble(npc, text),
+            (npc, text) => this.feedback.TryShowNpcSpeechBubble(npc, text),
             (npc, debugMessage) => this.PushInteractionContext(npc, debugMessage),
             this.helpRequestQuestLog.Sync
         );
@@ -75,7 +74,7 @@ internal sealed class BehaviorEngine
             this.TryStepAway,
             this.TryPause,
             this.TryFacePlayer,
-            (npc, text) => this.TryShowNpcSpeechBubble(npc, text),
+            (npc, text) => this.feedback.TryShowNpcSpeechBubble(npc, text),
             (npc, debugMessage) => this.PushInteractionContext(npc, debugMessage)
         );
     }
@@ -132,13 +131,11 @@ internal sealed class BehaviorEngine
         this.memory.ResetDaily();
         this.valleyTalkBridge.ClearAll();
         this.pendingRequests.Clear();
-        this.pendingAmbientRemarks.Clear();
         this.pendingWalks.Clear();
         this.pendingEscorts.Clear();
         this.pendingDelayedTravelActions.Clear();
-        this.pendingHudMessages.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
-        this.nextSpeechBubbleTimeByNpc.Clear();
+        this.feedback.Clear();
         this.TryPropagateCommunityImpressions();
         this.mailService.QueueDueGiftMailsForTomorrow();
         this.helper.GameContent.InvalidateCache("Data/mail");
@@ -164,13 +161,11 @@ internal sealed class BehaviorEngine
         this.memory.ResetDaily();
         this.valleyTalkBridge.ClearAll();
         this.pendingRequests.Clear();
-        this.pendingAmbientRemarks.Clear();
         this.pendingWalks.Clear();
         this.pendingEscorts.Clear();
         this.pendingDelayedTravelActions.Clear();
-        this.pendingHudMessages.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
-        this.nextSpeechBubbleTimeByNpc.Clear();
+        this.feedback.Clear();
     }
 
     private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
@@ -201,7 +196,7 @@ internal sealed class BehaviorEngine
         }
         else
         {
-            this.ShowFeedback("LivingNPCs：附近没有可触发的 NPC。");
+            this.feedback.Show("LivingNPCs：附近没有可触发的 NPC。");
             if (this.config.Debug)
             {
                 this.monitor.Log("No nearby NPC found for LivingNPCs behavior hotkey.", LogLevel.Debug);
@@ -261,8 +256,8 @@ internal sealed class BehaviorEngine
             this.TryExecute(npc, intent, request.Source);
         }
 
-        this.TryShowPendingHudMessages();
-        this.TryShowPendingAmbientRemarks();
+        this.feedback.TryShowPendingHudMessages();
+        this.feedback.TryShowPendingAmbientRemarks();
         this.TryStartPendingDelayedTravelActions();
         this.TryUpdatePendingEscorts();
         this.TryUpdatePendingWalks();
@@ -329,7 +324,7 @@ internal sealed class BehaviorEngine
 
         if (trigger == BehaviorTrigger.Manual)
         {
-            this.ShowFeedback($"LivingNPCs：正在为 {npc.displayName} 规划行为...");
+            this.feedback.Show($"LivingNPCs：正在为 {npc.displayName} 规划行为...");
         }
     }
 
@@ -396,7 +391,7 @@ internal sealed class BehaviorEngine
 
         if (this.config.EnableDialogueFollowUps && !string.IsNullOrWhiteSpace(result.AmbientFollowUpText))
         {
-            this.QueueAmbientRemark(npc, result.AmbientFollowUpText, result.AmbientFollowUpDelayMinutes);
+            this.feedback.QueueAmbientRemark(npc, result.AmbientFollowUpText, result.AmbientFollowUpDelayMinutes);
         }
 
         if (this.config.EnableAiWorldActions)
@@ -439,98 +434,6 @@ internal sealed class BehaviorEngine
         LivingNpcState state = this.memory.GetState(npc) ?? this.memory.UpdateStateForGift(npc, gift);
         this.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
         return this.BuildGiftOpportunityPromptContext(npc);
-    }
-
-    private void QueueAmbientRemark(NPC npc, string text, int delayMinutes)
-    {
-        this.pendingAmbientRemarks.RemoveAll(remark => remark.NpcName == npc.Name);
-        this.pendingAmbientRemarks.Add(new PendingAmbientRemark(
-            npc.Name,
-            text.Trim(),
-            Game1.Date.TotalDays,
-            this.AddMinutesToTime(Game1.timeOfDay, System.Math.Clamp(delayMinutes, 0, 120)),
-            npc.currentLocation?.Name ?? string.Empty,
-            npc.Tile
-        ));
-    }
-
-    private bool TryShowNpcSpeechBubble(NPC npc, string text, int? cooldownMilliseconds = null)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return false;
-        }
-
-        double now = Game1.currentGameTime?.TotalGameTime.TotalMilliseconds ?? 0d;
-        if (this.nextSpeechBubbleTimeByNpc.TryGetValue(npc.Name, out double nextAllowed) && now < nextAllowed)
-        {
-            return false;
-        }
-
-        int durationMilliseconds = GetSpeechBubbleDurationMilliseconds(text);
-        npc.showTextAboveHead(text, null, 2, durationMilliseconds, 0);
-        this.nextSpeechBubbleTimeByNpc[npc.Name] = now + Math.Max(durationMilliseconds, cooldownMilliseconds ?? durationMilliseconds);
-        return true;
-    }
-
-    private static int GetSpeechBubbleDurationMilliseconds(string text)
-    {
-        int visibleLength = (text ?? string.Empty).Trim().Length;
-        return System.Math.Clamp(4000 + System.Math.Max(0, visibleLength - 8) * 140, 4000, 10000);
-    }
-
-    private void TryShowPendingAmbientRemarks()
-    {
-        if (!this.config.EnableDialogueFollowUps
-            || this.pendingAmbientRemarks.Count == 0
-            || Game1.activeClickableMenu != null
-            || Game1.eventUp)
-        {
-            return;
-        }
-
-        foreach (var remark in this.pendingAmbientRemarks.ToList())
-        {
-            if (remark.TotalDays != Game1.Date.TotalDays)
-            {
-                this.pendingAmbientRemarks.Remove(remark);
-                continue;
-            }
-
-            if (Game1.timeOfDay < remark.NotBeforeTimeOfDay)
-            {
-                continue;
-            }
-
-            if (!this.TryFindNpcInCurrentLocation(remark.NpcName, out NPC? npc)
-                || npc == null
-                || npc.currentLocation?.Name != remark.LocationName
-                || Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles
-                || npc.Tile == remark.OriginTile)
-            {
-                continue;
-            }
-
-            if (!this.TryShowNpcSpeechBubble(npc, remark.Text))
-            {
-                continue;
-            }
-
-            this.pendingAmbientRemarks.Remove(remark);
-
-            if (this.config.Debug)
-            {
-                this.monitor.Log($"Displayed ambient dialogue follow-up for {npc.Name}: {remark.Text}", LogLevel.Debug);
-            }
-        }
-    }
-
-    private int AddMinutesToTime(int timeOfDay, int minutes)
-    {
-        int hours = timeOfDay / 100;
-        int mins = timeOfDay % 100;
-        int totalMinutes = (hours * 60) + mins + minutes;
-        return ((totalMinutes / 60) * 100) + (totalMinutes % 60);
     }
 
     private void TryExecuteConversationActions(
@@ -1020,7 +923,7 @@ internal sealed class BehaviorEngine
             npc.Name,
             Game1.Date.TotalDays,
             npc.currentLocation?.Name ?? string.Empty,
-            this.AddMinutesToTime(Game1.timeOfDay, delayMinutes),
+            BehaviorTimeMath.AddMinutesToTime(Game1.timeOfDay, delayMinutes),
             action.Type,
             action.TargetLocation,
             action.DurationMinutes,
@@ -1089,7 +992,7 @@ internal sealed class BehaviorEngine
 
             if (started)
             {
-                this.TryShowNpcSpeechBubble(npc, "好了，我们走吧。");
+                this.feedback.TryShowNpcSpeechBubble(npc, "好了，我们走吧。");
             }
         }
     }
@@ -1162,7 +1065,7 @@ internal sealed class BehaviorEngine
                 this.config.MaxMemoryEntriesPerNpc
             );
             this.MarkStateAfterWorldAction(state, "they mailed the farmer a small gift after the farmer's inventory was full");
-            this.ShowFeedbackAfterDialogue($"LivingNPCs：你的背包满了，{npc.displayName} 会把 {gift.DisplayName} 明天寄给你。");
+            this.feedback.ShowAfterDialogue($"LivingNPCs：你的背包满了，{npc.displayName} 会把 {gift.DisplayName} 明天寄给你。");
             return true;
         }
 
@@ -1190,7 +1093,7 @@ internal sealed class BehaviorEngine
             );
         }
 
-        this.ShowFeedbackAfterDialogue(this.BuildGiftHudMessage(npc, gift.DisplayName, motive));
+        this.feedback.ShowAfterDialogue(this.BuildGiftHudMessage(npc, gift.DisplayName, motive));
         return true;
     }
 
@@ -1225,10 +1128,10 @@ internal sealed class BehaviorEngine
             );
             if (queueAmbientThanks)
             {
-                this.QueueAmbientRemark(npc, "谢谢你，真的帮上忙了。", 0);
+                this.feedback.QueueAmbientRemark(npc, "谢谢你，真的帮上忙了。", 0);
             }
 
-            this.ShowFeedback($"LivingNPCs：完成 {npc.displayName} 的求助，额外好感 +{friendshipReward}。");
+            this.feedback.Show($"LivingNPCs：完成 {npc.displayName} 的求助，额外好感 +{friendshipReward}。");
             this.SpreadCommunityRipple(
                 npc,
                 "helped",
@@ -1289,7 +1192,7 @@ internal sealed class BehaviorEngine
                 this.config.MaxMemoryEntriesPerNpc
             );
             this.MarkStateAfterWorldAction(state, "they mailed the farmer a help request reward gift after the farmer's inventory was full");
-            this.ShowFeedbackAfterDialogue($"LivingNPCs：你的背包满了，{npc.displayName} 会把 {gift.DisplayName} 明天寄给你作为谢礼。");
+            this.feedback.ShowAfterDialogue($"LivingNPCs：你的背包满了，{npc.displayName} 会把 {gift.DisplayName} 明天寄给你作为谢礼。");
             return true;
         }
 
@@ -1315,7 +1218,7 @@ internal sealed class BehaviorEngine
             );
         }
 
-        this.ShowFeedbackAfterDialogue(this.BuildGiftHudMessage(npc, gift.DisplayName, "thanks"));
+        this.feedback.ShowAfterDialogue(this.BuildGiftHudMessage(npc, gift.DisplayName, "thanks"));
         return true;
     }
 
@@ -1337,7 +1240,7 @@ internal sealed class BehaviorEngine
                 $"the help request system scheduled a {amount}g mail reward for tomorrow: {request.Summary}",
                 this.config.MaxMemoryEntriesPerNpc
             );
-            this.ShowFeedbackAfterDialogue($"LivingNPCs：系统将在明天通过信件发放 {amount}g 求助奖励。");
+            this.feedback.ShowAfterDialogue($"LivingNPCs：系统将在明天通过信件发放 {amount}g 求助奖励。");
             return;
         }
 
@@ -1352,7 +1255,7 @@ internal sealed class BehaviorEngine
             $"the help request system granted a {amount}g reward: {request.Summary}",
             this.config.MaxMemoryEntriesPerNpc
         );
-        this.ShowFeedbackAfterDialogue($"LivingNPCs：系统发放求助奖励 {amount}g。");
+        this.feedback.ShowAfterDialogue($"LivingNPCs：系统发放求助奖励 {amount}g。");
     }
 
     private bool TryGiveMoney(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
@@ -1380,7 +1283,7 @@ internal sealed class BehaviorEngine
             this.config.MaxMemoryEntriesPerNpc
         );
         this.MarkStateAfterWorldAction(state, "they gave the farmer some money");
-        this.ShowFeedbackAfterDialogue($"LivingNPCs：{npc.displayName} 给了你 {amount}g。");
+        this.feedback.ShowAfterDialogue($"LivingNPCs：{npc.displayName} 给了你 {amount}g。");
         return true;
     }
 
@@ -1466,7 +1369,7 @@ internal sealed class BehaviorEngine
                 this.config.MaxMemoryEntriesPerNpc
             );
             this.MarkStateAfterWorldAction(state, "they mailed the farmer a meaningful gift after the farmer's inventory was full");
-            this.ShowFeedbackAfterDialogue($"LivingNPCs：你的背包满了，{npc.displayName} 会把 {gift.DisplayName} 明天寄给你。");
+            this.feedback.ShowAfterDialogue($"LivingNPCs：你的背包满了，{npc.displayName} 会把 {gift.DisplayName} 明天寄给你。");
             return true;
         }
 
@@ -1494,7 +1397,7 @@ internal sealed class BehaviorEngine
             );
         }
 
-        this.ShowFeedbackAfterDialogue(this.BuildGiftHudMessage(npc, gift.DisplayName, motive));
+        this.feedback.ShowAfterDialogue(this.BuildGiftHudMessage(npc, gift.DisplayName, motive));
         return true;
     }
 
@@ -1614,7 +1517,7 @@ internal sealed class BehaviorEngine
             this.config.MaxMemoryEntriesPerNpc
         );
         this.MarkStateAfterWorldAction(state, "they helped the farmer with watering");
-        this.ShowFeedback($"LivingNPCs：{npc.displayName} 帮你浇了 {nearbyTiles.Count} 格作物。");
+        this.feedback.Show($"LivingNPCs：{npc.displayName} 帮你浇了 {nearbyTiles.Count} 格作物。");
         return true;
     }
 
@@ -1653,7 +1556,7 @@ internal sealed class BehaviorEngine
             npc.Name,
             Game1.Date.TotalDays,
             npc.currentLocation?.Name ?? string.Empty,
-            this.AddMinutesToTime(Game1.timeOfDay, durationMinutes),
+            BehaviorTimeMath.AddMinutesToTime(Game1.timeOfDay, durationMinutes),
             Game1.player.TilePoint,
             null,
             originalIgnoreScheduleToday,
@@ -1667,7 +1570,7 @@ internal sealed class BehaviorEngine
             this.config.MaxMemoryEntriesPerNpc
         );
         this.MarkStateAfterWorldAction(state, "they agreed to walk with the farmer");
-        this.ShowFeedback($"LivingNPCs：{npc.displayName} 会陪你走一会儿。");
+        this.feedback.Show($"LivingNPCs：{npc.displayName} 会陪你走一会儿。");
         return true;
     }
 
@@ -1725,7 +1628,7 @@ internal sealed class BehaviorEngine
         string targetLabel = this.GetEscortTargetLabel(targetLocation);
 
         this.StopTravelActionsForNpc(npc, returnToSchedule: true);
-        this.ClearPendingAmbientRemarksForNpc(npc.Name);
+        this.feedback.ClearAmbientRemarksForNpc(npc.Name);
         bool originalIgnoreScheduleToday = npc.ignoreScheduleToday;
         bool originalFollowSchedule = npc.followSchedule;
         NpcTravelRuntime.SuppressSchedule(npc);
@@ -1736,7 +1639,7 @@ internal sealed class BehaviorEngine
             Game1.Date.TotalDays,
             targetLocation,
             targetLabel,
-            this.AddMinutesToTime(Game1.timeOfDay, durationMinutes),
+            BehaviorTimeMath.AddMinutesToTime(Game1.timeOfDay, durationMinutes),
             Game1.currentLocation?.Name ?? string.Empty,
             Game1.player.TilePoint,
             originalIgnoreScheduleToday,
@@ -1758,8 +1661,8 @@ internal sealed class BehaviorEngine
             return true;
         }
 
-        this.TryShowNpcSpeechBubble(npc, this.BuildEscortStartGreeting(targetLocation));
-        this.ShowFeedback($"LivingNPCs：{npc.displayName} 会带你去{targetLabel}。");
+        this.feedback.TryShowNpcSpeechBubble(npc, this.BuildEscortStartGreeting(targetLocation));
+        this.feedback.Show($"LivingNPCs：{npc.displayName} 会带你去{targetLabel}。");
         return true;
     }
 
@@ -1825,7 +1728,7 @@ internal sealed class BehaviorEngine
                     escort.LastAssignedController = null;
                     if (!this.IsEscortTargetReached(Game1.currentLocation, escort.TargetLocation))
                     {
-                        this.TryShowNpcSpeechBubble(npc, this.BuildEscortCaughtUpGreeting(escort));
+                        this.feedback.TryShowNpcSpeechBubble(npc, this.BuildEscortCaughtUpGreeting(escort));
                     }
                 }
             }
@@ -1833,7 +1736,7 @@ internal sealed class BehaviorEngine
             if (npc.currentLocation != Game1.currentLocation)
             {
                 this.StopEscortToLocation(escort, npc, returnToSchedule: false);
-                this.ShowFeedback($"LivingNPCs：{npc.displayName} 没跟上，护送中断了。");
+                this.feedback.Show($"LivingNPCs：{npc.displayName} 没跟上，护送中断了。");
                 continue;
             }
             else if (!Game1.currentLocation.characters.Contains(npc))
@@ -1860,7 +1763,7 @@ internal sealed class BehaviorEngine
             {
                 if (!escort.HintShownForLocation)
                 {
-                    escort.HintShownForLocation = this.TryShowNpcSpeechBubble(npc, "你离得有点远了，先跟上我。");
+                    escort.HintShownForLocation = this.feedback.TryShowNpcSpeechBubble(npc, "你离得有点远了，先跟上我。");
                 }
             }
 
@@ -1889,7 +1792,7 @@ internal sealed class BehaviorEngine
 
                     if (!escort.HintShownForLocation)
                     {
-                        escort.HintShownForLocation = this.TryShowNpcSpeechBubble(npc, this.BuildEscortDirectionHint(nextLocation));
+                        escort.HintShownForLocation = this.feedback.TryShowNpcSpeechBubble(npc, this.BuildEscortDirectionHint(nextLocation));
                     }
 
                     continue;
@@ -1906,7 +1809,7 @@ internal sealed class BehaviorEngine
 
                 if (!escort.HintShownForLocation)
                 {
-                    escort.HintShownForLocation = this.TryShowNpcSpeechBubble(npc, this.BuildEscortExitWaitHint(nextLocation));
+                    escort.HintShownForLocation = this.feedback.TryShowNpcSpeechBubble(npc, this.BuildEscortExitWaitHint(nextLocation));
                 }
 
                 continue;
@@ -2259,7 +2162,7 @@ internal sealed class BehaviorEngine
     {
         npc.controller = null;
         npc.Halt();
-        this.TryShowNpcSpeechBubble(npc, this.BuildEscortArrivalGreeting(escort));
+        this.feedback.TryShowNpcSpeechBubble(npc, this.BuildEscortArrivalGreeting(escort));
         var state = this.memory.GetState(npc);
         if (state != null)
         {
@@ -2279,14 +2182,9 @@ internal sealed class BehaviorEngine
             importance: 58
         );
         this.pendingEscorts.Remove(escort);
-        this.ShowFeedback($"LivingNPCs：{npc.displayName} 已带你到{escort.TargetLocationLabel}。");
+        this.feedback.Show($"LivingNPCs：{npc.displayName} 已带你到{escort.TargetLocationLabel}。");
         RestoreNpcScheduleControl(npc, escort.OriginalIgnoreScheduleToday, escort.OriginalFollowSchedule);
         this.TryReturnNpcToCurrentSchedule(npc, allowCrossLocationTeleport: false);
-    }
-
-    private void ClearPendingAmbientRemarksForNpc(string npcName)
-    {
-        this.pendingAmbientRemarks.RemoveAll(remark => string.Equals(remark.NpcName, npcName, StringComparison.OrdinalIgnoreCase));
     }
 
     private void StopEscortToLocation(PendingEscortToLocation escort, NPC? npc, bool returnToSchedule)
@@ -3309,7 +3207,7 @@ internal sealed class BehaviorEngine
 
         if (!this.valleyTalkBridge.TryRequestGiftDialogue(npc, deliveredItem, gift.TasteScore))
         {
-            this.QueueAmbientRemark(
+            this.feedback.QueueAmbientRemark(
                 npc,
                 fulfilledCount > 0 ? "谢谢你，真的帮上忙了。" : "谢谢你，我先收下这个。",
                 0
@@ -3318,7 +3216,7 @@ internal sealed class BehaviorEngine
 
         if (fulfilledCount == 0)
         {
-            this.ShowFeedback($"LivingNPCs：已把 {gift.ItemName} 交给 {npc.displayName}。");
+            this.feedback.Show($"LivingNPCs：已把 {gift.ItemName} 交给 {npc.displayName}。");
         }
     }
 
@@ -3872,7 +3770,7 @@ internal sealed class BehaviorEngine
         {
             if (source == "hotkey")
             {
-                this.ShowFeedback($"LivingNPCs：{npc.displayName} 未执行 {this.DescribeIntent(intent.Type)}：{this.TranslateSkipReason(reason)}");
+                this.feedback.Show($"LivingNPCs：{npc.displayName} 未执行 {this.DescribeIntent(intent.Type)}：{this.TranslateSkipReason(reason)}");
             }
 
             if (this.config.Debug)
@@ -3898,7 +3796,7 @@ internal sealed class BehaviorEngine
         {
             if (source == "hotkey")
             {
-                this.ShowFeedback($"LivingNPCs：{npc.displayName} 未能执行 {this.DescribeIntent(intent.Type)}。");
+                this.feedback.Show($"LivingNPCs：{npc.displayName} 未能执行 {this.DescribeIntent(intent.Type)}。");
             }
 
             return false;
@@ -3934,7 +3832,7 @@ internal sealed class BehaviorEngine
         if (source == "hotkey")
         {
             string bridge = pushedToValleyTalk ? "已推送 ValleyTalk 上下文" : "未推送 ValleyTalk 上下文";
-            this.ShowFeedback($"LivingNPCs：{npc.displayName} 已执行 {this.DescribeIntent(intent.Type)}，{bridge}。");
+            this.feedback.Show($"LivingNPCs：{npc.displayName} 已执行 {this.DescribeIntent(intent.Type)}，{bridge}。");
         }
 
         return true;
@@ -4213,42 +4111,6 @@ internal sealed class BehaviorEngine
         }
 
         return !location.characters.Any(npc => npc != ignoredNpc && npc.TilePoint == tile);
-    }
-
-    private void ShowFeedback(string message)
-    {
-        if (!this.config.ShowHudMessages)
-        {
-            return;
-        }
-
-        Game1.addHUDMessage(HUDMessage.ForCornerTextbox(message));
-    }
-
-    private void ShowFeedbackAfterDialogue(string message)
-    {
-        if (!this.config.ShowHudMessages || string.IsNullOrWhiteSpace(message))
-        {
-            return;
-        }
-
-        if (Game1.activeClickableMenu == null)
-        {
-            this.ShowFeedback(message);
-            return;
-        }
-
-        this.pendingHudMessages.Enqueue(message);
-    }
-
-    private void TryShowPendingHudMessages()
-    {
-        if (this.pendingHudMessages.Count == 0 || Game1.activeClickableMenu != null)
-        {
-            return;
-        }
-
-        this.ShowFeedback(this.pendingHudMessages.Dequeue());
     }
 
     private string DescribeIntent(BehaviorIntentType intentType)
