@@ -32,6 +32,7 @@ internal sealed class BehaviorEngine
     private readonly DialogueBehaviorInfluenceRuntime dialogueBehaviorInfluences;
     private readonly DelayedTravelActionRuntime delayedTravelActions;
     private readonly BehaviorMailService mailService;
+    private readonly HelpRequestRewardService helpRequestRewards;
     private readonly HelpRequestQuestLogService helpRequestQuestLog;
     private readonly HelpRequestRuntime helpRequests;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
@@ -53,6 +54,15 @@ internal sealed class BehaviorEngine
         this.communityRipples = new CommunityRippleRuntime(config, monitor, this.memory, this.random);
         this.debugCommands = new BehaviorDebugCommandHandler(helper, monitor, config, this.memory, this.feedback.Show);
         this.mailService = new BehaviorMailService(helper, this.memory, this.random);
+        this.helpRequestRewards = new HelpRequestRewardService(
+            config,
+            monitor,
+            this.memory,
+            this.giftSelector,
+            this.mailService,
+            this.feedback,
+            this.communityRipples
+        );
         this.helpRequestQuestLog = new HelpRequestQuestLogService(config, this.memory, this.mailService);
         this.delayedTravelActions = new DelayedTravelActionRuntime(
             config,
@@ -386,7 +396,7 @@ internal sealed class BehaviorEngine
 
         if (result.FulfilledHelpRequests.Count > 0)
         {
-            this.RewardFulfilledHelpRequests(npc, result.FulfilledHelpRequests);
+            this.helpRequestRewards.RewardFulfilled(npc, result.FulfilledHelpRequests);
         }
 
         if (result.HelpRequestsStored > 0 || result.HelpRequestsUpdated > 0)
@@ -686,167 +696,6 @@ internal sealed class BehaviorEngine
 
         this.feedback.ShowAfterDialogue(GiftActionRules.BuildGiftHudMessage(npc, gift.DisplayName, motive));
         return true;
-    }
-
-    private void RewardFulfilledHelpRequests(
-        NPC npc,
-        IReadOnlyList<NpcHelpRequestFact> requests,
-        bool queueAmbientThanks = true
-    )
-    {
-        foreach (var request in requests.Where(request => request.Status == "Fulfilled"))
-        {
-            this.RewardFulfilledHelpRequest(npc, request, queueAmbientThanks);
-        }
-    }
-
-    private void RewardFulfilledHelpRequest(NPC npc, NpcHelpRequestFact request, bool queueAmbientThanks)
-    {
-        if (!request.RewardGranted)
-        {
-            int minReward = System.Math.Min(this.config.MinHelpRequestFriendshipReward, this.config.MaxHelpRequestFriendshipReward);
-            int maxReward = System.Math.Max(this.config.MinHelpRequestFriendshipReward, this.config.MaxHelpRequestFriendshipReward);
-            int friendshipReward = System.Math.Clamp(request.RewardFriendship, minReward, maxReward);
-            Game1.player.changeFriendship(friendshipReward, npc);
-            request.RewardFriendship = friendshipReward;
-            request.RewardGranted = true;
-
-            this.memory.RecordNpcWorldAction(
-                npc,
-                "CompletedHelpRequest",
-                $"the farmer completed a personal help request and earned {friendshipReward} friendship: {request.Summary}",
-                this.config.MaxMemoryEntriesPerNpc
-            );
-            if (queueAmbientThanks)
-            {
-                this.feedback.QueueAmbientRemark(npc, "谢谢你，真的帮上忙了。", 0);
-            }
-
-            this.feedback.Show($"LivingNPCs：完成 {npc.displayName} 的求助，额外好感 +{friendshipReward}。");
-            this.communityRipples.Spread(
-                npc,
-                "helped",
-                $"the farmer helped {npc.displayName} with a personal request",
-                importance: 78
-            );
-        }
-
-        if (!request.RewardMoneyGranted)
-        {
-            this.GrantOrScheduleHelpRequestMoneyReward(npc, request);
-        }
-
-        if (!request.RewardGiftGiven)
-        {
-            this.TryGiveHelpRequestRewardGift(npc, request);
-        }
-    }
-
-    private bool TryGiveHelpRequestRewardGift(NPC npc, NpcHelpRequestFact request)
-    {
-        if (!this.config.AllowAiSmallGifts)
-        {
-            return false;
-        }
-
-        var state = this.memory.GetState(npc);
-        if (state == null)
-        {
-            return false;
-        }
-
-        if (GiftActionRules.HasAiGiftToday(state))
-        {
-            return false;
-        }
-
-        GiftSelection selection = this.giftSelector.Choose(npc, state, request.Summary, request.Resolution);
-        SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
-        if (!Game1.player.addItemToInventoryBool(gift))
-        {
-            string giftReason = GiftActionRules.BuildGiftSelectionReason(
-                $"they tried to give the farmer {gift.DisplayName} after a fulfilled personal help request, but the farmer's inventory was full",
-                selection
-            );
-            if (!this.mailService.ScheduleGiftMail(npc, state, selection, "inventory_full", giftReason, dueInDays: 1))
-            {
-                return false;
-            }
-
-            request.RewardGiftGiven = true;
-            state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
-            GiftActionRules.ClearGiftOpportunities(state);
-            this.memory.RecordNpcWorldAction(
-                npc,
-                "ScheduledHelpRequestRewardGiftMail",
-                giftReason,
-                this.config.MaxMemoryEntriesPerNpc
-            );
-            this.MarkStateAfterWorldAction(state, "they mailed the farmer a help request reward gift after the farmer's inventory was full");
-            this.feedback.ShowAfterDialogue($"LivingNPCs：你的背包满了，{npc.displayName} 会把 {gift.DisplayName} 明天寄给你作为谢礼。");
-            return true;
-        }
-
-        request.RewardGiftGiven = true;
-        state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
-        BehaviorMailService.RememberAiGiftItem(state, selection.ItemId);
-        GiftActionRules.ClearGiftOpportunities(state);
-        this.memory.RecordNpcWorldAction(
-            npc,
-            "GaveHelpRequestRewardGift",
-            GiftActionRules.BuildGiftSelectionReason(
-                $"they gave the farmer {gift.DisplayName} after a fulfilled personal help request",
-                selection
-            ),
-            this.config.MaxMemoryEntriesPerNpc
-        );
-        this.MarkStateAfterWorldAction(state, "they thanked the farmer with a small gift");
-        if (this.config.Debug)
-        {
-            this.monitor.Log(
-                $"Selected help request reward gift for {npc.Name}: {selection.DebugName} ({selection.ItemId}); {selection.Reason}.",
-                LogLevel.Debug
-            );
-        }
-
-        this.feedback.ShowAfterDialogue(GiftActionRules.BuildGiftHudMessage(npc, gift.DisplayName, "thanks"));
-        return true;
-    }
-
-    private void GrantOrScheduleHelpRequestMoneyReward(NPC npc, NpcHelpRequestFact request)
-    {
-        if (Game1.player == null)
-        {
-            return;
-        }
-
-        int amount = System.Math.Clamp(request.RewardMoney <= 0 ? 200 : request.RewardMoney, 200, 10000);
-        request.RewardMoney = amount;
-        if (this.mailService.ShouldSendHelpRequestMoneyByMail(request))
-        {
-            this.mailService.ScheduleHelpRequestMoneyRewardMail(request);
-            this.memory.RecordNpcWorldAction(
-                npc,
-                "ScheduledHelpRequestMoneyReward",
-                $"the help request system scheduled a {amount}g mail reward for tomorrow: {request.Summary}",
-                this.config.MaxMemoryEntriesPerNpc
-            );
-            this.feedback.ShowAfterDialogue($"LivingNPCs：系统将在明天通过信件发放 {amount}g 求助奖励。");
-            return;
-        }
-
-        Game1.player.Money += amount;
-        request.RewardMoneyByMail = false;
-        request.RewardMoneyMailKey = string.Empty;
-        request.RewardMoneyMailTotalDays = -1;
-        request.RewardMoneyGranted = true;
-        this.memory.RecordNpcWorldAction(
-            npc,
-            "GrantedHelpRequestMoneyReward",
-            $"the help request system granted a {amount}g reward: {request.Summary}",
-            this.config.MaxMemoryEntriesPerNpc
-        );
-        this.feedback.ShowAfterDialogue($"LivingNPCs：系统发放求助奖励 {amount}g。");
     }
 
     private bool TryGiveMoney(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
@@ -2496,7 +2345,7 @@ internal sealed class BehaviorEngine
                 IReadOnlyList<NpcHelpRequestFact> changedHelpRequests = this.memory.TryCompleteItemHelpRequests(npc, gift, this.config.MaxMemoryEntriesPerNpc);
                 if (changedHelpRequests.Count > 0)
                 {
-                    this.RewardFulfilledHelpRequests(npc, changedHelpRequests);
+                    this.helpRequestRewards.RewardFulfilled(npc, changedHelpRequests);
                     this.helpRequestQuestLog.Sync();
                     int fulfilledCount = changedHelpRequests.Count(request => request.Status == "Fulfilled");
                     int advancedCount = changedHelpRequests.Count - fulfilledCount;
@@ -2566,7 +2415,7 @@ internal sealed class BehaviorEngine
             return;
         }
 
-        this.RewardFulfilledHelpRequests(npc, changedHelpRequests, queueAmbientThanks: false);
+        this.helpRequestRewards.RewardFulfilled(npc, changedHelpRequests, queueAmbientThanks: false);
         this.helpRequestQuestLog.Sync();
 
         int fulfilledCount = changedHelpRequests.Count(request => request.Status == "Fulfilled");
