@@ -36,6 +36,7 @@ internal sealed class BehaviorEngine
     private readonly DialogueBehaviorInfluenceRuntime dialogueBehaviorInfluences;
     private readonly BehaviorMailService mailService;
     private readonly HelpRequestQuestLogService helpRequestQuestLog;
+    private readonly HelpRequestRuntime helpRequests;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
     private readonly List<PendingAmbientRemark> pendingAmbientRemarks = new();
     private readonly List<PendingWalkTogether> pendingWalks = new();
@@ -58,6 +59,14 @@ internal sealed class BehaviorEngine
         this.debugCommands = new BehaviorDebugCommandHandler(helper, monitor, config, this.memory, this.ShowFeedback);
         this.mailService = new BehaviorMailService(helper, this.memory, this.random);
         this.helpRequestQuestLog = new HelpRequestQuestLogService(config, this.memory, this.mailService);
+        this.helpRequests = new HelpRequestRuntime(
+            config,
+            this.memory,
+            npcName => this.TryFindNpcInCurrentLocation(npcName, out NPC? npc) ? npc : null,
+            (npc, text) => this.TryShowNpcSpeechBubble(npc, text),
+            (npc, debugMessage) => this.PushInteractionContext(npc, debugMessage),
+            this.helpRequestQuestLog.Sync
+        );
         this.dialogueBehaviorInfluences = new DialogueBehaviorInfluenceRuntime(
             config,
             this.memory,
@@ -207,7 +216,7 @@ internal sealed class BehaviorEngine
             return;
         }
 
-        this.TryUpdateHelpRequestTimers();
+        this.helpRequests.UpdateTimers();
 
         if (!this.config.EnablePassiveBehaviors || Game1.activeClickableMenu != null)
         {
@@ -2873,47 +2882,6 @@ internal sealed class BehaviorEngine
         }
     }
 
-    private void TryUpdateHelpRequestTimers()
-    {
-        if (!this.config.EnableHelpRequests)
-        {
-            return;
-        }
-
-        bool changed = false;
-        foreach (var state in this.memory.GetTrackedStates())
-        {
-            foreach (var request in state.HelpRequests.Where(request => request.Status is "Offered" or "Pending"))
-            {
-                if (request.DueTotalDays >= Game1.Date.TotalDays)
-                {
-                    continue;
-                }
-
-                request.Status = "Expired";
-                request.LastUpdatedTotalDays = Game1.Date.TotalDays;
-                request.LastUpdatedTimeOfDay = Game1.timeOfDay;
-                changed = true;
-                this.memory.UpdateStateForExpiredHelpRequest(state, request);
-                if (this.TryFindNpcInCurrentLocation(state.NpcName, out NPC? npc) && npc != null)
-                {
-                    this.memory.RecordNpcWorldAction(
-                        npc,
-                        "ExpiredHelpRequest",
-                        $"a personal help request went unanswered: {request.Summary}",
-                        this.config.MaxMemoryEntriesPerNpc
-                    );
-                    this.PushInteractionContext(npc, $"Expired help request for {npc.Name}: {request.Summary}.");
-                }
-            }
-        }
-
-        if (changed)
-        {
-            this.helpRequestQuestLog.Sync();
-        }
-    }
-
     private bool TryFindOpenTileNear(GameLocation location, Point center, NPC ignoredNpc, out Point targetTile)
     {
         foreach (var candidate in this.GetTilesAround(center, 5))
@@ -3047,71 +3015,6 @@ internal sealed class BehaviorEngine
                 }
             }
         }
-    }
-
-    private void TryShowHelpRequestFollowUps()
-    {
-        if (!this.config.EnableDialogueFollowUps
-            || Game1.currentLocation == null
-            || Game1.player == null
-            || Game1.activeClickableMenu != null
-            || Game1.eventUp)
-        {
-            return;
-        }
-
-        foreach (var npc in Game1.currentLocation.characters.Where(candidate => !string.IsNullOrWhiteSpace(candidate.Name)))
-        {
-            var state = this.memory.GetState(npc);
-            if (state == null
-                || Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles)
-            {
-                continue;
-            }
-
-            var request = state.HelpRequests.FirstOrDefault(candidate =>
-                candidate.Status == "Fulfilled"
-                && candidate.SpecialFollowUpPlanned
-                && candidate.FollowUpEligibleTotalDays <= Game1.Date.TotalDays
-                && candidate.FollowUpShownTotalDays < 0
-                && candidate.FulfilledTotalDays >= Game1.Date.TotalDays - 7
-            );
-            if (request == null)
-            {
-                continue;
-            }
-
-            if (!this.TryShowNpcSpeechBubble(npc, this.BuildHelpRequestFollowUp(request)))
-            {
-                continue;
-            }
-
-            request.FollowUpShownTotalDays = Game1.Date.TotalDays;
-            request.FollowUpShownTimeOfDay = Game1.timeOfDay;
-        }
-    }
-
-    private string BuildHelpRequestFollowUp(NpcHelpRequestFact request)
-    {
-        if (request.RewardMoneyByMail)
-        {
-            return request.Type == "question_request"
-                ? "上次那件事我后来又想了想。信应该也送到了吧？"
-                : "上次你带来的东西很有用，信应该也送到了吧？";
-        }
-
-        if (request.RewardMoney >= 1000)
-        {
-            return request.Type == "question_request"
-                ? "上次那件事真的帮我理清了不少。"
-                : "上次你带来的东西，真的解了我的急。";
-        }
-
-        return request.Type switch
-        {
-            "question_request" => "上次你说的那些，我后来还想了想。",
-            _ => "上次你带来的东西，正好派上了用场。"
-        };
     }
 
     private void StopWalkTogether(PendingWalkTogether walk, NPC? npc, bool returnToSchedule)
