@@ -9,7 +9,6 @@ using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Locations;
 using StardewValley.Pathfinding;
-using StardewValley.Quests;
 using StardewValley.TerrainFeatures;
 using SObject = StardewValley.Object;
 
@@ -18,8 +17,6 @@ namespace LivingNPCs.Behavior;
 internal sealed class BehaviorEngine
 {
     private const string SaveDataKey = "behavior-memory";
-    private const string HelpRequestQuestMarkerKey = "LivingNPCs/HelpRequestQuest";
-    private const string HelpRequestQuestIdKey = "LivingNPCs/HelpRequestQuestId";
     private const int SmallGiftMinFriendshipHearts = 2;
     private const int SmallGiftMinFamiliarity = 15;
     private const int MeaningfulGiftMinFriendshipHearts = 5;
@@ -38,6 +35,7 @@ internal sealed class BehaviorEngine
     private readonly BehaviorDebugCommandHandler debugCommands;
     private readonly DialogueBehaviorInfluenceRuntime dialogueBehaviorInfluences;
     private readonly BehaviorMailService mailService;
+    private readonly HelpRequestQuestLogService helpRequestQuestLog;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
     private readonly List<PendingAmbientRemark> pendingAmbientRemarks = new();
     private readonly List<PendingWalkTogether> pendingWalks = new();
@@ -59,6 +57,7 @@ internal sealed class BehaviorEngine
         this.aiBehaviorClient = new AiBehaviorClient(config, monitor);
         this.debugCommands = new BehaviorDebugCommandHandler(helper, monitor, config, this.memory, this.ShowFeedback);
         this.mailService = new BehaviorMailService(helper, this.memory, this.random);
+        this.helpRequestQuestLog = new HelpRequestQuestLogService(config, this.memory, this.mailService);
         this.dialogueBehaviorInfluences = new DialogueBehaviorInfluenceRuntime(
             config,
             this.memory,
@@ -93,7 +92,7 @@ internal sealed class BehaviorEngine
         this.valleyTalkBridge.TryInitialize();
         this.mailService.QueueDueGiftMailsForTomorrow();
         this.helper.GameContent.InvalidateCache("Data/mail");
-        this.SyncHelpRequestsToQuestLog();
+        this.helpRequestQuestLog.Sync();
 
         if (this.config.Debug)
         {
@@ -134,7 +133,7 @@ internal sealed class BehaviorEngine
         this.TryPropagateCommunityImpressions();
         this.mailService.QueueDueGiftMailsForTomorrow();
         this.helper.GameContent.InvalidateCache("Data/mail");
-        this.SyncHelpRequestsToQuestLog();
+        this.helpRequestQuestLog.Sync();
     }
 
     private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
@@ -383,7 +382,7 @@ internal sealed class BehaviorEngine
 
         if (result.HelpRequestsStored > 0 || result.HelpRequestsUpdated > 0)
         {
-            this.SyncHelpRequestsToQuestLog();
+            this.helpRequestQuestLog.Sync();
         }
 
         if (this.config.EnableDialogueFollowUps && !string.IsNullOrWhiteSpace(result.AmbientFollowUpText))
@@ -2911,7 +2910,7 @@ internal sealed class BehaviorEngine
 
         if (changed)
         {
-            this.SyncHelpRequestsToQuestLog();
+            this.helpRequestQuestLog.Sync();
         }
     }
 
@@ -3325,7 +3324,7 @@ internal sealed class BehaviorEngine
                 if (changedHelpRequests.Count > 0)
                 {
                     this.RewardFulfilledHelpRequests(npc, changedHelpRequests);
-                    this.SyncHelpRequestsToQuestLog();
+                    this.helpRequestQuestLog.Sync();
                     int fulfilledCount = changedHelpRequests.Count(request => request.Status == "Fulfilled");
                     int advancedCount = changedHelpRequests.Count - fulfilledCount;
                     this.PushInteractionContext(npc, $"Updated {changedHelpRequests.Count} help request(s) for {npc.Name} through a gifted item: {fulfilledCount} fulfilled, {advancedCount} advanced.");
@@ -3395,7 +3394,7 @@ internal sealed class BehaviorEngine
         }
 
         this.RewardFulfilledHelpRequests(npc, changedHelpRequests, queueAmbientThanks: false);
-        this.SyncHelpRequestsToQuestLog();
+        this.helpRequestQuestLog.Sync();
 
         int fulfilledCount = changedHelpRequests.Count(request => request.Status == "Fulfilled");
         int advancedCount = changedHelpRequests.Count - fulfilledCount;
@@ -4311,171 +4310,6 @@ internal sealed class BehaviorEngine
         }
 
         return !location.characters.Any(npc => npc != ignoredNpc && npc.TilePoint == tile);
-    }
-
-    private void SyncHelpRequestsToQuestLog()
-    {
-        if (!Context.IsWorldReady || Game1.player?.questLog == null)
-        {
-            return;
-        }
-
-        var pendingRequests = this.memory.GetTrackedStates()
-            .SelectMany(state => state.HelpRequests
-                .Where(request => request.Status == "Pending")
-                .Select(request => new
-                {
-                    State = state,
-                    Request = request
-                }))
-            .ToList();
-        var pendingQuestIds = pendingRequests
-            .Select(pair => pair.Request.QuestLogId)
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .ToHashSet(StringComparer.Ordinal);
-        var proxyQuests = Game1.player.questLog
-            .OfType<Quest>()
-            .Where(quest => quest.modData.TryGetValue(HelpRequestQuestMarkerKey, out string? marker)
-                && marker == "true")
-            .ToList();
-
-        foreach (var quest in proxyQuests)
-        {
-            if (!quest.modData.TryGetValue(HelpRequestQuestIdKey, out string? questId)
-                || string.IsNullOrWhiteSpace(questId)
-                || !pendingQuestIds.Contains(questId))
-            {
-                Game1.player.questLog.Remove(quest);
-            }
-        }
-
-        foreach (var pair in pendingRequests)
-        {
-            Quest? quest = Game1.player.questLog
-                .OfType<Quest>()
-                .FirstOrDefault(candidate =>
-                    candidate.modData.TryGetValue(HelpRequestQuestIdKey, out string? questId)
-                    && questId == pair.Request.QuestLogId);
-            if (quest == null)
-            {
-                quest = new Quest();
-                quest.accept();
-                quest.modData[HelpRequestQuestMarkerKey] = "true";
-                quest.modData[HelpRequestQuestIdKey] = pair.Request.QuestLogId;
-                Game1.player.questLog.Add(quest);
-            }
-
-            this.UpdateHelpRequestQuestText(quest, pair.State, pair.Request);
-        }
-    }
-
-    private void UpdateHelpRequestQuestText(Quest quest, LivingNpcState state, NpcHelpRequestFact request)
-    {
-        string npcDisplayName = string.IsNullOrWhiteSpace(request.NpcDisplayName)
-            ? state.NpcName
-            : request.NpcDisplayName;
-        string due = this.BuildHelpRequestDueText(request);
-        string stepText = this.BuildHelpRequestStepProgressText(request);
-        string rewardText = this.BuildHelpRequestRewardText(request);
-        quest.questTitle = $"求助：{npcDisplayName}";
-        quest.questDescription = request.Type == "item_request"
-            ? $"{npcDisplayName} 请你帮忙找一件东西。{stepText}{this.BuildHelpRequestDetailText(request)}\n{due}\n{rewardText}"
-            : $"{npcDisplayName} 想就一件事请教你。{stepText}{this.BuildHelpRequestDetailText(request)}\n{due}\n{rewardText}";
-        quest.currentObjective = request.Type == "item_request"
-            ? $"{stepText}把 {this.GetHelpRequestItemLabel(request)} 交给 {npcDisplayName}。{due}"
-            : $"{stepText}和 {npcDisplayName} 继续聊聊：{this.GetHelpRequestQuestionLabel(request)}。{due}";
-        quest.moneyReward.Value = this.GetHelpRequestQuestMoneyReward(request);
-        quest.rewardDescription.Value = this.BuildHelpRequestRewardDescription(request);
-    }
-
-    private string BuildHelpRequestStepProgressText(NpcHelpRequestFact request)
-    {
-        int totalSteps = System.Math.Max(1, request.Steps.Count);
-        if (totalSteps <= 1)
-        {
-            return string.Empty;
-        }
-
-        int currentStep = System.Math.Clamp(request.CurrentStepIndex + 1, 1, totalSteps);
-        return $"第 {currentStep}/{totalSteps} 步：";
-    }
-
-    private string BuildHelpRequestDetailText(NpcHelpRequestFact request)
-    {
-        return request.Type == "item_request"
-            ? $"需要：{this.GetHelpRequestItemLabel(request)}。"
-            : $"问题：{this.GetHelpRequestQuestionLabel(request)}。";
-    }
-
-    private string GetHelpRequestItemLabel(NpcHelpRequestFact request)
-    {
-        return string.IsNullOrWhiteSpace(request.RequestedItemLabel)
-            ? request.Summary
-            : request.RequestedItemLabel;
-    }
-
-    private string GetHelpRequestQuestionLabel(NpcHelpRequestFact request)
-    {
-        return string.IsNullOrWhiteSpace(request.QuestionTopic)
-            ? request.Summary
-            : request.QuestionTopic;
-    }
-
-    private string BuildHelpRequestDueText(NpcHelpRequestFact request)
-    {
-        int daysRemaining = request.DueTotalDays - Game1.Date.TotalDays;
-        return daysRemaining switch
-        {
-            < 0 => $"已逾期 {-daysRemaining} 天。",
-            0 => "今天到期。",
-            1 => "明天到期。",
-            _ => $"还剩 {daysRemaining} 天。"
-        };
-    }
-
-    private string BuildHelpRequestRewardText(NpcHelpRequestFact request)
-    {
-        int money = this.GetHelpRequestQuestMoneyReward(request);
-        int friendship = this.GetHelpRequestQuestFriendshipReward(request);
-        string delivery = this.WillSendHelpRequestMoneyByMail(request)
-            ? "金币次日来信"
-            : "金币当场发放";
-        string gift = this.config.AllowAiSmallGifts
-            ? "，可能有小礼物"
-            : string.Empty;
-        return $"预计奖励：{money}g、好感 +{friendship}（{delivery}{gift}）。";
-    }
-
-    private string BuildHelpRequestRewardDescription(NpcHelpRequestFact request)
-    {
-        string delivery = this.WillSendHelpRequestMoneyByMail(request)
-            ? "金币次日来信"
-            : "金币当场发放";
-        string gift = this.config.AllowAiSmallGifts
-            ? "；可能有小礼物"
-            : string.Empty;
-        return $"好感 +{this.GetHelpRequestQuestFriendshipReward(request)}；{delivery}{gift}";
-    }
-
-    private int GetHelpRequestQuestMoneyReward(NpcHelpRequestFact request)
-    {
-        int amount = request.RewardMoney <= 0
-            ? BehaviorMemory.DetermineHelpRequestMoneyReward(request.Steps)
-            : request.RewardMoney;
-        return System.Math.Clamp(amount, 200, 10000);
-    }
-
-    private int GetHelpRequestQuestFriendshipReward(NpcHelpRequestFact request)
-    {
-        int minReward = System.Math.Min(this.config.MinHelpRequestFriendshipReward, this.config.MaxHelpRequestFriendshipReward);
-        int maxReward = System.Math.Max(this.config.MinHelpRequestFriendshipReward, this.config.MaxHelpRequestFriendshipReward);
-        return System.Math.Clamp(request.RewardFriendship <= 0 ? minReward : request.RewardFriendship, minReward, maxReward);
-    }
-
-    private bool WillSendHelpRequestMoneyByMail(NpcHelpRequestFact request)
-    {
-        return request.RewardMoneyByMail
-            || (!request.RewardMoneyGranted && this.mailService.ShouldSendHelpRequestMoneyByMail(request));
     }
 
     private void ShowFeedback(string message)
