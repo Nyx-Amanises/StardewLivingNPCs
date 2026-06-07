@@ -35,13 +35,13 @@ internal sealed class BehaviorEngine
     private readonly BehaviorDebugCommandHandler debugCommands;
     private readonly BehaviorFeedbackService feedback;
     private readonly DialogueBehaviorInfluenceRuntime dialogueBehaviorInfluences;
+    private readonly DelayedTravelActionRuntime delayedTravelActions;
     private readonly BehaviorMailService mailService;
     private readonly HelpRequestQuestLogService helpRequestQuestLog;
     private readonly HelpRequestRuntime helpRequests;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
     private readonly List<PendingWalkTogether> pendingWalks = new();
     private readonly List<PendingEscortToLocation> pendingEscorts = new();
-    private readonly List<PendingDelayedTravelAction> pendingDelayedTravelActions = new();
     private readonly Dictionary<string, int> lastConversationMemoryTimeByNpc = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
 
@@ -58,6 +58,15 @@ internal sealed class BehaviorEngine
         this.debugCommands = new BehaviorDebugCommandHandler(helper, monitor, config, this.memory, this.feedback.Show);
         this.mailService = new BehaviorMailService(helper, this.memory, this.random);
         this.helpRequestQuestLog = new HelpRequestQuestLogService(config, this.memory, this.mailService);
+        this.delayedTravelActions = new DelayedTravelActionRuntime(
+            config,
+            monitor,
+            this.memory,
+            npcName => this.TryFindNpcInCurrentLocation(npcName, out NPC? npc) ? npc : null,
+            this.TryStartWalkTogether,
+            this.TryStartEscortToLocation,
+            (npc, text) => this.feedback.TryShowNpcSpeechBubble(npc, text)
+        );
         this.helpRequests = new HelpRequestRuntime(
             config,
             this.memory,
@@ -133,9 +142,9 @@ internal sealed class BehaviorEngine
         this.pendingRequests.Clear();
         this.pendingWalks.Clear();
         this.pendingEscorts.Clear();
-        this.pendingDelayedTravelActions.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
         this.feedback.Clear();
+        this.delayedTravelActions.Clear();
         this.TryPropagateCommunityImpressions();
         this.mailService.QueueDueGiftMailsForTomorrow();
         this.helper.GameContent.InvalidateCache("Data/mail");
@@ -163,9 +172,9 @@ internal sealed class BehaviorEngine
         this.pendingRequests.Clear();
         this.pendingWalks.Clear();
         this.pendingEscorts.Clear();
-        this.pendingDelayedTravelActions.Clear();
         this.lastConversationMemoryTimeByNpc.Clear();
         this.feedback.Clear();
+        this.delayedTravelActions.Clear();
     }
 
     private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
@@ -258,7 +267,7 @@ internal sealed class BehaviorEngine
 
         this.feedback.TryShowPendingHudMessages();
         this.feedback.TryShowPendingAmbientRemarks();
-        this.TryStartPendingDelayedTravelActions();
+        this.delayedTravelActions.TryStartPending();
         this.TryUpdatePendingEscorts();
         this.TryUpdatePendingWalks();
         if (e.IsMultipleOf(120))
@@ -450,7 +459,7 @@ internal sealed class BehaviorEngine
                 action.DelayMinutes = System.Math.Max(action.DelayMinutes, this.DetectPreparationDelayMinutes(npcResponse));
                 if (action.DelayMinutes > 0)
                 {
-                    this.QueueDelayedTravelAction(npc, action);
+                    this.delayedTravelActions.Queue(npc, action);
                     continue;
                 }
             }
@@ -913,88 +922,6 @@ internal sealed class BehaviorEngine
         }
 
         return fragments.Any(fragment => text.Contains(fragment, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private void QueueDelayedTravelAction(NPC npc, ValleyTalkWorldActionRequest action)
-    {
-        int delayMinutes = System.Math.Clamp(action.DelayMinutes, 1, 20);
-        this.pendingDelayedTravelActions.RemoveAll(pending => pending.NpcName == npc.Name);
-        this.pendingDelayedTravelActions.Add(new PendingDelayedTravelAction(
-            npc.Name,
-            Game1.Date.TotalDays,
-            npc.currentLocation?.Name ?? string.Empty,
-            BehaviorTimeMath.AddMinutesToTime(Game1.timeOfDay, delayMinutes),
-            action.Type,
-            action.TargetLocation,
-            action.DurationMinutes,
-            action.Reason
-        ));
-
-        var state = this.memory.GetState(npc);
-        if (state != null)
-        {
-            this.MarkStateAfterWorldAction(state, "they asked the farmer to wait briefly before leaving together");
-        }
-
-        if (this.config.Debug)
-        {
-            this.monitor.Log(
-                $"Queued delayed travel action {action.Type} for {npc.Name} in {delayMinutes} minutes toward {action.TargetLocation}.",
-                LogLevel.Debug
-            );
-        }
-    }
-
-    private void TryStartPendingDelayedTravelActions()
-    {
-        if (this.pendingDelayedTravelActions.Count == 0
-            || Game1.activeClickableMenu != null
-            || Game1.eventUp)
-        {
-            return;
-        }
-
-        foreach (var pending in this.pendingDelayedTravelActions.ToList())
-        {
-            if (pending.TotalDays != Game1.Date.TotalDays)
-            {
-                this.pendingDelayedTravelActions.Remove(pending);
-                continue;
-            }
-
-            if (Game1.timeOfDay < pending.NotBeforeTimeOfDay)
-            {
-                continue;
-            }
-
-            if (!this.TryFindNpcInCurrentLocation(pending.NpcName, out NPC? npc)
-                || npc == null
-                || npc.currentLocation?.Name != pending.LocationName
-                || Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles + 2)
-            {
-                this.pendingDelayedTravelActions.Remove(pending);
-                continue;
-            }
-
-            var action = new ValleyTalkWorldActionRequest
-            {
-                Type = pending.Type,
-                TargetLocation = pending.TargetLocation,
-                DurationMinutes = pending.DurationMinutes,
-                Reason = pending.Reason
-            };
-            bool started = pending.Type switch
-            {
-                "escort_to_location" => this.TryStartEscortToLocation(npc, action, out _),
-                _ => this.TryStartWalkTogether(npc, action, out _)
-            };
-            this.pendingDelayedTravelActions.Remove(pending);
-
-            if (started)
-            {
-                this.feedback.TryShowNpcSpeechBubble(npc, "好了，我们走吧。");
-            }
-        }
     }
 
     private bool TryGiveSmallGift(
