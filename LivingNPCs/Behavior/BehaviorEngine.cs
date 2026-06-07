@@ -7,7 +7,6 @@ using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
 using StardewValley.Pathfinding;
-using SObject = StardewValley.Object;
 
 namespace LivingNPCs.Behavior;
 
@@ -38,8 +37,8 @@ internal sealed class BehaviorEngine
     private readonly HelpRequestRewardService helpRequestRewards;
     private readonly HelpRequestQuestLogService helpRequestQuestLog;
     private readonly HelpRequestRuntime helpRequests;
+    private readonly ConversationStartRecorder conversationStartRecorder;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
-    private readonly Dictionary<string, int> lastConversationMemoryTimeByNpc = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
 
     public BehaviorEngine(IModHelper helper, IMonitor monitor, ModConfig config)
@@ -114,6 +113,20 @@ internal sealed class BehaviorEngine
             this.communityRipples
         );
         this.helpRequestQuestLog = new HelpRequestQuestLogService(config, this.memory, this.mailService);
+        this.conversationStartRecorder = new ConversationStartRecorder(
+            helper,
+            monitor,
+            config,
+            this.memory,
+            this.valleyTalkBridge,
+            this.feedback,
+            this.communityRipples,
+            this.giftOpportunities,
+            this.helpRequestRewards,
+            this.helpRequestQuestLog,
+            this.TryFindNpcForInteraction,
+            (npc, debugMessage, immediatePromptContext) => this.PushInteractionContext(npc, debugMessage, immediatePromptContext)
+        );
         this.delayedTravelActions = new DelayedTravelActionRuntime(
             config,
             monitor,
@@ -161,7 +174,7 @@ internal sealed class BehaviorEngine
     {
         var saveData = this.helper.Data.ReadSaveData<BehaviorMemorySaveData>(SaveDataKey);
         this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
-        this.lastConversationMemoryTimeByNpc.Clear();
+        this.conversationStartRecorder.Clear();
         this.valleyTalkBridge.TryInitialize();
         this.mailService.QueueDueGiftMailsForTomorrow();
         this.helper.GameContent.InvalidateCache("Data/mail");
@@ -198,7 +211,7 @@ internal sealed class BehaviorEngine
         this.pendingRequests.Clear();
         this.walkTogether.Clear();
         this.escortToLocation.Clear();
-        this.lastConversationMemoryTimeByNpc.Clear();
+        this.conversationStartRecorder.Clear();
         this.feedback.Clear();
         this.delayedTravelActions.Clear();
         this.communityRipples.TryPropagate();
@@ -228,7 +241,7 @@ internal sealed class BehaviorEngine
         this.pendingRequests.Clear();
         this.walkTogether.Clear();
         this.escortToLocation.Clear();
-        this.lastConversationMemoryTimeByNpc.Clear();
+        this.conversationStartRecorder.Clear();
         this.feedback.Clear();
         this.delayedTravelActions.Clear();
     }
@@ -249,7 +262,7 @@ internal sealed class BehaviorEngine
 
         if (!this.config.BehaviorHotkey.JustPressed())
         {
-            this.TryRecordConversationStart(e);
+            this.conversationStartRecorder.TryRecord(e);
             return;
         }
 
@@ -488,7 +501,7 @@ internal sealed class BehaviorEngine
             return string.Empty;
         }
 
-        var labels = this.DescribeGiftTaste(taste);
+        var labels = GiftMemoryDetailsFactory.DescribeTaste(taste);
         var gift = new GiftMemoryDetails(
             giftItemId ?? string.Empty,
             string.IsNullOrWhiteSpace(giftName) ? "a gift" : giftName,
@@ -886,269 +899,6 @@ internal sealed class BehaviorEngine
         }
     }
 
-    private void TryRecordConversationStart(ButtonPressedEventArgs e)
-    {
-        if (!this.config.EnableConversationMemory || !e.Button.IsActionButton())
-        {
-            return;
-        }
-
-        if (!this.TryFindNpcForInteraction(e.Cursor, out NPC? npc) || npc == null)
-        {
-            return;
-        }
-
-        SObject? heldGift = Game1.player.ActiveObject;
-        int timeMarker = (Game1.Date.TotalDays * 10000) + Game1.timeOfDay;
-        if (this.lastConversationMemoryTimeByNpc.TryGetValue(npc.Name, out int lastTimeMarker) && lastTimeMarker == timeMarker)
-        {
-            return;
-        }
-
-        this.lastConversationMemoryTimeByNpc[npc.Name] = timeMarker;
-        this.TryRecordObservedRomanticInteraction(npc);
-        if (heldGift != null)
-        {
-            var gift = this.BuildGiftMemoryDetails(npc, heldGift);
-            if (this.config.EnableHelpRequests && this.HasPendingItemHelpRequest(npc, gift))
-            {
-                this.helper.Input.Suppress(e.Button);
-                this.DeliverHelpRequestItem(npc, heldGift, gift);
-                return;
-            }
-
-            this.memory.RecordGiftOffered(npc, gift, this.config.MaxMemoryEntriesPerNpc);
-            if (this.config.EnableNpcState)
-            {
-                LivingNpcState state = this.memory.UpdateStateForGift(npc, gift);
-                this.giftOpportunities.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
-            }
-
-            if (this.config.EnableHelpRequests)
-            {
-                IReadOnlyList<NpcHelpRequestFact> changedHelpRequests = this.memory.TryCompleteItemHelpRequests(npc, gift, this.config.MaxMemoryEntriesPerNpc);
-                if (changedHelpRequests.Count > 0)
-                {
-                    this.helpRequestRewards.RewardFulfilled(npc, changedHelpRequests);
-                    this.helpRequestQuestLog.Sync();
-                    int fulfilledCount = changedHelpRequests.Count(request => request.Status == "Fulfilled");
-                    int advancedCount = changedHelpRequests.Count - fulfilledCount;
-                    this.PushInteractionContext(npc, $"Updated {changedHelpRequests.Count} help request(s) for {npc.Name} through a gifted item: {fulfilledCount} fulfilled, {advancedCount} advanced.");
-                }
-            }
-
-            this.PushInteractionContext(npc, $"Recorded gift interaction for {npc.Name}: {gift.ItemName} ({gift.TastePromptLabel}).");
-            return;
-        }
-
-        if (Game1.eventUp)
-        {
-            string eventContext = this.DescribeCurrentEventContext();
-            this.memory.RecordEventInteraction(npc, eventContext, this.config.MaxMemoryEntriesPerNpc);
-            if (this.config.EnableNpcState)
-            {
-                this.memory.UpdateStateForEventInteraction(npc, eventContext);
-            }
-
-            this.PushInteractionContext(npc, $"Recorded event interaction for {npc.Name}: {eventContext}.");
-            return;
-        }
-
-        this.memory.RecordConversationStart(npc, this.config.MaxMemoryEntriesPerNpc);
-        if (this.config.EnableNpcState)
-        {
-            LivingNpcState state = this.memory.UpdateStateForConversationStart(npc);
-            this.giftOpportunities.TryPrepareDailyGiftOpportunity(npc, state);
-            this.communityRipples.TrySpreadConversationSocialRipple(npc, state);
-        }
-
-        this.PushInteractionContext(npc, $"Recorded conversation start for {npc.Name}.");
-        this.MarkConflictFollowUpsMentionedAfterPrompt(npc);
-    }
-
-    private bool HasPendingItemHelpRequest(NPC npc, GiftMemoryDetails gift)
-    {
-        var state = this.memory.GetState(npc);
-        return state?.HelpRequests.Any(request =>
-            request.Status == "Pending"
-            && request.Type == "item_request"
-            && string.Equals(request.RequestedItemId, gift.ItemId, StringComparison.OrdinalIgnoreCase)) == true;
-    }
-
-    private void DeliverHelpRequestItem(NPC npc, SObject heldItem, GiftMemoryDetails gift)
-    {
-        SObject deliveredItem = ItemRegistry.Create<SObject>(gift.ItemId);
-        deliveredItem.Quality = heldItem.Quality;
-        Game1.player.reduceActiveItemByOne();
-
-        IReadOnlyList<NpcHelpRequestFact> changedHelpRequests = this.memory.TryCompleteItemHelpRequests(
-            npc,
-            gift,
-            this.config.MaxMemoryEntriesPerNpc
-        );
-        if (changedHelpRequests.Count == 0)
-        {
-            if (this.config.Debug)
-            {
-                this.monitor.Log(
-                    $"Suppressed gift interaction for {npc.Name}, but no matching help request was completed for {gift.ItemId}.",
-                    LogLevel.Debug
-                );
-            }
-
-            return;
-        }
-
-        this.helpRequestRewards.RewardFulfilled(npc, changedHelpRequests, queueAmbientThanks: false);
-        this.helpRequestQuestLog.Sync();
-
-        int fulfilledCount = changedHelpRequests.Count(request => request.Status == "Fulfilled");
-        int advancedCount = changedHelpRequests.Count - fulfilledCount;
-        this.PushInteractionContext(
-            npc,
-            $"Delivered {gift.ItemName} for {changedHelpRequests.Count} help request(s): {fulfilledCount} fulfilled, {advancedCount} advanced.",
-            this.BuildHelpRequestDeliveryPrompt(npc, gift, changedHelpRequests)
-        );
-
-        if (!this.valleyTalkBridge.TryRequestGiftDialogue(npc, deliveredItem, gift.TasteScore))
-        {
-            this.feedback.QueueAmbientRemark(
-                npc,
-                fulfilledCount > 0 ? "谢谢你，真的帮上忙了。" : "谢谢你，我先收下这个。",
-                0
-            );
-        }
-
-        if (fulfilledCount == 0)
-        {
-            this.feedback.Show($"LivingNPCs：已把 {gift.ItemName} 交给 {npc.displayName}。");
-        }
-    }
-
-    private string BuildHelpRequestDeliveryPrompt(
-        NPC npc,
-        GiftMemoryDetails gift,
-        IReadOnlyList<NpcHelpRequestFact> changedHelpRequests
-    )
-    {
-        var lines = new List<string>
-        {
-            "## LivingNPCs Immediate Help Request Delivery",
-            $"- The farmer just handed {npc.displayName} {gift.ItemName} ({gift.ItemId}) for a LivingNPCs help request.",
-            "- This is a task hand-in, not an ordinary daily gift. Acknowledge the requested item even if the farmer has already given a normal gift today.",
-            "- Respond now with a natural thank-you or reaction to the completed request/step. Do not mention the game's daily gift limit."
-        };
-
-        foreach (var request in changedHelpRequests)
-        {
-            lines.Add($"- Help request status: {request.Status}; summary: {request.Summary}; resolution: {request.Resolution}");
-            if (request.Status == "Fulfilled" && request.RewardGranted)
-            {
-                lines.Add($"- LivingNPCs already granted the configured friendship reward (+{request.RewardFriendship}).");
-            }
-
-            if (request.Status == "Fulfilled" && request.RewardMoneyGranted)
-            {
-                lines.Add(request.RewardMoneyByMail
-                    ? $"- LivingNPCs scheduled a system mail reward of {request.RewardMoney}g for tomorrow."
-                    : $"- LivingNPCs already granted a system money reward of {request.RewardMoney}g.");
-            }
-
-            if (request.RewardGiftGiven)
-            {
-                lines.Add("- LivingNPCs also gave the farmer a small item reward; mention it only if it feels natural.");
-            }
-
-            if (request.SpecialFollowUpPlanned)
-            {
-                lines.Add("- A later in-person follow-up may happen; do not promise it as guaranteed.");
-            }
-        }
-
-        return string.Join("\n", lines);
-    }
-
-    private void TryRecordObservedRomanticInteraction(NPC targetNpc)
-    {
-        if (Game1.currentLocation == null
-            || Game1.player == null
-            || !this.IsRomanticallyAttachedToFarmer(targetNpc))
-        {
-            return;
-        }
-
-        foreach (var observer in Game1.currentLocation.characters.Where(candidate =>
-                     candidate.Name != targetNpc.Name
-                     && !string.IsNullOrWhiteSpace(candidate.Name)
-                     && Vector2.Distance(candidate.Tile, Game1.player.Tile) <= 6
-                     && this.IsRomanticallyAttachedToFarmer(candidate)))
-        {
-            var state = this.memory.GetState(observer);
-            if (state?.CurrentEmotion == "Jealous"
-                && state.LastEmotionUpdatedTotalDays == Game1.Date.TotalDays)
-            {
-                continue;
-            }
-
-            this.memory.UpdateStateForObservedRomanticInteraction(observer, targetNpc);
-            this.memory.RecordNpcWorldAction(
-                observer,
-                "ObservedRomanticInteraction",
-                $"they noticed the farmer being close with {targetNpc.displayName}",
-                this.config.MaxMemoryEntriesPerNpc
-            );
-            this.PushInteractionContext(observer, $"Observed romantic interaction involving {targetNpc.Name}.");
-        }
-
-        this.communityRipples.Spread(
-            targetNpc,
-            "romantic_attention",
-            $"the farmer has been giving romantic attention to {targetNpc.displayName}",
-            importance: 70
-        );
-    }
-
-    private bool IsRomanticallyAttachedToFarmer(NPC npc)
-    {
-        return Game1.player.friendshipData.TryGetValue(npc.Name, out Friendship friendship)
-            && (friendship.IsDating() || friendship.IsEngaged() || friendship.IsMarried());
-    }
-
-    private void MarkConflictFollowUpsMentionedAfterPrompt(NPC npc)
-    {
-        var state = this.memory.GetState(npc);
-        if (state == null)
-        {
-            return;
-        }
-
-        foreach (var conflict in state.Conflicts.Where(conflict =>
-                     conflict.Status == "Resolved"
-                     && conflict.ResolvedTotalDays >= Game1.Date.TotalDays - 3
-                     && conflict.RecoveryMentionedTotalDays < 0))
-        {
-            conflict.RecoveryMentionedTotalDays = Game1.Date.TotalDays;
-            conflict.RecoveryMentionedTimeOfDay = Game1.timeOfDay;
-        }
-
-        foreach (var request in state.HelpRequests.Where(request =>
-                     request.Status == "Expired"
-                     && request.LastMentionedTotalDays < Game1.Date.TotalDays))
-        {
-            request.LastMentionedTotalDays = Game1.Date.TotalDays;
-            request.LastMentionedTimeOfDay = Game1.timeOfDay;
-        }
-
-        foreach (var request in state.HelpRequests.Where(request =>
-                     request.Status == "Fulfilled"
-                     && request.FulfilledTotalDays >= Game1.Date.TotalDays - 3
-                     && request.LastMentionedTotalDays < 0))
-        {
-            request.LastMentionedTotalDays = Game1.Date.TotalDays;
-            request.LastMentionedTimeOfDay = Game1.timeOfDay;
-        }
-    }
-
     private void PushInteractionContext(NPC npc, string debugMessage, string immediatePromptContext = "")
     {
         string promptContext = this.memory.BuildPromptContext(
@@ -1231,47 +981,6 @@ internal sealed class BehaviorEngine
             "- If naming a specific gift, use an allowed itemId and itemLabel. Generic wording such as 'a small thing' is fine when no specific item is named.",
             "- If the moment feels emotionally wrong, crowded, or abrupt, skip the gift rather than forcing it."
         );
-    }
-
-    private GiftMemoryDetails BuildGiftMemoryDetails(NPC npc, SObject gift)
-    {
-        int taste = this.TryGetGiftTaste(npc, gift);
-        var labels = this.DescribeGiftTaste(taste);
-        string itemName = string.IsNullOrWhiteSpace(gift.DisplayName) ? gift.Name : gift.DisplayName;
-        return new GiftMemoryDetails(gift.QualifiedItemId, itemName, labels.DebugLabel, labels.PromptLabel, taste);
-    }
-
-    private int TryGetGiftTaste(NPC npc, SObject gift)
-    {
-        try
-        {
-            var method = typeof(NPC).GetMethod("getGiftTasteForThisItem", [typeof(SObject)]);
-            object? result = method?.Invoke(npc, [gift]);
-            return result is int taste ? taste : -1;
-        }
-        catch
-        {
-            return -1;
-        }
-    }
-
-    private GiftTasteLabels DescribeGiftTaste(int taste)
-    {
-        return taste switch
-        {
-            0 => new GiftTasteLabels("最爱", "loved gift"),
-            2 => new GiftTasteLabels("喜欢", "liked gift"),
-            4 => new GiftTasteLabels("不喜欢", "disliked gift"),
-            6 => new GiftTasteLabels("讨厌", "hated gift"),
-            8 => new GiftTasteLabels("普通", "neutral gift"),
-            _ => new GiftTasteLabels("未知喜好", "unknown gift taste")
-        };
-    }
-
-    private string DescribeCurrentEventContext()
-    {
-        string location = Game1.currentLocation?.DisplayName ?? Game1.currentLocation?.Name ?? "当前地点";
-        return $"event or festival moment at {location} on {Game1.season} {Game1.dayOfMonth}, {Game1.timeOfDay}";
     }
 
     private bool TryFindNpcForInteraction(ICursorPosition cursor, out NPC? npc)
