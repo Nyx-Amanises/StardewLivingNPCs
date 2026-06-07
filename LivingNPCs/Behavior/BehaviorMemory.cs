@@ -302,6 +302,29 @@ internal sealed class BehaviorMemory
         return true;
     }
 
+    internal int StoreLongTermMemoriesFromAnalysisForTesting(
+        LivingNpcState state,
+        string analysisJson,
+        int currentTotalDays,
+        int currentTimeOfDay = 1200)
+    {
+        var analysis = ParseExchangeAnalysis(analysisJson);
+        int stored = 0;
+        foreach (var candidate in analysis.Memories
+                     .Where(memory => !memory.PlayerPreference)
+                     .Where(memory => memory.Importance >= 40 && !string.IsNullOrWhiteSpace(memory.Summary))
+                     .OrderByDescending(memory => memory.Importance)
+                     .Take(4))
+        {
+            if (this.StoreLongTermMemory(state, candidate, currentTotalDays, currentTimeOfDay))
+            {
+                stored++;
+            }
+        }
+
+        return stored;
+    }
+
     public ValleyTalkExchangeResult RecordValleyTalkExchange(
         NPC npc,
         string playerText,
@@ -1382,14 +1405,19 @@ internal sealed class BehaviorMemory
         return prompt;
     }
 
-                            private static int GetMemoryAge(int totalDays)
+    private static int GetMemoryAge(int totalDays)
+    {
+        return GetMemoryAge(totalDays, Game1.Date.TotalDays);
+    }
+
+    internal static int GetMemoryAge(int totalDays, int currentTotalDays)
     {
         return totalDays < 0
             ? int.MaxValue
-            : System.Math.Max(0, Game1.Date.TotalDays - totalDays);
+            : System.Math.Max(0, currentTotalDays - totalDays);
     }
 
-        private MemoryRecallPlan BuildMemoryRecallPlan(
+    private MemoryRecallPlan BuildMemoryRecallPlan(
         LivingNpcState state,
         WorldContextSnapshot world,
         IReadOnlyList<BehaviorMemoryEntry> recentEntries,
@@ -1433,7 +1461,7 @@ internal sealed class BehaviorMemory
         return MemoryRecallService.BuildCommunityImpressionPlan(state, maxCount, Game1.Date.TotalDays);
     }
 
-                            private void MarkMemoriesRecalled(MemoryRecallPlan recallPlan)
+    private void MarkMemoriesRecalled(MemoryRecallPlan recallPlan)
     {
         MemoryRecallService.MarkRecalled(recallPlan, Game1.Date.TotalDays, Game1.timeOfDay);
     }
@@ -1759,11 +1787,16 @@ internal sealed class BehaviorMemory
 
     internal static int GetLongTermMemoryRetentionScore(LongTermMemoryFact memory)
     {
+        return GetLongTermMemoryRetentionScore(memory, Game1.Date.TotalDays);
+    }
+
+    internal static int GetLongTermMemoryRetentionScore(LongTermMemoryFact memory, int currentTotalDays)
+    {
         int score = memory.Importance;
         score += System.Math.Min(24, memory.TimesReinforced * 4);
         score += System.Math.Min(12, memory.RecallCount);
         score += MemoryRecallService.GetLongTermMemoryKindBonus(memory.Kind);
-        score += GetMemoryAge(memory.LastUpdatedTotalDays) switch
+        score += GetMemoryAge(memory.LastUpdatedTotalDays, currentTotalDays) switch
         {
             0 => 12,
             1 => 9,
@@ -1873,7 +1906,7 @@ internal sealed class BehaviorMemory
         );
     }
 
-        private LivingNpcState GetOrCreateState(NPC npc)
+    private LivingNpcState GetOrCreateState(NPC npc)
     {
         if (!this.statesByNpc.TryGetValue(npc.Name, out var state))
         {
@@ -1937,7 +1970,7 @@ internal sealed class BehaviorMemory
         state.LastRelationshipTrustUpdatedTimeOfDay = Game1.timeOfDay;
     }
 
-                    private static ValleyTalkExchangeAnalysis ParseExchangeAnalysis(string analysisJson)
+    internal static ValleyTalkExchangeAnalysis ParseExchangeAnalysis(string analysisJson)
     {
         return ValleyTalkExchangeParser.Parse(analysisJson);
     }
@@ -2086,6 +2119,42 @@ internal sealed class BehaviorMemory
 
     private int ApplyConflictRepair(LivingNpcState state, int repairDelta, bool apology, bool specificRepairTalk)
     {
+        return this.ApplyConflictRepair(
+            state,
+            repairDelta,
+            apology,
+            specificRepairTalk,
+            Game1.Date.TotalDays,
+            Game1.timeOfDay
+        );
+    }
+
+    internal int ApplyConflictRepairForTesting(
+        LivingNpcState state,
+        int repairDelta,
+        bool apology,
+        bool specificRepairTalk,
+        int currentTotalDays,
+        int currentTimeOfDay = 1200)
+    {
+        return this.ApplyConflictRepair(
+            state,
+            repairDelta,
+            apology,
+            specificRepairTalk,
+            currentTotalDays,
+            currentTimeOfDay
+        );
+    }
+
+    private int ApplyConflictRepair(
+        LivingNpcState state,
+        int repairDelta,
+        bool apology,
+        bool specificRepairTalk,
+        int currentTotalDays,
+        int currentTimeOfDay)
+    {
         var emotionalStyle = EmotionalExpressionStyle.For(state.NpcName, NpcDisposition.ForName(state.NpcName));
         int totalRepair = emotionalStyle.AdjustRepairAmount(System.Math.Clamp(repairDelta + (apology ? 12 : 0), 0, 100));
         if (totalRepair <= 0 && !apology && !specificRepairTalk)
@@ -2097,8 +2166,8 @@ internal sealed class BehaviorMemory
         foreach (var conflict in state.Conflicts.Where(conflict => conflict.Status is "Active" or "Recovering"))
         {
             conflict.RepairScore = LivingNpcState.ClampScore(conflict.RepairScore + totalRepair);
-            conflict.LastUpdatedTotalDays = Game1.Date.TotalDays;
-            conflict.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            conflict.LastUpdatedTotalDays = currentTotalDays;
+            conflict.LastUpdatedTimeOfDay = currentTimeOfDay;
             if (apology)
             {
                 conflict.ApologyCount += 1;
@@ -2112,13 +2181,13 @@ internal sealed class BehaviorMemory
 
             if (conflict.RequiresComplexRepair)
             {
-                this.RefreshComplexRepairStage(conflict);
+                this.RefreshComplexRepairStage(conflict, currentTotalDays);
                 int floor = GetComplexRepairSeverityFloor(conflict);
                 conflict.Severity = LivingNpcState.ClampScore(System.Math.Max(floor, conflict.Severity - totalRepair));
-                this.RefreshComplexRepairStage(conflict);
+                this.RefreshComplexRepairStage(conflict, currentTotalDays);
                 if (CanResolveComplexConflict(conflict) && conflict.Severity == 0)
                 {
-                    this.ResolveConflict(state, conflict);
+                    this.ResolveConflict(state, conflict, currentTotalDays, currentTimeOfDay);
                     resolved++;
                 }
                 else
@@ -2134,7 +2203,7 @@ internal sealed class BehaviorMemory
             conflict.Severity = LivingNpcState.ClampScore(conflict.Severity - totalRepair);
             if (conflict.Severity == 0)
             {
-                this.ResolveConflict(state, conflict);
+                this.ResolveConflict(state, conflict, currentTotalDays, currentTimeOfDay);
                 resolved++;
             }
             else
@@ -2153,15 +2222,33 @@ internal sealed class BehaviorMemory
 
     private void MarkRepairGiftReceived(LivingNpcState state, string giftName)
     {
+        this.MarkRepairGiftReceived(state, giftName, Game1.Date.TotalDays, Game1.timeOfDay);
+    }
+
+    internal void MarkRepairGiftReceivedForTesting(
+        LivingNpcState state,
+        string giftName,
+        int currentTotalDays,
+        int currentTimeOfDay = 1200)
+    {
+        this.MarkRepairGiftReceived(state, giftName, currentTotalDays, currentTimeOfDay);
+    }
+
+    private void MarkRepairGiftReceived(
+        LivingNpcState state,
+        string giftName,
+        int currentTotalDays,
+        int currentTimeOfDay)
+    {
         foreach (var conflict in state.Conflicts.Where(conflict =>
                      conflict.RequiresComplexRepair
                      && conflict.Status is "Active" or "Recovering"))
         {
             conflict.MeaningfulGiftReceived = true;
             conflict.LastRepairGiftName = giftName;
-            conflict.LastUpdatedTotalDays = Game1.Date.TotalDays;
-            conflict.LastUpdatedTimeOfDay = Game1.timeOfDay;
-            this.RefreshComplexRepairStage(conflict);
+            conflict.LastUpdatedTotalDays = currentTotalDays;
+            conflict.LastUpdatedTimeOfDay = currentTimeOfDay;
+            this.RefreshComplexRepairStage(conflict, currentTotalDays);
         }
     }
 
@@ -2170,6 +2257,42 @@ internal sealed class BehaviorMemory
         int emotionDailyDecay,
         int conflictDailyDecay,
         EmotionalExpressionCue emotionalStyle)
+    {
+        this.DecayEmotionAndConflicts(
+            state,
+            emotionDailyDecay,
+            conflictDailyDecay,
+            emotionalStyle,
+            Game1.Date.TotalDays,
+            Game1.timeOfDay
+        );
+    }
+
+    internal void DecayEmotionAndConflictsForTesting(
+        LivingNpcState state,
+        int emotionDailyDecay,
+        int conflictDailyDecay,
+        int currentTotalDays,
+        int currentTimeOfDay = 1200)
+    {
+        var emotionalStyle = EmotionalExpressionStyle.For(state.NpcName, NpcDisposition.ForName(state.NpcName));
+        this.DecayEmotionAndConflicts(
+            state,
+            emotionDailyDecay,
+            conflictDailyDecay,
+            emotionalStyle,
+            currentTotalDays,
+            currentTimeOfDay
+        );
+    }
+
+    private void DecayEmotionAndConflicts(
+        LivingNpcState state,
+        int emotionDailyDecay,
+        int conflictDailyDecay,
+        EmotionalExpressionCue emotionalStyle,
+        int currentTotalDays,
+        int currentTimeOfDay)
     {
         int adjustedEmotionDailyDecay = emotionalStyle.AdjustEmotionDecay(emotionDailyDecay);
         int adjustedConflictDailyDecay = emotionalStyle.AdjustConflictDecay(conflictDailyDecay);
@@ -2191,18 +2314,18 @@ internal sealed class BehaviorMemory
         {
             if (conflict.RequiresComplexRepair)
             {
-                this.RefreshComplexRepairStage(conflict);
+                this.RefreshComplexRepairStage(conflict, currentTotalDays);
                 int floor = GetComplexRepairSeverityFloor(conflict);
                 conflict.Severity = System.Math.Max(
                     floor,
                     LivingNpcState.MoveToward(conflict.Severity, 0, adjustedConflictDailyDecay)
                 );
-                conflict.LastUpdatedTotalDays = Game1.Date.TotalDays;
-                conflict.LastUpdatedTimeOfDay = Game1.timeOfDay;
-                this.RefreshComplexRepairStage(conflict);
+                conflict.LastUpdatedTotalDays = currentTotalDays;
+                conflict.LastUpdatedTimeOfDay = currentTimeOfDay;
+                this.RefreshComplexRepairStage(conflict, currentTotalDays);
                 if (CanResolveComplexConflict(conflict) && conflict.Severity == 0)
                 {
-                    this.ResolveConflict(state, conflict);
+                    this.ResolveConflict(state, conflict, currentTotalDays, currentTimeOfDay);
                 }
                 else
                 {
@@ -2215,11 +2338,11 @@ internal sealed class BehaviorMemory
             }
 
             conflict.Severity = LivingNpcState.MoveToward(conflict.Severity, 0, adjustedConflictDailyDecay);
-            conflict.LastUpdatedTotalDays = Game1.Date.TotalDays;
-            conflict.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            conflict.LastUpdatedTotalDays = currentTotalDays;
+            conflict.LastUpdatedTimeOfDay = currentTimeOfDay;
             if (conflict.Severity == 0)
             {
-                this.ResolveConflict(state, conflict);
+                this.ResolveConflict(state, conflict, currentTotalDays, currentTimeOfDay);
             }
             else
             {
@@ -2243,9 +2366,18 @@ internal sealed class BehaviorMemory
 
     private void ResolveConflict(LivingNpcState state, NpcConflictFact conflict)
     {
+        this.ResolveConflict(state, conflict, Game1.Date.TotalDays, Game1.timeOfDay);
+    }
+
+    private void ResolveConflict(
+        LivingNpcState state,
+        NpcConflictFact conflict,
+        int currentTotalDays,
+        int currentTimeOfDay)
+    {
         conflict.Status = "Resolved";
-        conflict.ResolvedTotalDays = Game1.Date.TotalDays;
-        conflict.ResolvedTimeOfDay = Game1.timeOfDay;
+        conflict.ResolvedTotalDays = currentTotalDays;
+        conflict.ResolvedTimeOfDay = currentTimeOfDay;
         conflict.RepairStage = "Resolved";
         if (conflict.RequiresComplexRepair && !conflict.RepairGrowthGranted)
         {
@@ -2256,6 +2388,11 @@ internal sealed class BehaviorMemory
     }
 
     private void RefreshComplexRepairStage(NpcConflictFact conflict)
+    {
+        this.RefreshComplexRepairStage(conflict, Game1.Date.TotalDays);
+    }
+
+    private void RefreshComplexRepairStage(NpcConflictFact conflict, int currentTotalDays)
     {
         if (!conflict.RequiresComplexRepair)
         {
@@ -2281,7 +2418,7 @@ internal sealed class BehaviorMemory
             return;
         }
 
-        if (Game1.Date.TotalDays < conflict.MinimumRepairTotalDays)
+        if (currentTotalDays < conflict.MinimumRepairTotalDays)
         {
             conflict.RepairStage = "NeedsTime";
             return;
@@ -3048,7 +3185,7 @@ internal sealed class BehaviorMemory
         out string reason)
     {
         var world = WorldContext.For(npc);
-        var result = HelpRequestReadinessRules.Evaluate(
+        var result = EvaluateHelpRequestReadiness(
             state,
             world.FriendshipHearts,
             maxPendingHelpRequestsPerNpc,
@@ -3060,7 +3197,41 @@ internal sealed class BehaviorMemory
         return result.Allowed;
     }
 
-        private bool StoreLongTermMemory(LivingNpcState state, ValleyTalkMemoryCandidate candidate)
+    internal static HelpRequestReadinessResult EvaluateHelpRequestReadiness(
+        LivingNpcState state,
+        int friendshipHearts,
+        int maxPendingHelpRequestsPerNpc,
+        int helpRequestCooldownDays,
+        int minRelationshipTrustForHelpRequests,
+        int currentTotalDays)
+    {
+        return HelpRequestReadinessRules.Evaluate(
+            state,
+            friendshipHearts,
+            maxPendingHelpRequestsPerNpc,
+            helpRequestCooldownDays,
+            minRelationshipTrustForHelpRequests,
+            currentTotalDays
+        );
+    }
+
+    private bool StoreLongTermMemory(LivingNpcState state, ValleyTalkMemoryCandidate candidate)
+    {
+        return this.StoreLongTermMemory(
+            state,
+            candidate,
+            Game1.Date.TotalDays,
+            Game1.timeOfDay,
+            updateNicknameState: true
+        );
+    }
+
+    private bool StoreLongTermMemory(
+        LivingNpcState state,
+        ValleyTalkMemoryCandidate candidate,
+        int currentTotalDays,
+        int currentTimeOfDay,
+        bool updateNicknameState = false)
     {
         string normalizedKey = BuildLongTermMemoryKey(candidate.Kind, candidate.Subject, candidate.Summary);
         if (string.IsNullOrWhiteSpace(normalizedKey))
@@ -3081,10 +3252,14 @@ internal sealed class BehaviorMemory
 
             existing.Importance = System.Math.Max(existing.Importance, candidate.Importance);
             existing.Tags = NormalizeMemoryTags(existing.Tags.Concat(candidate.Tags), existing.Subject, existing.Summary);
-            existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
-            existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            existing.LastUpdatedTotalDays = currentTotalDays;
+            existing.LastUpdatedTimeOfDay = currentTimeOfDay;
             existing.TimesReinforced += 1;
-            this.TryUpdateNicknameStateFromMemory(state, existing);
+            if (updateNicknameState)
+            {
+                this.TryUpdateNicknameStateFromMemory(state, existing);
+            }
+
             return true;
         }
 
@@ -3095,22 +3270,26 @@ internal sealed class BehaviorMemory
             Summary = candidate.Summary.Trim(),
             Tags = NormalizeMemoryTags(candidate.Tags, candidate.Subject, candidate.Summary),
             Importance = candidate.Importance,
-            CreatedTotalDays = Game1.Date.TotalDays,
-            CreatedTimeOfDay = Game1.timeOfDay,
-            LastUpdatedTotalDays = Game1.Date.TotalDays,
-            LastUpdatedTimeOfDay = Game1.timeOfDay,
+            CreatedTotalDays = currentTotalDays,
+            CreatedTimeOfDay = currentTimeOfDay,
+            LastUpdatedTotalDays = currentTotalDays,
+            LastUpdatedTimeOfDay = currentTimeOfDay,
             TimesReinforced = 1
         });
 
         state.LongTermMemories = state.LongTermMemories
-            .OrderByDescending(GetLongTermMemoryRetentionScore)
+            .OrderByDescending(memory => GetLongTermMemoryRetentionScore(memory, currentTotalDays))
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
             .Take(MaxLongTermMemoriesPerNpc)
             .ToList();
 
-        this.TryUpdateNicknameStateFromMemory(state, state.LongTermMemories.LastOrDefault(memory =>
-            BuildLongTermMemoryKey(memory.Kind, memory.Subject, memory.Summary) == normalizedKey));
+        if (updateNicknameState)
+        {
+            this.TryUpdateNicknameStateFromMemory(state, state.LongTermMemories.LastOrDefault(memory =>
+                BuildLongTermMemoryKey(memory.Kind, memory.Subject, memory.Summary) == normalizedKey));
+        }
+
         return true;
     }
 
@@ -3503,5 +3682,4 @@ internal sealed class BehaviorMemory
             }
         }
     }
-
 }
