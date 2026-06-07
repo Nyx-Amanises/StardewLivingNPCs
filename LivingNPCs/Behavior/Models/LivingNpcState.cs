@@ -379,9 +379,7 @@ internal sealed class LivingNpcState
     {
         get
         {
-            var influences = this.DialogueBehaviorInfluences
-                .OrderBy(influence => BehaviorMemory.DialogueBehaviorInfluenceStatusOrder(influence.Status))
-                .ThenBy(influence => influence.ExpiresTotalDays)
+            var influences = DialogueBehaviorInfluenceStore.OrderForDisplay(this.DialogueBehaviorInfluences)
                 .Take(4)
                 .ToList();
             return influences.Count == 0
@@ -692,41 +690,7 @@ internal sealed class LivingNpcState
             .ThenByDescending(experience => experience.LastUpdatedTimeOfDay)
             .Take(12)
             .ToList();
-        this.DialogueBehaviorInfluences ??= new List<DialogueBehaviorInfluenceFact>();
-        this.DialogueBehaviorInfluences = this.DialogueBehaviorInfluences
-            .Where(influence => influence != null && !string.IsNullOrWhiteSpace(influence.Summary))
-            .Select(influence =>
-            {
-                influence.Type = BehaviorMemory.NormalizeDialogueBehaviorInfluenceType(influence.Type);
-                influence.Summary = influence.Summary.Trim();
-                influence.TargetLocation = BehaviorMemory.NormalizeTravelLocation(influence.TargetLocation, "Town");
-                influence.TargetLocationLabel = string.IsNullOrWhiteSpace(influence.TargetLocationLabel)
-                    ? influence.TargetLocation
-                    : influence.TargetLocationLabel.Trim();
-                influence.Intensity = ClampScore(influence.Intensity);
-                influence.Status = influence.Status switch
-                {
-                    "Spent" => "Spent",
-                    "Expired" => "Expired",
-                    _ => "Active"
-                };
-                if (influence.Status == "Active" && influence.ExpiresTotalDays < Game1.Date.TotalDays)
-                {
-                    influence.Status = "Expired";
-                }
-
-                influence.TriggerCount = System.Math.Max(0, influence.TriggerCount);
-                influence.MaxTriggers = System.Math.Clamp(influence.MaxTriggers <= 0 ? 1 : influence.MaxTriggers, 1, 4);
-                influence.TimesReinforced = System.Math.Max(0, influence.TimesReinforced);
-                return influence;
-            })
-            .Where(influence => influence.Type != "none")
-            .OrderBy(influence => BehaviorMemory.DialogueBehaviorInfluenceStatusOrder(influence.Status))
-            .ThenBy(influence => influence.ExpiresTotalDays)
-            .ThenByDescending(influence => influence.LastUpdatedTotalDays)
-            .ThenByDescending(influence => influence.LastUpdatedTimeOfDay)
-            .Take(BehaviorMemory.MaxDialogueBehaviorInfluencesPerNpc)
-            .ToList();
+        DialogueBehaviorInfluenceStore.Refresh(this, Game1.Date.TotalDays);
         this.Conflicts ??= new List<NpcConflictFact>();
         this.Conflicts = this.Conflicts
             .Where(conflict => conflict != null && !string.IsNullOrWhiteSpace(conflict.Summary))

@@ -7,8 +7,6 @@ namespace LivingNPCs.Behavior;
 
 internal sealed class BehaviorMemory
 {
-    internal const int MaxDialogueBehaviorInfluencesPerNpc = 12;
-
     private static readonly HashSet<string> AllowedHelpRequestItemIds = new(System.StringComparer.OrdinalIgnoreCase)
     {
         "(O)16",
@@ -1815,74 +1813,24 @@ internal sealed class BehaviorMemory
         ValleyTalkBehaviorInfluenceCandidate candidate,
         int maxDialogueBehaviorInfluenceDays)
     {
-        string type = NormalizeDialogueBehaviorInfluenceType(candidate.Type);
-        if (type == "none" || string.IsNullOrWhiteSpace(candidate.Summary))
+        string fallbackLocation = npc.currentLocation?.Name ?? Game1.currentLocation?.Name ?? string.Empty;
+        if (!DialogueBehaviorInfluenceStore.Store(
+                state,
+                candidate,
+                fallbackLocation,
+                maxDialogueBehaviorInfluenceDays,
+                Game1.Date.TotalDays,
+                Game1.timeOfDay,
+                out var storedInfluence))
         {
             return false;
         }
 
-        string fallbackLocation = npc.currentLocation?.Name ?? Game1.currentLocation?.Name ?? string.Empty;
-        string targetLocation = NormalizeTravelLocation(candidate.TargetLocation, fallbackLocation);
-        string targetLabel = string.IsNullOrWhiteSpace(candidate.TargetLocationLabel)
-            ? GetTravelLocationLabel(targetLocation)
-            : candidate.TargetLocationLabel.Trim();
-        int durationDays = candidate.DurationDays <= 0
-            ? GetDefaultDialogueBehaviorDurationDays(type)
-            : candidate.DurationDays;
-        durationDays = System.Math.Clamp(
-            durationDays,
-            0,
-            System.Math.Clamp(maxDialogueBehaviorInfluenceDays, 1, 7)
-        );
-        int maxTriggers = candidate.MaxTriggers <= 0
-            ? GetDefaultDialogueBehaviorMaxTriggers(type)
-            : candidate.MaxTriggers;
-        string normalizedKey = BuildDialogueBehaviorInfluenceKey(type, candidate.Summary, targetLocation);
-
-        var existing = state.DialogueBehaviorInfluences.FirstOrDefault(influence =>
-            BuildDialogueBehaviorInfluenceKey(influence.Type, influence.Summary, influence.TargetLocation) == normalizedKey
-            && influence.Status == "Active");
-        if (existing != null)
+        if (storedInfluence != null)
         {
-            existing.Summary = candidate.Summary.Trim();
-            existing.TargetLocation = targetLocation;
-            existing.TargetLocationLabel = targetLabel;
-            existing.Intensity = System.Math.Max(existing.Intensity, candidate.Intensity);
-            existing.ExpiresTotalDays = System.Math.Max(existing.ExpiresTotalDays, Game1.Date.TotalDays + durationDays);
-            existing.MaxTriggers = System.Math.Max(existing.MaxTriggers, maxTriggers);
-            existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
-            existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
-            existing.TimesReinforced += 1;
-            this.ApplyDialogueBehaviorStateEffect(state, existing);
-            return true;
+            this.ApplyDialogueBehaviorStateEffect(state, storedInfluence);
         }
 
-        var influence = new DialogueBehaviorInfluenceFact
-        {
-            Type = type,
-            Summary = candidate.Summary.Trim(),
-            TargetLocation = targetLocation,
-            TargetLocationLabel = targetLabel,
-            Intensity = System.Math.Clamp(candidate.Intensity <= 0 ? GetDefaultDialogueBehaviorIntensity(type) : candidate.Intensity, 1, 100),
-            CreatedTotalDays = Game1.Date.TotalDays,
-            CreatedTimeOfDay = Game1.timeOfDay,
-            LastUpdatedTotalDays = Game1.Date.TotalDays,
-            LastUpdatedTimeOfDay = Game1.timeOfDay,
-            ExpiresTotalDays = Game1.Date.TotalDays + durationDays,
-            MaxTriggers = System.Math.Clamp(maxTriggers, 1, 4),
-            Status = "Active",
-            TimesReinforced = 1
-        };
-
-        state.DialogueBehaviorInfluences.Add(influence);
-        state.DialogueBehaviorInfluences = state.DialogueBehaviorInfluences
-            .OrderBy(influence => DialogueBehaviorInfluenceStatusOrder(influence.Status))
-            .ThenBy(influence => influence.ExpiresTotalDays)
-            .ThenByDescending(influence => influence.LastUpdatedTotalDays)
-            .ThenByDescending(influence => influence.LastUpdatedTimeOfDay)
-            .Take(MaxDialogueBehaviorInfluencesPerNpc)
-            .ToList();
-        this.ApplyDialogueBehaviorStateEffect(state, influence);
         return true;
     }
 
@@ -2610,11 +2558,6 @@ internal sealed class BehaviorMemory
         return BehaviorValueNormalizer.NormalizeWorldActionType(type);
     }
 
-    internal static string NormalizeDialogueBehaviorInfluenceType(string type)
-    {
-        return BehaviorValueNormalizer.NormalizeDialogueBehaviorInfluenceType(type);
-    }
-
     internal static string NormalizeEmotion(string emotion)
     {
         return BehaviorValueNormalizer.NormalizeEmotion(emotion);
@@ -2645,62 +2588,6 @@ internal sealed class BehaviorMemory
         return BehaviorValueNormalizer.NormalizeSharedExperienceType(type);
     }
 
-    private static int GetDefaultDialogueBehaviorDurationDays(string type)
-    {
-        return NormalizeDialogueBehaviorInfluenceType(type) switch
-        {
-            "companion_walk" => 0,
-            "pause_to_talk" => 1,
-            "visit_location" => 3,
-            "comforted" => 2,
-            "offended" => 3,
-            "give_space" => 2,
-            "stay_near" => 1,
-            _ => 1
-        };
-    }
-
-    private static int GetDefaultDialogueBehaviorMaxTriggers(string type)
-    {
-        return NormalizeDialogueBehaviorInfluenceType(type) switch
-        {
-            "companion_walk" => 1,
-            "pause_to_talk" => 1,
-            "visit_location" => 2,
-            "comforted" => 2,
-            "offended" => 2,
-            "give_space" => 2,
-            "stay_near" => 2,
-            _ => 1
-        };
-    }
-
-    private static int GetDefaultDialogueBehaviorIntensity(string type)
-    {
-        return NormalizeDialogueBehaviorInfluenceType(type) switch
-        {
-            "companion_walk" => 65,
-            "visit_location" => 45,
-            "comforted" => 55,
-            "offended" => 70,
-            "give_space" => 60,
-            "stay_near" => 55,
-            "pause_to_talk" => 45,
-            _ => 40
-        };
-    }
-
-    internal static int DialogueBehaviorInfluenceStatusOrder(string status)
-    {
-        return status switch
-        {
-            "Active" => 0,
-            "Spent" => 1,
-            "Expired" => 2,
-            _ => 3
-        };
-    }
-
     private static string NormalizeMemorySummary(string summary)
     {
         return BehaviorValueNormalizer.NormalizeMemorySummary(summary);
@@ -2714,11 +2601,6 @@ internal sealed class BehaviorMemory
     private static string GetTravelLocationLabel(string locationName)
     {
         return TravelLocationRules.GetLabel(locationName);
-    }
-
-    private static string BuildDialogueBehaviorInfluenceKey(string type, string summary, string targetLocation)
-    {
-        return BehaviorValueNormalizer.BuildDialogueBehaviorInfluenceKey(type, summary, targetLocation);
     }
 
     internal static int HelpRequestStatusOrder(string status)
