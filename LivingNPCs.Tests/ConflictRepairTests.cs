@@ -51,7 +51,7 @@ public sealed class ConflictRepairTests
             repairDelta: 0,
             apology: false,
             specificRepairTalk: true,
-            currentTotalDays: TestScenarios.Today + BehaviorMemory.GetComplexRepairDelayDays(80)
+            currentTotalDays: TestScenarios.Today + ConflictRepairService.GetComplexRepairDelayDays(80)
         );
 
         Assert.True(conflict.SpecificRepairTalkReceived);

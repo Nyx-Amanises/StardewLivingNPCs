@@ -2068,7 +2068,7 @@ internal sealed class BehaviorMemory
                 existing.RequiresComplexRepair = true;
                 existing.MinimumRepairTotalDays = System.Math.Max(
                     existing.MinimumRepairTotalDays,
-                    Game1.Date.TotalDays + GetComplexRepairDelayDays(state, existing.PeakSeverity)
+                    Game1.Date.TotalDays + ConflictRepairService.GetComplexRepairDelayDays(state, existing.PeakSeverity)
                 );
                 existing.SpecificRepairTalkReceived = false;
                 if (candidate.Severity >= 30)
@@ -2077,12 +2077,12 @@ internal sealed class BehaviorMemory
                 }
             }
 
-            this.RefreshComplexRepairStage(existing);
-            existing.Status = GetConflictStatus(existing.Severity);
+            ConflictRepairService.RefreshStage(existing, Game1.Date.TotalDays);
+            existing.Status = ConflictRepairService.GetConflictStatus(existing.Severity);
             existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
             existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
             existing.TimesReinforced += 1;
-            this.ApplyRelationshipTrustDelta(state, -System.Math.Max(2, GetConflictTrustLoss(candidate.Severity) / 2));
+            this.ApplyRelationshipTrustDelta(state, -System.Math.Max(2, ConflictRepairService.GetConflictTrustLoss(candidate.Severity) / 2));
             this.ApplyEmotionForConflict(state, existing);
             return true;
         }
@@ -2093,18 +2093,18 @@ internal sealed class BehaviorMemory
             Summary = candidate.Summary.Trim(),
             Severity = LivingNpcState.ClampScore(candidate.Severity),
             PeakSeverity = LivingNpcState.ClampScore(candidate.Severity),
-            Status = GetConflictStatus(candidate.Severity),
+            Status = ConflictRepairService.GetConflictStatus(candidate.Severity),
             CreatedTotalDays = Game1.Date.TotalDays,
             CreatedTimeOfDay = Game1.timeOfDay,
             LastUpdatedTotalDays = Game1.Date.TotalDays,
             LastUpdatedTimeOfDay = Game1.timeOfDay,
             RequiresComplexRepair = candidate.Severity >= 60,
             MinimumRepairTotalDays = candidate.Severity >= 60
-                ? Game1.Date.TotalDays + GetComplexRepairDelayDays(state, candidate.Severity)
+                ? Game1.Date.TotalDays + ConflictRepairService.GetComplexRepairDelayDays(state, candidate.Severity)
                 : -1,
             TimesReinforced = 1
         };
-        this.RefreshComplexRepairStage(conflict);
+        ConflictRepairService.RefreshStage(conflict, Game1.Date.TotalDays);
         state.Conflicts.Add(conflict);
         state.Conflicts = state.Conflicts
             .OrderBy(conflictEntry => ConflictStatusOrder(conflictEntry.Status))
@@ -2112,7 +2112,7 @@ internal sealed class BehaviorMemory
             .ThenByDescending(conflictEntry => conflictEntry.LastUpdatedTotalDays)
             .Take(12)
             .ToList();
-        this.ApplyRelationshipTrustDelta(state, -GetConflictTrustLoss(conflict.Severity));
+        this.ApplyRelationshipTrustDelta(state, -ConflictRepairService.GetConflictTrustLoss(conflict.Severity));
         this.ApplyEmotionForConflict(state, conflict);
         return true;
     }
@@ -2156,68 +2156,23 @@ internal sealed class BehaviorMemory
         int currentTimeOfDay)
     {
         var emotionalStyle = EmotionalExpressionStyle.For(state.NpcName, NpcDisposition.ForName(state.NpcName));
-        int totalRepair = emotionalStyle.AdjustRepairAmount(System.Math.Clamp(repairDelta + (apology ? 12 : 0), 0, 100));
-        if (totalRepair <= 0 && !apology && !specificRepairTalk)
-        {
-            return 0;
-        }
+        var update = ConflictRepairService.ApplyRepair(
+            state,
+            repairDelta,
+            apology,
+            specificRepairTalk,
+            emotionalStyle,
+            currentTotalDays,
+            currentTimeOfDay
+        );
+        this.ApplyConflictRepairUpdate(state, update);
 
-        int resolved = 0;
-        foreach (var conflict in state.Conflicts.Where(conflict => conflict.Status is "Active" or "Recovering"))
-        {
-            conflict.RepairScore = LivingNpcState.ClampScore(conflict.RepairScore + totalRepair);
-            conflict.LastUpdatedTotalDays = currentTotalDays;
-            conflict.LastUpdatedTimeOfDay = currentTimeOfDay;
-            if (apology)
-            {
-                conflict.ApologyCount += 1;
-                conflict.ApologyReceived = true;
-            }
-
-            if (specificRepairTalk)
-            {
-                conflict.SpecificRepairTalkReceived = true;
-            }
-
-            if (conflict.RequiresComplexRepair)
-            {
-                this.RefreshComplexRepairStage(conflict, currentTotalDays);
-                int floor = GetComplexRepairSeverityFloor(conflict);
-                conflict.Severity = LivingNpcState.ClampScore(System.Math.Max(floor, conflict.Severity - totalRepair));
-                this.RefreshComplexRepairStage(conflict, currentTotalDays);
-                if (CanResolveComplexConflict(conflict) && conflict.Severity == 0)
-                {
-                    this.ResolveConflict(state, conflict, currentTotalDays, currentTimeOfDay);
-                    resolved++;
-                }
-                else
-                {
-                    conflict.Status = conflict.RepairStage is "NeedsApology" or "NeedsGesture"
-                        ? "Active"
-                        : "Recovering";
-                }
-
-                continue;
-            }
-
-            conflict.Severity = LivingNpcState.ClampScore(conflict.Severity - totalRepair);
-            if (conflict.Severity == 0)
-            {
-                this.ResolveConflict(state, conflict, currentTotalDays, currentTimeOfDay);
-                resolved++;
-            }
-            else
-            {
-                conflict.Status = GetConflictStatus(conflict.Severity);
-            }
-        }
-
-        if (resolved > 0)
+        if (update.ResolvedCount > 0)
         {
             this.ApplyEmotion(state, "Calm", -state.EmotionIntensity, "an earlier conflict has been repaired");
         }
 
-        return resolved;
+        return update.ResolvedCount;
     }
 
     private void MarkRepairGiftReceived(LivingNpcState state, string giftName)
@@ -2240,16 +2195,7 @@ internal sealed class BehaviorMemory
         int currentTotalDays,
         int currentTimeOfDay)
     {
-        foreach (var conflict in state.Conflicts.Where(conflict =>
-                     conflict.RequiresComplexRepair
-                     && conflict.Status is "Active" or "Recovering"))
-        {
-            conflict.MeaningfulGiftReceived = true;
-            conflict.LastRepairGiftName = giftName;
-            conflict.LastUpdatedTotalDays = currentTotalDays;
-            conflict.LastUpdatedTimeOfDay = currentTimeOfDay;
-            this.RefreshComplexRepairStage(conflict, currentTotalDays);
-        }
+        ConflictRepairService.MarkRepairGiftReceived(state, giftName, currentTotalDays, currentTimeOfDay);
     }
 
     private void DecayEmotionAndConflicts(
@@ -2294,61 +2240,26 @@ internal sealed class BehaviorMemory
         int currentTotalDays,
         int currentTimeOfDay)
     {
-        int adjustedEmotionDailyDecay = emotionalStyle.AdjustEmotionDecay(emotionDailyDecay);
-        int adjustedConflictDailyDecay = emotionalStyle.AdjustConflictDecay(conflictDailyDecay);
-        if (adjustedEmotionDailyDecay > 0 && state.EmotionIntensity > 0)
-        {
-            state.EmotionIntensity = LivingNpcState.MoveToward(state.EmotionIntensity, 0, adjustedEmotionDailyDecay);
-            if (state.EmotionIntensity == 0)
-            {
-                state.CurrentEmotion = "Calm";
-            }
-        }
+        var update = ConflictRepairService.DecayEmotionAndConflicts(
+            state,
+            emotionDailyDecay,
+            conflictDailyDecay,
+            emotionalStyle,
+            currentTotalDays,
+            currentTimeOfDay
+        );
+        this.ApplyConflictRepairUpdate(state, update);
+    }
 
-        if (adjustedConflictDailyDecay <= 0)
+    private void ApplyConflictRepairUpdate(LivingNpcState state, ConflictRepairUpdate update)
+    {
+        if (update.ComplexRepairGrowthAwards <= 0)
         {
             return;
         }
 
-        foreach (var conflict in state.Conflicts.Where(conflict => conflict.Status is "Active" or "Recovering"))
-        {
-            if (conflict.RequiresComplexRepair)
-            {
-                this.RefreshComplexRepairStage(conflict, currentTotalDays);
-                int floor = GetComplexRepairSeverityFloor(conflict);
-                conflict.Severity = System.Math.Max(
-                    floor,
-                    LivingNpcState.MoveToward(conflict.Severity, 0, adjustedConflictDailyDecay)
-                );
-                conflict.LastUpdatedTotalDays = currentTotalDays;
-                conflict.LastUpdatedTimeOfDay = currentTimeOfDay;
-                this.RefreshComplexRepairStage(conflict, currentTotalDays);
-                if (CanResolveComplexConflict(conflict) && conflict.Severity == 0)
-                {
-                    this.ResolveConflict(state, conflict, currentTotalDays, currentTimeOfDay);
-                }
-                else
-                {
-                    conflict.Status = conflict.RepairStage is "NeedsApology" or "NeedsGesture"
-                        ? "Active"
-                        : "Recovering";
-                }
-
-                continue;
-            }
-
-            conflict.Severity = LivingNpcState.MoveToward(conflict.Severity, 0, adjustedConflictDailyDecay);
-            conflict.LastUpdatedTotalDays = currentTotalDays;
-            conflict.LastUpdatedTimeOfDay = currentTimeOfDay;
-            if (conflict.Severity == 0)
-            {
-                this.ResolveConflict(state, conflict, currentTotalDays, currentTimeOfDay);
-            }
-            else
-            {
-                conflict.Status = GetConflictStatus(conflict.Severity);
-            }
-        }
+        this.ApplyRelationshipTrustDelta(state, update.ComplexRepairGrowthAwards * 8);
+        state.Familiarity = LivingNpcState.ClampScore(state.Familiarity + (update.ComplexRepairGrowthAwards * 2));
     }
 
     private void ApplyEmotionForConflict(LivingNpcState state, NpcConflictFact conflict)
@@ -2362,120 +2273,6 @@ internal sealed class BehaviorMemory
             _ => "Uneasy"
         };
         this.ApplyEmotion(state, emotion, conflict.Severity / 2, conflict.Summary);
-    }
-
-    private void ResolveConflict(LivingNpcState state, NpcConflictFact conflict)
-    {
-        this.ResolveConflict(state, conflict, Game1.Date.TotalDays, Game1.timeOfDay);
-    }
-
-    private void ResolveConflict(
-        LivingNpcState state,
-        NpcConflictFact conflict,
-        int currentTotalDays,
-        int currentTimeOfDay)
-    {
-        conflict.Status = "Resolved";
-        conflict.ResolvedTotalDays = currentTotalDays;
-        conflict.ResolvedTimeOfDay = currentTimeOfDay;
-        conflict.RepairStage = "Resolved";
-        if (conflict.RequiresComplexRepair && !conflict.RepairGrowthGranted)
-        {
-            conflict.RepairGrowthGranted = true;
-            this.ApplyRelationshipTrustDelta(state, 8);
-            state.Familiarity = LivingNpcState.ClampScore(state.Familiarity + 2);
-        }
-    }
-
-    private void RefreshComplexRepairStage(NpcConflictFact conflict)
-    {
-        this.RefreshComplexRepairStage(conflict, Game1.Date.TotalDays);
-    }
-
-    private void RefreshComplexRepairStage(NpcConflictFact conflict, int currentTotalDays)
-    {
-        if (!conflict.RequiresComplexRepair)
-        {
-            conflict.RepairStage = conflict.Status == "Resolved" ? "Resolved" : "Simple";
-            return;
-        }
-
-        if (conflict.Status == "Resolved")
-        {
-            conflict.RepairStage = "Resolved";
-            return;
-        }
-
-        if (!conflict.ApologyReceived)
-        {
-            conflict.RepairStage = "NeedsApology";
-            return;
-        }
-
-        if (!conflict.MeaningfulGiftReceived)
-        {
-            conflict.RepairStage = "NeedsGesture";
-            return;
-        }
-
-        if (currentTotalDays < conflict.MinimumRepairTotalDays)
-        {
-            conflict.RepairStage = "NeedsTime";
-            return;
-        }
-
-        if (!conflict.SpecificRepairTalkReceived)
-        {
-            conflict.RepairStage = "NeedsConversation";
-            return;
-        }
-
-        conflict.RepairStage = "ReadyToResolve";
-    }
-
-    private static bool CanResolveComplexConflict(NpcConflictFact conflict)
-    {
-        return !conflict.RequiresComplexRepair
-            || conflict.RepairStage == "ReadyToResolve";
-    }
-
-    private static int GetComplexRepairSeverityFloor(NpcConflictFact conflict)
-    {
-        if (!conflict.RequiresComplexRepair)
-        {
-            return 0;
-        }
-
-        return conflict.RepairStage switch
-        {
-            "NeedsApology" => 45,
-            "NeedsGesture" => 30,
-            "NeedsTime" => 20,
-            "NeedsConversation" => 10,
-            _ => 0
-        };
-    }
-
-    internal static int GetComplexRepairDelayDays(int severity)
-    {
-        return severity >= 80 ? 5 : 3;
-    }
-
-    private static int GetComplexRepairDelayDays(LivingNpcState state, int severity)
-    {
-        var emotionalStyle = EmotionalExpressionStyle.For(state.NpcName, NpcDisposition.ForName(state.NpcName));
-        return emotionalStyle.AdjustComplexRepairDelay(GetComplexRepairDelayDays(severity));
-    }
-
-    private static int GetConflictTrustLoss(int severity)
-    {
-        return severity switch
-        {
-            >= 70 => 18,
-            >= 50 => 12,
-            >= 30 => 8,
-            _ => 4
-        };
     }
 
     private bool StorePlayerPreferenceMemory(LivingNpcState state, ValleyTalkMemoryCandidate candidate)
@@ -3583,16 +3380,6 @@ internal sealed class BehaviorMemory
             "Declined" => 3,
             "Fulfilled" => 4,
             _ => 5
-        };
-    }
-
-    private static string GetConflictStatus(int severity)
-    {
-        return severity switch
-        {
-            <= 0 => "Resolved",
-            < 30 => "Recovering",
-            _ => "Active"
         };
     }
 

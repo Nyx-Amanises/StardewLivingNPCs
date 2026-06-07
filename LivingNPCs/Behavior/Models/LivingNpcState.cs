@@ -756,7 +756,7 @@ internal sealed class LivingNpcState
                 };
                 if (conflict.RequiresComplexRepair && conflict.MinimumRepairTotalDays < 0)
                 {
-                    conflict.MinimumRepairTotalDays = conflict.CreatedTotalDays + BehaviorMemory.GetComplexRepairDelayDays(conflict.PeakSeverity);
+                    conflict.MinimumRepairTotalDays = conflict.CreatedTotalDays + ConflictRepairService.GetComplexRepairDelayDays(conflict.PeakSeverity);
                 }
                 conflict.TimesReinforced = System.Math.Max(0, conflict.TimesReinforced);
                 if (conflict.Status == "Resolved" && conflict.ResolvedTotalDays < 0)

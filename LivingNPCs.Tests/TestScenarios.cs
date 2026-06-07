@@ -83,7 +83,7 @@ internal static class TestScenarios
             LastUpdatedTimeOfDay = 1000,
             RequiresComplexRepair = true,
             RepairStage = "NeedsApology",
-            MinimumRepairTotalDays = Today + BehaviorMemory.GetComplexRepairDelayDays(80),
+            MinimumRepairTotalDays = Today + ConflictRepairService.GetComplexRepairDelayDays(80),
             TimesReinforced = 1
         };
     }
