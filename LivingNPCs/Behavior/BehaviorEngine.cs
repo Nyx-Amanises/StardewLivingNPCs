@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Linq;
 using System.Threading;
 using Microsoft.Xna.Framework;
@@ -21,8 +20,6 @@ internal sealed class BehaviorEngine
     private const string SaveDataKey = "behavior-memory";
     private const string HelpRequestQuestMarkerKey = "LivingNPCs/HelpRequestQuest";
     private const string HelpRequestQuestIdKey = "LivingNPCs/HelpRequestQuestId";
-    private const string HelpRequestRewardMailKeyPrefix = "LivingNPCs.HelpRequestReward.";
-    private const string GiftMailKeyPrefix = "LivingNPCs.GiftMail.";
     private const int SmallGiftMinFriendshipHearts = 2;
     private const int SmallGiftMinFamiliarity = 15;
     private const int MeaningfulGiftMinFriendshipHearts = 5;
@@ -40,6 +37,7 @@ internal sealed class BehaviorEngine
     private readonly AiBehaviorClient aiBehaviorClient;
     private readonly BehaviorDebugCommandHandler debugCommands;
     private readonly DialogueBehaviorInfluenceRuntime dialogueBehaviorInfluences;
+    private readonly BehaviorMailService mailService;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
     private readonly List<PendingAmbientRemark> pendingAmbientRemarks = new();
     private readonly List<PendingWalkTogether> pendingWalks = new();
@@ -60,6 +58,7 @@ internal sealed class BehaviorEngine
         this.planner = new AiBehaviorPlanner(new RuleBasedBehaviorPlanner(config, this.random, this.memory));
         this.aiBehaviorClient = new AiBehaviorClient(config, monitor);
         this.debugCommands = new BehaviorDebugCommandHandler(helper, monitor, config, this.memory, this.ShowFeedback);
+        this.mailService = new BehaviorMailService(helper, this.memory, this.random);
         this.dialogueBehaviorInfluences = new DialogueBehaviorInfluenceRuntime(
             config,
             this.memory,
@@ -92,7 +91,7 @@ internal sealed class BehaviorEngine
         this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
         this.lastConversationMemoryTimeByNpc.Clear();
         this.valleyTalkBridge.TryInitialize();
-        this.TryQueueDueGiftMailsForTomorrow();
+        this.mailService.QueueDueGiftMailsForTomorrow();
         this.helper.GameContent.InvalidateCache("Data/mail");
         this.SyncHelpRequestsToQuestLog();
 
@@ -133,7 +132,7 @@ internal sealed class BehaviorEngine
         this.lastConversationMemoryTimeByNpc.Clear();
         this.nextSpeechBubbleTimeByNpc.Clear();
         this.TryPropagateCommunityImpressions();
-        this.TryQueueDueGiftMailsForTomorrow();
+        this.mailService.QueueDueGiftMailsForTomorrow();
         this.helper.GameContent.InvalidateCache("Data/mail");
         this.SyncHelpRequestsToQuestLog();
     }
@@ -148,23 +147,7 @@ internal sealed class BehaviorEngine
         e.Edit(asset =>
         {
             var data = asset.AsDictionary<string, string>().Data;
-            foreach (var request in this.GetHelpRequestRewardMailRequests())
-            {
-                string key = this.GetHelpRequestRewardMailKey(request);
-                if (!string.IsNullOrWhiteSpace(key))
-                {
-                    data[key] = this.BuildHelpRequestRewardMailText(request);
-                }
-            }
-
-            foreach (var mail in this.GetGiftMailRequests())
-            {
-                string key = this.GetGiftMailKey(mail);
-                if (!string.IsNullOrWhiteSpace(key))
-                {
-                    data[key] = this.BuildGiftMailText(mail);
-                }
-            }
+            this.mailService.ApplyMailData(data);
         });
     }
 
@@ -1156,7 +1139,7 @@ internal sealed class BehaviorEngine
                     selection
                 )
             );
-            if (!this.ScheduleGiftMail(npc, state, selection, "inventory_full", giftReason, dueInDays: 1))
+            if (!this.mailService.ScheduleGiftMail(npc, state, selection, "inventory_full", giftReason, dueInDays: 1))
             {
                 reason = "player inventory is full";
                 return false;
@@ -1176,7 +1159,7 @@ internal sealed class BehaviorEngine
         }
 
         state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
-        RememberAiGiftItem(state, selection.ItemId);
+        BehaviorMailService.RememberAiGiftItem(state, selection.ItemId);
         this.ClearGiftOpportunities(state);
         this.memory.RecordNpcWorldAction(
             npc,
@@ -1283,7 +1266,7 @@ internal sealed class BehaviorEngine
                 $"they tried to give the farmer {gift.DisplayName} after a fulfilled personal help request, but the farmer's inventory was full",
                 selection
             );
-            if (!this.ScheduleGiftMail(npc, state, selection, "inventory_full", giftReason, dueInDays: 1))
+            if (!this.mailService.ScheduleGiftMail(npc, state, selection, "inventory_full", giftReason, dueInDays: 1))
             {
                 return false;
             }
@@ -1304,7 +1287,7 @@ internal sealed class BehaviorEngine
 
         request.RewardGiftGiven = true;
         state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
-        RememberAiGiftItem(state, selection.ItemId);
+        BehaviorMailService.RememberAiGiftItem(state, selection.ItemId);
         this.ClearGiftOpportunities(state);
         this.memory.RecordNpcWorldAction(
             npc,
@@ -1337,20 +1320,9 @@ internal sealed class BehaviorEngine
 
         int amount = System.Math.Clamp(request.RewardMoney <= 0 ? 200 : request.RewardMoney, 200, 10000);
         request.RewardMoney = amount;
-        if (this.ShouldSendHelpRequestMoneyByMail(request))
+        if (this.mailService.ShouldSendHelpRequestMoneyByMail(request))
         {
-            string mailKey = this.GetHelpRequestRewardMailKey(request);
-            request.RewardMoneyByMail = true;
-            request.RewardMoneyMailKey = mailKey;
-            request.RewardMoneyMailTotalDays = Game1.Date.TotalDays + 1;
-            request.RewardMoneyGranted = true;
-
-            if (!Game1.player.mailForTomorrow.Contains(mailKey) && !Game1.player.mailReceived.Contains(mailKey))
-            {
-                Game1.player.mailForTomorrow.Add(mailKey);
-            }
-
-            this.helper.GameContent.InvalidateCache("Data/mail");
+            this.mailService.ScheduleHelpRequestMoneyRewardMail(request);
             this.memory.RecordNpcWorldAction(
                 npc,
                 "ScheduledHelpRequestMoneyReward",
@@ -1373,147 +1345,6 @@ internal sealed class BehaviorEngine
             this.config.MaxMemoryEntriesPerNpc
         );
         this.ShowFeedbackAfterDialogue($"LivingNPCs：系统发放求助奖励 {amount}g。");
-    }
-
-    private bool ShouldSendHelpRequestMoneyByMail(NpcHelpRequestFact request)
-    {
-        int chance = request.RewardMoney switch
-        {
-            >= 5000 => 60,
-            >= 1000 => 45,
-            _ => 25
-        };
-
-        unchecked
-        {
-            string seed = $"{request.QuestLogId}:{request.Summary}:{request.RequestedItemId}:{request.RewardMoney}";
-            int hash = 17;
-            foreach (char character in seed)
-            {
-                hash = (hash * 31) + character;
-            }
-
-            return System.Math.Abs(hash % 100) < chance;
-        }
-    }
-
-    private IEnumerable<NpcHelpRequestFact> GetHelpRequestRewardMailRequests()
-    {
-        return this.memory.GetTrackedStates()
-            .SelectMany(state => state.HelpRequests)
-            .Where(request => request.RewardMoneyByMail
-                && request.RewardMoney > 0
-                && !string.IsNullOrWhiteSpace(request.RewardMoneyMailKey));
-    }
-
-    private string GetHelpRequestRewardMailKey(NpcHelpRequestFact request)
-    {
-        if (!string.IsNullOrWhiteSpace(request.RewardMoneyMailKey))
-        {
-            return request.RewardMoneyMailKey.Trim();
-        }
-
-        string id = string.IsNullOrWhiteSpace(request.QuestLogId)
-            ? SanitizeFileName($"{request.NpcDisplayName}-{request.Summary}")
-            : request.QuestLogId.Trim();
-        return $"{HelpRequestRewardMailKeyPrefix}{id}";
-    }
-
-    private string BuildHelpRequestRewardMailText(NpcHelpRequestFact request)
-    {
-        int amount = System.Math.Clamp(request.RewardMoney <= 0 ? 200 : request.RewardMoney, 200, 10000);
-        string npcName = string.IsNullOrWhiteSpace(request.NpcDisplayName)
-            ? "镇上的居民"
-            : request.NpcDisplayName.Trim();
-        string itemLabel = string.IsNullOrWhiteSpace(request.RequestedItemLabel)
-            ? "那件东西"
-            : request.RequestedItemLabel.Trim();
-
-        return $"@，谢谢你之前帮{npcName}带来{itemLabel}。这份谢礼由镇上的互助基金代为发放，请收下。^^    - LivingNPCs%money {amount} %%[#]互助谢礼";
-    }
-
-    private IEnumerable<NpcGiftMailFact> GetGiftMailRequests()
-    {
-        return this.memory.GetTrackedStates()
-            .SelectMany(state => state.GiftMails ?? new List<NpcGiftMailFact>())
-            .Where(mail => !string.IsNullOrWhiteSpace(mail.MailKey)
-                && !string.IsNullOrWhiteSpace(mail.ItemId)
-                && !string.IsNullOrWhiteSpace(mail.ItemLabel));
-    }
-
-    private string GetGiftMailKey(NpcGiftMailFact mail)
-    {
-        return string.IsNullOrWhiteSpace(mail.MailKey)
-            ? $"{GiftMailKeyPrefix}{System.Guid.NewGuid():N}"
-            : mail.MailKey.Trim();
-    }
-
-    private string BuildGiftMailText(NpcGiftMailFact mail)
-    {
-        string npcName = string.IsNullOrWhiteSpace(mail.NpcDisplayName)
-            ? "镇上的居民"
-            : mail.NpcDisplayName.Trim();
-        string itemLabel = string.IsNullOrWhiteSpace(mail.ItemLabel)
-            ? "这件小东西"
-            : mail.ItemLabel.Trim();
-        string sourceGift = string.IsNullOrWhiteSpace(mail.SourceGiftName)
-            ? "你送来的礼物"
-            : mail.SourceGiftName.Trim();
-        string body = mail.Motive switch
-        {
-            "reciprocal" => $"@，那天你送我的{sourceGift}，我一直记着。这个{itemLabel}算是一点回礼，希望你会喜欢。",
-            "inventory_full" => $"@，刚才想把{itemLabel}交给你，不过你的背包好像满了。我把它放进信里寄过来了，记得收下。",
-            "meaningful" => $"@，有些话当面反而不好说清楚。这个{itemLabel}想送给你，希望它能把我的心意带到。",
-            "thanks" => $"@，谢谢你之前帮的忙。这个{itemLabel}是我的一点谢意，请收下。",
-            "preference" => $"@，我记得你似乎会喜欢这样的东西，所以把{itemLabel}寄给你。希望它来得正好。",
-            _ => $"@，今天想起你，觉得这个{itemLabel}也许会派上用场。请收下吧。"
-        };
-        string title = mail.Motive switch
-        {
-            "reciprocal" => $"{npcName}的回礼",
-            "inventory_full" => $"{npcName}寄来的礼物",
-            "meaningful" => $"{npcName}的心意",
-            "thanks" => $"{npcName}的谢礼",
-            _ => $"{npcName}的礼物"
-        };
-        string itemId = GetMailObjectId(mail.ItemId);
-        return $"{body}^^    - {npcName}%item object {itemId} 1 %%[#]{title}";
-    }
-
-    private static string GetMailObjectId(string itemId)
-    {
-        string trimmed = itemId.Trim();
-        if (trimmed.StartsWith("(O)", StringComparison.OrdinalIgnoreCase))
-        {
-            trimmed = trimmed[3..];
-        }
-
-        return trimmed;
-    }
-
-    private void TryQueueDueGiftMailsForTomorrow()
-    {
-        if (!Context.IsWorldReady || Game1.player == null)
-        {
-            return;
-        }
-
-        foreach (var state in this.memory.GetTrackedStates())
-        {
-            foreach (var mail in state.GiftMails.Where(mail =>
-                         !mail.QueuedForDelivery
-                         && mail.DueTotalDays <= Game1.Date.TotalDays + 1))
-            {
-                string key = this.GetGiftMailKey(mail);
-                mail.MailKey = key;
-                if (!Game1.player.mailForTomorrow.Contains(key) && !Game1.player.mailReceived.Contains(key))
-                {
-                    Game1.player.mailForTomorrow.Add(key);
-                }
-
-                mail.QueuedForDelivery = true;
-            }
-        }
     }
 
     private bool TryGiveMoney(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
@@ -1612,7 +1443,7 @@ internal sealed class BehaviorEngine
                     selection
                 )
             );
-            if (!this.ScheduleGiftMail(npc, state, selection, "inventory_full", giftReason, dueInDays: 1))
+            if (!this.mailService.ScheduleGiftMail(npc, state, selection, "inventory_full", giftReason, dueInDays: 1))
             {
                 reason = "player inventory is full";
                 return false;
@@ -1632,7 +1463,7 @@ internal sealed class BehaviorEngine
         }
 
         state.LastAiMeaningfulGiftTotalDays = Game1.Date.TotalDays;
-        RememberAiGiftItem(state, selection.ItemId);
+        BehaviorMailService.RememberAiGiftItem(state, selection.ItemId);
         this.ClearGiftOpportunities(state);
         this.memory.RecordNpcWorldAction(
             npc,
@@ -2900,78 +2731,6 @@ internal sealed class BehaviorEngine
         state.PendingReciprocalGiftReason = string.Empty;
     }
 
-    private bool HasPendingGiftMail(LivingNpcState state, string motive)
-    {
-        return state.GiftMails.Any(mail =>
-            mail.DueTotalDays >= Game1.Date.TotalDays
-            && string.Equals(mail.Motive, motive, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private static void RememberAiGiftItem(LivingNpcState state, string itemId)
-    {
-        if (string.IsNullOrWhiteSpace(itemId))
-        {
-            return;
-        }
-
-        state.RecentAiGiftItemIds ??= new List<string>();
-        string normalized = itemId.Trim();
-        state.RecentAiGiftItemIds.RemoveAll(existing => string.Equals(existing, normalized, StringComparison.OrdinalIgnoreCase));
-        state.RecentAiGiftItemIds.Insert(0, normalized);
-        if (state.RecentAiGiftItemIds.Count > 3)
-        {
-            state.RecentAiGiftItemIds.RemoveRange(3, state.RecentAiGiftItemIds.Count - 3);
-        }
-    }
-
-    private bool ScheduleGiftMail(
-        NPC npc,
-        LivingNpcState state,
-        GiftSelection selection,
-        string motive,
-        string reason,
-        int dueInDays,
-        string sourceGiftName = ""
-    )
-    {
-        if (Game1.player == null)
-        {
-            return false;
-        }
-
-        state.GiftMails ??= new List<NpcGiftMailFact>();
-        string itemLabel = selection.DebugName;
-        try
-        {
-            SObject preview = ItemRegistry.Create<SObject>(selection.ItemId);
-            itemLabel = string.IsNullOrWhiteSpace(preview.DisplayName) ? itemLabel : preview.DisplayName;
-        }
-        catch
-        {
-            // Keep the selector's debug name if the item preview cannot be created yet.
-        }
-
-        var mail = new NpcGiftMailFact
-        {
-            MailKey = $"{GiftMailKeyPrefix}{SanitizeFileName(npc.Name)}.{Game1.Date.TotalDays}.{Game1.timeOfDay}.{this.random.Next(100000):D5}",
-            NpcDisplayName = npc.displayName,
-            ItemId = selection.ItemId,
-            ItemLabel = itemLabel,
-            Motive = motive,
-            Reason = reason,
-            SourceGiftName = sourceGiftName,
-            Tier = selection.Tier == GiftTier.Meaningful ? "meaningful" : "small",
-            CreatedTotalDays = Game1.Date.TotalDays,
-            CreatedTimeOfDay = Game1.timeOfDay,
-            DueTotalDays = Game1.Date.TotalDays + System.Math.Max(1, dueInDays)
-        };
-        state.GiftMails.Add(mail);
-        RememberAiGiftItem(state, selection.ItemId);
-        this.TryQueueDueGiftMailsForTomorrow();
-        this.helper.GameContent.InvalidateCache("Data/mail");
-        return true;
-    }
-
     private string DetermineGiftMotive(ValleyTalkWorldActionRequest action, GiftSelection selection, GiftTier tier, string fallback = "daily")
     {
         string reason = action.Reason ?? string.Empty;
@@ -3448,7 +3207,7 @@ internal sealed class BehaviorEngine
             || !this.IsEligibleForSmallGift(npc, state)
             || state.HighestUnresolvedConflictSeverity >= 30
             || gift.TasteScore is 4 or 6
-            || this.HasPendingGiftMail(state, "reciprocal")
+            || this.mailService.HasPendingGiftMail(state, "reciprocal")
             || state.PendingReciprocalGiftDueTotalDays >= Game1.Date.TotalDays)
         {
             return;
@@ -3494,7 +3253,7 @@ internal sealed class BehaviorEngine
                 $"they planned a delayed return gift because the farmer recently gave {npc.displayName} {gift.ItemName}, a {gift.TastePromptLabel}",
                 selection
             );
-            if (this.ScheduleGiftMail(npc, state, selection, "reciprocal", mailReason, delayDays, gift.ItemName))
+            if (this.mailService.ScheduleGiftMail(npc, state, selection, "reciprocal", mailReason, delayDays, gift.ItemName))
             {
                 if (reciprocalTier == GiftTier.Meaningful)
                 {
@@ -4554,17 +4313,6 @@ internal sealed class BehaviorEngine
         return !location.characters.Any(npc => npc != ignoredNpc && npc.TilePoint == tile);
     }
 
-    private static string SanitizeFileName(string value)
-    {
-        string safe = string.IsNullOrWhiteSpace(value) ? "unknown" : value.Trim();
-        foreach (char c in Path.GetInvalidFileNameChars())
-        {
-            safe = safe.Replace(c, '_');
-        }
-
-        return safe;
-    }
-
     private void SyncHelpRequestsToQuestLog()
     {
         if (!Context.IsWorldReady || Game1.player?.questLog == null)
@@ -4727,7 +4475,7 @@ internal sealed class BehaviorEngine
     private bool WillSendHelpRequestMoneyByMail(NpcHelpRequestFact request)
     {
         return request.RewardMoneyByMail
-            || (!request.RewardMoneyGranted && this.ShouldSendHelpRequestMoneyByMail(request));
+            || (!request.RewardMoneyGranted && this.mailService.ShouldSendHelpRequestMoneyByMail(request));
     }
 
     private void ShowFeedback(string message)
