@@ -30,6 +30,7 @@ internal sealed class BehaviorEngine
     private readonly DialogueBehaviorInfluenceRuntime dialogueBehaviorInfluences;
     private readonly DelayedTravelActionRuntime delayedTravelActions;
     private readonly BehaviorMailService mailService;
+    private readonly GiftOpportunityService giftOpportunities;
     private readonly GiftActionRuntime giftActions;
     private readonly DirectWorldActionRuntime directWorldActions;
     private readonly WalkTogetherRuntime walkTogether;
@@ -54,6 +55,13 @@ internal sealed class BehaviorEngine
         this.communityRipples = new CommunityRippleRuntime(config, monitor, this.memory, this.random);
         this.debugCommands = new BehaviorDebugCommandHandler(helper, monitor, config, this.memory, this.feedback.Show);
         this.mailService = new BehaviorMailService(helper, this.memory, this.random);
+        this.giftOpportunities = new GiftOpportunityService(
+            config,
+            this.memory,
+            this.giftSelector,
+            this.mailService,
+            this.random
+        );
         this.giftActions = new GiftActionRuntime(
             config,
             monitor,
@@ -474,7 +482,7 @@ internal sealed class BehaviorEngine
             taste
         );
         LivingNpcState state = this.memory.GetState(npc) ?? this.memory.UpdateStateForGift(npc, gift);
-        this.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
+        this.giftOpportunities.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
         return this.BuildGiftOpportunityPromptContext(npc);
     }
 
@@ -1606,152 +1614,6 @@ internal sealed class BehaviorEngine
         }
     }
 
-    private void TryPrepareDailyGiftOpportunity(NPC npc, LivingNpcState state)
-    {
-        if (!this.config.EnableAiWorldActions
-            || !this.config.AllowAiSmallGifts
-            || GiftActionRules.HasAiGiftToday(state)
-            || state.HighestUnresolvedConflictSeverity >= 30
-            || state.DailyGiftOpportunityTotalDays == Game1.Date.TotalDays)
-        {
-            return;
-        }
-
-        if (WorldContext.For(npc).FriendshipHearts < GiftActionRules.MeaningfulGiftMinFriendshipHearts)
-        {
-            return;
-        }
-
-        int minChance = System.Math.Clamp(
-            System.Math.Min(this.config.AiDailyGiftChanceMinPercent, this.config.AiDailyGiftChanceMaxPercent),
-            0,
-            100
-        );
-        int maxChance = System.Math.Clamp(
-            System.Math.Max(this.config.AiDailyGiftChanceMinPercent, this.config.AiDailyGiftChanceMaxPercent),
-            0,
-            100
-        );
-        if (state.LastDailyGiftOpportunityRollTotalDays == Game1.Date.TotalDays)
-        {
-            return;
-        }
-
-        state.LastDailyGiftOpportunityRollTotalDays = Game1.Date.TotalDays;
-        int chance = this.random.Next(minChance, maxChance + 1);
-        if (this.random.Next(100) >= chance)
-        {
-            return;
-        }
-
-        state.DailyGiftOpportunityTotalDays = Game1.Date.TotalDays;
-        state.DailyGiftOpportunityChancePercent = chance;
-        state.DailyGiftOpportunityReason = $"{npc.displayName} is at {WorldContext.For(npc).FriendshipHearts} hearts and may naturally offer a small everyday gift during this conversation";
-    }
-
-    private bool ShouldUseMeaningfulReciprocalGift(NPC npc, LivingNpcState state, GiftMemoryDetails gift)
-    {
-        if (gift.TasteScore != 0
-            || !this.config.AllowAiMeaningfulGifts
-            || !GiftActionRules.IsEligibleForMeaningfulGift(npc, out _))
-        {
-            return false;
-        }
-
-        int daysSinceLastMeaningfulGift = state.LastAiMeaningfulGiftTotalDays < 0
-            ? int.MaxValue
-            : Game1.Date.TotalDays - state.LastAiMeaningfulGiftTotalDays;
-        int friendshipHearts = WorldContext.For(npc).FriendshipHearts;
-        bool bypassCooldown = friendshipHearts >= GiftActionRules.MeaningfulGiftNoCooldownFriendshipHearts;
-        if (!bypassCooldown && daysSinceLastMeaningfulGift < this.config.AiMeaningfulGiftCooldownDays)
-        {
-            return false;
-        }
-
-        return this.random.Next(100) < 25;
-    }
-
-    private void TryScheduleReciprocalGiftOpportunity(NPC npc, LivingNpcState state, GiftMemoryDetails gift)
-    {
-        if (!this.config.EnableAiWorldActions
-            || !this.config.AllowAiSmallGifts
-            || !GiftActionRules.IsEligibleForSmallGift(npc, state)
-            || state.HighestUnresolvedConflictSeverity >= 30
-            || gift.TasteScore is 4 or 6
-            || this.mailService.HasPendingGiftMail(state, "reciprocal")
-            || state.PendingReciprocalGiftDueTotalDays >= Game1.Date.TotalDays)
-        {
-            return;
-        }
-
-        if (state.PendingReciprocalGiftDueTotalDays >= Game1.Date.TotalDays)
-        {
-            return;
-        }
-
-        int chance = gift.TasteScore switch
-        {
-            0 => 75,
-            2 => 45,
-            8 => 10,
-            _ => 0
-        };
-        if (chance <= 0 || this.random.Next(100) >= chance)
-        {
-            return;
-        }
-
-        int delayDays = gift.TasteScore switch
-        {
-            0 => this.random.Next(0, 3),
-            2 => this.random.Next(0, 4),
-            _ => this.random.Next(1, 4)
-        };
-        if (delayDays == 0 && GiftActionRules.HasAiGiftToday(state))
-        {
-            delayDays = 1;
-        }
-
-        if (delayDays > 0)
-        {
-            GiftTier reciprocalTier = this.ShouldUseMeaningfulReciprocalGift(npc, state, gift)
-                ? GiftTier.Meaningful
-                : GiftTier.Small;
-            GiftSelection selection = reciprocalTier == GiftTier.Meaningful
-                ? this.giftSelector.ChooseMeaningful(npc, state, gift.ItemName, gift.TastePromptLabel)
-                : this.giftSelector.Choose(npc, state, gift.ItemName, gift.TastePromptLabel);
-            string mailReason = GiftActionRules.BuildGiftSelectionReason(
-                $"they planned a delayed return gift because the farmer recently gave {npc.displayName} {gift.ItemName}, a {gift.TastePromptLabel}",
-                selection
-            );
-            if (this.mailService.ScheduleGiftMail(npc, state, selection, "reciprocal", mailReason, delayDays, gift.ItemName))
-            {
-                if (reciprocalTier == GiftTier.Meaningful)
-                {
-                    state.LastAiMeaningfulGiftTotalDays = Game1.Date.TotalDays;
-                }
-                else
-                {
-                    state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
-                }
-
-                GiftActionRules.ClearGiftOpportunities(state);
-                this.memory.RecordNpcWorldAction(
-                    npc,
-                    "ScheduledReciprocalGiftMail",
-                    mailReason,
-                    this.config.MaxMemoryEntriesPerNpc
-                );
-            }
-
-            return;
-        }
-
-        state.PendingReciprocalGiftDueTotalDays = Game1.Date.TotalDays + delayDays;
-        state.PendingReciprocalGiftSourceGiftName = gift.ItemName;
-        state.PendingReciprocalGiftReason = $"the farmer recently gave {npc.displayName} {gift.ItemName}, a {gift.TastePromptLabel}; a small return gift would feel reciprocal";
-    }
-
     private void TryRecordConversationStart(ButtonPressedEventArgs e)
     {
         if (!this.config.EnableConversationMemory || !e.Button.IsActionButton())
@@ -1787,7 +1649,7 @@ internal sealed class BehaviorEngine
             if (this.config.EnableNpcState)
             {
                 LivingNpcState state = this.memory.UpdateStateForGift(npc, gift);
-                this.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
+                this.giftOpportunities.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
             }
 
             if (this.config.EnableHelpRequests)
@@ -1824,7 +1686,7 @@ internal sealed class BehaviorEngine
         if (this.config.EnableNpcState)
         {
             LivingNpcState state = this.memory.UpdateStateForConversationStart(npc);
-            this.TryPrepareDailyGiftOpportunity(npc, state);
+            this.giftOpportunities.TryPrepareDailyGiftOpportunity(npc, state);
             this.communityRipples.TrySpreadConversationSocialRipple(npc, state);
         }
 
