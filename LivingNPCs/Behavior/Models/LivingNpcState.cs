@@ -556,12 +556,12 @@ internal sealed class LivingNpcState
         this.PlayerPreferenceMemories ??= new List<PlayerPreferenceFact>();
         this.PlayerPreferenceMemories = this.PlayerPreferenceMemories
             .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
-            .Select(BehaviorMemory.NormalizePlayerPreferenceMemoryForStore)
+            .Select(PlayerPreferenceMemoryStore.NormalizeForStore)
             .Where(memory => memory.PreferenceKind != "none")
-            .OrderByDescending(BehaviorMemory.GetPlayerPreferenceRetentionScore)
+            .OrderByDescending(PlayerPreferenceMemoryStore.GetRetentionScore)
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
-            .Take(BehaviorMemory.MaxPlayerPreferenceMemoriesPerNpc)
+            .Take(PlayerPreferenceMemoryStore.MaxMemoriesPerNpc)
             .ToList();
         this.CommunityImpressions ??= new List<CommunityImpressionFact>();
         this.CommunityImpressions = this.CommunityImpressions

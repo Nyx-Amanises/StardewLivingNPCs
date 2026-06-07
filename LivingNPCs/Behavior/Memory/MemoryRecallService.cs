@@ -29,7 +29,7 @@ internal static class MemoryRecallService
             .ToList();
         var playerPreferences = state.PlayerPreferenceMemories
             .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
-            .Select(BehaviorMemory.NormalizePlayerPreferenceMemoryForStore)
+            .Select(PlayerPreferenceMemoryStore.NormalizeForStore)
             .Select(memory => ScorePlayerPreferenceMemory(memory, context, currentTotalDays))
             .Where(selection => selection.Score >= 45)
             .OrderByDescending(selection => selection.Score)

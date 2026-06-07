@@ -7,7 +7,6 @@ namespace LivingNPCs.Behavior;
 
 internal sealed class BehaviorMemory
 {
-    internal const int MaxPlayerPreferenceMemoriesPerNpc = 24;
     internal const int MaxDialogueBehaviorInfluencesPerNpc = 12;
     internal const int MaxCommunityImpressionsPerNpc = 16;
 
@@ -1473,22 +1472,7 @@ internal sealed class BehaviorMemory
     private void RefreshMemoryStores(LivingNpcState state)
     {
         LongTermMemoryStore.Refresh(state, Game1.Date.TotalDays);
-
-        state.PlayerPreferenceMemories ??= new List<PlayerPreferenceFact>();
-        state.PlayerPreferenceMemories = state.PlayerPreferenceMemories
-            .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
-            .Select(NormalizePlayerPreferenceMemoryForStore)
-            .Where(memory => memory.PreferenceKind != "none"
-                && !string.IsNullOrWhiteSpace(BuildPlayerPreferenceKey(memory.PreferenceKind, memory.Subject, memory.Summary)))
-            .GroupBy(
-                memory => BuildPlayerPreferenceKey(memory.PreferenceKind, memory.Subject, memory.Summary),
-                System.StringComparer.OrdinalIgnoreCase)
-            .Select(MergePlayerPreferenceGroup)
-            .OrderByDescending(GetPlayerPreferenceRetentionScore)
-            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
-            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
-            .Take(MaxPlayerPreferenceMemoriesPerNpc)
-            .ToList();
+        PlayerPreferenceMemoryStore.Refresh(state, Game1.Date.TotalDays);
 
         state.CommunityImpressions ??= new List<CommunityImpressionFact>();
         state.CommunityImpressions = state.CommunityImpressions
@@ -1506,24 +1490,6 @@ internal sealed class BehaviorMemory
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
             .Take(MaxCommunityImpressionsPerNpc)
             .ToList();
-    }
-
-    internal static PlayerPreferenceFact NormalizePlayerPreferenceMemoryForStore(PlayerPreferenceFact memory)
-    {
-        memory.PreferenceKind = NormalizePlayerPreferenceKind(memory.PreferenceKind);
-        memory.Subject = memory.Subject?.Trim() ?? string.Empty;
-        memory.Summary = memory.Summary.Trim();
-        memory.Tags = NormalizeMemoryTags(memory.Tags, memory.Subject, memory.Summary);
-        memory.Importance = System.Math.Clamp(memory.Importance, 0, 100);
-        memory.TimesReinforced = System.Math.Max(0, memory.TimesReinforced);
-        memory.RecallCount = System.Math.Max(0, memory.RecallCount);
-        if (memory.LastUpdatedTotalDays < 0)
-        {
-            memory.LastUpdatedTotalDays = memory.CreatedTotalDays;
-            memory.LastUpdatedTimeOfDay = memory.CreatedTimeOfDay;
-        }
-
-        return memory;
     }
 
     internal static CommunityImpressionFact NormalizeCommunityImpressionForStore(CommunityImpressionFact memory)
@@ -1562,57 +1528,6 @@ internal sealed class BehaviorMemory
         }
 
         return memory;
-    }
-
-    private static PlayerPreferenceFact MergePlayerPreferenceGroup(IEnumerable<PlayerPreferenceFact> group)
-    {
-        var memories = group
-            .OrderByDescending(GetPlayerPreferenceRetentionScore)
-            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
-            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
-            .ToList();
-        var primary = memories[0];
-        foreach (var memory in memories.Skip(1))
-        {
-            if (string.IsNullOrWhiteSpace(primary.Subject) && !string.IsNullOrWhiteSpace(memory.Subject))
-            {
-                primary.Subject = memory.Subject;
-            }
-
-            if (memory.Importance > primary.Importance || memory.Summary.Length > primary.Summary.Length)
-            {
-                primary.Summary = memory.Summary;
-            }
-
-            primary.Importance = System.Math.Max(primary.Importance, memory.Importance);
-            primary.Tags = NormalizeMemoryTags(
-                primary.Tags.Concat(memory.Tags),
-                primary.Subject,
-                primary.Summary,
-                memory.Subject,
-                memory.Summary);
-            primary.TimesReinforced += memory.TimesReinforced;
-            primary.RecallCount += memory.RecallCount;
-            if (IsOlderCreatedAt(memory.CreatedTotalDays, primary.CreatedTotalDays))
-            {
-                primary.CreatedTotalDays = memory.CreatedTotalDays;
-                primary.CreatedTimeOfDay = memory.CreatedTimeOfDay;
-            }
-
-            if (IsNewerAt(memory.LastUpdatedTotalDays, memory.LastUpdatedTimeOfDay, primary.LastUpdatedTotalDays, primary.LastUpdatedTimeOfDay))
-            {
-                primary.LastUpdatedTotalDays = memory.LastUpdatedTotalDays;
-                primary.LastUpdatedTimeOfDay = memory.LastUpdatedTimeOfDay;
-            }
-
-            if (IsNewerAt(memory.LastRecalledTotalDays, memory.LastRecalledTimeOfDay, primary.LastRecalledTotalDays, primary.LastRecalledTimeOfDay))
-            {
-                primary.LastRecalledTotalDays = memory.LastRecalledTotalDays;
-                primary.LastRecalledTimeOfDay = memory.LastRecalledTimeOfDay;
-            }
-        }
-
-        return NormalizePlayerPreferenceMemoryForStore(primary);
     }
 
     private static CommunityImpressionFact MergeCommunityImpressionGroup(IEnumerable<CommunityImpressionFact> group)
@@ -1700,33 +1615,6 @@ internal sealed class BehaviorMemory
     {
         return candidateTotalDays > currentTotalDays
             || (candidateTotalDays == currentTotalDays && candidateTimeOfDay > currentTimeOfDay);
-    }
-
-    internal static int GetPlayerPreferenceRetentionScore(PlayerPreferenceFact memory)
-    {
-        int score = memory.Importance;
-        score += System.Math.Min(24, memory.TimesReinforced * 4);
-        score += System.Math.Min(12, memory.RecallCount);
-        score += memory.PreferenceKind switch
-        {
-            "goal" => 14,
-            "value" => 12,
-            "habit" => 10,
-            "liked_item_category" => 8,
-            "disliked_item" => 8,
-            _ => 0
-        };
-        score += GetMemoryAge(memory.LastUpdatedTotalDays) switch
-        {
-            0 => 12,
-            1 => 9,
-            <= 7 => 6,
-            <= 28 => 3,
-            >= 112 => -12,
-            >= 56 => -6,
-            _ => 0
-        };
-        return score;
     }
 
     internal static int GetCommunityImpressionRetentionScore(CommunityImpressionFact memory)
@@ -2170,48 +2058,7 @@ internal sealed class BehaviorMemory
 
     private bool StorePlayerPreferenceMemory(LivingNpcState state, ValleyTalkMemoryCandidate candidate)
     {
-        string normalizedKey = NormalizePlayerPreferenceKey(candidate);
-        if (string.IsNullOrWhiteSpace(normalizedKey))
-        {
-            return false;
-        }
-
-        var existing = state.PlayerPreferenceMemories.FirstOrDefault(memory =>
-            BuildPlayerPreferenceKey(memory.PreferenceKind, memory.Subject, memory.Summary) == normalizedKey);
-        if (existing != null)
-        {
-            existing.PreferenceKind = NormalizePlayerPreferenceKind(candidate.PlayerPreferenceKind);
-            existing.Subject = candidate.Subject.Trim();
-            existing.Summary = candidate.Summary.Trim();
-            existing.Importance = System.Math.Max(existing.Importance, candidate.Importance);
-            existing.Tags = NormalizeMemoryTags(existing.Tags.Concat(candidate.Tags), existing.Subject, existing.Summary);
-            existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
-            existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
-            existing.TimesReinforced += 1;
-            return true;
-        }
-
-        state.PlayerPreferenceMemories.Add(new PlayerPreferenceFact
-        {
-            PreferenceKind = NormalizePlayerPreferenceKind(candidate.PlayerPreferenceKind),
-            Subject = candidate.Subject.Trim(),
-            Summary = candidate.Summary.Trim(),
-            Tags = NormalizeMemoryTags(candidate.Tags, candidate.Subject, candidate.Summary),
-            Importance = candidate.Importance,
-            CreatedTotalDays = Game1.Date.TotalDays,
-            CreatedTimeOfDay = Game1.timeOfDay,
-            LastUpdatedTotalDays = Game1.Date.TotalDays,
-            LastUpdatedTimeOfDay = Game1.timeOfDay,
-            TimesReinforced = 1
-        });
-
-        state.PlayerPreferenceMemories = state.PlayerPreferenceMemories
-            .OrderByDescending(GetPlayerPreferenceRetentionScore)
-            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
-            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
-            .Take(MaxPlayerPreferenceMemoriesPerNpc)
-            .ToList();
-        return true;
+        return PlayerPreferenceMemoryStore.Store(state, candidate, Game1.Date.TotalDays, Game1.timeOfDay);
     }
 
     private bool StoreDialogueBehaviorInfluence(
@@ -3010,11 +2857,6 @@ internal sealed class BehaviorMemory
         state.FarmerNicknameTimeOfDay = Game1.timeOfDay;
     }
 
-    internal static string NormalizePlayerPreferenceKind(string kind)
-    {
-        return BehaviorValueNormalizer.NormalizePlayerPreferenceKind(kind);
-    }
-
     internal static string NormalizeCommunityImpressionKind(string kind)
     {
         return BehaviorValueNormalizer.NormalizeCommunityImpressionKind(kind);
@@ -3168,24 +3010,9 @@ internal sealed class BehaviorMemory
         return BehaviorValueNormalizer.NormalizeMemorySummary(summary);
     }
 
-    internal static List<string> NormalizePlayerPreferenceTags(IEnumerable<string>? tags)
-    {
-        return BehaviorValueNormalizer.NormalizePlayerPreferenceTags(tags);
-    }
-
     private static List<string> NormalizeMemoryTags(IEnumerable<string>? tags, params string?[] texts)
     {
         return BehaviorValueNormalizer.NormalizeMemoryTags(tags, texts);
-    }
-
-    private static string NormalizePlayerPreferenceKey(ValleyTalkMemoryCandidate candidate)
-    {
-        return BehaviorValueNormalizer.NormalizePlayerPreferenceKey(candidate);
-    }
-
-    private static string BuildPlayerPreferenceKey(string kind, string subject, string summary)
-    {
-        return BehaviorValueNormalizer.BuildPlayerPreferenceKey(kind, subject, summary);
     }
 
     private static string BuildCommunityImpressionKey(string subjectNpcName, string kind, string summary)
