@@ -6,9 +6,7 @@ using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
-using StardewValley.Locations;
 using StardewValley.Pathfinding;
-using StardewValley.TerrainFeatures;
 using SObject = StardewValley.Object;
 
 namespace LivingNPCs.Behavior;
@@ -33,6 +31,7 @@ internal sealed class BehaviorEngine
     private readonly DelayedTravelActionRuntime delayedTravelActions;
     private readonly BehaviorMailService mailService;
     private readonly GiftActionRuntime giftActions;
+    private readonly DirectWorldActionRuntime directWorldActions;
     private readonly HelpRequestRewardService helpRequestRewards;
     private readonly HelpRequestQuestLogService helpRequestQuestLog;
     private readonly HelpRequestRuntime helpRequests;
@@ -61,6 +60,12 @@ internal sealed class BehaviorEngine
             this.memory,
             this.giftSelector,
             this.mailService,
+            this.feedback,
+            this.CanUseWorldAction
+        );
+        this.directWorldActions = new DirectWorldActionRuntime(
+            config,
+            this.memory,
             this.feedback,
             this.CanUseWorldAction
         );
@@ -485,11 +490,11 @@ internal sealed class BehaviorEngine
                 "give_small_gift" => this.giftActions.TryGiveSmallGift(npc, action, playerText, npcResponse, out _),
                 "give_meaningful_gift" => this.giftActions.TryGiveMeaningfulGift(npc, action, playerText, npcResponse, out _),
                 "give_money" => this.giftActions.TryGiveMoney(npc, action, out _),
-                "water_nearby_crops" => this.TryWaterNearbyCrops(npc, action, out _),
+                "water_nearby_crops" => this.directWorldActions.TryWaterNearbyCrops(npc, action, out _),
                 "walk_together" => this.TryStartWalkTogether(npc, action, out _),
                 "escort_to_location" => this.TryStartEscortToLocation(npc, action, out _),
-                "festival_interaction" => this.TryFestivalInteraction(npc, action, out _),
-                "assist_quest" => this.TryAssistQuest(npc, action, out _),
+                "festival_interaction" => this.directWorldActions.TryFestivalInteraction(npc, action, out _),
+                "assist_quest" => this.directWorldActions.TryAssistQuest(npc, action, out _),
                 _ => false
             };
 
@@ -605,62 +610,6 @@ internal sealed class BehaviorEngine
             );
         }
 
-        return true;
-    }
-
-    private bool TryWaterNearbyCrops(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
-    {
-        reason = string.Empty;
-        if (!this.CanUseWorldAction(npc, "farm_help", requireFriendly: true, out reason))
-        {
-            return false;
-        }
-
-        var state = this.memory.GetState(npc);
-        if (!this.config.AllowAiFarmHelp || state == null || state.LastAiFarmHelpTotalDays == Game1.Date.TotalDays)
-        {
-            reason = "farm help is disabled or already used today";
-            return false;
-        }
-
-        if (Game1.currentLocation is not Farm farm)
-        {
-            reason = "the player is not on the farm";
-            return false;
-        }
-
-        int requestedTiles = action.TileCount <= 0 ? 6 : action.TileCount;
-        int maxTiles = System.Math.Clamp(requestedTiles, 1, this.config.MaxAiWateredTilesPerAction);
-        var nearbyTiles = farm.terrainFeatures.Pairs
-            .Where(pair => pair.Value is HoeDirt dirt && dirt.crop != null && dirt.state.Value != 1)
-            .OrderBy(pair => Vector2.Distance(pair.Key, Game1.player.Tile))
-            .Take(maxTiles)
-            .ToList();
-
-        foreach (var pair in nearbyTiles)
-        {
-            if (pair.Value is HoeDirt dirt)
-            {
-                dirt.state.Value = 1;
-                dirt.updateNeighbors();
-            }
-        }
-
-        if (nearbyTiles.Count == 0)
-        {
-            reason = "there are no nearby unwatered crops";
-            return false;
-        }
-
-        state.LastAiFarmHelpTotalDays = Game1.Date.TotalDays;
-        this.memory.RecordNpcWorldAction(
-            npc,
-            "WateredNearbyCrops",
-            this.BuildWorldActionReason(action.Reason, $"they watered {nearbyTiles.Count} nearby crop tiles for the farmer"),
-            this.config.MaxMemoryEntriesPerNpc
-        );
-        this.MarkStateAfterWorldAction(state, "they helped the farmer with watering");
-        this.feedback.Show($"LivingNPCs：{npc.displayName} 帮你浇了 {nearbyTiles.Count} 格作物。");
         return true;
     }
 
@@ -1604,81 +1553,6 @@ internal sealed class BehaviorEngine
             "Tent" => "莱纳斯的帐篷",
             _ => targetLocation
         };
-    }
-
-    private bool TryFestivalInteraction(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
-    {
-        reason = string.Empty;
-        if (!this.config.AllowAiFestivalInteractions)
-        {
-            reason = "festival interactions are disabled";
-            return false;
-        }
-
-        if (!this.CanUseWorldAction(npc, "festival_interaction", requireFriendly: false, out reason, allowDuringEvents: true))
-        {
-            return false;
-        }
-
-        if (!Game1.eventUp)
-        {
-            reason = "there is no active event";
-            return false;
-        }
-
-        var state = this.memory.GetState(npc);
-        npc.doEmote(20);
-        if (state != null)
-        {
-            this.memory.RecordNpcWorldAction(
-                npc,
-                "FestivalInteraction",
-                this.BuildWorldActionReason(action.Reason, "they shared a light special interaction during an event scene"),
-                this.config.MaxMemoryEntriesPerNpc
-            );
-            this.MarkStateAfterWorldAction(state, "they shared a small festival interaction");
-        }
-
-        return true;
-    }
-
-    private bool TryAssistQuest(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
-    {
-        reason = string.Empty;
-        if (!this.config.AllowAiQuestAssists)
-        {
-            reason = "quest assists are disabled";
-            return false;
-        }
-
-        if (!this.CanUseWorldAction(npc, "assist_quest", requireFriendly: true, out reason))
-        {
-            return false;
-        }
-
-        if (Game1.player?.questLog == null || Game1.player.questLog.Count == 0)
-        {
-            reason = "the farmer has no active quest";
-            return false;
-        }
-
-        var state = this.memory.GetState(npc);
-        npc.doEmote(16);
-        if (state != null)
-        {
-            string questCue = string.IsNullOrWhiteSpace(action.QuestHint)
-                ? "an active task"
-                : action.QuestHint.Trim();
-            this.memory.RecordNpcWorldAction(
-                npc,
-                "AssistedQuest",
-                this.BuildWorldActionReason(action.Reason, $"they offered light non-completing help around {questCue}"),
-                this.config.MaxMemoryEntriesPerNpc
-            );
-            this.MarkStateAfterWorldAction(state, "they offered light task help");
-        }
-
-        return true;
     }
 
     private bool CanUseWorldAction(

@@ -7,14 +7,6 @@ namespace LivingNPCs.Behavior;
 
 internal sealed class GiftActionRuntime
 {
-    public delegate bool CanUseWorldActionHandler(
-        NPC npc,
-        string actionName,
-        bool requireFriendly,
-        out string reason,
-        bool allowDuringEvents,
-        bool allowDistantWhenExplicit);
-
     private readonly ModConfig config;
     private readonly IMonitor monitor;
     private readonly BehaviorMemory memory;
