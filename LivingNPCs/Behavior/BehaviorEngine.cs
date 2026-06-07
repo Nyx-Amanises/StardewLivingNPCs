@@ -16,11 +16,6 @@ namespace LivingNPCs.Behavior;
 internal sealed class BehaviorEngine
 {
     private const string SaveDataKey = "behavior-memory";
-    private const int SmallGiftMinFriendshipHearts = 2;
-    private const int SmallGiftMinFamiliarity = 15;
-    private const int MeaningfulGiftMinFriendshipHearts = 5;
-    private const int MeaningfulGiftNoCooldownFriendshipHearts = 8;
-    private const int PendingReciprocalGiftExpirationDays = 3;
 
     private readonly IModHelper helper;
     private readonly IMonitor monitor;
@@ -562,10 +557,10 @@ internal sealed class BehaviorEngine
         }
 
         bool meaningfulCue = ConversationActionCueRules.LooksLikeMeaningfulGiftOffer(playerText, npcResponse);
-        string type = meaningfulCue && this.IsEligibleForMeaningfulGift(npc, state, out _)
+        string type = meaningfulCue && GiftActionRules.IsEligibleForMeaningfulGift(npc, out _)
             ? "give_meaningful_gift"
             : "give_small_gift";
-        if (type == "give_small_gift" && !this.IsEligibleForSmallGift(npc, state))
+        if (type == "give_small_gift" && !GiftActionRules.IsEligibleForSmallGift(npc, state))
         {
             return false;
         }
@@ -610,15 +605,15 @@ internal sealed class BehaviorEngine
         var state = this.memory.GetState(npc);
         if (!this.config.AllowAiSmallGifts
             || state == null
-            || this.HasAiGiftToday(state))
+            || GiftActionRules.HasAiGiftToday(state))
         {
             reason = "small gifts are disabled or another AI gift was already used today";
             return false;
         }
 
-        if (!this.IsEligibleForSmallGift(npc, state))
+        if (!GiftActionRules.IsEligibleForSmallGift(npc, state))
         {
-            reason = $"small gifts require at least {SmallGiftMinFriendshipHearts} hearts or familiarity {SmallGiftMinFamiliarity}";
+            reason = $"small gifts require at least {GiftActionRules.SmallGiftMinFriendshipHearts} hearts or familiarity {GiftActionRules.SmallGiftMinFamiliarity}";
             return false;
         }
 
@@ -636,12 +631,12 @@ internal sealed class BehaviorEngine
         }
 
         SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
-        string motive = this.DetermineGiftMotive(action, selection, GiftTier.Small);
+        string motive = GiftActionRules.DetermineGiftMotive(action, selection, GiftTier.Small);
         if (!Game1.player.addItemToInventoryBool(gift))
         {
             string giftReason = this.BuildWorldActionReason(
                 action.Reason,
-                this.BuildGiftSelectionReason(
+                GiftActionRules.BuildGiftSelectionReason(
                     $"they tried to give the farmer {gift.DisplayName} after an AI conversation, but the farmer's inventory was full",
                     selection
                 )
@@ -653,7 +648,7 @@ internal sealed class BehaviorEngine
             }
 
             state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
-            this.ClearGiftOpportunities(state);
+            GiftActionRules.ClearGiftOpportunities(state);
             this.memory.RecordNpcWorldAction(
                 npc,
                 "ScheduledSmallGiftMail",
@@ -667,13 +662,13 @@ internal sealed class BehaviorEngine
 
         state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
         BehaviorMailService.RememberAiGiftItem(state, selection.ItemId);
-        this.ClearGiftOpportunities(state);
+        GiftActionRules.ClearGiftOpportunities(state);
         this.memory.RecordNpcWorldAction(
             npc,
             "GaveSmallGift",
             this.BuildWorldActionReason(
                 action.Reason,
-                this.BuildGiftSelectionReason(
+                GiftActionRules.BuildGiftSelectionReason(
                     $"they gave the farmer {gift.DisplayName} after an AI conversation",
                     selection
                 )
@@ -689,7 +684,7 @@ internal sealed class BehaviorEngine
             );
         }
 
-        this.feedback.ShowAfterDialogue(this.BuildGiftHudMessage(npc, gift.DisplayName, motive));
+        this.feedback.ShowAfterDialogue(GiftActionRules.BuildGiftHudMessage(npc, gift.DisplayName, motive));
         return true;
     }
 
@@ -760,7 +755,7 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        if (this.HasAiGiftToday(state))
+        if (GiftActionRules.HasAiGiftToday(state))
         {
             return false;
         }
@@ -769,7 +764,7 @@ internal sealed class BehaviorEngine
         SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
         if (!Game1.player.addItemToInventoryBool(gift))
         {
-            string giftReason = this.BuildGiftSelectionReason(
+            string giftReason = GiftActionRules.BuildGiftSelectionReason(
                 $"they tried to give the farmer {gift.DisplayName} after a fulfilled personal help request, but the farmer's inventory was full",
                 selection
             );
@@ -780,7 +775,7 @@ internal sealed class BehaviorEngine
 
             request.RewardGiftGiven = true;
             state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
-            this.ClearGiftOpportunities(state);
+            GiftActionRules.ClearGiftOpportunities(state);
             this.memory.RecordNpcWorldAction(
                 npc,
                 "ScheduledHelpRequestRewardGiftMail",
@@ -795,11 +790,11 @@ internal sealed class BehaviorEngine
         request.RewardGiftGiven = true;
         state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
         BehaviorMailService.RememberAiGiftItem(state, selection.ItemId);
-        this.ClearGiftOpportunities(state);
+        GiftActionRules.ClearGiftOpportunities(state);
         this.memory.RecordNpcWorldAction(
             npc,
             "GaveHelpRequestRewardGift",
-            this.BuildGiftSelectionReason(
+            GiftActionRules.BuildGiftSelectionReason(
                 $"they gave the farmer {gift.DisplayName} after a fulfilled personal help request",
                 selection
             ),
@@ -814,7 +809,7 @@ internal sealed class BehaviorEngine
             );
         }
 
-        this.feedback.ShowAfterDialogue(this.BuildGiftHudMessage(npc, gift.DisplayName, "thanks"));
+        this.feedback.ShowAfterDialogue(GiftActionRules.BuildGiftHudMessage(npc, gift.DisplayName, "thanks"));
         return true;
     }
 
@@ -904,13 +899,13 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        if (this.HasAiGiftToday(state))
+        if (GiftActionRules.HasAiGiftToday(state))
         {
             reason = "another AI gift was already used today";
             return false;
         }
 
-        if (!this.IsEligibleForMeaningfulGift(npc, state, out reason))
+        if (!GiftActionRules.IsEligibleForMeaningfulGift(npc, out reason))
         {
             return false;
         }
@@ -919,7 +914,7 @@ internal sealed class BehaviorEngine
             ? int.MaxValue
             : Game1.Date.TotalDays - state.LastAiMeaningfulGiftTotalDays;
         int friendshipHearts = WorldContext.For(npc).FriendshipHearts;
-        bool bypassCooldown = friendshipHearts >= MeaningfulGiftNoCooldownFriendshipHearts;
+        bool bypassCooldown = friendshipHearts >= GiftActionRules.MeaningfulGiftNoCooldownFriendshipHearts;
         if (!bypassCooldown && daysSinceLastMeaningfulGift < this.config.AiMeaningfulGiftCooldownDays)
         {
             reason = "meaningful gift cooldown is active";
@@ -940,12 +935,12 @@ internal sealed class BehaviorEngine
         }
 
         SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
-        string motive = this.DetermineGiftMotive(action, selection, GiftTier.Meaningful);
+        string motive = GiftActionRules.DetermineGiftMotive(action, selection, GiftTier.Meaningful);
         if (!Game1.player.addItemToInventoryBool(gift))
         {
             string giftReason = this.BuildWorldActionReason(
                 action.Reason,
-                this.BuildGiftSelectionReason(
+                GiftActionRules.BuildGiftSelectionReason(
                     $"they tried to give the farmer a meaningful {gift.DisplayName}, but the farmer's inventory was full",
                     selection
                 )
@@ -957,7 +952,7 @@ internal sealed class BehaviorEngine
             }
 
             state.LastAiMeaningfulGiftTotalDays = Game1.Date.TotalDays;
-            this.ClearGiftOpportunities(state);
+            GiftActionRules.ClearGiftOpportunities(state);
             this.memory.RecordNpcWorldAction(
                 npc,
                 "ScheduledMeaningfulGiftMail",
@@ -971,13 +966,13 @@ internal sealed class BehaviorEngine
 
         state.LastAiMeaningfulGiftTotalDays = Game1.Date.TotalDays;
         BehaviorMailService.RememberAiGiftItem(state, selection.ItemId);
-        this.ClearGiftOpportunities(state);
+        GiftActionRules.ClearGiftOpportunities(state);
         this.memory.RecordNpcWorldAction(
             npc,
             "GaveMeaningfulGift",
             this.BuildWorldActionReason(
                 action.Reason,
-                this.BuildGiftSelectionReason(
+                GiftActionRules.BuildGiftSelectionReason(
                     $"they gave the farmer a meaningful {gift.DisplayName}",
                     selection
                 )
@@ -993,7 +988,7 @@ internal sealed class BehaviorEngine
             );
         }
 
-        this.feedback.ShowAfterDialogue(this.BuildGiftHudMessage(npc, gift.DisplayName, motive));
+        this.feedback.ShowAfterDialogue(GiftActionRules.BuildGiftHudMessage(npc, gift.DisplayName, motive));
         return true;
     }
 
@@ -1029,7 +1024,7 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        if (VisibleDialoguePromisesUnsupportedGift(npcResponse))
+        if (GiftActionRules.VisibleDialoguePromisesUnsupportedGift(npcResponse))
         {
             reason = "visible dialogue promised a specific unsupported gift without a valid itemId";
             return false;
@@ -1039,26 +1034,6 @@ internal sealed class BehaviorEngine
             ? this.giftSelector.ChooseMeaningful(npc, state, playerText, npcResponse)
             : this.giftSelector.Choose(npc, state, playerText, npcResponse);
         return true;
-    }
-
-    private bool VisibleDialoguePromisesUnsupportedGift(string npcResponse)
-    {
-        if (string.IsNullOrWhiteSpace(npcResponse))
-        {
-            return false;
-        }
-
-        string text = npcResponse.ToLowerInvariant();
-        return ConversationActionCueRules.ContainsAny(
-            text,
-            "书签",
-            "bookmark",
-            "便签",
-            "纸条",
-            "手帕",
-            "发夹",
-            "小卡片"
-        );
     }
 
     private bool TryWaterNearbyCrops(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
@@ -2180,93 +2155,11 @@ internal sealed class BehaviorEngine
         return true;
     }
 
-    private bool HasAiGiftToday(LivingNpcState state)
-    {
-        return state.LastAiSmallGiftTotalDays == Game1.Date.TotalDays
-            || state.LastAiMeaningfulGiftTotalDays == Game1.Date.TotalDays;
-    }
-
-    private bool IsEligibleForSmallGift(NPC npc, LivingNpcState state)
-    {
-        int friendshipHearts = WorldContext.For(npc).FriendshipHearts;
-        return friendshipHearts >= SmallGiftMinFriendshipHearts
-            || state.Familiarity >= SmallGiftMinFamiliarity;
-    }
-
-    private bool IsEligibleForMeaningfulGift(NPC npc, LivingNpcState state, out string reason)
-    {
-        reason = string.Empty;
-        int friendshipHearts = WorldContext.For(npc).FriendshipHearts;
-        if (friendshipHearts < MeaningfulGiftMinFriendshipHearts)
-        {
-            reason = $"meaningful gifts require at least {MeaningfulGiftMinFriendshipHearts} hearts";
-            return false;
-        }
-
-        return true;
-    }
-
-    private void ClearGiftOpportunities(LivingNpcState state)
-    {
-        state.DailyGiftOpportunityTotalDays = -1;
-        state.DailyGiftOpportunityChancePercent = 0;
-        state.DailyGiftOpportunityReason = string.Empty;
-        state.PendingReciprocalGiftDueTotalDays = -1;
-        state.PendingReciprocalGiftSourceGiftName = string.Empty;
-        state.PendingReciprocalGiftReason = string.Empty;
-    }
-
-    private string DetermineGiftMotive(ValleyTalkWorldActionRequest action, GiftSelection selection, GiftTier tier, string fallback = "daily")
-    {
-        string reason = action.Reason ?? string.Empty;
-        if (!string.IsNullOrWhiteSpace(selection.MatchedPlayerPreference))
-        {
-            return "preference";
-        }
-
-        if (ConversationActionCueRules.ContainsAny(reason, "recently gave", "return gift", "reciprocal", "回礼"))
-        {
-            return "reciprocal";
-        }
-
-        if (ConversationActionCueRules.ContainsAny(reason, "thank", "thanks", "谢礼", "感谢", "help request"))
-        {
-            return "thanks";
-        }
-
-        if (tier == GiftTier.Meaningful)
-        {
-            return "meaningful";
-        }
-
-        return fallback;
-    }
-
-    private string BuildGiftHudMessage(NPC npc, string itemLabel, string motive)
-    {
-        return motive switch
-        {
-            "preference" => $"LivingNPCs：{npc.displayName} 记得你的喜好，送给你了 {itemLabel}。",
-            "reciprocal" => $"LivingNPCs：{npc.displayName} 回送给你了 {itemLabel}。",
-            "thanks" => $"LivingNPCs：{npc.displayName} 送给你了 {itemLabel} 作为谢礼。",
-            "meaningful" => $"LivingNPCs：{npc.displayName} 送给你了一份用心的礼物：{itemLabel}。",
-            _ => $"LivingNPCs：{npc.displayName} 送给你了 {itemLabel}。"
-        };
-    }
-
     private string BuildWorldActionReason(string requestedReason, string fallback)
     {
         return string.IsNullOrWhiteSpace(requestedReason)
             ? fallback
             : $"{requestedReason.Trim()}; {fallback}";
-    }
-
-    private string BuildGiftSelectionReason(string prefix, GiftSelection selection)
-    {
-        string rememberedPreference = string.IsNullOrWhiteSpace(selection.MatchedPlayerPreference)
-            ? string.Empty
-            : $"; remembered farmer preference: {selection.MatchedPlayerPreference}";
-        return $"{prefix}; selection basis: {selection.Reason}{rememberedPreference}";
     }
 
     private void MarkStateAfterWorldAction(LivingNpcState state, string lastInteraction)
@@ -2418,14 +2311,14 @@ internal sealed class BehaviorEngine
     {
         if (!this.config.EnableAiWorldActions
             || !this.config.AllowAiSmallGifts
-            || this.HasAiGiftToday(state)
+            || GiftActionRules.HasAiGiftToday(state)
             || state.HighestUnresolvedConflictSeverity >= 30
             || state.DailyGiftOpportunityTotalDays == Game1.Date.TotalDays)
         {
             return;
         }
 
-        if (WorldContext.For(npc).FriendshipHearts < MeaningfulGiftMinFriendshipHearts)
+        if (WorldContext.For(npc).FriendshipHearts < GiftActionRules.MeaningfulGiftMinFriendshipHearts)
         {
             return;
         }
@@ -2461,7 +2354,7 @@ internal sealed class BehaviorEngine
     {
         if (gift.TasteScore != 0
             || !this.config.AllowAiMeaningfulGifts
-            || !this.IsEligibleForMeaningfulGift(npc, state, out _))
+            || !GiftActionRules.IsEligibleForMeaningfulGift(npc, out _))
         {
             return false;
         }
@@ -2470,7 +2363,7 @@ internal sealed class BehaviorEngine
             ? int.MaxValue
             : Game1.Date.TotalDays - state.LastAiMeaningfulGiftTotalDays;
         int friendshipHearts = WorldContext.For(npc).FriendshipHearts;
-        bool bypassCooldown = friendshipHearts >= MeaningfulGiftNoCooldownFriendshipHearts;
+        bool bypassCooldown = friendshipHearts >= GiftActionRules.MeaningfulGiftNoCooldownFriendshipHearts;
         if (!bypassCooldown && daysSinceLastMeaningfulGift < this.config.AiMeaningfulGiftCooldownDays)
         {
             return false;
@@ -2483,7 +2376,7 @@ internal sealed class BehaviorEngine
     {
         if (!this.config.EnableAiWorldActions
             || !this.config.AllowAiSmallGifts
-            || !this.IsEligibleForSmallGift(npc, state)
+            || !GiftActionRules.IsEligibleForSmallGift(npc, state)
             || state.HighestUnresolvedConflictSeverity >= 30
             || gift.TasteScore is 4 or 6
             || this.mailService.HasPendingGiftMail(state, "reciprocal")
@@ -2515,7 +2408,7 @@ internal sealed class BehaviorEngine
             2 => this.random.Next(0, 4),
             _ => this.random.Next(1, 4)
         };
-        if (delayDays == 0 && this.HasAiGiftToday(state))
+        if (delayDays == 0 && GiftActionRules.HasAiGiftToday(state))
         {
             delayDays = 1;
         }
@@ -2528,7 +2421,7 @@ internal sealed class BehaviorEngine
             GiftSelection selection = reciprocalTier == GiftTier.Meaningful
                 ? this.giftSelector.ChooseMeaningful(npc, state, gift.ItemName, gift.TastePromptLabel)
                 : this.giftSelector.Choose(npc, state, gift.ItemName, gift.TastePromptLabel);
-            string mailReason = this.BuildGiftSelectionReason(
+            string mailReason = GiftActionRules.BuildGiftSelectionReason(
                 $"they planned a delayed return gift because the farmer recently gave {npc.displayName} {gift.ItemName}, a {gift.TastePromptLabel}",
                 selection
             );
@@ -2543,7 +2436,7 @@ internal sealed class BehaviorEngine
                     state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
                 }
 
-                this.ClearGiftOpportunities(state);
+                GiftActionRules.ClearGiftOpportunities(state);
                 this.memory.RecordNpcWorldAction(
                     npc,
                     "ScheduledReciprocalGiftMail",
@@ -2864,14 +2757,14 @@ internal sealed class BehaviorEngine
             || !this.config.EnableAiWorldActions
             || !this.config.AllowAiSmallGifts
             || state.HighestUnresolvedConflictSeverity >= 30
-            || this.HasAiGiftToday(state))
+            || GiftActionRules.HasAiGiftToday(state))
         {
             return string.Empty;
         }
 
         int today = Game1.Date.TotalDays;
         if (state.PendingReciprocalGiftDueTotalDays >= 0
-            && state.PendingReciprocalGiftDueTotalDays + PendingReciprocalGiftExpirationDays < today)
+            && state.PendingReciprocalGiftDueTotalDays + GiftActionRules.PendingReciprocalGiftExpirationDays < today)
         {
             state.PendingReciprocalGiftDueTotalDays = -1;
             state.PendingReciprocalGiftSourceGiftName = string.Empty;
