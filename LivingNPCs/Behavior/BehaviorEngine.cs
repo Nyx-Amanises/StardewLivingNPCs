@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Globalization;
 using System.Linq;
 using System.Threading;
 using Microsoft.Xna.Framework;
@@ -1869,11 +1868,11 @@ internal sealed class BehaviorEngine
     private bool TryReadWarpDestinationTile(GameLocation sourceLocation, string targetLocation, out Point targetTile)
     {
         foreach (var warp in sourceLocation.warps.Where(warp => string.Equals(
-            BehaviorMemory.NormalizeTravelLocation(GetWarpTargetName(warp), string.Empty),
+            BehaviorMemory.NormalizeTravelLocation(ScheduleReflectionReader.GetWarpTargetName(warp), string.Empty),
             targetLocation,
             StringComparison.OrdinalIgnoreCase)))
         {
-            if (TryReadWarpTargetTile(warp, out targetTile))
+            if (ScheduleReflectionReader.TryReadWarpTargetTile(warp, out targetTile))
             {
                 return true;
             }
@@ -1883,27 +1882,10 @@ internal sealed class BehaviorEngine
         return false;
     }
 
-    private static bool TryReadWarpTargetTile(object warp, out Point targetTile)
-    {
-        bool hasX = TryReadNumericMember(warp, "TargetX", out int x)
-            || TryReadNumericMember(warp, "targetX", out x);
-        bool hasY = TryReadNumericMember(warp, "TargetY", out int y)
-            || TryReadNumericMember(warp, "targetY", out y);
-
-        if (hasX && hasY)
-        {
-            targetTile = new Point(x, y);
-            return true;
-        }
-
-        targetTile = Point.Zero;
-        return false;
-    }
-
     private bool TryFindReverseWarpEntryTile(GameLocation destination, string sourceLocationName, NPC npc, out Point targetTile)
     {
         foreach (var warp in destination.warps.Where(warp => string.Equals(
-            BehaviorMemory.NormalizeTravelLocation(GetWarpTargetName(warp), string.Empty),
+            BehaviorMemory.NormalizeTravelLocation(ScheduleReflectionReader.GetWarpTargetName(warp), string.Empty),
             sourceLocationName,
             StringComparison.OrdinalIgnoreCase)))
         {
@@ -2006,7 +1988,7 @@ internal sealed class BehaviorEngine
     {
         return location.warps.Any(warp =>
             string.Equals(
-                BehaviorMemory.NormalizeTravelLocation(GetWarpTargetName(warp), string.Empty),
+                BehaviorMemory.NormalizeTravelLocation(ScheduleReflectionReader.GetWarpTargetName(warp), string.Empty),
                 targetLocation,
                 StringComparison.OrdinalIgnoreCase
             ));
@@ -2016,7 +1998,7 @@ internal sealed class BehaviorEngine
     {
         foreach (var warp in location.warps
             .Where(warp => string.Equals(
-                BehaviorMemory.NormalizeTravelLocation(GetWarpTargetName(warp), string.Empty),
+                BehaviorMemory.NormalizeTravelLocation(ScheduleReflectionReader.GetWarpTargetName(warp), string.Empty),
                 targetLocation,
                 StringComparison.OrdinalIgnoreCase))
             .OrderBy(warp => Vector2.Distance(new Vector2(warp.X, warp.Y), npc.Tile)))
@@ -2264,7 +2246,7 @@ internal sealed class BehaviorEngine
             .Select(entry => entry.Value)
             .FirstOrDefault();
         if (scheduleEntry == null
-            || !TryReadScheduleDestination(scheduleEntry, out string locationName, out Point scheduledTile, out int scheduledFacingDirection))
+            || !ScheduleReflectionReader.TryReadScheduleDestination(scheduleEntry, out string locationName, out Point scheduledTile, out int scheduledFacingDirection))
         {
             return false;
         }
@@ -2720,106 +2702,6 @@ internal sealed class BehaviorEngine
 
         targetTile = Point.Zero;
         return false;
-    }
-
-    private static bool TryReadScheduleDestination(object scheduleEntry, out string locationName, out Point targetTile, out int facingDirection)
-    {
-        locationName = ReadScheduleString(scheduleEntry, "targetLocationName");
-        facingDirection = ReadScheduleInt(scheduleEntry, "facingDirection", -1);
-        targetTile = Point.Zero;
-        return !string.IsNullOrWhiteSpace(locationName)
-            && TryReadScheduleTile(scheduleEntry, "targetTile", out targetTile);
-    }
-
-    private static bool TryReadScheduleTile(object scheduleEntry, string memberName, out Point targetTile)
-    {
-        object? value = ReadScheduleMember(scheduleEntry, memberName);
-        if (value is Point point)
-        {
-            targetTile = point;
-            return true;
-        }
-
-        if (value is Vector2 vector)
-        {
-            targetTile = new Point((int)vector.X, (int)vector.Y);
-            return true;
-        }
-
-        if (value != null
-            && TryReadNumericMember(value, "X", out int x)
-            && TryReadNumericMember(value, "Y", out int y))
-        {
-            targetTile = new Point(x, y);
-            return true;
-        }
-
-        targetTile = Point.Zero;
-        return false;
-    }
-
-    private static string ReadScheduleString(object source, string memberName)
-    {
-        return ReadScheduleMember(source, memberName) as string ?? string.Empty;
-    }
-
-    private static int ReadScheduleInt(object source, string memberName, int fallback)
-    {
-        object? value = ReadScheduleMember(source, memberName);
-        if (value == null)
-        {
-            return fallback;
-        }
-
-        try
-        {
-            return Convert.ToInt32(value, CultureInfo.InvariantCulture);
-        }
-        catch
-        {
-            return fallback;
-        }
-    }
-
-    private static bool TryReadNumericMember(object source, string memberName, out int value)
-    {
-        object? raw = ReadScheduleMember(source, memberName);
-        if (raw == null)
-        {
-            value = 0;
-            return false;
-        }
-
-        try
-        {
-            value = Convert.ToInt32(raw, CultureInfo.InvariantCulture);
-            return true;
-        }
-        catch
-        {
-            value = 0;
-            return false;
-        }
-    }
-
-    private static object? ReadScheduleMember(object source, string memberName)
-    {
-        var type = source.GetType();
-        return type.GetField(memberName)?.GetValue(source)
-            ?? type.GetProperty(memberName)?.GetValue(source);
-    }
-
-    private static string GetWarpTargetName(object warp)
-    {
-        foreach (string memberName in new[] { "TargetName", "targetName", "TargetLocationName", "targetLocationName" })
-        {
-            if (ReadScheduleMember(warp, memberName) is string targetName && !string.IsNullOrWhiteSpace(targetName))
-            {
-                return targetName;
-            }
-        }
-
-        return string.Empty;
     }
 
     private IEnumerable<Point> GetTilesAround(Point center, int maxRadius)
