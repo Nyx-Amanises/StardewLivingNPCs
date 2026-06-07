@@ -455,7 +455,7 @@ internal sealed class BehaviorEngine
         {
             if (action.Type is "walk_together" or "escort_to_location")
             {
-                action.DelayMinutes = System.Math.Max(action.DelayMinutes, this.DetectPreparationDelayMinutes(npcResponse));
+                action.DelayMinutes = System.Math.Max(action.DelayMinutes, ConversationActionCueRules.DetectPreparationDelayMinutes(npcResponse));
                 if (action.DelayMinutes > 0)
                 {
                     this.delayedTravelActions.Queue(npc, action);
@@ -504,7 +504,7 @@ internal sealed class BehaviorEngine
     {
         if (actions.Count > 0)
         {
-            this.TryCorrectTravelActionTargetFromVisibleDialogue(npc, actions, playerText, npcResponse);
+            ConversationActionCueRules.TryCorrectTravelActionTargetFromVisibleDialogue(npc, actions, playerText, npcResponse);
             return actions;
         }
 
@@ -522,7 +522,7 @@ internal sealed class BehaviorEngine
             return new[] { giftAction };
         }
 
-        if (!this.TryBuildFallbackTravelAction(npc, playerText, npcResponse, out ValleyTalkWorldActionRequest? action)
+        if (!ConversationActionCueRules.TryBuildFallbackTravelAction(npc, playerText, npcResponse, out ValleyTalkWorldActionRequest? action)
             || action == null)
         {
             return actions;
@@ -547,8 +547,8 @@ internal sealed class BehaviorEngine
     )
     {
         action = null;
-        if (!this.LooksLikeImmediateGiftOffer(npcResponse)
-            || this.LooksLikeGiftOfferRejection(npcResponse))
+        if (!ConversationActionCueRules.LooksLikeImmediateGiftOffer(npcResponse)
+            || ConversationActionCueRules.LooksLikeGiftOfferRejection(npcResponse))
         {
             return false;
         }
@@ -559,7 +559,7 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        bool meaningfulCue = this.LooksLikeMeaningfulGiftOffer(playerText, npcResponse);
+        bool meaningfulCue = ConversationActionCueRules.LooksLikeMeaningfulGiftOffer(playerText, npcResponse);
         string type = meaningfulCue && this.IsEligibleForMeaningfulGift(npc, state, out _)
             ? "give_meaningful_gift"
             : "give_small_gift";
@@ -589,338 +589,6 @@ internal sealed class BehaviorEngine
         }
 
         return true;
-    }
-
-    private bool LooksLikeImmediateGiftOffer(string npcResponse)
-    {
-        return this.ContainsAny(
-            npcResponse,
-            "给你",
-            "送你",
-            "拿着",
-            "收下",
-            "带给你",
-            "留给你",
-            "一点心意",
-            "小礼物",
-            "回礼",
-            "谢礼",
-            "这个给",
-            "这个是给",
-            "this is for you",
-            "this one's for you",
-            "take this",
-            "take it",
-            "i brought you",
-            "i saved this for you",
-            "small gift",
-            "return the favor",
-            "to thank you"
-        );
-    }
-
-    private bool LooksLikeGiftOfferRejection(string npcResponse)
-    {
-        return this.ContainsAny(
-            npcResponse,
-            "不能给你",
-            "没法给你",
-            "下次再给",
-            "以后再给",
-            "改天再给",
-            "not today",
-            "next time",
-            "another day",
-            "can't give"
-        );
-    }
-
-    private bool LooksLikeMeaningfulGiftOffer(string playerText, string npcResponse)
-    {
-        string combined = $"{playerText} {npcResponse}";
-        return this.ContainsAny(
-            combined,
-            "有意义",
-            "特别",
-            "重要",
-            "珍藏",
-            "用心",
-            "记得你喜欢",
-            "special",
-            "meaningful",
-            "important",
-            "saved this",
-            "remembered you like"
-        );
-    }
-
-    private void TryCorrectTravelActionTargetFromVisibleDialogue(
-        NPC npc,
-        IReadOnlyList<ValleyTalkWorldActionRequest> actions,
-        string playerText,
-        string npcResponse
-    )
-    {
-        var action = actions.FirstOrDefault(candidate => candidate.Type is "walk_together" or "escort_to_location");
-        if (action == null)
-        {
-            return;
-        }
-
-        string visibleTarget = this.TryDetectTravelTargetLocation(npc, $"{playerText} {npcResponse}");
-        if (string.IsNullOrWhiteSpace(visibleTarget))
-        {
-            return;
-        }
-
-        string currentTarget = BehaviorMemory.NormalizeTravelLocation(action.TargetLocation, string.Empty);
-        bool currentTargetIsGeneric = string.IsNullOrWhiteSpace(currentTarget)
-            || currentTarget is "Town" or "BusStop";
-        if (!currentTargetIsGeneric && string.Equals(currentTarget, visibleTarget, StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        if (currentTargetIsGeneric || visibleTarget == this.ResolveNpcHomeEscortTarget(npc))
-        {
-            action.Type = "escort_to_location";
-            action.TargetLocation = visibleTarget;
-            action.Reason = this.BuildWorldActionReason(
-                action.Reason,
-                $"visible dialogue clarified the destination as {visibleTarget}"
-            );
-        }
-    }
-
-    private bool TryBuildFallbackTravelAction(
-        NPC npc,
-        string playerText,
-        string npcResponse,
-        out ValleyTalkWorldActionRequest? action
-    )
-    {
-        action = null;
-        string combinedText = $"{playerText} {npcResponse}";
-        if (!this.LooksLikeImmediateTravelInvitation(playerText, npcResponse)
-            || this.LooksLikeDeferredOrRejectedTravel(npcResponse))
-        {
-            return false;
-        }
-
-        string targetLocation = this.TryDetectTravelTargetLocation(npc, combinedText);
-        action = new ValleyTalkWorldActionRequest
-        {
-            Type = string.IsNullOrWhiteSpace(targetLocation) ? "walk_together" : "escort_to_location",
-            TargetLocation = targetLocation,
-            DurationMinutes = string.IsNullOrWhiteSpace(targetLocation) ? 10 : 15,
-            DelayMinutes = this.DetectPreparationDelayMinutes(npcResponse),
-            Reason = "the visible conversation ended with an immediate shared travel plan"
-        };
-        return true;
-    }
-
-    private bool LooksLikeImmediateTravelInvitation(string playerText, string npcResponse)
-    {
-        bool farmerInvited = this.ContainsAny(
-            playerText,
-            "一起去",
-            "要不要去",
-            "陪我去",
-            "去我农场",
-            "来我农场",
-            "去农场看看",
-            "一起走",
-            "go with me",
-            "come to my farm",
-            "visit my farm",
-            "walk with me"
-        );
-        bool npcAccepted = this.ContainsAny(
-            npcResponse,
-            "一起去",
-            "我陪你",
-            "那我们",
-            "走吧",
-            "可以",
-            "当然",
-            "好啊",
-            "好呀",
-            "愿意",
-            "let's go",
-            "i'll go",
-            "i can go",
-            "sure"
-        );
-        return farmerInvited && npcAccepted;
-    }
-
-    private bool LooksLikeDeferredOrRejectedTravel(string npcResponse)
-    {
-        if (this.DetectPreparationDelayMinutes(npcResponse) > 0)
-        {
-            return false;
-        }
-
-        return this.ContainsAny(
-            npcResponse,
-            "下次",
-            "改天",
-            "晚点",
-            "以后",
-            "今天不行",
-            "不行",
-            "不可以",
-            "不能",
-            "没法",
-            "抱歉",
-            "later",
-            "another time",
-            "not now",
-            "can't"
-        );
-    }
-
-    private int DetectPreparationDelayMinutes(string npcResponse)
-    {
-        return this.ContainsAny(
-            npcResponse,
-            "等我一下",
-            "稍等",
-            "一会儿",
-            "准备一下",
-            "换件衣服",
-            "拿件衣服",
-            "拿衣服",
-            "雨衣",
-            "带把伞",
-            "拿把伞",
-            "wait a moment",
-            "get my coat",
-            "grab my coat",
-            "umbrella"
-        )
-            ? 10
-            : 0;
-    }
-
-    private string TryDetectTravelTargetLocation(NPC npc, string text)
-    {
-        string npcHome = this.ResolveNpcHomeEscortTarget(npc);
-        if (!string.IsNullOrWhiteSpace(npcHome)
-            && this.ContainsAny(
-                text,
-                "你家",
-                "你的家",
-                "你家里",
-                "你住的地方",
-                "你住处",
-                "你房间",
-                "她家",
-                "他家",
-                "家里看看",
-                "回你家",
-                "去家里",
-                "your home",
-                "your house",
-                "where you live"
-            ))
-        {
-            return npcHome;
-        }
-
-        if (this.ContainsAny(text, "潘妮家", "潘妮的家", "潘妮家里", "帕姆家", "帕姆的家", "拖车", "penny's home", "penny's house", "trailer"))
-        {
-            return "Trailer";
-        }
-
-        if (this.ContainsAny(text, "农场", "farm"))
-        {
-            return "Farm";
-        }
-
-        if (this.ContainsAny(text, "海边", "海滩", "beach"))
-        {
-            return "Beach";
-        }
-
-        if (this.ContainsAny(text, "博物馆", "图书馆", "museum", "library"))
-        {
-            return "ArchaeologyHouse";
-        }
-
-        if (this.ContainsAny(text, "森林", "煤矿森林", "forest"))
-        {
-            return "Forest";
-        }
-
-        if (this.ContainsAny(text, "矿井", "矿洞", "矿山", "mine", "mines"))
-        {
-            return "Mine";
-        }
-
-        if (this.ContainsAny(text, "山上", "山地", "mountain"))
-        {
-            return "Mountain";
-        }
-
-        if (this.ContainsAny(text, "酒吧", "沙龙", "saloon"))
-        {
-            return "Saloon";
-        }
-
-        if (this.ContainsAny(text, "医院", "诊所", "clinic", "hospital"))
-        {
-            return "Hospital";
-        }
-
-        if (this.ContainsAny(text, "皮埃尔", "杂货店", "general store", "pierre"))
-        {
-            return "SeedShop";
-        }
-
-        if (this.ContainsAny(text, "巴士站", "bus stop"))
-        {
-            return "BusStop";
-        }
-
-        if (this.ContainsAny(text, "镇上", "鹈鹕镇", "town"))
-        {
-            return "Town";
-        }
-
-        return string.Empty;
-    }
-
-    private string ResolveNpcHomeEscortTarget(NPC npc)
-    {
-        return npc.Name switch
-        {
-            "Penny" or "Pam" => "Trailer",
-            "Alex" or "Evelyn" or "George" => "JoshHouse",
-            "Haley" or "Emily" => "HaleyHouse",
-            "Sam" or "Jodi" or "Vincent" or "Kent" => "SamHouse",
-            "Abigail" or "Pierre" or "Caroline" => "SeedShop",
-            "Sebastian" or "Maru" or "Demetrius" or "Robin" => "ScienceHouse",
-            "Leah" => "LeahHouse",
-            "Marnie" or "Jas" or "Shane" => "AnimalShop",
-            "Elliott" => "ElliottHouse",
-            "Gus" => "Saloon",
-            "Clint" => "Blacksmith",
-            "Willy" => "FishShop",
-            "Wizard" => "WizardHouse",
-            "Linus" => "Tent",
-            _ => string.Empty
-        };
-    }
-
-    private bool ContainsAny(string text, params string[] fragments)
-    {
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return false;
-        }
-
-        return fragments.Any(fragment => text.Contains(fragment, StringComparison.OrdinalIgnoreCase));
     }
 
     private bool TryGiveSmallGift(
@@ -1379,7 +1047,7 @@ internal sealed class BehaviorEngine
         }
 
         string text = npcResponse.ToLowerInvariant();
-        return ContainsAny(
+        return ConversationActionCueRules.ContainsAny(
             text,
             "书签",
             "bookmark",
@@ -2554,12 +2222,12 @@ internal sealed class BehaviorEngine
             return "preference";
         }
 
-        if (this.ContainsAny(reason, "recently gave", "return gift", "reciprocal", "回礼"))
+        if (ConversationActionCueRules.ContainsAny(reason, "recently gave", "return gift", "reciprocal", "回礼"))
         {
             return "reciprocal";
         }
 
-        if (this.ContainsAny(reason, "thank", "thanks", "谢礼", "感谢", "help request"))
+        if (ConversationActionCueRules.ContainsAny(reason, "thank", "thanks", "谢礼", "感谢", "help request"))
         {
             return "thanks";
         }
