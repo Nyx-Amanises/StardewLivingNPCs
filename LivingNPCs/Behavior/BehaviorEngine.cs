@@ -866,37 +866,7 @@ internal sealed class BehaviorEngine
 
     private bool TryFindOpenTileNear(GameLocation location, Point center, NPC ignoredNpc, out Point targetTile)
     {
-        foreach (var candidate in this.GetTilesAround(center, 5))
-        {
-            if (this.IsSafeDestinationTile(location, candidate, ignoredNpc))
-            {
-                targetTile = candidate;
-                return true;
-            }
-        }
-
-        targetTile = Point.Zero;
-        return false;
-    }
-
-    private IEnumerable<Point> GetTilesAround(Point center, int maxRadius)
-    {
-        yield return center;
-        for (int radius = 1; radius <= maxRadius; radius++)
-        {
-            for (int dx = -radius; dx <= radius; dx++)
-            {
-                for (int dy = -radius; dy <= radius; dy++)
-                {
-                    if (Math.Abs(dx) != radius && Math.Abs(dy) != radius)
-                    {
-                        continue;
-                    }
-
-                    yield return new Point(center.X + dx, center.Y + dy);
-                }
-            }
-        }
+        return BehaviorActionExecutor.TryFindOpenTileNear(location, center, ignoredNpc, out targetTile);
     }
 
     private void PushInteractionContext(NPC npc, string debugMessage, string immediatePromptContext = "")
@@ -1151,223 +1121,62 @@ internal sealed class BehaviorEngine
 
     private bool TryFacePlayer(NPC npc)
     {
-        if (!this.config.AllowFacePlayer)
-        {
-            return false;
-        }
-
-        npc.faceDirection(this.GetDirectionTowardPlayer(npc));
-        return true;
+        return BehaviorActionExecutor.TryFacePlayer(npc, this.config.AllowFacePlayer);
     }
 
     private bool TryEmote(NPC npc, int emoteId)
     {
-        if (!this.config.AllowEmotes)
-        {
-            return false;
-        }
-
-        this.TryFacePlayer(npc);
-        npc.doEmote(emoteId);
-        return true;
+        return BehaviorActionExecutor.TryEmote(npc, emoteId, this.config.AllowEmotes, this.config.AllowFacePlayer);
     }
 
     private bool TryPause(NPC npc)
     {
-        if (!this.config.AllowFacePlayer)
-        {
-            return false;
-        }
-
-        npc.controller = null;
-        npc.Halt();
-        this.TryFacePlayer(npc);
-        return true;
+        return BehaviorActionExecutor.TryPause(npc, this.config.AllowFacePlayer);
     }
 
     private bool TryLookAround(NPC npc)
     {
-        if (!this.config.AllowFacePlayer)
-        {
-            return false;
-        }
-
-        npc.faceDirection(this.random.Next(4));
-        return true;
+        return BehaviorActionExecutor.TryLookAround(npc, this.config.AllowFacePlayer, this.random);
     }
 
     private bool TryApproachPlayer(NPC npc)
     {
-        if (!this.config.AllowApproachPlayer || Game1.currentLocation == null)
-        {
-            return false;
-        }
-
-        if (!this.TryFindApproachTile(npc, out Point targetTile))
-        {
-            this.TryFacePlayer(npc);
-            return false;
-        }
-
-        npc.controller = new PathFindController(
-            npc,
-            Game1.currentLocation,
-            targetTile,
-            this.GetDirectionTowardPlayerFromTile(targetTile)
-        );
-
-        return npc.controller != null;
+        return BehaviorActionExecutor.TryApproachPlayer(npc, this.config.AllowApproachPlayer, this.config.AllowFacePlayer);
     }
 
     private bool TryStepAway(NPC npc)
     {
-        if (!this.config.AllowApproachPlayer || Game1.currentLocation == null)
-        {
-            return false;
-        }
-
-        if (!this.TryFindStepAwayTile(npc, out Point targetTile))
-        {
-            this.TryFacePlayer(npc);
-            return false;
-        }
-
-        npc.controller = new PathFindController(
-            npc,
-            Game1.currentLocation,
-            targetTile,
-            this.GetDirectionTowardPlayerFromTile(targetTile)
-        );
-
-        return npc.controller != null;
+        return BehaviorActionExecutor.TryStepAway(npc, this.config.AllowApproachPlayer, this.config.AllowFacePlayer);
     }
 
     private int GetDirectionTowardPlayer(NPC npc)
     {
-        Vector2 delta = Game1.player.Tile - npc.Tile;
-        if (Math.Abs(delta.X) > Math.Abs(delta.Y))
-        {
-            return delta.X > 0 ? 1 : 3;
-        }
-
-        return delta.Y > 0 ? 2 : 0;
+        return BehaviorActionExecutor.GetDirectionTowardPlayer(npc);
     }
 
     private int GetDirectionTowardPlayerFromTile(Point tile)
     {
-        Vector2 delta = Game1.player.Tile - new Vector2(tile.X, tile.Y);
-        if (Math.Abs(delta.X) > Math.Abs(delta.Y))
-        {
-            return delta.X > 0 ? 1 : 3;
-        }
-
-        return delta.Y > 0 ? 2 : 0;
+        return BehaviorActionExecutor.GetDirectionTowardPlayerFromTile(tile);
     }
 
     private Point GetPlayerFacingTile()
     {
-        var tile = Game1.player.TilePoint;
-        return Game1.player.FacingDirection switch
-        {
-            0 => new Point(tile.X, tile.Y - 1),
-            1 => new Point(tile.X + 1, tile.Y),
-            2 => new Point(tile.X, tile.Y + 1),
-            3 => new Point(tile.X - 1, tile.Y),
-            _ => tile
-        };
+        return BehaviorActionExecutor.GetPlayerFacingTile();
     }
 
     private bool TryFindApproachTile(NPC npc, out Point targetTile)
     {
-        targetTile = Point.Zero;
-        var playerTile = Game1.player.TilePoint;
-        var candidates = new[]
-        {
-            new Point(playerTile.X, playerTile.Y + 1),
-            new Point(playerTile.X + 1, playerTile.Y),
-            new Point(playerTile.X - 1, playerTile.Y),
-            new Point(playerTile.X, playerTile.Y - 1)
-        };
-
-        var location = Game1.currentLocation;
-        if (location == null)
-        {
-            return false;
-        }
-
-        foreach (var candidate in candidates.OrderBy(tile => Vector2.Distance(new Vector2(tile.X, tile.Y), npc.Tile)))
-        {
-            if (this.IsSafeDestinationTile(location, candidate))
-            {
-                targetTile = candidate;
-                return true;
-            }
-        }
-
-        return false;
+        return BehaviorActionExecutor.TryFindApproachTile(npc, out targetTile);
     }
 
     private bool TryFindStepAwayTile(NPC npc, out Point targetTile)
     {
-        targetTile = Point.Zero;
-        var location = Game1.currentLocation;
-        if (location == null)
-        {
-            return false;
-        }
-
-        var npcTile = npc.TilePoint;
-        Vector2 away = npc.Tile - Game1.player.Tile;
-        int awayX = Math.Abs(away.X) >= Math.Abs(away.Y) ? Math.Sign(away.X) : 0;
-        int awayY = Math.Abs(away.Y) > Math.Abs(away.X) ? Math.Sign(away.Y) : 0;
-        if (awayX == 0 && awayY == 0)
-        {
-            awayY = 1;
-        }
-
-        var candidates = new[]
-        {
-            new Point(npcTile.X + awayX, npcTile.Y + awayY),
-            new Point(npcTile.X + awayY, npcTile.Y + awayX),
-            new Point(npcTile.X - awayY, npcTile.Y - awayX),
-            new Point(npcTile.X + awayX + awayY, npcTile.Y + awayY + awayX),
-            new Point(npcTile.X + awayX - awayY, npcTile.Y + awayY - awayX)
-        };
-
-        foreach (var candidate in candidates
-            .Distinct()
-            .OrderByDescending(tile => Vector2.Distance(new Vector2(tile.X, tile.Y), Game1.player.Tile))
-            .ThenBy(tile => Vector2.Distance(new Vector2(tile.X, tile.Y), npc.Tile)))
-        {
-            if (this.IsSafeDestinationTile(location, candidate))
-            {
-                targetTile = candidate;
-                return true;
-            }
-        }
-
-        return false;
+        return BehaviorActionExecutor.TryFindStepAwayTile(npc, out targetTile);
     }
 
     private bool IsSafeDestinationTile(GameLocation location, Point tile, NPC? ignoredNpc = null)
     {
-        if (tile.X < 0 || tile.Y < 0 || tile.X >= location.Map.Layers[0].LayerWidth || tile.Y >= location.Map.Layers[0].LayerHeight)
-        {
-            return false;
-        }
-
-        var tileVector = new Vector2(tile.X, tile.Y);
-        if (!location.isTileLocationOpen(tileVector))
-        {
-            return false;
-        }
-
-        if (!location.isTilePassable(tileVector))
-        {
-            return false;
-        }
-
-        return !location.characters.Any(npc => npc != ignoredNpc && npc.TilePoint == tile);
+        return BehaviorActionExecutor.IsSafeDestinationTile(location, tile, ignoredNpc);
     }
 
     private string DescribeIntent(BehaviorIntentType intentType)
