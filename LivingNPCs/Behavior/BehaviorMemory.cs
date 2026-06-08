@@ -1077,149 +1077,49 @@ internal sealed class BehaviorMemory
 
     private bool ApplyDialogueEmotionImpact(LivingNpcState state, ValleyTalkEmotionImpact impact)
     {
-        if (!impact.HasEffect)
-        {
-            return false;
-        }
-
-        string reason = string.IsNullOrWhiteSpace(impact.Reason)
-            ? "the latest conversation changed how they felt"
-            : impact.Reason;
-        if (impact.Emotion == "none")
-        {
-            if (impact.IntensityDelta < 0)
-            {
-                state.EmotionIntensity = LivingNpcState.ClampScore(state.EmotionIntensity + impact.IntensityDelta);
-                if (state.EmotionIntensity == 0)
-                {
-                    state.CurrentEmotion = "Calm";
-                }
-
-                state.LastEmotionReason = reason;
-                state.LastEmotionUpdatedTotalDays = Game1.Date.TotalDays;
-                state.LastEmotionUpdatedTimeOfDay = Game1.timeOfDay;
-                return true;
-            }
-
-            return false;
-        }
-
-        this.ApplyEmotion(state, impact.Emotion, impact.IntensityDelta, reason);
-        return true;
+        return ConflictEmotionMemoryService.ApplyDialogueEmotionImpact(
+            state,
+            impact,
+            Game1.Date.TotalDays,
+            Game1.timeOfDay
+        );
     }
 
     private void ApplyEmotion(LivingNpcState state, string emotion, int intensityDelta, string reason)
     {
-        string normalizedEmotion = NormalizeEmotion(emotion);
-        if (normalizedEmotion == "none")
-        {
-            return;
-        }
-
-        int baseIntensity = state.CurrentEmotion == normalizedEmotion
-            ? state.EmotionIntensity
-            : normalizedEmotion == "Calm"
-                ? 0
-                : System.Math.Max(10, state.EmotionIntensity / 2);
-        state.CurrentEmotion = normalizedEmotion == "none" ? "Calm" : normalizedEmotion;
-        state.EmotionIntensity = LivingNpcState.ClampScore(baseIntensity + intensityDelta);
-        if (state.EmotionIntensity == 0)
-        {
-            state.CurrentEmotion = "Calm";
-        }
-
-        state.LastEmotionReason = string.IsNullOrWhiteSpace(reason)
-            ? "the latest interaction changed how they felt"
-            : reason.Trim();
-        state.LastEmotionUpdatedTotalDays = Game1.Date.TotalDays;
-        state.LastEmotionUpdatedTimeOfDay = Game1.timeOfDay;
+        ConflictEmotionMemoryService.ApplyEmotion(
+            state,
+            emotion,
+            intensityDelta,
+            reason,
+            Game1.Date.TotalDays,
+            Game1.timeOfDay
+        );
     }
 
     private void ApplyRelationshipTrustDelta(LivingNpcState state, int delta)
     {
-        if (delta == 0)
-        {
-            return;
-        }
-
-        state.RelationshipTrust = LivingNpcState.ClampScore(state.RelationshipTrust + delta);
-        state.LastRelationshipTrustUpdatedTotalDays = Game1.Date.TotalDays;
-        state.LastRelationshipTrustUpdatedTimeOfDay = Game1.timeOfDay;
+        ConflictEmotionMemoryService.ApplyRelationshipTrustDelta(
+            state,
+            delta,
+            Game1.Date.TotalDays,
+            Game1.timeOfDay
+        );
     }
 
     private bool StoreConflict(LivingNpcState state, ValleyTalkConflictCandidate candidate)
     {
-        string normalizedSummary = NormalizeMemorySummary(candidate.Summary);
-        if (string.IsNullOrWhiteSpace(normalizedSummary) || candidate.Severity <= 0)
-        {
-            return false;
-        }
-
-        var existing = state.Conflicts.FirstOrDefault(conflict =>
-            conflict.Status != "Resolved"
-            && NormalizeMemorySummary(conflict.Summary) == normalizedSummary);
-        if (existing != null)
-        {
-            existing.CauseKind = candidate.CauseKind;
-            existing.Severity = LivingNpcState.ClampScore(System.Math.Max(existing.Severity, candidate.Severity) + 8);
-            existing.PeakSeverity = System.Math.Max(existing.PeakSeverity, existing.Severity);
-            if (existing.PeakSeverity >= 60)
-            {
-                existing.RequiresComplexRepair = true;
-                existing.MinimumRepairTotalDays = System.Math.Max(
-                    existing.MinimumRepairTotalDays,
-                    Game1.Date.TotalDays + ConflictRepairService.GetComplexRepairDelayDays(state, existing.PeakSeverity)
-                );
-                existing.SpecificRepairTalkReceived = false;
-                if (candidate.Severity >= 30)
-                {
-                    existing.MeaningfulGiftReceived = false;
-                }
-            }
-
-            ConflictRepairService.RefreshStage(existing, Game1.Date.TotalDays);
-            existing.Status = ConflictRepairService.GetConflictStatus(existing.Severity);
-            existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
-            existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
-            existing.TimesReinforced += 1;
-            this.ApplyRelationshipTrustDelta(state, -System.Math.Max(2, ConflictRepairService.GetConflictTrustLoss(candidate.Severity) / 2));
-            this.ApplyEmotionForConflict(state, existing);
-            return true;
-        }
-
-        var conflict = new NpcConflictFact
-        {
-            CauseKind = candidate.CauseKind,
-            Summary = candidate.Summary.Trim(),
-            Severity = LivingNpcState.ClampScore(candidate.Severity),
-            PeakSeverity = LivingNpcState.ClampScore(candidate.Severity),
-            Status = ConflictRepairService.GetConflictStatus(candidate.Severity),
-            CreatedTotalDays = Game1.Date.TotalDays,
-            CreatedTimeOfDay = Game1.timeOfDay,
-            LastUpdatedTotalDays = Game1.Date.TotalDays,
-            LastUpdatedTimeOfDay = Game1.timeOfDay,
-            RequiresComplexRepair = candidate.Severity >= 60,
-            MinimumRepairTotalDays = candidate.Severity >= 60
-                ? Game1.Date.TotalDays + ConflictRepairService.GetComplexRepairDelayDays(state, candidate.Severity)
-                : -1,
-            TimesReinforced = 1
-        };
-        ConflictRepairService.RefreshStage(conflict, Game1.Date.TotalDays);
-        state.Conflicts.Add(conflict);
-        state.Conflicts = state.Conflicts
-            .OrderBy(conflictEntry => ConflictStatusOrder(conflictEntry.Status))
-            .ThenByDescending(conflictEntry => conflictEntry.Severity)
-            .ThenByDescending(conflictEntry => conflictEntry.LastUpdatedTotalDays)
-            .Take(12)
-            .ToList();
-        this.ApplyRelationshipTrustDelta(state, -ConflictRepairService.GetConflictTrustLoss(conflict.Severity));
-        this.ApplyEmotionForConflict(state, conflict);
-        return true;
+        return ConflictEmotionMemoryService.StoreConflict(
+            state,
+            candidate,
+            Game1.Date.TotalDays,
+            Game1.timeOfDay
+        );
     }
 
     private int ApplyConflictRepair(LivingNpcState state, int repairDelta, bool apology, bool specificRepairTalk)
     {
-        return this.ApplyConflictRepair(
+        return ConflictEmotionMemoryService.ApplyConflictRepair(
             state,
             repairDelta,
             apology,
@@ -1237,7 +1137,7 @@ internal sealed class BehaviorMemory
         int currentTotalDays,
         int currentTimeOfDay = 1200)
     {
-        return this.ApplyConflictRepair(
+        return ConflictEmotionMemoryService.ApplyConflictRepair(
             state,
             repairDelta,
             apology,
@@ -1245,39 +1145,11 @@ internal sealed class BehaviorMemory
             currentTotalDays,
             currentTimeOfDay
         );
-    }
-
-    private int ApplyConflictRepair(
-        LivingNpcState state,
-        int repairDelta,
-        bool apology,
-        bool specificRepairTalk,
-        int currentTotalDays,
-        int currentTimeOfDay)
-    {
-        var emotionalStyle = EmotionalExpressionStyle.For(state.NpcName, NpcDisposition.ForName(state.NpcName));
-        var update = ConflictRepairService.ApplyRepair(
-            state,
-            repairDelta,
-            apology,
-            specificRepairTalk,
-            emotionalStyle,
-            currentTotalDays,
-            currentTimeOfDay
-        );
-        this.ApplyConflictRepairUpdate(state, update);
-
-        if (update.ResolvedCount > 0)
-        {
-            this.ApplyEmotion(state, "Calm", -state.EmotionIntensity, "an earlier conflict has been repaired");
-        }
-
-        return update.ResolvedCount;
     }
 
     private void MarkRepairGiftReceived(LivingNpcState state, string giftName)
     {
-        this.MarkRepairGiftReceived(state, giftName, Game1.Date.TotalDays, Game1.timeOfDay);
+        ConflictEmotionMemoryService.MarkRepairGiftReceived(state, giftName, Game1.Date.TotalDays, Game1.timeOfDay);
     }
 
     internal void MarkRepairGiftReceivedForTesting(
@@ -1286,16 +1158,7 @@ internal sealed class BehaviorMemory
         int currentTotalDays,
         int currentTimeOfDay = 1200)
     {
-        this.MarkRepairGiftReceived(state, giftName, currentTotalDays, currentTimeOfDay);
-    }
-
-    private void MarkRepairGiftReceived(
-        LivingNpcState state,
-        string giftName,
-        int currentTotalDays,
-        int currentTimeOfDay)
-    {
-        ConflictRepairService.MarkRepairGiftReceived(state, giftName, currentTotalDays, currentTimeOfDay);
+        ConflictEmotionMemoryService.MarkRepairGiftReceived(state, giftName, currentTotalDays, currentTimeOfDay);
     }
 
     private void DecayEmotionAndConflicts(
@@ -1304,7 +1167,7 @@ internal sealed class BehaviorMemory
         int conflictDailyDecay,
         EmotionalExpressionCue emotionalStyle)
     {
-        this.DecayEmotionAndConflicts(
+        ConflictEmotionMemoryService.DecayEmotionAndConflicts(
             state,
             emotionDailyDecay,
             conflictDailyDecay,
@@ -1322,7 +1185,7 @@ internal sealed class BehaviorMemory
         int currentTimeOfDay = 1200)
     {
         var emotionalStyle = EmotionalExpressionStyle.For(state.NpcName, NpcDisposition.ForName(state.NpcName));
-        this.DecayEmotionAndConflicts(
+        ConflictEmotionMemoryService.DecayEmotionAndConflicts(
             state,
             emotionDailyDecay,
             conflictDailyDecay,
@@ -1330,49 +1193,6 @@ internal sealed class BehaviorMemory
             currentTotalDays,
             currentTimeOfDay
         );
-    }
-
-    private void DecayEmotionAndConflicts(
-        LivingNpcState state,
-        int emotionDailyDecay,
-        int conflictDailyDecay,
-        EmotionalExpressionCue emotionalStyle,
-        int currentTotalDays,
-        int currentTimeOfDay)
-    {
-        var update = ConflictRepairService.DecayEmotionAndConflicts(
-            state,
-            emotionDailyDecay,
-            conflictDailyDecay,
-            emotionalStyle,
-            currentTotalDays,
-            currentTimeOfDay
-        );
-        this.ApplyConflictRepairUpdate(state, update);
-    }
-
-    private void ApplyConflictRepairUpdate(LivingNpcState state, ConflictRepairUpdate update)
-    {
-        if (update.ComplexRepairGrowthAwards <= 0)
-        {
-            return;
-        }
-
-        this.ApplyRelationshipTrustDelta(state, update.ComplexRepairGrowthAwards * 8);
-        state.Familiarity = LivingNpcState.ClampScore(state.Familiarity + (update.ComplexRepairGrowthAwards * 2));
-    }
-
-    private void ApplyEmotionForConflict(LivingNpcState state, NpcConflictFact conflict)
-    {
-        string emotion = conflict.CauseKind == "promise"
-            ? "Disappointed"
-            : conflict.Severity switch
-        {
-            >= 70 => "Angry",
-            >= 35 => "Upset",
-            _ => "Uneasy"
-        };
-        this.ApplyEmotion(state, emotion, conflict.Severity / 2, conflict.Summary);
     }
 
     private bool StorePlayerPreferenceMemory(LivingNpcState state, ValleyTalkMemoryCandidate candidate)
