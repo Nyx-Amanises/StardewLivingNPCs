@@ -540,7 +540,7 @@ internal sealed class BehaviorMemory
         this.AddFamiliarity(state, familiarityGain, dailyCap: 6);
         state.Attention = LivingNpcState.ClampScore(state.Attention + attentionDelta);
         state.Openness = LivingNpcState.ClampScore(state.Openness + opennessDelta);
-        this.ApplyWorldStateInfluence(state, world);
+        ConversationStateService.ApplyWorldStateInfluence(state, world);
         state.LastInteraction = source == "passive" ? "passive nearby reaction" : "small behavior near the farmer";
         state.LastUpdatedTotalDays = Game1.Date.TotalDays;
         state.LastUpdatedTimeOfDay = Game1.timeOfDay;
@@ -638,7 +638,7 @@ internal sealed class BehaviorMemory
         this.AddFamiliarity(state, familiarityGain, dailyCap: 8);
         state.Attention = LivingNpcState.ClampScore(state.Attention + attentionDelta);
         state.Openness = LivingNpcState.ClampScore(state.Openness + opennessDelta);
-        this.ApplyWorldStateInfluence(state, world);
+        ConversationStateService.ApplyWorldStateInfluence(state, world);
         state.LastInteraction = "the farmer offered a gift";
         state.LastUpdatedTotalDays = Game1.Date.TotalDays;
         state.LastUpdatedTimeOfDay = Game1.timeOfDay;
@@ -663,7 +663,7 @@ internal sealed class BehaviorMemory
         state.Attention = LivingNpcState.ClampScore(state.Attention + 8);
         state.Openness = LivingNpcState.ClampScore(state.Openness + (world.FriendshipHearts >= 4 ? 4 : 1));
         this.AddFamiliarity(state, amount: 1, dailyCap: 8);
-        this.ApplyWorldStateInfluence(state, world);
+        ConversationStateService.ApplyWorldStateInfluence(state, world);
         state.LastInteraction = "the farmer interacted during an event";
         state.LastUpdatedTotalDays = Game1.Date.TotalDays;
         state.LastUpdatedTimeOfDay = Game1.timeOfDay;
@@ -679,7 +679,7 @@ internal sealed class BehaviorMemory
     {
         var state = this.GetOrCreateState(npc);
         var world = WorldContext.For(npc);
-        this.UpdateConversationRhythm(state, world.FriendshipHearts);
+        ConversationStateService.UpdateConversationRhythm(state, world.FriendshipHearts, Game1.Date.TotalDays, Game1.timeOfDay);
         int repeatFamiliarityLimit = System.Math.Min(3, state.DailyConversationComfortLimit);
         int familiarityGain = state.ConversationsToday == 1 ? 3 : state.ConversationsToday <= repeatFamiliarityLimit ? 1 : 0;
         if (state.ConversationsToday == 1 && state.ConsecutiveConversationDays >= 3)
@@ -700,9 +700,15 @@ internal sealed class BehaviorMemory
             state.Openness = LivingNpcState.ClampScore(state.Openness - System.Math.Min(18, 4 + (severity / 5)));
         }
 
-        this.ApplyConversationRhythmInfluence(state);
-        this.ApplyObservedConcern(state);
-        this.ApplyWorldStateInfluence(state, world);
+        ConversationStateService.ApplyConversationRhythmInfluence(state);
+        ConversationStateService.ApplyObservedConcern(
+            state,
+            Game1.Date.TotalDays,
+            Game1.player.health,
+            Game1.player.maxHealth,
+            this.ApplyEmotion
+        );
+        ConversationStateService.ApplyWorldStateInfluence(state, world);
         state.LastInteraction = "the farmer started a conversation";
         state.LastUpdatedTotalDays = Game1.Date.TotalDays;
         state.LastUpdatedTimeOfDay = Game1.timeOfDay;
@@ -749,7 +755,7 @@ internal sealed class BehaviorMemory
                 state.AiFriendshipGainedToday = 0;
             }
 
-            this.RefreshConversationDay(state);
+            ConversationStateService.RefreshConversationDay(state, Game1.Date.TotalDays);
             if (state.LastGiftTotalDays != Game1.Date.TotalDays)
             {
                 state.GiftsToday = 0;
@@ -801,324 +807,6 @@ internal sealed class BehaviorMemory
 
         state.Familiarity = LivingNpcState.ClampScore(state.Familiarity + gained);
         state.FamiliarityGainedToday += gained;
-    }
-
-    private void RefreshConversationDay(LivingNpcState state)
-    {
-        int today = Game1.Date.TotalDays;
-        if (state.LastConversationTotalDays == today)
-        {
-            return;
-        }
-
-        state.ConversationsToday = 0;
-        if (state.LastConversationTotalDays >= 0)
-        {
-            state.LastConversationGapDays = System.Math.Max(1, today - state.LastConversationTotalDays);
-            state.InteractionRhythm = state.LastConversationGapDays >= 7
-                ? "LongQuietGap"
-                : "NoConversationToday";
-        }
-        else
-        {
-            state.LastConversationGapDays = -1;
-            state.InteractionRhythm = "New";
-        }
-    }
-
-    private void UpdateConversationRhythm(LivingNpcState state, int friendshipHearts)
-    {
-        int today = Game1.Date.TotalDays;
-        int previousConversationDay = state.LastConversationTotalDays;
-        state.LastFriendshipHearts = friendshipHearts;
-
-        if (previousConversationDay == today)
-        {
-            state.ConversationsToday = System.Math.Max(0, state.ConversationsToday) + 1;
-            state.LastConversationGapDays = 0;
-            if (state.ConsecutiveConversationDays <= 0)
-            {
-                state.ConsecutiveConversationDays = 1;
-            }
-        }
-        else
-        {
-            state.LastConversationGapDays = previousConversationDay >= 0
-                ? System.Math.Max(1, today - previousConversationDay)
-                : -1;
-            state.ConversationsToday = 1;
-            state.ConsecutiveConversationDays = previousConversationDay == today - 1
-                ? System.Math.Max(1, state.ConsecutiveConversationDays + 1)
-                : 1;
-        }
-
-        state.LastConversationTotalDays = today;
-        state.LastConversationTimeOfDay = Game1.timeOfDay;
-        state.InteractionComfortTier = this.DetermineInteractionComfortTier(state);
-        state.DailyConversationComfortLimit = this.DetermineDailyConversationComfortLimit(state.InteractionComfortTier);
-        state.RepeatedConversationPressure = this.CalculateRepeatedConversationPressure(state);
-        state.InteractionRhythm = this.DetermineInteractionRhythm(state);
-    }
-
-    private string DetermineInteractionRhythm(LivingNpcState state)
-    {
-        if (state.ConversationsToday > state.DailyConversationComfortLimit + 1)
-        {
-            return "CrowdedToday";
-        }
-
-        if (state.ConversationsToday > state.DailyConversationComfortLimit)
-        {
-            return "AtComfortLimit";
-        }
-
-        if (state.ConversationsToday >= 2)
-        {
-            return state.InteractionComfortTier switch
-            {
-                "Distant" => "PoliteRepeat",
-                "Trusted" or "Intimate" => "ComfortableRepeat",
-                _ => "CheckedInAgain"
-            };
-        }
-
-        if (state.LastConversationGapDays >= 7)
-        {
-            return "AfterLongGap";
-        }
-
-        if (state.ConsecutiveConversationDays >= 5)
-        {
-            return "DailyRoutine";
-        }
-
-        if (state.ConsecutiveConversationDays >= 3)
-        {
-            return "BuildingRoutine";
-        }
-
-        return state.LastConversationGapDays < 0 ? "FirstConversation" : "FreshToday";
-    }
-
-    private string DetermineInteractionComfortTier(LivingNpcState state)
-    {
-        if (state.LastFriendshipHearts >= 10 || state.Familiarity >= 85)
-        {
-            return "Intimate";
-        }
-
-        if (state.LastFriendshipHearts >= 8 || state.Familiarity >= 70)
-        {
-            return "Trusted";
-        }
-
-        if (state.LastFriendshipHearts >= 4 || state.Familiarity >= 45)
-        {
-            return "Friendly";
-        }
-
-        if (state.LastFriendshipHearts >= 2 || state.Familiarity >= 18)
-        {
-            return "Familiar";
-        }
-
-        return "Distant";
-    }
-
-    private int DetermineDailyConversationComfortLimit(string comfortTier)
-    {
-        return comfortTier switch
-        {
-            "Intimate" => 6,
-            "Trusted" => 5,
-            "Friendly" => 4,
-            "Familiar" => 3,
-            _ => 2
-        };
-    }
-
-    private int CalculateRepeatedConversationPressure(LivingNpcState state)
-    {
-        int overLimit = System.Math.Max(0, state.ConversationsToday - state.DailyConversationComfortLimit);
-        int tierWeight = state.InteractionComfortTier switch
-        {
-            "Intimate" => 8,
-            "Trusted" => 12,
-            "Friendly" => 18,
-            "Familiar" => 24,
-            _ => 32
-        };
-
-        return System.Math.Clamp(overLimit * tierWeight, 0, 100);
-    }
-
-    private void ApplyConversationRhythmInfluence(LivingNpcState state)
-    {
-        switch (state.InteractionRhythm)
-        {
-            case "CrowdedToday":
-                this.ApplyCrowdedConversationInfluence(state);
-                break;
-
-            case "AtComfortLimit":
-                this.ApplyComfortLimitInfluence(state);
-                break;
-
-            case "PoliteRepeat":
-                state.Mood = "Polite";
-                state.CurrentInclination = "Measured";
-                state.Attention = LivingNpcState.ClampScore(state.Attention + 1);
-                state.Openness = LivingNpcState.ClampScore(state.Openness - 5);
-                break;
-
-            case "ComfortableRepeat":
-                state.Mood = "Comfortable";
-                state.CurrentInclination = "OpenToTalk";
-                state.Attention = LivingNpcState.ClampScore(state.Attention + 4);
-                state.Openness = LivingNpcState.ClampScore(state.Openness + 3);
-                break;
-
-            case "CheckedInAgain":
-                state.Mood = state.Openness >= 65 || state.InteractionComfortTier is "Friendly" or "Trusted" or "Intimate"
-                    ? "Familiar"
-                    : "Aware";
-                state.Attention = LivingNpcState.ClampScore(state.Attention + 2);
-                state.Openness = LivingNpcState.ClampScore(state.Openness + (state.InteractionComfortTier == "Friendly" ? 1 : -2));
-                break;
-
-            case "AfterLongGap":
-                state.Mood = "Surprised";
-                state.CurrentInclination = "Reconnecting";
-                state.Attention = LivingNpcState.ClampScore(state.Attention + 6);
-                state.Openness = LivingNpcState.ClampScore(state.Openness - 2);
-                break;
-
-            case "DailyRoutine":
-                state.Mood = "Comfortable";
-                state.CurrentInclination = "OpenToTalk";
-                state.Attention = LivingNpcState.ClampScore(state.Attention + 4);
-                state.Openness = LivingNpcState.ClampScore(state.Openness + 5);
-                break;
-
-            case "BuildingRoutine":
-                state.Mood = "Familiar";
-                state.Attention = LivingNpcState.ClampScore(state.Attention + 2);
-                state.Openness = LivingNpcState.ClampScore(state.Openness + 2);
-                break;
-        }
-    }
-
-    private void ApplyObservedConcern(LivingNpcState state)
-    {
-        if (state.HasUnresolvedConflict && state.HighestUnresolvedConflictSeverity >= 45)
-        {
-            return;
-        }
-
-        bool canCareOpenly = state.RelationshipTrust >= 45 || state.InteractionComfortTier is "Friendly" or "Trusted" or "Intimate";
-        if (canCareOpenly
-            && state.LastConversationGapDays >= 7
-            && !(state.CurrentEmotion == "Worried" && state.LastEmotionUpdatedTotalDays == Game1.Date.TotalDays))
-        {
-            this.ApplyEmotion(
-                state,
-                "Worried",
-                System.Math.Min(20, 8 + state.LastConversationGapDays),
-                $"the farmer had not appeared for {state.LastConversationGapDays} days"
-            );
-        }
-
-        if (canCareOpenly
-            && Game1.player.maxHealth > 0
-            && Game1.player.health <= System.Math.Max(1, Game1.player.maxHealth / 3)
-            && !(state.CurrentEmotion == "Worried" && state.LastEmotionUpdatedTotalDays == Game1.Date.TotalDays))
-        {
-            this.ApplyEmotion(
-                state,
-                "Worried",
-                18,
-                "the farmer looked badly hurt"
-            );
-        }
-    }
-
-    private void ApplyCrowdedConversationInfluence(LivingNpcState state)
-    {
-        int opennessPenalty = state.InteractionComfortTier switch
-        {
-            "Intimate" => 3,
-            "Trusted" => 5,
-            "Friendly" => 7,
-            "Familiar" => 10,
-            _ => 14
-        };
-
-        state.Mood = state.InteractionComfortTier is "Intimate" or "Trusted"
-            ? "CrowdedButWarm"
-            : "Overloaded";
-        state.CurrentInclination = state.InteractionComfortTier is "Intimate" or "Trusted"
-            ? "GentleBoundary"
-            : "NeedsSpace";
-        state.Attention = LivingNpcState.ClampScore(state.Attention + (state.InteractionComfortTier == "Distant" ? -3 : 1));
-        state.Openness = LivingNpcState.ClampScore(state.Openness - opennessPenalty);
-    }
-
-    private void ApplyComfortLimitInfluence(LivingNpcState state)
-    {
-        if (state.InteractionComfortTier is "Intimate" or "Trusted")
-        {
-            state.Mood = "Comfortable";
-            state.CurrentInclination = "OpenToTalk";
-            state.Attention = LivingNpcState.ClampScore(state.Attention + 2);
-            state.Openness = LivingNpcState.ClampScore(state.Openness + 1);
-            return;
-        }
-
-        state.Mood = state.InteractionComfortTier == "Friendly" ? "Familiar" : "Polite";
-        state.CurrentInclination = state.InteractionComfortTier == "Distant" ? "Measured" : "Acknowledging";
-        state.Attention = LivingNpcState.ClampScore(state.Attention + 1);
-        state.Openness = LivingNpcState.ClampScore(state.Openness - (state.InteractionComfortTier == "Distant" ? 6 : 3));
-    }
-
-    private void ApplyWorldStateInfluence(LivingNpcState state, WorldContextSnapshot world)
-    {
-        state.LastSceneContext = world.DebugLabel;
-        state.LastSceneInfluence = string.IsNullOrWhiteSpace(world.StateInfluence.DebugLabel)
-            ? "none"
-            : world.StateInfluence.DebugLabel;
-        state.LastSceneInfluenceReason = string.IsNullOrWhiteSpace(world.StateInfluence.Reason)
-            ? "none"
-            : world.StateInfluence.Reason;
-
-        if (!world.StateInfluence.HasMood)
-        {
-            return;
-        }
-
-        state.Attention = LivingNpcState.ClampScore(state.Attention + world.StateInfluence.AttentionDelta);
-        state.Openness = LivingNpcState.ClampScore(state.Openness + world.StateInfluence.OpennessDelta);
-
-        if (ShouldUseContextMood(state.Mood, world.StateInfluence.Priority))
-        {
-            state.Mood = world.StateInfluence.Mood;
-        }
-
-        if (ShouldUseContextInclination(state.CurrentInclination, world.StateInfluence.Priority))
-        {
-            state.CurrentInclination = world.StateInfluence.Inclination;
-        }
-    }
-
-    private static bool ShouldUseContextMood(string currentMood, int contextPriority)
-    {
-        return contextPriority >= 70
-            || currentMood is "Neutral" or "Aware" or "Attentive" or "Calm" or "Fresh" or "Quiet";
-    }
-
-    private static bool ShouldUseContextInclination(string currentInclination, int contextPriority)
-    {
-        return contextPriority >= 70
-            || currentInclination is "Neutral" or "Aware" or "Acknowledging";
     }
 
     private BehaviorMemoryEntry CreateEntry(NPC npc, string kind, string action, string reason)
