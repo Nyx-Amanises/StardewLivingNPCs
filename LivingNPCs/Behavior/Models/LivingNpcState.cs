@@ -642,7 +642,7 @@ internal sealed class LivingNpcState
                     ? 50
                     : System.Math.Clamp(request.RewardFriendship, 0, 100);
                 request.RewardMoney = request.RewardMoney <= 0
-                    ? BehaviorMemory.DetermineHelpRequestMoneyReward(request.Steps)
+                    ? HelpRequestMemoryRules.DetermineMoneyReward(request.Steps)
                     : System.Math.Clamp(request.RewardMoney, 200, 10000);
                 request.RewardMoneyMailKey = request.RewardMoneyMailKey?.Trim() ?? string.Empty;
                 if (!request.RewardMoneyByMail)

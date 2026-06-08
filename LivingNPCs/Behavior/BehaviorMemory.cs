@@ -1894,7 +1894,7 @@ internal sealed class BehaviorMemory
         int helpRequestCooldownDays,
         int minRelationshipTrustForHelpRequests)
     {
-        if (!this.CanOpenHelpRequest(
+        if (!HelpRequestMemoryRules.CanOpen(
                 npc,
                 state,
                 maxPendingHelpRequestsPerNpc,
@@ -1953,12 +1953,12 @@ internal sealed class BehaviorMemory
             AcceptedTimeOfDay = requiresAcceptance ? 0 : Game1.timeOfDay,
             LastUpdatedTotalDays = Game1.Date.TotalDays,
             LastUpdatedTimeOfDay = Game1.timeOfDay,
-            RewardFriendship = DetermineHelpRequestFriendshipReward(
+            RewardFriendship = HelpRequestMemoryRules.DetermineFriendshipReward(
                 npc,
                 candidate,
                 normalizedType
             ),
-            RewardMoney = DetermineHelpRequestMoneyReward(steps),
+            RewardMoney = HelpRequestMemoryRules.DetermineMoneyReward(steps),
             TimesReinforced = 1
         });
         state.LastHelpRequestTotalDays = Game1.Date.TotalDays;
@@ -2022,7 +2022,7 @@ internal sealed class BehaviorMemory
             };
 
         var steps = new List<NpcHelpRequestStepFact>();
-        foreach (var rawStep in rawSteps.Take(this.GetMaxHelpRequestStepsForCurrentWorldStage()))
+        foreach (var rawStep in rawSteps.Take(HelpRequestMemoryRules.GetMaxStepsForCurrentWorldStage()))
         {
             string type = NormalizeHelpRequestType(rawStep.Type);
             if (type == "item_request")
@@ -2227,7 +2227,7 @@ internal sealed class BehaviorMemory
             16,
             $"the farmer helped with a personal request: {request.Summary}"
         );
-        request.SpecialFollowUpPlanned = ShouldPlanHelpRequestFollowUp(state, request);
+        request.SpecialFollowUpPlanned = HelpRequestMemoryRules.ShouldPlanFollowUp(state, request);
         request.FollowUpEligibleTotalDays = request.SpecialFollowUpPlanned
             ? Game1.Date.TotalDays + 1
             : -1;
@@ -2280,156 +2280,6 @@ internal sealed class BehaviorMemory
             .ToList();
     }
 
-    private static int DetermineHelpRequestFriendshipReward(
-        NPC npc,
-        ValleyTalkHelpRequestCandidate candidate,
-        string normalizedType)
-    {
-        unchecked
-        {
-            string seed = $"{npc.Name}:{normalizedType}:{candidate.Summary}:{Game1.Date.TotalDays}";
-            int hash = 17;
-            foreach (char character in seed)
-            {
-                hash = (hash * 31) + character;
-            }
-
-            return 50 + System.Math.Abs(hash % 51);
-        }
-    }
-
-    internal static int DetermineHelpRequestMoneyReward(IReadOnlyList<NpcHelpRequestStepFact> steps)
-    {
-        int total = 0;
-        foreach (var step in steps.Where(step => step.Type == "item_request"))
-        {
-            total += DetermineHelpRequestItemMoneyReward(step.RequestedItemId);
-        }
-
-        return System.Math.Clamp(total <= 0 ? 200 : total, 200, 10000);
-    }
-
-    private static int DetermineHelpRequestItemMoneyReward(string itemId)
-    {
-        string normalized = NormalizeQualifiedObjectId(itemId);
-        if (normalized is "(O)16" or "(O)20")
-        {
-            return 200;
-        }
-
-        if (normalized == "(O)74")
-        {
-            return 10000;
-        }
-
-        int basePrice = TryGetObjectBasePrice(normalized);
-        if (basePrice <= 80)
-        {
-            return 200;
-        }
-
-        int reward = basePrice * 5;
-        reward = ((reward + 24) / 25) * 25;
-        return System.Math.Clamp(reward, 200, 10000);
-    }
-
-    private static int TryGetObjectBasePrice(string itemId)
-    {
-        string objectId = NormalizeQualifiedObjectId(itemId);
-        if (objectId.StartsWith("(O)", System.StringComparison.OrdinalIgnoreCase))
-        {
-            objectId = objectId.Substring(3);
-        }
-
-        if (Game1.objectData != null && Game1.objectData.TryGetValue(objectId, out var data))
-        {
-            return data.Price;
-        }
-
-        try
-        {
-            var item = ItemRegistry.Create<StardewValley.Object>(NormalizeQualifiedObjectId(itemId));
-            return item.salePrice(false);
-        }
-        catch
-        {
-            return 0;
-        }
-    }
-
-    private static string NormalizeQualifiedObjectId(string itemId)
-    {
-        string value = itemId?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return string.Empty;
-        }
-
-        if (value.StartsWith("(O)", System.StringComparison.OrdinalIgnoreCase))
-        {
-            return $"(O){value.Substring(3)}";
-        }
-
-        return $"(O){value}";
-    }
-
-    private static bool ShouldPlanHelpRequestFollowUp(LivingNpcState state, NpcHelpRequestFact request)
-    {
-        int chance = request.FollowUpPotential switch
-        {
-            "deeper_relationship" => 75,
-            _ => 45
-        };
-
-        if (request.RewardMoney >= 1000)
-        {
-            chance += 10;
-        }
-
-        unchecked
-        {
-            string seed = $"{state.NpcName}:{request.Summary}:{request.RequestedItemId}:{request.FulfilledTotalDays}:{request.FollowUpPotential}";
-            int hash = 17;
-            foreach (char character in seed)
-            {
-                hash = (hash * 31) + character;
-            }
-
-            return System.Math.Abs(hash % 100) < System.Math.Clamp(chance, 0, 90);
-        }
-    }
-
-    private int GetMaxHelpRequestStepsForCurrentWorldStage()
-    {
-        return WorldProgression.Current().ResidentStage switch
-        {
-            "first_spring_newcomer" => 1,
-            "first_year_settling_in" => 2,
-            _ => 3
-        };
-    }
-
-    private bool CanOpenHelpRequest(
-        NPC npc,
-        LivingNpcState state,
-        int maxPendingHelpRequestsPerNpc,
-        int helpRequestCooldownDays,
-        int minRelationshipTrustForHelpRequests,
-        out string reason)
-    {
-        var world = WorldContext.For(npc);
-        var result = EvaluateHelpRequestReadiness(
-            state,
-            world.FriendshipHearts,
-            maxPendingHelpRequestsPerNpc,
-            helpRequestCooldownDays,
-            minRelationshipTrustForHelpRequests,
-            Game1.Date.TotalDays
-        );
-        reason = result.Reason;
-        return result.Allowed;
-    }
-
     internal static HelpRequestReadinessResult EvaluateHelpRequestReadiness(
         LivingNpcState state,
         int friendshipHearts,
@@ -2438,7 +2288,7 @@ internal sealed class BehaviorMemory
         int minRelationshipTrustForHelpRequests,
         int currentTotalDays)
     {
-        return HelpRequestReadinessRules.Evaluate(
+        return HelpRequestMemoryRules.EvaluateReadiness(
             state,
             friendshipHearts,
             maxPendingHelpRequestsPerNpc,

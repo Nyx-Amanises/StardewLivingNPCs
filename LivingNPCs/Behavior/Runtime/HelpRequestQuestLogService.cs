@@ -169,7 +169,7 @@ internal sealed class HelpRequestQuestLogService
     private static int GetMoneyReward(NpcHelpRequestFact request)
     {
         int amount = request.RewardMoney <= 0
-            ? BehaviorMemory.DetermineHelpRequestMoneyReward(request.Steps)
+            ? HelpRequestMemoryRules.DetermineMoneyReward(request.Steps)
             : request.RewardMoney;
         return Math.Clamp(amount, 200, 10000);
     }
