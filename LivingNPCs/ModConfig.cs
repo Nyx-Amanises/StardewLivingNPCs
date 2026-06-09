@@ -35,9 +35,8 @@ internal sealed class ModConfig
     public int MaxAiMoneyGiftAmount { get; set; } = 250;
     public bool AllowAiFarmHelp { get; set; } = true;
     public int MaxAiWateredTilesPerAction { get; set; } = 12;
-    public bool AllowAiWalkTogether { get; set; } = true;
-    public int MaxAiWalkTogetherMinutes { get; set; } = 20;
-    public bool AllowAiEscortToLocation { get; set; } = true;
+    public bool AllowAiCompanionOutings { get; set; } = true;
+    public int MinimumCompanionOutingStayMinutes { get; set; } = 300;
     public bool AllowAiFestivalInteractions { get; set; } = true;
     public bool AllowAiQuestAssists { get; set; } = true;
     public bool EnableNpcState { get; set; } = true;
@@ -106,9 +105,8 @@ internal sealed class ModConfig
         this.MaxAiMoneyGiftAmount = defaults.MaxAiMoneyGiftAmount;
         this.AllowAiFarmHelp = defaults.AllowAiFarmHelp;
         this.MaxAiWateredTilesPerAction = defaults.MaxAiWateredTilesPerAction;
-        this.AllowAiWalkTogether = defaults.AllowAiWalkTogether;
-        this.MaxAiWalkTogetherMinutes = defaults.MaxAiWalkTogetherMinutes;
-        this.AllowAiEscortToLocation = defaults.AllowAiEscortToLocation;
+        this.AllowAiCompanionOutings = defaults.AllowAiCompanionOutings;
+        this.MinimumCompanionOutingStayMinutes = defaults.MinimumCompanionOutingStayMinutes;
         this.AllowAiFestivalInteractions = defaults.AllowAiFestivalInteractions;
         this.AllowAiQuestAssists = defaults.AllowAiQuestAssists;
         this.EnableNpcState = defaults.EnableNpcState;

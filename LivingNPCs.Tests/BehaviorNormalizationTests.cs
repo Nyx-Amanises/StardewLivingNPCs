@@ -7,6 +7,7 @@ public sealed class BehaviorNormalizationTests
     [Theory]
     [InlineData("Pelican Town", "Town")]
     [InlineData("潘妮家", "Trailer")]
+    [InlineData("Trailer_Big", "Trailer")]
     [InlineData("The Mines", "Mine")]
     public void TravelAliasesNormalizeToCanonicalLocations(string input, string expected)
     {

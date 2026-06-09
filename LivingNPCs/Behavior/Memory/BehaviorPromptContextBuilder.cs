@@ -67,7 +67,7 @@ internal static class BehaviorPromptContextBuilder
             prompt.AppendLine($"- Durable memory store: {state.LongTermMemories.Count} long-term memories tracked; recall focus for this reply: {MemoryRecallService.FormatLongTermMemoryPromptLabel(recallPlan.LongTermMemories)}.");
             prompt.AppendLine($"- Known farmer preferences: {MemoryRecallService.FormatPlayerPreferencePromptLabel(recallPlan.PlayerPreferences)}.");
             prompt.AppendLine($"- Conversation-driven behavior tendencies: {state.DialogueBehaviorInfluencePromptLabel}.");
-            prompt.AppendLine($"- Shared experiences from completed help requests: {state.SharedExperiencePromptLabel}.");
+            prompt.AppendLine($"- Shared experiences with the farmer: {state.SharedExperiencePromptLabel}.");
             prompt.AppendLine($"- Help requests involving the farmer: {state.HelpRequestPromptLabel}.");
             prompt.AppendLine($"- Community impressions about the farmer's ties with other NPCs: {MemoryRecallService.FormatCommunityImpressionPromptLabel(npc, communityImpressions)}.");
             prompt.AppendLine($"- Stable community circles this NPC belongs to: {FormatSocialCirclePromptLabel(npc)}.");
@@ -312,7 +312,7 @@ internal static class BehaviorPromptContextBuilder
             );
             if (sharedExperience != null)
             {
-                yield return $"Shared help milestone: {sharedExperience.PromptLabel}; if it fits, the NPC may warmly acknowledge that the farmer came through.";
+                yield return $"Shared experience: {sharedExperience.PromptLabel}; if it fits, the NPC may acknowledge the time they spent together without formally reciting the memory.";
             }
 
             if (state.RelationshipTrust < 35)
@@ -419,7 +419,7 @@ internal static class BehaviorPromptContextBuilder
                 experience.FollowUpEligibleTotalDays <= currentTotalDays
                 && experience.FollowUpShownTotalDays < 0))
         {
-            yield return "Completed help requests can deepen continuity; acknowledge them naturally without turning them into a formal future plan.";
+            yield return "Completed shared experiences can deepen continuity; acknowledge them naturally without turning them into a formal recap or future plan.";
         }
 
         if (state.HasUnresolvedConflict)

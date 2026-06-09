@@ -232,7 +232,6 @@ internal sealed class RuleBasedBehaviorPlanner : IBehaviorPlanner
                     double weight = Math.Clamp(influence.Intensity / 100d, 0.1, 1);
                     switch (influence.Type)
                     {
-                        case "companion_walk":
                         case "stay_near":
                             approachBonus += 0.08 + (0.14 * weight);
                             emoteBonus += 0.02 + (0.04 * weight);

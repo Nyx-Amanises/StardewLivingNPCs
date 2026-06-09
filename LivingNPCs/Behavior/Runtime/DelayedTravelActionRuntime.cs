@@ -15,9 +15,7 @@ internal sealed class DelayedTravelActionRuntime
     private readonly IMonitor monitor;
     private readonly BehaviorMemory memory;
     private readonly Func<string, NPC?> findNpcInCurrentLocation;
-    private readonly TryStartTravelActionHandler tryStartWalkTogether;
-    private readonly TryStartTravelActionHandler tryStartEscortToLocation;
-    private readonly Func<NPC, string, bool> tryShowNpcSpeechBubble;
+    private readonly TryStartTravelActionHandler tryStartCompanionOuting;
     private readonly List<PendingDelayedTravelAction> pendingActions = new();
 
     public DelayedTravelActionRuntime(
@@ -25,17 +23,13 @@ internal sealed class DelayedTravelActionRuntime
         IMonitor monitor,
         BehaviorMemory memory,
         Func<string, NPC?> findNpcInCurrentLocation,
-        TryStartTravelActionHandler tryStartWalkTogether,
-        TryStartTravelActionHandler tryStartEscortToLocation,
-        Func<NPC, string, bool> tryShowNpcSpeechBubble)
+        TryStartTravelActionHandler tryStartCompanionOuting)
     {
         this.config = config;
         this.monitor = monitor;
         this.memory = memory;
         this.findNpcInCurrentLocation = findNpcInCurrentLocation;
-        this.tryStartWalkTogether = tryStartWalkTogether;
-        this.tryStartEscortToLocation = tryStartEscortToLocation;
-        this.tryShowNpcSpeechBubble = tryShowNpcSpeechBubble;
+        this.tryStartCompanionOuting = tryStartCompanionOuting;
     }
 
     public void Clear()
@@ -61,7 +55,7 @@ internal sealed class DelayedTravelActionRuntime
         var state = this.memory.GetState(npc);
         if (state != null)
         {
-            MarkStateAfterWorldAction(state, "they asked the farmer to wait briefly before leaving together");
+            MarkStateAfterWorldAction(state, "they needed a brief moment before the shared outing");
         }
 
         if (this.config.Debug)
@@ -111,17 +105,8 @@ internal sealed class DelayedTravelActionRuntime
                 DurationMinutes = pending.DurationMinutes,
                 Reason = pending.Reason
             };
-            bool started = pending.Type switch
-            {
-                "escort_to_location" => this.tryStartEscortToLocation(npc, action, out _),
-                _ => this.tryStartWalkTogether(npc, action, out _)
-            };
+            this.tryStartCompanionOuting(npc, action, out _);
             this.pendingActions.Remove(pending);
-
-            if (started)
-            {
-                this.tryShowNpcSpeechBubble(npc, "好了，我们走吧。");
-            }
         }
     }
 

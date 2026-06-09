@@ -233,7 +233,7 @@ internal static class ModConfigMenu
         configMenu.AddBoolOption(
             mod: manifest,
             name: () => "对话后续气泡",
-            tooltip: () => "允许 AI 对话在合适时留下一个短暂的后续头顶气泡，例如约好同行后边走边补上一句。",
+            tooltip: () => "允许 AI 对话在合适时留下一个短暂的后续头顶气泡；陪伴出游不会用它播报移动状态。",
             getValue: () => config.EnableDialogueFollowUps,
             setValue: value => config.EnableDialogueFollowUps = value
         );
@@ -241,7 +241,7 @@ internal static class ModConfigMenu
         configMenu.AddBoolOption(
             mod: manifest,
             name: () => "对话驱动行为",
-            tooltip: () => "允许 AI 对话在严格限制下影响 NPC 之后几分钟到几天内的小行为，例如更愿意靠近、保持距离、短暂同行或在目标地点自然回应。",
+            tooltip: () => "允许 AI 对话在严格限制下影响 NPC 之后几分钟到几天内的小行为，例如更愿意靠近、保持距离或在目标地点自然回应。",
             getValue: () => config.EnableDialogueDrivenBehaviors,
             setValue: value => config.EnableDialogueDrivenBehaviors = value
         );
@@ -265,7 +265,7 @@ internal static class ModConfigMenu
         configMenu.AddBoolOption(
             mod: manifest,
             name: () => "允许 AI 触发世界动作",
-            tooltip: () => "允许 AI 在严格限制下触发少量实际效果，例如小礼物、少量金钱、浇水或短暂同行。",
+            tooltip: () => "允许 AI 在严格限制下触发少量实际效果，例如小礼物、少量金钱、浇水或陪伴出游。",
             getValue: () => config.EnableAiWorldActions,
             setValue: value => config.EnableAiWorldActions = value
         );
@@ -359,29 +359,21 @@ internal static class ModConfigMenu
 
         configMenu.AddBoolOption(
             mod: manifest,
-            name: () => "允许 NPC 短暂同行",
-            tooltip: () => "只有关系已有一点熟悉且 NPC 当前空闲时，AI 才可能让 NPC 短时间陪玩家同行。",
-            getValue: () => config.AllowAiWalkTogether,
-            setValue: value => config.AllowAiWalkTogether = value
+            name: () => "允许 NPC 陪伴出游",
+            tooltip: () => "允许 NPC 接受一起去某处逛逛、看风景或安静待一会儿的邀请，并临时偏离当天日程。",
+            getValue: () => config.AllowAiCompanionOutings,
+            setValue: value => config.AllowAiCompanionOutings = value
         );
 
         configMenu.AddNumberOption(
             mod: manifest,
-            name: () => "同行最长时长",
-            tooltip: () => "一次 AI 同行最多持续多少游戏分钟。",
-            getValue: () => config.MaxAiWalkTogetherMinutes,
-            setValue: value => config.MaxAiWalkTogetherMinutes = value,
-            min: 5,
-            max: 60,
-            interval: 5
-        );
-
-        configMenu.AddBoolOption(
-            mod: manifest,
-            name: () => "允许 NPC 陪同前往地点",
-            tooltip: () => "允许 AI 发起有时间限制、路径受限的同行请求；当前只做安全的短时陪走，不改永久日程。",
-            getValue: () => config.AllowAiEscortToLocation,
-            setValue: value => config.AllowAiEscortToLocation = value
+            name: () => "出游最短停留时间",
+            tooltip: () => "NPC 到达目的地后至少停留多少游戏分钟；默认 300 分钟，也就是 5 个游戏小时。",
+            getValue: () => config.MinimumCompanionOutingStayMinutes,
+            setValue: value => config.MinimumCompanionOutingStayMinutes = value,
+            min: 300,
+            max: 600,
+            interval: 30
         );
 
         configMenu.AddBoolOption(

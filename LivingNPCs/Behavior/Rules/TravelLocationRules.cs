@@ -30,6 +30,7 @@ internal static class TravelLocationRules
         ["Bus Stop"] = "BusStop",
         ["巴士站"] = "BusStop",
         ["Trailer"] = "Trailer",
+        ["Trailer_Big"] = "Trailer",
         ["Penny's Trailer"] = "Trailer",
         ["Pam's Trailer"] = "Trailer",
         ["Penny's House"] = "Trailer",

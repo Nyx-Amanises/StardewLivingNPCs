@@ -24,16 +24,24 @@ internal sealed record PendingDelayedTravelAction(
     string Reason
 );
 
-internal sealed class PendingEscortToLocation
+internal enum CompanionOutingPhase
 {
-    public PendingEscortToLocation(
+    Traveling,
+    AtDestination,
+    Returning
+}
+
+internal sealed class PendingCompanionOuting
+{
+    public PendingCompanionOuting(
         string npcName,
         int totalDays,
         string targetLocation,
         string targetLocationLabel,
-        int endTimeOfDay,
-        string lastLocationName,
-        Point lastPlayerTile,
+        string activityStyle,
+        Point anchorTile,
+        int anchorFacingDirection,
+        string anchorLabel,
         bool originalIgnoreScheduleToday,
         bool originalFollowSchedule
     )
@@ -42,9 +50,10 @@ internal sealed class PendingEscortToLocation
         this.TotalDays = totalDays;
         this.TargetLocation = targetLocation;
         this.TargetLocationLabel = targetLocationLabel;
-        this.EndTimeOfDay = endTimeOfDay;
-        this.LastLocationName = lastLocationName;
-        this.LastPlayerTile = lastPlayerTile;
+        this.ActivityStyle = activityStyle;
+        this.AnchorTile = anchorTile;
+        this.AnchorFacingDirection = anchorFacingDirection;
+        this.AnchorLabel = anchorLabel;
         this.OriginalIgnoreScheduleToday = originalIgnoreScheduleToday;
         this.OriginalFollowSchedule = originalFollowSchedule;
     }
@@ -53,48 +62,22 @@ internal sealed class PendingEscortToLocation
     public int TotalDays { get; }
     public string TargetLocation { get; }
     public string TargetLocationLabel { get; }
-    public int EndTimeOfDay { get; }
-    public string LastLocationName { get; set; }
-    public Point LastPlayerTile { get; set; }
+    public string ActivityStyle { get; }
+    public Point AnchorTile { get; set; }
+    public int AnchorFacingDirection { get; set; }
+    public string AnchorLabel { get; set; }
     public bool OriginalIgnoreScheduleToday { get; }
     public bool OriginalFollowSchedule { get; }
-    public Point LastWaypointTile { get; set; } = Point.Zero;
+    public CompanionOutingPhase Phase { get; set; } = CompanionOutingPhase.Traveling;
+    public int ArrivalTimeOfDay { get; set; }
+    public int StayUntilTimeOfDay { get; set; }
+    public int LastObservedTimeOfDay { get; set; }
+    public int SharedMinutesAtDestination { get; set; }
+    public int RouteRetryCount { get; set; }
+    public int AnchorRelocationCount { get; set; }
+    public bool SharedExperienceRecorded { get; set; }
     public PathFindController? LastAssignedController { get; set; }
-    public bool HintShownForLocation { get; set; }
-    public bool WaitingInNextLocation { get; set; }
-    public string WaitingLocationName { get; set; } = string.Empty;
-    public string WaitingSourceLocationName { get; set; } = string.Empty;
-}
-
-internal sealed class PendingWalkTogether
-{
-    public PendingWalkTogether(
-        string npcName,
-        int totalDays,
-        string locationName,
-        int endTimeOfDay,
-        Point lastPlayerTile,
-        PathFindController? lastAssignedController,
-        bool originalIgnoreScheduleToday,
-        bool originalFollowSchedule
-    )
-    {
-        this.NpcName = npcName;
-        this.TotalDays = totalDays;
-        this.LocationName = locationName;
-        this.EndTimeOfDay = endTimeOfDay;
-        this.LastPlayerTile = lastPlayerTile;
-        this.LastAssignedController = lastAssignedController;
-        this.OriginalIgnoreScheduleToday = originalIgnoreScheduleToday;
-        this.OriginalFollowSchedule = originalFollowSchedule;
-    }
-
-    public string NpcName { get; }
-    public int TotalDays { get; }
-    public string LocationName { get; }
-    public int EndTimeOfDay { get; }
-    public Point LastPlayerTile { get; set; }
-    public PathFindController? LastAssignedController { get; set; }
-    public bool OriginalIgnoreScheduleToday { get; }
-    public bool OriginalFollowSchedule { get; }
+    public string ReturnLocationName { get; set; } = string.Empty;
+    public Point ReturnTile { get; set; } = Point.Zero;
+    public int ReturnFacingDirection { get; set; } = 2;
 }

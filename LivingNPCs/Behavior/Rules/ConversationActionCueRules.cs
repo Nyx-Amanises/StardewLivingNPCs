@@ -77,7 +77,7 @@ internal static class ConversationActionCueRules
         string npcResponse
     )
     {
-        var action = actions.FirstOrDefault(candidate => candidate.Type is "walk_together" or "escort_to_location");
+        var action = actions.FirstOrDefault(candidate => candidate.Type == "companion_outing");
         if (action == null)
         {
             return;
@@ -99,7 +99,7 @@ internal static class ConversationActionCueRules
 
         if (currentTargetIsGeneric || visibleTarget == ResolveNpcHomeEscortTarget(npc))
         {
-            action.Type = "escort_to_location";
+            action.Type = "companion_outing";
             action.TargetLocation = visibleTarget;
             action.Reason = BuildWorldActionReason(
                 action.Reason,
@@ -124,13 +124,18 @@ internal static class ConversationActionCueRules
         }
 
         string targetLocation = TryDetectTravelTargetLocation(npc, combinedText);
+        if (string.IsNullOrWhiteSpace(targetLocation))
+        {
+            return false;
+        }
+
         action = new ValleyTalkWorldActionRequest
         {
-            Type = string.IsNullOrWhiteSpace(targetLocation) ? "walk_together" : "escort_to_location",
+            Type = "companion_outing",
             TargetLocation = targetLocation,
-            DurationMinutes = string.IsNullOrWhiteSpace(targetLocation) ? 10 : 15,
+            DurationMinutes = 300,
             DelayMinutes = DetectPreparationDelayMinutes(npcResponse),
-            Reason = "the visible conversation ended with an immediate shared travel plan"
+            Reason = "the visible conversation ended with an immediate shared outing plan"
         };
         return true;
     }

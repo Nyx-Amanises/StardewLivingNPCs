@@ -136,8 +136,8 @@ internal static class BehaviorValueNormalizer
             "give_meaningful_gift" => "give_meaningful_gift",
             "give_money" => "give_money",
             "water_nearby_crops" => "water_nearby_crops",
-            "walk_together" => "walk_together",
-            "escort_to_location" => "escort_to_location",
+            "companion_outing" => "companion_outing",
+            "escort_to_location" => "companion_outing",
             "festival_interaction" => "festival_interaction",
             "assist_quest" => "assist_quest",
             _ => "none"
@@ -148,8 +148,6 @@ internal static class BehaviorValueNormalizer
     {
         return type?.Trim().ToLowerInvariant() switch
         {
-            "companion_walk" => "companion_walk",
-            "walk_together" => "companion_walk",
             "visit_location" => "visit_location",
             "go_to_location" => "visit_location",
             "comforted" => "comforted",
@@ -229,9 +227,12 @@ internal static class BehaviorValueNormalizer
 
     public static string NormalizeSharedExperienceType(string type)
     {
-        return type?.Trim().ToLowerInvariant() == "help_request"
-            ? "help_request"
-            : "none";
+        return type?.Trim().ToLowerInvariant() switch
+        {
+            "help_request" => "help_request",
+            "companion_outing" => "companion_outing",
+            _ => "none"
+        };
     }
 
     public static string NormalizeMemorySummary(string summary)

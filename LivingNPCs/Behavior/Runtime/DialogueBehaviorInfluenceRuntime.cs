@@ -7,11 +7,8 @@ namespace LivingNPCs.Behavior;
 
 internal sealed class DialogueBehaviorInfluenceRuntime
 {
-    public delegate bool TryStartWalkTogetherHandler(NPC npc, ValleyTalkWorldActionRequest action, out string reason);
-
     private readonly ModConfig config;
     private readonly BehaviorMemory memory;
-    private readonly TryStartWalkTogetherHandler tryStartWalkTogether;
     private readonly Func<NPC, bool> tryApproachPlayer;
     private readonly Func<NPC, bool> tryStepAway;
     private readonly Func<NPC, bool> tryPause;
@@ -22,7 +19,6 @@ internal sealed class DialogueBehaviorInfluenceRuntime
     public DialogueBehaviorInfluenceRuntime(
         ModConfig config,
         BehaviorMemory memory,
-        TryStartWalkTogetherHandler tryStartWalkTogether,
         Func<NPC, bool> tryApproachPlayer,
         Func<NPC, bool> tryStepAway,
         Func<NPC, bool> tryPause,
@@ -32,7 +28,6 @@ internal sealed class DialogueBehaviorInfluenceRuntime
     {
         this.config = config;
         this.memory = memory;
-        this.tryStartWalkTogether = tryStartWalkTogether;
         this.tryApproachPlayer = tryApproachPlayer;
         this.tryStepAway = tryStepAway;
         this.tryPause = tryPause;
@@ -113,7 +108,6 @@ internal sealed class DialogueBehaviorInfluenceRuntime
             "visit_location" => this.IsTargetLocationCurrent(influence)
                 && distance <= this.config.MaxInteractionDistanceTiles + 2,
             "offended" or "give_space" => distance <= 2.5f && npc.controller == null,
-            "companion_walk" => distance <= this.config.MaxInteractionDistanceTiles && npc.controller == null,
             "stay_near" or "comforted" or "pause_to_talk" => distance <= this.config.MaxInteractionDistanceTiles && npc.controller == null,
             _ => false
         };
@@ -123,20 +117,6 @@ internal sealed class DialogueBehaviorInfluenceRuntime
     {
         bool executed = influence.Type switch
         {
-            "companion_walk" => this.tryStartWalkTogether(
-                npc,
-                new ValleyTalkWorldActionRequest
-                {
-                    Type = "walk_together",
-                    DurationMinutes = Math.Clamp(
-                        12 + (influence.Intensity / 12),
-                        10,
-                        Math.Max(10, this.config.MaxAiWalkTogetherMinutes)
-                    ),
-                    Reason = influence.Summary
-                },
-                out _
-            ),
             "visit_location" => this.TryReactAtLocation(npc, influence),
             "comforted" => this.TryApplyComforted(npc, state),
             "stay_near" => this.TryApplyStayNear(npc, state),

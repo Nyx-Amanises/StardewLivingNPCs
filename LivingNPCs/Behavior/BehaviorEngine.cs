@@ -32,8 +32,7 @@ internal sealed class BehaviorEngine
     private readonly GiftOpportunityService giftOpportunities;
     private readonly GiftActionRuntime giftActions;
     private readonly DirectWorldActionRuntime directWorldActions;
-    private readonly WalkTogetherRuntime walkTogether;
-    private readonly EscortToLocationRuntime escortToLocation;
+    private readonly CompanionOutingRuntime companionOutings;
     private readonly HelpRequestRewardService helpRequestRewards;
     private readonly HelpRequestQuestLogService helpRequestQuestLog;
     private readonly HelpRequestRuntime helpRequests;
@@ -76,32 +75,17 @@ internal sealed class BehaviorEngine
             this.feedback,
             this.CanUseWorldAction
         );
-        this.walkTogether = new WalkTogetherRuntime(
-            config,
-            this.memory,
-            this.feedback,
-            this.CanUseWorldAction,
-            this.StopTravelActionsForNpc,
-            npcName => this.TryFindNpcInCurrentLocation(npcName, out NPC? npc) ? npc : null,
-            npc => this.TryFindApproachTile(npc, out Point targetTile) ? targetTile : null,
-            this.TryFacePlayer,
-            this.GetDirectionTowardPlayerFromTile,
-            npc => this.TryReturnNpcToCurrentSchedule(npc)
-        );
-        this.escortToLocation = new EscortToLocationRuntime(
+        this.companionOutings = new CompanionOutingRuntime(
             config,
             monitor,
             this.memory,
             this.feedback,
             this.communityRipples,
             this.CanUseWorldAction,
-            this.StopTravelActionsForNpc,
-            this.TryFindApproachTile,
-            this.TryFindOpenTileNear,
             this.IsSafeDestinationTile,
-            this.TryFacePlayer,
-            this.GetDirectionTowardPlayerFromTile,
-            (npc, allowCrossLocationTeleport) => this.TryReturnNpcToCurrentSchedule(npc, allowCrossLocationTeleport)
+            this.TryResolveCurrentScheduleTarget,
+            (npc, allowCrossLocationTeleport) => this.TryReturnNpcToCurrentSchedule(npc, allowCrossLocationTeleport),
+            (npc, debugMessage) => this.PushInteractionContext(npc, debugMessage)
         );
         this.helpRequestRewards = new HelpRequestRewardService(
             config,
@@ -132,9 +116,7 @@ internal sealed class BehaviorEngine
             monitor,
             this.memory,
             npcName => this.TryFindNpcInCurrentLocation(npcName, out NPC? npc) ? npc : null,
-            this.walkTogether.TryStart,
-            this.escortToLocation.TryStart,
-            (npc, text) => this.feedback.TryShowNpcSpeechBubble(npc, text)
+            this.companionOutings.TryStart
         );
         this.helpRequests = new HelpRequestRuntime(
             config,
@@ -147,7 +129,6 @@ internal sealed class BehaviorEngine
         this.dialogueBehaviorInfluences = new DialogueBehaviorInfluenceRuntime(
             config,
             this.memory,
-            this.walkTogether.TryStart,
             this.TryApproachPlayer,
             this.TryStepAway,
             this.TryPause,
@@ -209,8 +190,7 @@ internal sealed class BehaviorEngine
         this.memory.ResetDaily();
         this.valleyTalkBridge.ClearAll();
         this.pendingRequests.Clear();
-        this.walkTogether.Clear();
-        this.escortToLocation.Clear();
+        this.companionOutings.Clear();
         this.conversationStartRecorder.Clear();
         this.feedback.Clear();
         this.delayedTravelActions.Clear();
@@ -239,8 +219,7 @@ internal sealed class BehaviorEngine
         this.memory.ResetDaily();
         this.valleyTalkBridge.ClearAll();
         this.pendingRequests.Clear();
-        this.walkTogether.Clear();
-        this.escortToLocation.Clear();
+        this.companionOutings.Clear();
         this.conversationStartRecorder.Clear();
         this.feedback.Clear();
         this.delayedTravelActions.Clear();
@@ -337,8 +316,7 @@ internal sealed class BehaviorEngine
         this.feedback.TryShowPendingHudMessages();
         this.feedback.TryShowPendingAmbientRemarks();
         this.delayedTravelActions.TryStartPending();
-        this.escortToLocation.TryUpdatePending();
-        this.walkTogether.TryUpdatePending();
+        this.companionOutings.TryUpdatePending();
         if (e.IsMultipleOf(120))
         {
             this.dialogueBehaviorInfluences.TryApply();
@@ -540,11 +518,12 @@ internal sealed class BehaviorEngine
     {
         foreach (var action in this.BuildEffectiveConversationActions(npc, actions, playerText, npcResponse).Take(1))
         {
-            if (action.Type is "walk_together" or "escort_to_location")
+            if (action.Type == "companion_outing")
             {
                 action.DelayMinutes = System.Math.Max(action.DelayMinutes, ConversationActionCueRules.DetectPreparationDelayMinutes(npcResponse));
                 if (action.DelayMinutes > 0)
                 {
+                    this.feedback.ClearAmbientRemarksForNpc(npc.Name);
                     this.delayedTravelActions.Queue(npc, action);
                     continue;
                 }
@@ -556,8 +535,7 @@ internal sealed class BehaviorEngine
                 "give_meaningful_gift" => this.giftActions.TryGiveMeaningfulGift(npc, action, playerText, npcResponse, out _),
                 "give_money" => this.giftActions.TryGiveMoney(npc, action, out _),
                 "water_nearby_crops" => this.directWorldActions.TryWaterNearbyCrops(npc, action, out _),
-                "walk_together" => this.walkTogether.TryStart(npc, action, out _),
-                "escort_to_location" => this.escortToLocation.TryStart(npc, action, out _),
+                "companion_outing" => this.companionOutings.TryStart(npc, action, out _),
                 "festival_interaction" => this.directWorldActions.TryFestivalInteraction(npc, action, out _),
                 "assist_quest" => this.directWorldActions.TryAssistQuest(npc, action, out _),
                 _ => false
@@ -571,8 +549,7 @@ internal sealed class BehaviorEngine
                     "give_meaningful_gift" => "meaningful gift request rejected",
                     "give_money" => "money request rejected",
                     "water_nearby_crops" => "watering request rejected",
-                    "walk_together" => "walk request rejected",
-                    "escort_to_location" => "escort request rejected",
+                    "companion_outing" => "companion outing request rejected",
                     "festival_interaction" => "festival interaction request rejected",
                     "assist_quest" => "quest assist request rejected",
                     _ => "unknown request rejected"
@@ -678,15 +655,9 @@ internal sealed class BehaviorEngine
         return true;
     }
 
-    private void StopTravelActionsForNpc(NPC npc, bool returnToSchedule)
-    {
-        this.walkTogether.StopForNpc(npc, returnToSchedule);
-        this.escortToLocation.StopForNpc(npc, returnToSchedule);
-    }
-
     private bool TryReturnNpcToCurrentSchedule(NPC npc, bool allowCrossLocationTeleport = true)
     {
-        return this.TryResumeNpcCurrentSchedule(npc, "LivingNPCs escort", allowCrossLocationTeleport);
+        return this.TryResumeNpcCurrentSchedule(npc, "LivingNPCs companion outing", allowCrossLocationTeleport);
     }
 
     private bool TryResumeNpcCurrentSchedule(NPC npc, string context, bool allowCrossLocationTeleport = true)
@@ -900,6 +871,12 @@ internal sealed class BehaviorEngine
         if (!string.IsNullOrWhiteSpace(giftOpportunityContext))
         {
             promptContext = $"{promptContext}\n{giftOpportunityContext}";
+        }
+
+        string companionOutingContext = this.companionOutings.BuildPromptContext(npc);
+        if (!string.IsNullOrWhiteSpace(companionOutingContext))
+        {
+            promptContext = $"{promptContext}\n{companionOutingContext}";
         }
 
         if (!string.IsNullOrWhiteSpace(immediatePromptContext))

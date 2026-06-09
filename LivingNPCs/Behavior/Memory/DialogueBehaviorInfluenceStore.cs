@@ -173,7 +173,6 @@ internal static class DialogueBehaviorInfluenceStore
     {
         return NormalizeType(type) switch
         {
-            "companion_walk" => 0,
             "pause_to_talk" => 1,
             "visit_location" => 3,
             "comforted" => 2,
@@ -188,7 +187,6 @@ internal static class DialogueBehaviorInfluenceStore
     {
         return NormalizeType(type) switch
         {
-            "companion_walk" => 1,
             "pause_to_talk" => 1,
             "visit_location" => 2,
             "comforted" => 2,
@@ -203,7 +201,6 @@ internal static class DialogueBehaviorInfluenceStore
     {
         return NormalizeType(type) switch
         {
-            "companion_walk" => 65,
             "visit_location" => 45,
             "comforted" => 55,
             "offended" => 70,

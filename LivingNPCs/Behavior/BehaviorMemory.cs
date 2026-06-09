@@ -1217,7 +1217,6 @@ internal sealed class BehaviorMemory
     {
         switch (influence.Type)
         {
-            case "companion_walk":
             case "stay_near":
                 state.Mood = state.Mood == "Guarded" ? "Polite" : "Engaged";
                 state.CurrentInclination = "OpenToTalk";

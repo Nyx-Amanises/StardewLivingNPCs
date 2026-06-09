@@ -341,7 +341,7 @@ internal sealed class LivingNpcState
         {
             var experiences = this.GetTopSharedExperiences(4).ToList();
             return experiences.Count == 0
-                ? "no shared help-request experiences are recorded"
+                ? "no durable shared experiences are recorded"
                 : string.Join("; ", experiences.Select(experience => experience.PromptLabel));
         }
     }
