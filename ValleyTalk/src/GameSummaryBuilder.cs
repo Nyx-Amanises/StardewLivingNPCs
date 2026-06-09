@@ -1,10 +1,12 @@
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using StardewValley;
 using StardewValley.Network;
 using ValleyTalk;
 using System;
+using Newtonsoft.Json.Linq;
 using StardewModdingAPI.Events;
 using StardewModdingAPI;
 
@@ -13,6 +15,7 @@ namespace ValleyTalk;
 internal class GameSummaryBuilder
 {
     private readonly string _gameSummaryPath;
+    private readonly string _baseContentPackFileName;
     private GameSummary _gameSummaryDict;
 
     private GameSummary GameSummaryDict
@@ -21,15 +24,18 @@ internal class GameSummaryBuilder
         {
             if (_gameSummaryDict == null)
             {
-                _gameSummaryDict = Game1.content.LoadLocalized<GameSummary>(_gameSummaryPath);
+                _gameSummaryDict = string.IsNullOrWhiteSpace(_baseContentPackFileName)
+                    ? Game1.content.LoadLocalized<GameSummary>(_gameSummaryPath)
+                    : LoadBaseContentPackSummary(_baseContentPackFileName);
             }
             return _gameSummaryDict;
         }
     }
 
-    public GameSummaryBuilder(string gameSummaryPath = null)
+    public GameSummaryBuilder(string gameSummaryPath = null, string baseContentPackFileName = null)
     {
         _gameSummaryPath = gameSummaryPath ?? VtConstants.GameSummaryPath;
+        _baseContentPackFileName = baseContentPackFileName;
         ModEntry.SHelper.Events.Content.AssetRequested += (sender, e) =>
         {
             if (e.Name.IsEquivalentTo(VtConstants.GameSummaryPath) || e.Name.IsEquivalentTo(VtConstants.OptimizedGameSummaryPath))
@@ -44,6 +50,27 @@ internal class GameSummaryBuilder
                 _gameSummaryDict = null;
             }
         };
+    }
+
+    private static GameSummary LoadBaseContentPackSummary(string fileName)
+    {
+        string modsDirectory = Directory.GetParent(ModEntry.SHelper.DirectoryPath)?.FullName ?? ModEntry.SHelper.DirectoryPath;
+        string contentPackPath = Path.Combine(modsDirectory, "[CP] ValleyTalk Base");
+        string filePath = Path.Combine(contentPackPath, "assets", fileName);
+        try
+        {
+            var root = JObject.Parse(File.ReadAllText(filePath));
+            var entries = root["Changes"]?
+                .Children<JObject>()
+                .Select(change => change["Entries"])
+                .FirstOrDefault(token => token != null);
+            return entries?.ToObject<GameSummary>() ?? new GameSummary();
+        }
+        catch (Exception ex)
+        {
+            ModEntry.SMonitor.Log($"Unable to load base ValleyTalk GameSummary file '{filePath}': {ex}", LogLevel.Error);
+            return new GameSummary();
+        }
     }
 
     internal string Build()

@@ -9,8 +9,8 @@ internal static class ModWorldProgression
 {
     public static ModWorldProgressSnapshot Current(Farmer farmer)
     {
-        var sve = BuildSveProgress(farmer);
-        var rsv = BuildRsvProgress(farmer);
+        var sve = ModCompatibility.EnableSve ? BuildSveProgress(farmer) : SveWorldProgressSnapshot.NotInstalled;
+        var rsv = ModCompatibility.EnableRsv ? BuildRsvProgress(farmer) : RsvWorldProgressSnapshot.NotInstalled;
         return new ModWorldProgressSnapshot(
             sve,
             rsv,
@@ -26,8 +26,8 @@ internal static class ModWorldProgression
         ModWorldProgressSnapshot progress,
         IReadOnlyCollection<string> attitudeTraits)
     {
-        bool isSveNpc = string.Equals(disposition.SourceLabel, "Stardew Valley Expanded", StringComparison.OrdinalIgnoreCase);
-        bool isRsvNpc = string.Equals(disposition.SourceLabel, "Ridgeside Village", StringComparison.OrdinalIgnoreCase);
+        bool isSveNpc = ModCompatibility.EnableSve && ModCompatibility.IsSveSource(disposition.SourceLabel);
+        bool isRsvNpc = ModCompatibility.EnableRsv && ModCompatibility.IsRsvSource(disposition.SourceLabel);
         var promptParts = new List<string>();
         var debugParts = new List<string>();
         var guidanceParts = new List<string>();

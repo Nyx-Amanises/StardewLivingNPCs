@@ -160,6 +160,20 @@ namespace ValleyTalk
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
+                name: () => Util.GetString("configEnableSveCompatibility", returnNull: true) ?? "启用 SVE 兼容",
+                tooltip: () => Util.GetString("configEnableSveCompatibilityTooltip", returnNull: true) ?? "关闭后，ValleyTalk 不再把 SVE 专用世界摘要、角色 biography 和对白样本用于 AI 上下文。",
+                getValue: () => Config.EnableSveCompatibility,
+                setValue: (value) =>{ Config.EnableSveCompatibility = value; }
+            );
+            ConfigMenu.AddBoolOption(
+                mod: ModManifest,
+                name: () => Util.GetString("configEnableRsvCompatibility", returnNull: true) ?? "启用 RSV 兼容",
+                tooltip: () => Util.GetString("configEnableRsvCompatibilityTooltip", returnNull: true) ?? "关闭后，ValleyTalk 不再把 RSV 专用角色资料和对白样本用于 AI 上下文。",
+                getValue: () => Config.EnableRsvCompatibility,
+                setValue: (value) =>{ Config.EnableRsvCompatibility = value; }
+            );
+            ConfigMenu.AddBoolOption(
+                mod: ModManifest,
                 name: () => Util.GetString("configUseOptimizedGameSummaryPrompt", returnNull: true) ?? "启用优化后的世界设定提示词",
                 tooltip: () => Util.GetString("configUseOptimizedGameSummaryPromptTooltip", returnNull: true) ?? "关闭时使用当前完整世界摘要；开启后改用精简世界摘要，便于对比 token 消耗和对白质量。",
                 getValue: () => Config.UseOptimizedGameSummaryPrompt,

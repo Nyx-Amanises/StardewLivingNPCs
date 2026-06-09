@@ -5,6 +5,8 @@ namespace LivingNPCs;
 
 public sealed class ModEntry : Mod
 {
+    internal static ModConfig ActiveConfig { get; private set; } = new();
+
     private BehaviorEngine? engine;
     private ModConfig config = null!;
 
@@ -16,6 +18,7 @@ public sealed class ModEntry : Mod
     public override void Entry(IModHelper helper)
     {
         this.config = helper.ReadConfig<ModConfig>();
+        ActiveConfig = this.config;
         if (this.config.Migrate())
         {
             helper.WriteConfig(this.config);

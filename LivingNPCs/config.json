@@ -34,6 +34,8 @@
   "AllowFacePlayer": true,
   "AllowEmotes": true,
   "AllowApproachPlayer": true,
+  "EnableSveCompatibility": true,
+  "EnableRsvCompatibility": true,
   "EnableAiPlanner": false,
   "AiPlannerEndpoint": "http://localhost:11434/v1/chat/completions",
   "AiPlannerApiKey": "",

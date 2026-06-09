@@ -13,6 +13,8 @@
   "GiftFrequency": 4,
   "TypedResponses": "With Generated",
   "AllowLocalContentPackDialogueForAi": true,
+  "EnableSveCompatibility": true,
+  "EnableRsvCompatibility": true,
   "UseOptimizedGameSummaryPrompt": false,
   "UseOptimizedLivingNpcMetadataPrompt": false,
   "DisableCharacters": "",

@@ -290,7 +290,8 @@ internal static class WorldProgression
     private static IReadOnlyCollection<string> DetermineObservationDomains(NPC npc)
     {
         var domains = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (ExplicitObservationDomains.TryGetValue(npc.Name, out var explicitDomains))
+        if (IsExplicitCompatibilityCueEnabled(npc.Name)
+            && ExplicitObservationDomains.TryGetValue(npc.Name, out var explicitDomains))
         {
             foreach (string domain in explicitDomains)
             {
@@ -330,14 +331,16 @@ internal static class WorldProgression
 
     private static bool HasExplicitObservationDomain(string npcName, string domain)
     {
-        return ExplicitObservationDomains.TryGetValue(npcName, out var domains)
+        return IsExplicitCompatibilityCueEnabled(npcName)
+            && ExplicitObservationDomains.TryGetValue(npcName, out var domains)
             && domains.Contains(domain, StringComparer.OrdinalIgnoreCase);
     }
 
     private static IReadOnlyCollection<string> DetermineAttitudeTraits(NPC npc, NpcDispositionProfile disposition)
     {
         var traits = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (ExplicitAttitudeTraits.TryGetValue(npc.Name, out var explicitTraits))
+        if (IsExplicitCompatibilityCueEnabled(npc.Name)
+            && ExplicitAttitudeTraits.TryGetValue(npc.Name, out var explicitTraits))
         {
             foreach (string trait in explicitTraits)
             {
@@ -360,6 +363,21 @@ internal static class WorldProgression
         AddTraitIfPresent(traits, profileText, "practical", "practical", "grounded", "busy");
         AddTraitIfPresent(traits, profileText, "fishing", "fishing", "fisher", "water life");
         return traits;
+    }
+
+    private static bool IsExplicitCompatibilityCueEnabled(string npcName)
+    {
+        if (!ModCompatibility.EnableSve && NpcDisposition.IsSveNpcName(npcName))
+        {
+            return false;
+        }
+
+        if (!ModCompatibility.EnableRsv && NpcDisposition.IsRsvNpcName(npcName))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private static void AddTraitIfPresent(HashSet<string> traits, string text, string trait, params string[] clues)

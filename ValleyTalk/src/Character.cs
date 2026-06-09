@@ -17,8 +17,25 @@ namespace ValleyTalk;
 public class Character
 {
     private BioData _bioData;
+    private bool? _bioLoadedWithExpansionCompatibilityEnabled;
+    private bool? _dialogueLoadedWithExpansionCompatibilityEnabled;
 
     private static readonly Dictionary<string,TimeSpan> filterTimes = new() { { "House", TimeSpan.Zero }, { "Action", TimeSpan.Zero }, { "Received Gift", TimeSpan.Zero }, { "Given Gift", TimeSpan.Zero }, { "Editorial", TimeSpan.Zero }, { "Gender", TimeSpan.Zero }, { "Question", TimeSpan.Zero } };
+    private static readonly HashSet<string> SveCompatibilityNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Alesia", "Andy", "Apples", "Bear", "Camilla", "Charlie", "CharlieChicken", "Claire", "Dusty", "Gunther", "GuntherSilvian", "Isaac", "Jadu", "Jolyne",
+        "Lance", "Magnus", "Martin", "Morgan", "Morris", "Olivia", "Scarlett", "Sophia", "Susan", "Victor", "Gil",
+        "MarlonFay", "MrQi", "Qi"
+    };
+    private static readonly HashSet<string> RsvCompatibilityNames = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "Acorn", "Aguar", "Alissa", "Althea", "Anton", "Ariah", "Belinda", "Bert", "Blair", "Bliss", "Bryle", "Carmen",
+        "Corine", "Daia", "Ezekiel", "Faye", "Flor", "Freddie", "Helen", "Ian", "Irene", "Jeric", "Jio", "June", "Keahi",
+        "Kenneth", "Kiarra", "Kimpoi", "Kiwi", "Lenny", "Lola", "Lorenzo", "Lorraine", "Louie", "Maddie", "Maive",
+        "Malaya", "Nadaline", "Naomi", "Olga", "Paula", "Philip", "Pika", "Pipo", "Raeriyala", "RelicSpirit", "Richard",
+        "Sari", "Sean", "Shanice", "Shiro", "Sonny", "Torts", "TreehouseGirl", "Trinnie", "Undreya", "Ysabelle", "Yuuma",
+        "Zachary", "Zayne"
+    };
     private StardewEventHistory eventHistory = new();
     private DialogueFile dialogueData;
     private Season? _sampleCacheSeason;
@@ -77,6 +94,22 @@ public class Character
         return result;
     }
 
+    private bool IsExpansionCompatibilityEnabledForCharacter()
+    {
+        string baseName = RemoveDotSuffixes(Name);
+        if (SveCompatibilityNames.Contains(baseName) && ModEntry.Config?.EnableSveCompatibility == false)
+        {
+            return false;
+        }
+
+        if (RsvCompatibilityNames.Contains(baseName) && ModEntry.Config?.EnableRsvCompatibility == false)
+        {
+            return false;
+        }
+
+        return true;
+    }
+
     private IEnumerable<string> GetLovedAndHatedGiftNames()
     {
         if (!Game1.NPCGiftTastes.TryGetValue(Name, out var npcGiftTastes))
@@ -118,7 +151,9 @@ public class Character
     private void LoadDialogue()
     {
         Dictionary<string, string> canonDialogue = new();
-        if (ModEntry.BlockModdedContent && !Bio.UsePatchedDialogue)
+        bool expansionCompatibilityEnabled = IsExpansionCompatibilityEnabledForCharacter();
+        bool blockPatchedDialogue = ModEntry.BlockModdedContent || !expansionCompatibilityEnabled;
+        if (blockPatchedDialogue && !Bio.UsePatchedDialogue)
         {
             var manager = new ContentManager(Game1.content.ServiceProvider, Game1.content.RootDirectory);
             try
@@ -183,11 +218,15 @@ public class Character
                 DialogueData.Add("Base",context, value);
             }
         }
+        _dialogueLoadedWithExpansionCompatibilityEnabled = expansionCompatibilityEnabled;
     }
 
     private void CheckBio()
     {
-        if (_bioData != null && ( _bioData.Biography.Length > 0 || _bioData.Missing))
+        bool expansionCompatibilityEnabled = IsExpansionCompatibilityEnabledForCharacter();
+        if (_bioData != null
+            && _bioLoadedWithExpansionCompatibilityEnabled == expansionCompatibilityEnabled
+            && ( _bioData.Biography.Length > 0 || _bioData.Missing))
         {
             return;
         }
@@ -203,6 +242,7 @@ public class Character
             if (fallbackBio != null)
             {
                 _bioData = fallbackBio;
+                _bioLoadedWithExpansionCompatibilityEnabled = expansionCompatibilityEnabled;
                 ValidPortraits = new List<string>() { "h", "s", "l", "a" };
                 PossiblePreoccupations = new List<string>(_bioData.Preoccupations);
                 PossiblePreoccupations.AddRange(GetLovedAndHatedGiftNames());
@@ -215,6 +255,7 @@ public class Character
                 Name = Name,
                 Missing = true
             };
+            _bioLoadedWithExpansionCompatibilityEnabled = expansionCompatibilityEnabled;
             ValidPortraits = new List<string>() { "h", "s", "l", "a" };
             PossiblePreoccupations = GetLovedAndHatedGiftNames().ToList();
             ModEntry.SMonitor.Log($"No bio file found for {Name}.", StardewModdingAPI.LogLevel.Warn);
@@ -222,8 +263,22 @@ public class Character
         }
 
         bioData.Name = Name;
+        if (!expansionCompatibilityEnabled)
+        {
+            bioData = BuildFallbackBioData() ?? new BioData
+            {
+                Name = Name,
+                Missing = true
+            };
+            ModEntry.SMonitor.Log($"Expansion compatibility is disabled for {Name}; using lightweight Data/Characters bio for AI context.", StardewModdingAPI.LogLevel.Debug);
+        }
+        else
+        {
+            bioData.Missing = false;
+        }
+
         _bioData = bioData;
-        _bioData.Missing = false;
+        _bioLoadedWithExpansionCompatibilityEnabled = expansionCompatibilityEnabled;
         ValidPortraits = new List<string>() { "h", "s", "l", "a" };
         ValidPortraits.AddRange(_bioData.ExtraPortraits.Keys);
         PossiblePreoccupations = new List<string>(_bioData.Preoccupations);
@@ -242,7 +297,7 @@ public class Character
             Name = Name,
             Biography = BuildFallbackBiography(data),
             BiographyEnd = "This biography was generated locally from Stardew Valley 1.6 Data/Characters because no ValleyTalk bio file was found. Treat it as lightweight guidance, not full canon.",
-            UsePatchedDialogue = ModEntry.Config.AllowLocalContentPackDialogueForAi,
+            UsePatchedDialogue = ModEntry.Config.AllowLocalContentPackDialogueForAi && IsExpansionCompatibilityEnabledForCharacter(),
             Missing = false
         };
 
@@ -337,7 +392,8 @@ public class Character
 
     internal IEnumerable<DialogueValue> SelectDialogueSample(DialogueContext context)
     {
-        if (_sampleCacheSeason == context.Season &&
+        if (_sampleCache != null &&
+            _sampleCacheSeason == context.Season &&
             _sampleCacheHeartLevel == context.Hearts &&
             _sampleCacheDay == context.DayOfSeason)
         {
@@ -1063,6 +1119,14 @@ public class Character
         {
             if (dialogueData == null)
             {
+                LoadDialogue();
+            }
+            else if (_dialogueLoadedWithExpansionCompatibilityEnabled != IsExpansionCompatibilityEnabledForCharacter())
+            {
+                _sampleCacheSeason = null;
+                _sampleCacheDay = null;
+                _sampleCacheHeartLevel = null;
+                _sampleCache = null;
                 LoadDialogue();
             }
             return dialogueData;  

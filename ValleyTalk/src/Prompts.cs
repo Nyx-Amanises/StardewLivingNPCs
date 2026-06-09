@@ -24,6 +24,8 @@ public class Prompts
 
     static string _stardewSummary;
     static string _optimizedStardewSummary;
+    static string _baseStardewSummary;
+    static string _optimizedBaseStardewSummary;
     private string _system;
     public string System { get => _system ??= GetSystemPrompt(); internal set => _system = value; }
     private string _gameConstantContext;
@@ -170,12 +172,17 @@ public class Prompts
 
     private static string GetStardewSummary()
     {
+        bool useSveCompatibility = ModEntry.Config?.EnableSveCompatibility != false;
         if (ModEntry.Config?.UseOptimizedGameSummaryPrompt == true)
         {
-            return _optimizedStardewSummary ??= new GameSummaryBuilder(VtConstants.OptimizedGameSummaryPath).Build();
+            return useSveCompatibility
+                ? _optimizedStardewSummary ??= new GameSummaryBuilder(VtConstants.OptimizedGameSummaryPath).Build()
+                : _optimizedBaseStardewSummary ??= new GameSummaryBuilder(VtConstants.OptimizedGameSummaryPath, VtConstants.OptimizedBaseGameSummaryFileName).Build();
         }
 
-        return _stardewSummary ??= new GameSummaryBuilder(VtConstants.GameSummaryPath).Build();
+        return useSveCompatibility
+            ? _stardewSummary ??= new GameSummaryBuilder(VtConstants.GameSummaryPath).Build()
+            : _baseStardewSummary ??= new GameSummaryBuilder(VtConstants.GameSummaryPath, VtConstants.BaseGameSummaryFileName).Build();
     }
 
     private string GetNpcConstantContext()

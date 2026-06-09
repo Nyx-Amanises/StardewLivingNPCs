@@ -269,13 +269,42 @@ internal static class NpcDisposition
 
     private static bool TryGetKnownProfile(string? name, out NpcDispositionProfile profile)
     {
-        if (!string.IsNullOrWhiteSpace(name) && Profiles.TryGetValue(name, out profile!))
+        if (!string.IsNullOrWhiteSpace(name)
+            && Profiles.TryGetValue(name, out profile!)
+            && IsProfileCompatibilityEnabled(name, profile))
         {
             return true;
         }
 
         profile = null!;
         return false;
+    }
+
+    internal static bool IsSveNpcName(string? name)
+    {
+        return !string.IsNullOrWhiteSpace(name) && SveNames.Contains(name);
+    }
+
+    internal static bool IsRsvNpcName(string? name)
+    {
+        return !string.IsNullOrWhiteSpace(name) && RsvNames.Contains(name);
+    }
+
+    private static bool IsProfileCompatibilityEnabled(string name, NpcDispositionProfile profile)
+    {
+        if (!ModCompatibility.EnableSve
+            && (IsSveNpcName(name) || ModCompatibility.IsSveSource(profile.SourceLabel)))
+        {
+            return false;
+        }
+
+        if (!ModCompatibility.EnableRsv
+            && (IsRsvNpcName(name) || ModCompatibility.IsRsvSource(profile.SourceLabel)))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private static NpcDispositionProfile? TryBuildCharacterDataProfile(NPC npc)
@@ -335,11 +364,11 @@ internal static class NpcDisposition
             $"{npc.displayName} is handled as a {sourceLabel} character using Stardew Valley 1.6 Data/Characters."
         };
 
-        if (string.Equals(sourceLabel, "Stardew Valley Expanded", StringComparison.OrdinalIgnoreCase))
+        if (ModCompatibility.IsSveSource(sourceLabel))
         {
             details.Add("This is part of the Stardew Valley Expanded world, so keep continuity compatible with SVE's added locations, jobs, families, and larger adventure/magic arcs without quoting mod dialogue.");
         }
-        else if (string.Equals(sourceLabel, "Ridgeside Village", StringComparison.OrdinalIgnoreCase))
+        else if (ModCompatibility.IsRsvSource(sourceLabel))
         {
             details.Add("This is part of Ridgeside Village, so keep continuity compatible with the mountain village community, local family networks, and RSV social life without quoting mod dialogue.");
         }
@@ -454,14 +483,14 @@ internal static class NpcDisposition
 
     private static string GetKnownSourceLabel(string npcName)
     {
-        if (SveNames.Contains(npcName))
+        if (ModCompatibility.EnableSve && IsSveNpcName(npcName))
         {
-            return "Stardew Valley Expanded";
+            return ModCompatibility.SveSourceLabel;
         }
 
-        if (RsvNames.Contains(npcName))
+        if (ModCompatibility.EnableRsv && IsRsvNpcName(npcName))
         {
-            return "Ridgeside Village";
+            return ModCompatibility.RsvSourceLabel;
         }
 
         return "custom NPC";
@@ -469,14 +498,14 @@ internal static class NpcDisposition
 
     private static string GetKnownSourceDebugLabel(string npcName)
     {
-        if (SveNames.Contains(npcName))
+        if (ModCompatibility.EnableSve && IsSveNpcName(npcName))
         {
-            return "Stardew Valley Expanded";
+            return ModCompatibility.SveSourceLabel;
         }
 
-        if (RsvNames.Contains(npcName))
+        if (ModCompatibility.EnableRsv && IsRsvNpcName(npcName))
         {
-            return "Ridgeside Village";
+            return ModCompatibility.RsvSourceLabel;
         }
 
         return "自定义 NPC";
@@ -637,7 +666,7 @@ internal static class NpcDisposition
             emoteModifier,
             passiveEmoteId,
             reason,
-            "Stardew Valley Expanded",
+            ModCompatibility.SveSourceLabel,
             "Stardew Valley Expanded（专属摘要）",
             backgroundPrompt,
             dialoguePrompt
@@ -661,7 +690,7 @@ internal static class NpcDisposition
             emoteModifier,
             passiveEmoteId,
             reason,
-            "Ridgeside Village",
+            ModCompatibility.RsvSourceLabel,
             "Ridgeside Village（专属摘要）",
             backgroundPrompt,
             dialoguePrompt

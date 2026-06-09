@@ -519,6 +519,27 @@ internal static class ModConfigMenu
 
         configMenu.AddSectionTitle(
             mod: manifest,
+            text: () => "Mod 兼容"
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "启用 SVE 兼容",
+            tooltip: () => "关闭后，LivingNPCs 不再使用 SVE 专用人设、扩展进度和扩展 NPC 上下文。",
+            getValue: () => config.EnableSveCompatibility,
+            setValue: value => config.EnableSveCompatibility = value
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => "启用 RSV 兼容",
+            tooltip: () => "关闭后，LivingNPCs 不再使用 Ridgeside Village 专用人设、扩展进度和扩展 NPC 上下文。",
+            getValue: () => config.EnableRsvCompatibility,
+            setValue: value => config.EnableRsvCompatibility = value
+        );
+
+        configMenu.AddSectionTitle(
+            mod: manifest,
             text: () => "ValleyTalk 集成"
         );
 
