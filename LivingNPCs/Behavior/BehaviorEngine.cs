@@ -664,7 +664,7 @@ internal sealed class BehaviorEngine
         GiftTier tier = type == "give_meaningful_gift"
             ? GiftTier.Meaningful
             : GiftTier.Small;
-        if (this.giftSelector.TryChooseMentioned(npcResponse, tier, out GiftSelection? mentioned)
+        if (this.giftSelector.TryChooseMentioned(npc, npcResponse, tier, out GiftSelection? mentioned)
             && mentioned != null)
         {
             action.ItemId = mentioned.ItemId;
@@ -950,7 +950,9 @@ internal sealed class BehaviorEngine
             "## LivingNPCs Gift Opportunity",
             $"- Gift cue: {cue}.",
             "- If it fits the visible reply, have the NPC naturally offer a small in-game gift now and include exactly one hidden action with type give_small_gift.",
-            "- If naming a specific gift, use an allowed itemId and itemLabel. Generic wording such as 'a small thing' is fine when no specific item is named.",
+            $"- Shared small gift IDs: {this.giftSelector.BuildCommonPromptList(GiftTier.Small)}.",
+            $"- {npc.displayName}'s personalized small gift IDs: {this.giftSelector.BuildPersonalizedPromptList(npc, GiftTier.Small)}.",
+            "- If naming a specific gift, use an itemId from the two lists above and the matching itemLabel. Generic wording such as 'a small thing' is fine when no specific item is named.",
             "- If the moment feels emotionally wrong, crowded, or abrupt, skip the gift rather than forcing it."
         );
     }

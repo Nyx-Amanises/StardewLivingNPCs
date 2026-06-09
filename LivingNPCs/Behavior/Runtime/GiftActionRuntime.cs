@@ -291,7 +291,7 @@ internal sealed class GiftActionRuntime
         reason = string.Empty;
         if (!string.IsNullOrWhiteSpace(action.ItemId))
         {
-            if (this.giftSelector.TryChooseRequested(action.ItemId, tier, out GiftSelection? requestedSelection)
+            if (this.giftSelector.TryChooseRequested(npc, action.ItemId, tier, out GiftSelection? requestedSelection)
                 && requestedSelection != null)
             {
                 selection = requestedSelection;
