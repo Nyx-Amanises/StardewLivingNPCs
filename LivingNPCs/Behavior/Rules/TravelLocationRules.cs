@@ -1,9 +1,58 @@
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 
 namespace LivingNPCs.Behavior;
 
 internal static class TravelLocationRules
 {
+    private static readonly HashSet<string> PublicOutingTargets = new(System.StringComparer.OrdinalIgnoreCase)
+    {
+        "Farm",
+        "Town",
+        "Mountain",
+        "Mine",
+        "Beach",
+        "Forest",
+        "BusStop",
+        "Saloon",
+        "SeedShop",
+        "ArchaeologyHouse",
+        "Hospital",
+        "Trailer",
+        "JoshHouse",
+        "HaleyHouse",
+        "SamHouse",
+        "ScienceHouse",
+        "LeahHouse",
+        "AnimalShop",
+        "ElliottHouse",
+        "Blacksmith",
+        "FishShop",
+        "WizardHouse",
+        "Tent",
+        "FlowerDance",
+        "Custom_GrampletonCoast",
+        "Custom_BlueMoonVineyard",
+        "Custom_AuroraVineyard",
+        "Custom_ForestWest",
+        "Custom_SVESummit",
+        "Custom_GrandpasShedOutside",
+        "Custom_JunimoWoods",
+        "Custom_EnchantedGrove",
+        "Custom_Ridgeside_RidgesideVillage",
+        "Custom_Ridgeside_Ridge",
+        "Custom_Ridgeside_RidgeFalls",
+        "Custom_Ridgeside_RidgeForest",
+        "Custom_Ridgeside_RSVCableCar",
+        "Custom_Ridgeside_RSVCliff",
+        "Custom_Ridgeside_RSVTheHike",
+        "Custom_Ridgeside_RSVSpiritRealm",
+        "Custom_Ridgeside_LogCabinHotelLobby",
+        "Custom_Ridgeside_PurpleMansion",
+        "Custom_Ridgeside_PaulaClinic",
+        "Custom_Ridgeside_RSVGreenhouse1"
+    };
+
     private static readonly Dictionary<string, string> Aliases = new(System.StringComparer.OrdinalIgnoreCase)
     {
         ["Farm"] = "Farm",
@@ -98,8 +147,99 @@ internal static class TravelLocationRules
         ["Hospital"] = "Hospital",
         ["Clinic"] = "Hospital",
         ["诊所"] = "Hospital",
-        ["医院"] = "Hospital"
+        ["医院"] = "Hospital",
+        ["FlowerDance"] = "FlowerDance",
+        ["Flower Dance"] = "FlowerDance",
+        ["Flower Festival"] = "FlowerDance",
+        ["花舞节"] = "FlowerDance",
+        ["花舞节会场"] = "FlowerDance",
+        ["Custom_GrampletonCoast"] = "Custom_GrampletonCoast",
+        ["Grampleton Coast"] = "Custom_GrampletonCoast",
+        ["SVE Coast"] = "Custom_GrampletonCoast",
+        ["格兰普顿海岸"] = "Custom_GrampletonCoast",
+        ["SVE 海岸"] = "Custom_GrampletonCoast",
+        ["Custom_BlueMoonVineyard"] = "Custom_BlueMoonVineyard",
+        ["Blue Moon Vineyard"] = "Custom_BlueMoonVineyard",
+        ["Sophia's Vineyard"] = "Custom_BlueMoonVineyard",
+        ["蓝月葡萄园"] = "Custom_BlueMoonVineyard",
+        ["索菲亚的葡萄园"] = "Custom_BlueMoonVineyard",
+        ["Custom_AuroraVineyard"] = "Custom_AuroraVineyard",
+        ["Aurora Vineyard"] = "Custom_AuroraVineyard",
+        ["极光葡萄园"] = "Custom_AuroraVineyard",
+        ["Custom_ForestWest"] = "Custom_ForestWest",
+        ["Forest West"] = "Custom_ForestWest",
+        ["West Forest"] = "Custom_ForestWest",
+        ["SVE Forest West"] = "Custom_ForestWest",
+        ["西部森林"] = "Custom_ForestWest",
+        ["Custom_SVESummit"] = "Custom_SVESummit",
+        ["SVE Summit"] = "Custom_SVESummit",
+        ["Summit"] = "Custom_SVESummit",
+        ["山顶"] = "Custom_SVESummit",
+        ["SVE 山顶"] = "Custom_SVESummit",
+        ["Custom_GrandpasShedOutside"] = "Custom_GrandpasShedOutside",
+        ["Grandpa's Shed"] = "Custom_GrandpasShedOutside",
+        ["Grandpa's Shed Outside"] = "Custom_GrandpasShedOutside",
+        ["爷爷的棚屋"] = "Custom_GrandpasShedOutside",
+        ["Custom_JunimoWoods"] = "Custom_JunimoWoods",
+        ["Junimo Woods"] = "Custom_JunimoWoods",
+        ["祝尼魔森林"] = "Custom_JunimoWoods",
+        ["Custom_EnchantedGrove"] = "Custom_EnchantedGrove",
+        ["Enchanted Grove"] = "Custom_EnchantedGrove",
+        ["魔法林地"] = "Custom_EnchantedGrove",
+        ["Custom_Ridgeside_RidgesideVillage"] = "Custom_Ridgeside_RidgesideVillage",
+        ["Ridgeside Village"] = "Custom_Ridgeside_RidgesideVillage",
+        ["Ridgeside"] = "Custom_Ridgeside_RidgesideVillage",
+        ["RSV Village"] = "Custom_Ridgeside_RidgesideVillage",
+        ["里奇赛德村"] = "Custom_Ridgeside_RidgesideVillage",
+        ["岭边村"] = "Custom_Ridgeside_RidgesideVillage",
+        ["Custom_Ridgeside_Ridge"] = "Custom_Ridgeside_Ridge",
+        ["Ridgeside Ridge"] = "Custom_Ridgeside_Ridge",
+        ["The Ridge"] = "Custom_Ridgeside_Ridge",
+        ["山脊"] = "Custom_Ridgeside_Ridge",
+        ["Custom_Ridgeside_RidgeFalls"] = "Custom_Ridgeside_RidgeFalls",
+        ["Ridge Falls"] = "Custom_Ridgeside_RidgeFalls",
+        ["Ridgeside Falls"] = "Custom_Ridgeside_RidgeFalls",
+        ["山脊瀑布"] = "Custom_Ridgeside_RidgeFalls",
+        ["Custom_Ridgeside_RidgeForest"] = "Custom_Ridgeside_RidgeForest",
+        ["Ridge Forest"] = "Custom_Ridgeside_RidgeForest",
+        ["Ridgeside Forest"] = "Custom_Ridgeside_RidgeForest",
+        ["山脊森林"] = "Custom_Ridgeside_RidgeForest",
+        ["Custom_Ridgeside_RSVCableCar"] = "Custom_Ridgeside_RSVCableCar",
+        ["Ridgeside Cable Car"] = "Custom_Ridgeside_RSVCableCar",
+        ["Cable Car"] = "Custom_Ridgeside_RSVCableCar",
+        ["缆车"] = "Custom_Ridgeside_RSVCableCar",
+        ["Custom_Ridgeside_RSVCliff"] = "Custom_Ridgeside_RSVCliff",
+        ["Ridgeside Cliff"] = "Custom_Ridgeside_RSVCliff",
+        ["RSV Cliff"] = "Custom_Ridgeside_RSVCliff",
+        ["悬崖"] = "Custom_Ridgeside_RSVCliff",
+        ["里奇赛德悬崖"] = "Custom_Ridgeside_RSVCliff",
+        ["Custom_Ridgeside_RSVTheHike"] = "Custom_Ridgeside_RSVTheHike",
+        ["The Hike"] = "Custom_Ridgeside_RSVTheHike",
+        ["Ridgeside Hike"] = "Custom_Ridgeside_RSVTheHike",
+        ["徒步道"] = "Custom_Ridgeside_RSVTheHike",
+        ["Custom_Ridgeside_RSVSpiritRealm"] = "Custom_Ridgeside_RSVSpiritRealm",
+        ["Spirit Realm"] = "Custom_Ridgeside_RSVSpiritRealm",
+        ["灵界"] = "Custom_Ridgeside_RSVSpiritRealm",
+        ["Custom_Ridgeside_LogCabinHotelLobby"] = "Custom_Ridgeside_LogCabinHotelLobby",
+        ["Log Cabin Hotel"] = "Custom_Ridgeside_LogCabinHotelLobby",
+        ["Ridgeside Hotel"] = "Custom_Ridgeside_LogCabinHotelLobby",
+        ["木屋旅馆"] = "Custom_Ridgeside_LogCabinHotelLobby",
+        ["Custom_Ridgeside_PurpleMansion"] = "Custom_Ridgeside_PurpleMansion",
+        ["Purple Mansion"] = "Custom_Ridgeside_PurpleMansion",
+        ["紫色宅邸"] = "Custom_Ridgeside_PurpleMansion",
+        ["Custom_Ridgeside_PaulaClinic"] = "Custom_Ridgeside_PaulaClinic",
+        ["Paula's Clinic"] = "Custom_Ridgeside_PaulaClinic",
+        ["Ridgeside Clinic"] = "Custom_Ridgeside_PaulaClinic",
+        ["宝拉诊所"] = "Custom_Ridgeside_PaulaClinic",
+        ["里奇赛德诊所"] = "Custom_Ridgeside_PaulaClinic",
+        ["Custom_Ridgeside_RSVGreenhouse1"] = "Custom_Ridgeside_RSVGreenhouse1",
+        ["Ridgeside Greenhouse"] = "Custom_Ridgeside_RSVGreenhouse1",
+        ["RSV Greenhouse"] = "Custom_Ridgeside_RSVGreenhouse1",
+        ["里奇赛德温室"] = "Custom_Ridgeside_RSVGreenhouse1"
     };
+
+    public static IReadOnlyCollection<string> KnownPublicOutingTargets { get; } =
+        new ReadOnlyCollection<string>([.. PublicOutingTargets]);
 
     public static string Normalize(string value, string fallback)
     {
@@ -110,6 +250,12 @@ internal static class TravelLocationRules
         }
 
         return string.IsNullOrWhiteSpace(candidate) ? "Town" : candidate;
+    }
+
+    public static bool IsKnownPublicOutingTarget(string locationName)
+    {
+        string normalized = Normalize(locationName, string.Empty);
+        return PublicOutingTargets.Contains(normalized);
     }
 
     public static string GetLabel(string locationName)
@@ -139,6 +285,79 @@ internal static class TravelLocationRules
             "SeedShop" => "Pierre's General Store",
             "ArchaeologyHouse" => "the museum and library",
             "Hospital" => "the clinic",
+            "FlowerDance" => "the edge of the Flower Dance meadow",
+            "Custom_GrampletonCoast" => "Grampleton Coast",
+            "Custom_BlueMoonVineyard" => "Blue Moon Vineyard",
+            "Custom_AuroraVineyard" => "Aurora Vineyard",
+            "Custom_ForestWest" => "SVE's western forest",
+            "Custom_SVESummit" => "the SVE summit",
+            "Custom_GrandpasShedOutside" => "Grandpa's shed",
+            "Custom_JunimoWoods" => "Junimo Woods",
+            "Custom_EnchantedGrove" => "the enchanted grove",
+            "Custom_Ridgeside_RidgesideVillage" => "Ridgeside Village",
+            "Custom_Ridgeside_Ridge" => "the Ridgeside ridge",
+            "Custom_Ridgeside_RidgeFalls" => "Ridge Falls",
+            "Custom_Ridgeside_RidgeForest" => "Ridge Forest",
+            "Custom_Ridgeside_RSVCableCar" => "the Ridgeside cable car",
+            "Custom_Ridgeside_RSVCliff" => "the Ridgeside cliff",
+            "Custom_Ridgeside_RSVTheHike" => "the Ridgeside hiking trail",
+            "Custom_Ridgeside_RSVSpiritRealm" => "the Spirit Realm",
+            "Custom_Ridgeside_LogCabinHotelLobby" => "the Log Cabin Hotel lobby",
+            "Custom_Ridgeside_PurpleMansion" => "the Purple Mansion",
+            "Custom_Ridgeside_PaulaClinic" => "Paula's clinic",
+            "Custom_Ridgeside_RSVGreenhouse1" => "the Ridgeside greenhouse",
+            _ => locationName
+        };
+    }
+
+    public static string GetChineseLabel(string locationName)
+    {
+        return locationName switch
+        {
+            "Farm" => "农场",
+            "Town" => "鹈鹕镇",
+            "Mountain" => "山上",
+            "Mine" => "矿井",
+            "Beach" => "海边",
+            "Forest" => "煤矿森林",
+            "BusStop" => "巴士站",
+            "Trailer" => "潘妮和帕姆的家",
+            "Saloon" => "星之果实酒吧",
+            "SeedShop" => "皮埃尔的杂货店",
+            "ArchaeologyHouse" => "博物馆和图书馆",
+            "Hospital" => "诊所",
+            "JoshHouse" => "亚历克斯家",
+            "HaleyHouse" => "海莉和艾米丽家",
+            "SamHouse" => "山姆家",
+            "ScienceHouse" => "罗宾家",
+            "LeahHouse" => "莉亚家",
+            "AnimalShop" => "玛妮牧场",
+            "ElliottHouse" => "艾利欧特小屋",
+            "Blacksmith" => "铁匠铺",
+            "FishShop" => "鱼店",
+            "WizardHouse" => "法师塔",
+            "Tent" => "莱纳斯的帐篷",
+            "FlowerDance" => "花舞节边缘",
+            "Custom_GrampletonCoast" => "格兰普顿海岸",
+            "Custom_BlueMoonVineyard" => "蓝月葡萄园",
+            "Custom_AuroraVineyard" => "极光葡萄园",
+            "Custom_ForestWest" => "SVE 西部森林",
+            "Custom_SVESummit" => "SVE 山顶",
+            "Custom_GrandpasShedOutside" => "爷爷的棚屋",
+            "Custom_JunimoWoods" => "祝尼魔森林",
+            "Custom_EnchantedGrove" => "魔法林地",
+            "Custom_Ridgeside_RidgesideVillage" => "里奇赛德村",
+            "Custom_Ridgeside_Ridge" => "里奇赛德山脊",
+            "Custom_Ridgeside_RidgeFalls" => "山脊瀑布",
+            "Custom_Ridgeside_RidgeForest" => "山脊森林",
+            "Custom_Ridgeside_RSVCableCar" => "里奇赛德缆车",
+            "Custom_Ridgeside_RSVCliff" => "里奇赛德悬崖",
+            "Custom_Ridgeside_RSVTheHike" => "里奇赛德徒步道",
+            "Custom_Ridgeside_RSVSpiritRealm" => "灵界",
+            "Custom_Ridgeside_LogCabinHotelLobby" => "木屋旅馆大厅",
+            "Custom_Ridgeside_PurpleMansion" => "紫色宅邸",
+            "Custom_Ridgeside_PaulaClinic" => "宝拉诊所",
+            "Custom_Ridgeside_RSVGreenhouse1" => "里奇赛德温室",
             _ => locationName
         };
     }

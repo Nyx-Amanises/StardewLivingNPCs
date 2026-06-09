@@ -59,6 +59,11 @@ public sealed class CompanionOutingRulesTests
     [InlineData("SeedShop", "Let's browse the shop.", "browse")]
     [InlineData("Beach", "Let's look at the scenery.", "scenic")]
     [InlineData("Saloon", "Let's spend some time there.", "social")]
+    [InlineData("Beach", "我们去看浪吧。", "scenic")]
+    [InlineData("ArchaeologyHouse", "去图书馆翻书。", "browse")]
+    [InlineData("Saloon", "靠吧台聊一会。", "social")]
+    [InlineData("Mountain", "在山湖边聊天。", "quiet")]
+    [InlineData("FlowerDance", "沿着花舞节边缘散步。", "festival")]
     public void ActivityStyleReflectsDestinationAndConversation(string target, string reason, string expected)
     {
         Assert.Equal(expected, CompanionOutingRules.DetermineActivityStyle(target, reason));

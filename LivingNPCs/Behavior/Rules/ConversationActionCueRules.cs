@@ -274,9 +274,79 @@ internal static class ConversationActionCueRules
             return "Beach";
         }
 
+        if (ContainsAny(text, "格兰普顿海岸", "sve 海岸", "grampleton coast", "sve coast"))
+        {
+            return "Custom_GrampletonCoast";
+        }
+
+        if (ContainsAny(text, "蓝月葡萄园", "索菲亚的葡萄园", "blue moon vineyard", "sophia's vineyard"))
+        {
+            return "Custom_BlueMoonVineyard";
+        }
+
+        if (ContainsAny(text, "极光葡萄园", "aurora vineyard"))
+        {
+            return "Custom_AuroraVineyard";
+        }
+
+        if (ContainsAny(text, "祝尼魔森林", "junimo woods"))
+        {
+            return "Custom_JunimoWoods";
+        }
+
+        if (ContainsAny(text, "魔法林地", "enchanted grove"))
+        {
+            return "Custom_EnchantedGrove";
+        }
+
+        if (ContainsAny(text, "爷爷的棚屋", "grandpa's shed"))
+        {
+            return "Custom_GrandpasShedOutside";
+        }
+
         if (ContainsAny(text, "博物馆", "图书馆", "museum", "library"))
         {
             return "ArchaeologyHouse";
+        }
+
+        if (ContainsAny(text, "里奇赛德瀑布", "山脊瀑布", "ridge falls", "ridgeside falls"))
+        {
+            return "Custom_Ridgeside_RidgeFalls";
+        }
+
+        if (ContainsAny(text, "山脊森林", "里奇赛德森林", "ridge forest", "ridgeside forest"))
+        {
+            return "Custom_Ridgeside_RidgeForest";
+        }
+
+        if (ContainsAny(text, "西部森林", "forest west", "west forest"))
+        {
+            return "Custom_ForestWest";
+        }
+
+        if (ContainsAny(text, "sve 山顶", "山顶", "summit", "sve summit"))
+        {
+            return "Custom_SVESummit";
+        }
+
+        if (ContainsAny(text, "里奇赛德山脊", "山脊", "ridgeside ridge", "the ridge"))
+        {
+            return "Custom_Ridgeside_Ridge";
+        }
+
+        if (ContainsAny(text, "里奇赛德悬崖", "悬崖", "ridgeside cliff", "rsv cliff"))
+        {
+            return "Custom_Ridgeside_RSVCliff";
+        }
+
+        if (ContainsAny(text, "徒步道", "里奇赛德徒步", "the hike", "ridgeside hike"))
+        {
+            return "Custom_Ridgeside_RSVTheHike";
+        }
+
+        if (ContainsAny(text, "缆车", "cable car"))
+        {
+            return "Custom_Ridgeside_RSVCableCar";
         }
 
         if (ContainsAny(text, "森林", "煤矿森林", "forest"))
@@ -299,9 +369,39 @@ internal static class ConversationActionCueRules
             return "Saloon";
         }
 
+        if (ContainsAny(text, "木屋旅馆", "里奇赛德旅馆", "log cabin hotel", "ridgeside hotel"))
+        {
+            return "Custom_Ridgeside_LogCabinHotelLobby";
+        }
+
+        if (ContainsAny(text, "紫色宅邸", "purple mansion"))
+        {
+            return "Custom_Ridgeside_PurpleMansion";
+        }
+
+        if (ContainsAny(text, "宝拉诊所", "里奇赛德诊所", "paula's clinic", "ridgeside clinic"))
+        {
+            return "Custom_Ridgeside_PaulaClinic";
+        }
+
         if (ContainsAny(text, "医院", "诊所", "clinic", "hospital"))
         {
             return "Hospital";
+        }
+
+        if (ContainsAny(text, "里奇赛德温室", "ridgeside greenhouse", "rsv greenhouse"))
+        {
+            return "Custom_Ridgeside_RSVGreenhouse1";
+        }
+
+        if (ContainsAny(text, "灵界", "spirit realm"))
+        {
+            return "Custom_Ridgeside_RSVSpiritRealm";
+        }
+
+        if (ContainsAny(text, "花舞节", "花田", "flower dance", "flower festival"))
+        {
+            return "FlowerDance";
         }
 
         if (ContainsAny(text, "皮埃尔", "杂货店", "general store", "pierre"))
@@ -317,6 +417,11 @@ internal static class ConversationActionCueRules
         if (ContainsAny(text, "镇上", "鹈鹕镇", "town"))
         {
             return "Town";
+        }
+
+        if (ContainsAny(text, "里奇赛德村", "岭边村", "ridgeside village", "ridgeside", "rsv village"))
+        {
+            return "Custom_Ridgeside_RidgesideVillage";
         }
 
         return string.Empty;

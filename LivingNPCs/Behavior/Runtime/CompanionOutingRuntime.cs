@@ -79,7 +79,7 @@ internal sealed class CompanionOutingRuntime
         }
 
         string targetLocation = BehaviorMemory.NormalizeTravelLocation(action.TargetLocation, string.Empty);
-        if (string.IsNullOrWhiteSpace(targetLocation) || !IsKnownTarget(targetLocation))
+        if (string.IsNullOrWhiteSpace(targetLocation) || !TravelLocationRules.IsKnownPublicOutingTarget(targetLocation))
         {
             reason = "a supported outing destination is required";
             return false;
@@ -143,7 +143,7 @@ internal sealed class CompanionOutingRuntime
             npc.Name,
             Game1.Date.TotalDays,
             targetLocation,
-            GetTargetLabel(targetLocation),
+            TravelLocationRules.GetChineseLabel(targetLocation),
             activityStyle,
             anchor.Tile,
             anchor.FacingDirection,
@@ -740,45 +740,6 @@ internal sealed class CompanionOutingRuntime
 
         reason = string.Empty;
         return false;
-    }
-
-    private static bool IsKnownTarget(string targetLocation)
-    {
-        return targetLocation is "Farm" or "Town" or "Mountain" or "Mine" or "Beach" or "Forest" or "BusStop"
-            or "Saloon" or "SeedShop" or "ArchaeologyHouse" or "Hospital" or "Trailer"
-            or "JoshHouse" or "HaleyHouse" or "SamHouse" or "ScienceHouse" or "LeahHouse"
-            or "AnimalShop" or "ElliottHouse" or "Blacksmith" or "FishShop" or "WizardHouse" or "Tent";
-    }
-
-    private static string GetTargetLabel(string targetLocation)
-    {
-        return targetLocation switch
-        {
-            "Farm" => "农场",
-            "Town" => "鹈鹕镇",
-            "Mountain" => "山上",
-            "Mine" => "矿井",
-            "Beach" => "海边",
-            "Forest" => "煤矿森林",
-            "BusStop" => "巴士站",
-            "Trailer" => "潘妮和帕姆的家",
-            "Saloon" => "星之果实酒吧",
-            "SeedShop" => "皮埃尔的杂货店",
-            "ArchaeologyHouse" => "博物馆和图书馆",
-            "Hospital" => "诊所",
-            "JoshHouse" => "亚历克斯家",
-            "HaleyHouse" => "海莉和艾米丽家",
-            "SamHouse" => "山姆家",
-            "ScienceHouse" => "罗宾家",
-            "LeahHouse" => "莉亚家",
-            "AnimalShop" => "玛妮牧场",
-            "ElliottHouse" => "艾利欧特小屋",
-            "Blacksmith" => "铁匠铺",
-            "FishShop" => "鱼店",
-            "WizardHouse" => "法师塔",
-            "Tent" => "莱纳斯的帐篷",
-            _ => targetLocation
-        };
     }
 
     private static string FormatPhase(CompanionOutingPhase phase)

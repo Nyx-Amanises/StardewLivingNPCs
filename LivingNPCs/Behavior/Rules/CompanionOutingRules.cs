@@ -11,28 +11,35 @@ internal static class CompanionOutingRules
     public static string DetermineActivityStyle(string targetLocation, string reason)
     {
         string text = reason ?? string.Empty;
-        if (ContainsAny(text, "风景", "景色", "看看海", "散心", "看风景", "scenery", "view", "sightseeing"))
+        if (ContainsAny(text, "花舞", "花田", "跳舞", "dance meadow", "flower dance", "festival")
+            || targetLocation == "FlowerDance")
         {
-            return "scenic";
+            return "festival";
         }
 
-        if (ContainsAny(text, "逛", "看看商品", "买东西", "商店", "browse", "shop", "shopping")
-            || targetLocation is "SeedShop" or "ArchaeologyHouse" or "Blacksmith" or "FishShop")
-        {
-            return "browse";
-        }
-
-        if (ContainsAny(text, "安静", "坐一会", "待一会", "聊聊", "quiet", "sit", "talk"))
-        {
-            return "quiet";
-        }
-
-        if (targetLocation is "Saloon" or "Town")
+        if (ContainsAny(text, "吧台", "酒保", "喝一杯", "喝点", "小酌", "bar counter", "bartop", "drink")
+            || IsSocialTarget(targetLocation))
         {
             return "social";
         }
 
-        return targetLocation is "Beach" or "Mountain" or "Forest" or "Farm"
+        if (ContainsAny(text, "风景", "景色", "看看海", "看海", "看浪", "海浪", "浪花", "散心", "看风景", "瀑布", "山顶", "scenery", "view", "sightseeing", "shore", "waves", "waterfall"))
+        {
+            return "scenic";
+        }
+
+        if (ContainsAny(text, "逛", "翻书", "看书", "书架", "展品", "看看商品", "买东西", "商店", "browse", "book", "read", "shelves", "exhibit", "shop", "shopping")
+            || IsBrowseTarget(targetLocation))
+        {
+            return "browse";
+        }
+
+        if (ContainsAny(text, "安静", "坐一会", "待一会", "聊聊", "聊天", "说说话", "湖边聊", "quiet", "sit", "talk", "chat"))
+        {
+            return "quiet";
+        }
+
+        return IsScenicTarget(targetLocation)
             ? "scenic"
             : "visit";
     }
@@ -45,6 +52,7 @@ internal static class CompanionOutingRules
             "browse" => "looking around the place together",
             "quiet" => "sharing some quiet time",
             "social" => "spending relaxed public time together",
+            "festival" => "walking the festival edge together",
             _ => "visiting the place together"
         };
     }
@@ -57,6 +65,7 @@ internal static class CompanionOutingRules
             "browse" => "逛一逛",
             "quiet" => "安静相处",
             "social" => "公共场所相处",
+            "festival" => "节日散步",
             _ => "一起拜访"
         };
     }
@@ -102,5 +111,29 @@ internal static class CompanionOutingRules
         }
 
         return false;
+    }
+
+    private static bool IsBrowseTarget(string targetLocation)
+    {
+        return targetLocation is "SeedShop" or "ArchaeologyHouse" or "Blacksmith" or "FishShop"
+            or "Custom_Ridgeside_LogCabinHotelLobby" or "Custom_Ridgeside_PurpleMansion"
+            or "Custom_Ridgeside_RSVGreenhouse1";
+    }
+
+    private static bool IsScenicTarget(string targetLocation)
+    {
+        return targetLocation is "Beach" or "Mountain" or "Forest" or "Farm"
+            or "Custom_GrampletonCoast" or "Custom_BlueMoonVineyard" or "Custom_AuroraVineyard"
+            or "Custom_ForestWest" or "Custom_SVESummit" or "Custom_GrandpasShedOutside"
+            or "Custom_JunimoWoods" or "Custom_EnchantedGrove"
+            or "Custom_Ridgeside_Ridge" or "Custom_Ridgeside_RidgeFalls"
+            or "Custom_Ridgeside_RidgeForest" or "Custom_Ridgeside_RSVCableCar"
+            or "Custom_Ridgeside_RSVCliff" or "Custom_Ridgeside_RSVTheHike"
+            or "Custom_Ridgeside_RSVSpiritRealm";
+    }
+
+    private static bool IsSocialTarget(string targetLocation)
+    {
+        return targetLocation is "Saloon" or "Town" or "Custom_Ridgeside_RidgesideVillage";
     }
 }
