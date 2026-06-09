@@ -510,8 +510,25 @@ internal sealed class BehaviorEngine
             taste
         );
         LivingNpcState state = this.memory.GetState(npc) ?? this.memory.UpdateStateForGift(npc, gift);
-        this.giftOpportunities.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
-        return this.BuildGiftOpportunityPromptContext(npc);
+        bool scheduledReciprocalGift = this.giftOpportunities.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
+        bool hasReciprocalMail = scheduledReciprocalGift || this.mailService.HasPendingGiftMail(state, "reciprocal");
+        return hasReciprocalMail
+            ? BuildGiftResponseMailPrompt(npc, gift.ItemName)
+            : string.Empty;
+    }
+
+    private static string BuildGiftResponseMailPrompt(NPC npc, string giftName)
+    {
+        string itemLabel = string.IsNullOrWhiteSpace(giftName)
+            ? "the farmer's gift"
+            : giftName.Trim();
+        return string.Join(
+            "\n",
+            "## LivingNPCs Reciprocal Gift Mail",
+            $"- LivingNPCs has scheduled a later mailbox return gift from {npc.displayName} because the farmer gave them {itemLabel}.",
+            "- In this immediate gift reaction, the NPC may briefly imply they will send something later if it sounds natural.",
+            "- Do not give the farmer an item now, do not include a hidden give_small_gift or give_meaningful_gift action, and do not promise a specific item."
+        );
     }
 
     private void TryExecuteConversationActions(
@@ -915,23 +932,8 @@ internal sealed class BehaviorEngine
             return string.Empty;
         }
 
-        int today = Game1.Date.TotalDays;
-        if (state.PendingReciprocalGiftDueTotalDays >= 0
-            && state.PendingReciprocalGiftDueTotalDays + GiftActionRules.PendingReciprocalGiftExpirationDays < today)
-        {
-            state.PendingReciprocalGiftDueTotalDays = -1;
-            state.PendingReciprocalGiftSourceGiftName = string.Empty;
-            state.PendingReciprocalGiftReason = string.Empty;
-        }
-
         string cue = string.Empty;
-        if (state.PendingReciprocalGiftDueTotalDays >= 0 && state.PendingReciprocalGiftDueTotalDays <= today)
-        {
-            cue = string.IsNullOrWhiteSpace(state.PendingReciprocalGiftReason)
-                ? "The NPC has a natural opportunity to offer a small return gift for a recent gift from the farmer."
-                : state.PendingReciprocalGiftReason;
-        }
-        else if (state.DailyGiftOpportunityTotalDays == today)
+        if (state.DailyGiftOpportunityTotalDays == Game1.Date.TotalDays)
         {
             cue = string.IsNullOrWhiteSpace(state.DailyGiftOpportunityReason)
                 ? "The relationship is warm enough that the NPC may offer a small everyday gift today."

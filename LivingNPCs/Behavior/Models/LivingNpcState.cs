@@ -812,13 +812,9 @@ internal sealed class LivingNpcState
             this.DailyGiftOpportunityReason = string.Empty;
         }
 
-        if (this.PendingReciprocalGiftDueTotalDays >= 0
-            && this.PendingReciprocalGiftDueTotalDays + 3 < Game1.Date.TotalDays)
-        {
-            this.PendingReciprocalGiftDueTotalDays = -1;
-            this.PendingReciprocalGiftSourceGiftName = string.Empty;
-            this.PendingReciprocalGiftReason = string.Empty;
-        }
+        this.PendingReciprocalGiftDueTotalDays = -1;
+        this.PendingReciprocalGiftSourceGiftName = string.Empty;
+        this.PendingReciprocalGiftReason = string.Empty;
 
         this.GiftMails ??= new List<NpcGiftMailFact>();
         this.GiftMails = this.GiftMails

@@ -8,7 +8,6 @@ internal static class GiftActionRules
     public const int SmallGiftMinFamiliarity = 15;
     public const int MeaningfulGiftMinFriendshipHearts = 5;
     public const int MeaningfulGiftNoCooldownFriendshipHearts = 8;
-    public const int PendingReciprocalGiftExpirationDays = 3;
 
     public static bool HasAiGiftToday(LivingNpcState state)
     {
