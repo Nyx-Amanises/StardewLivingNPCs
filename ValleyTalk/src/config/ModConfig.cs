@@ -17,7 +17,7 @@ namespace ValleyTalk
         public string PromptFormat { get; set; } = "[INST] {system}\n{prompt}[/INST]\n{response_start}";
         public int QueryTimeout { get; set; } = 60;
         public string ApiKey { get; set; } = string.Empty;
-        public bool ApplyTranslation { get; set; } = false;
+        public bool ApplyTranslation { get; set; } = true;
         public int GeneralFrequency { get; set; } = 4;
         public int MarriageFrequency { get; set; } = 4;
         public int GiftFrequency { get; set; } = 4;

@@ -7,7 +7,7 @@
   "PromptFormat": "[INST] {system}\n{prompt}[/INST]\n{response_start}",
   "QueryTimeout": 30,
   "ApiKey": "ENTER YOUR KEY",
-  "ApplyTranslation": false,
+  "ApplyTranslation": true,
   "GeneralFrequency": 4,
   "MarriageFrequency": 4,
   "GiftFrequency": 4,

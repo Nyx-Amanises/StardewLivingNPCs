@@ -19,6 +19,7 @@ public class Character
     private BioData _bioData;
     private bool? _bioLoadedWithExpansionCompatibilityEnabled;
     private bool? _dialogueLoadedWithExpansionCompatibilityEnabled;
+    private bool _dialogueLoading;
 
     private static readonly Dictionary<string,TimeSpan> filterTimes = new() { { "House", TimeSpan.Zero }, { "Action", TimeSpan.Zero }, { "Received Gift", TimeSpan.Zero }, { "Given Gift", TimeSpan.Zero }, { "Editorial", TimeSpan.Zero }, { "Gender", TimeSpan.Zero }, { "Question", TimeSpan.Zero } };
     private static readonly HashSet<string> SveCompatibilityNames = new(StringComparer.OrdinalIgnoreCase)
@@ -150,75 +151,91 @@ public class Character
 
     private void LoadDialogue()
     {
+        if (_dialogueLoading)
+        {
+            return;
+        }
+
+        _dialogueLoading = true;
+        dialogueData ??= new DialogueFile();
         Dictionary<string, string> canonDialogue = new();
-        bool expansionCompatibilityEnabled = IsExpansionCompatibilityEnabledForCharacter();
-        bool blockPatchedDialogue = ModEntry.BlockModdedContent || !expansionCompatibilityEnabled;
-        if (blockPatchedDialogue && !Bio.UsePatchedDialogue)
+        try
         {
-            var manager = new ContentManager(Game1.content.ServiceProvider, Game1.content.RootDirectory);
-            try
+            bool expansionCompatibilityEnabled = IsExpansionCompatibilityEnabledForCharacter();
+            BioData bio = Bio;
+            bool blockPatchedDialogue = ModEntry.BlockModdedContent || !expansionCompatibilityEnabled;
+            if (blockPatchedDialogue && !bio.UsePatchedDialogue)
             {
-                string assetName = $"Characters\\Dialogue\\{Name}";
-                foreach(var langSuffix in ModEntry.LanguageFileSuffixes)
+                var manager = new ContentManager(Game1.content.ServiceProvider, Game1.content.RootDirectory);
+                try
                 {
-                    var path = $"{assetName}{langSuffix}";
-                    var unmarriedDialogue = manager.Load<Dictionary<string, string>>(path);
-                    if (unmarriedDialogue != null)
+                    string assetName = $"Characters\\Dialogue\\{Name}";
+                    foreach(var langSuffix in ModEntry.LanguageFileSuffixes)
                     {
-                        canonDialogue = unmarriedDialogue;
-                        break;
-                    }
-                }
-            }
-            catch (Exception)
-            {
-                // If it fails, just continue
-            }
-            try
-            {
-                string assetName = $"Characters\\Dialogue\\MarriageDialogue{Name}";
-                foreach(var langSuffix in ModEntry.LanguageFileSuffixes)
-                {
-                    var path = $"{assetName}{langSuffix}";
-                    var marriedDialogue = manager.Load<Dictionary<string, string>>(path);
-                    if (marriedDialogue != null)
-                    {
-                        foreach (var dialogue in marriedDialogue)
+                        var path = $"{assetName}{langSuffix}";
+                        var unmarriedDialogue = manager.Load<Dictionary<string, string>>(path);
+                        if (unmarriedDialogue != null)
                         {
-                            canonDialogue.Add($"M_{dialogue.Key}", dialogue.Value);
+                            canonDialogue = unmarriedDialogue;
+                            break;
                         }
-                        break;
                     }
                 }
+                catch (Exception)
+                {
+                    // If it fails, just continue
+                }
+                try
+                {
+                    string assetName = $"Characters\\Dialogue\\MarriageDialogue{Name}";
+                    foreach(var langSuffix in ModEntry.LanguageFileSuffixes)
+                    {
+                        var path = $"{assetName}{langSuffix}";
+                        var marriedDialogue = manager.Load<Dictionary<string, string>>(path);
+                        if (marriedDialogue != null)
+                        {
+                            foreach (var dialogue in marriedDialogue)
+                            {
+                                canonDialogue.Add($"M_{dialogue.Key}", dialogue.Value);
+                            }
+                            break;
+                        }
+                    }
+                }
+                catch (Exception)
+                {
+                    // If it fails, just continue
+                }
             }
-            catch (Exception)
+            else
             {
-                // If it fails, just continue
+                canonDialogue = StardewNpc.Dialogue;
             }
-        }
-        else
-        {
-            canonDialogue = StardewNpc.Dialogue;
-        }
-        if (Bio.Dialogue != null)
-        {
-            foreach (var dialogue in Bio.Dialogue)
+            if (bio.Dialogue != null)
             {
-                canonDialogue[dialogue.Key] = dialogue.Value;
+                foreach (var dialogue in bio.Dialogue)
+                {
+                    canonDialogue[dialogue.Key] = dialogue.Value;
+                }
+                
             }
-            
-        }
-        DialogueData = new();
-        foreach (var dialogue in canonDialogue)
-        {
-            var context = new DialogueContext(dialogue.Key);
-            var value = new DialogueValue(dialogue.Value);
-            if (value is DialogueValue)
+            var loadedDialogue = new DialogueFile();
+            foreach (var dialogue in canonDialogue)
             {
-                DialogueData.Add("Base",context, value);
+                var context = new DialogueContext(dialogue.Key);
+                var value = new DialogueValue(dialogue.Value);
+                if (value is DialogueValue)
+                {
+                    loadedDialogue.Add("Base",context, value);
+                }
             }
+            dialogueData = loadedDialogue;
+            _dialogueLoadedWithExpansionCompatibilityEnabled = expansionCompatibilityEnabled;
         }
-        _dialogueLoadedWithExpansionCompatibilityEnabled = expansionCompatibilityEnabled;
+        finally
+        {
+            _dialogueLoading = false;
+        }
     }
 
     private void CheckBio()
@@ -1121,7 +1138,7 @@ public class Character
             {
                 LoadDialogue();
             }
-            else if (_dialogueLoadedWithExpansionCompatibilityEnabled != IsExpansionCompatibilityEnabledForCharacter())
+            else if (!_dialogueLoading && _dialogueLoadedWithExpansionCompatibilityEnabled != IsExpansionCompatibilityEnabledForCharacter())
             {
                 _sampleCacheSeason = null;
                 _sampleCacheDay = null;
