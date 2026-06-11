@@ -20,6 +20,8 @@ internal class LlmOAICompatible : LlmOpenAiBase, IGetModelNames
 
     public override bool IsHighlySensoredModel => false;
 
+    protected override bool AllowInstructionsRequestFallback => true;
+
     public string[] GetModelNames()
     {
         return CoreGetModelNames();

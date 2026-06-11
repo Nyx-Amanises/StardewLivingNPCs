@@ -24,34 +24,58 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         public string content { get; set; }
     }
 
+    protected virtual bool AllowInstructionsRequestFallback => false;
+
+    private IEnumerable<string> BuildChatRequestBodies(
+        string systemPromptString,
+        string gameCacheString,
+        string npcCacheString,
+        string promptString,
+        int n_predict)
+    {
+        string userPrompt = gameCacheString + npcCacheString + promptString;
+        yield return JsonConvert.SerializeObject(new
+        {
+            model = modelName,
+            max_tokens = n_predict,
+            messages = new PromptElement[]
+            {
+                new()
+                {
+                    role = "system",
+                    content = systemPromptString
+                },
+                new()
+                {
+                    role = "user",
+                    content = userPrompt
+                }
+            }
+        });
+
+        if (!AllowInstructionsRequestFallback)
+        {
+            yield break;
+        }
+
+        yield return JsonConvert.SerializeObject(new
+        {
+            model = modelName,
+            instructions = systemPromptString,
+            messages = new PromptElement[]
+            {
+                new()
+                {
+                    role = "user",
+                    content = userPrompt
+                }
+            }
+        });
+    }
+
     internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true)
     {
-        var inputString = JsonConvert.SerializeObject(new // Changed
-            {
-                model = modelName,
-                max_tokens = n_predict,
-                messages = new PromptElement[]
-                { 
-                    new()
-                    {
-                        role = "system",
-                        content = systemPromptString
-                    },
-                    new()
-                    {
-                        role = "user",
-                        content = gameCacheString + npcCacheString + promptString
-                    }
-                }
-            });
-        var json = new StringContent(
-            inputString,
-            Encoding.UTF8,
-            "application/json"
-        );
-
         // call out to URL passing the object as the body, and return the result
-        int retry = allowRetry ? 3 : 1;
         var fullUrl = $"{url}/v1/chat/completions";
         
         // Check network availability on Android
@@ -62,72 +86,76 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         
         string responseString = "";
         int apiResponseCode = 500;
-        while (retry > 0)
+        foreach (string inputString in BuildChatRequestBodies(systemPromptString, gameCacheString, npcCacheString, promptString, n_predict))
         {
-            try
+            int retry = allowRetry ? 3 : 1;
+            while (retry > 0)
             {
-                // Use Android-compatible network helper
-                responseString = await NetworkHelper.MakeRequestAsync(fullUrl, inputString, CancellationToken.None, apiKey);
-                if (TryExtractOpenAiContent(responseString, out string parsedText, out TokenUsage parsedUsage))
+                try
                 {
-                    return new LlmResponse(parsedText, usage: parsedUsage);
-                }
-                if (LooksLikeServerSentEvents(responseString))
-                {
-                    retry--;
-                    continue;
-                }
-
-                var responseJson = JObject.Parse(responseString);
-
-                if (responseJson == null)
-                {
-                    throw new Exception("Failed to parse response");
-                }
-                else
-                {
-
-                    if (!responseJson.TryGetValue("choices", out var choicesToken) || choicesToken.Type == JTokenType.Null) { retry--; continue; } // Changed
-                    var choicesArray = choicesToken as JArray;
-                    if (choicesArray == null || !choicesArray.HasValues) { retry--; continue; }
-
-                    var firstChoice = choicesArray.FirstOrDefault();
-                    if (firstChoice == null) { retry--; continue; }
-
-                    var messageToken = firstChoice["message"];
-                    if (messageToken == null || messageToken.Type == JTokenType.Null) { retry--; continue; }
-
-                    var contentToken = messageToken["content"];
-                    if (contentToken == null || contentToken.Type == JTokenType.Null) { retry--; continue; }
-
-                    var text = contentToken.ToString();
-                    if (!string.IsNullOrWhiteSpace(text))
+                    // Use Android-compatible network helper
+                    responseString = await NetworkHelper.MakeRequestAsync(fullUrl, inputString, CancellationToken.None, apiKey);
+                    if (TryExtractOpenAiContent(responseString, out string parsedText, out TokenUsage parsedUsage))
                     {
-                        return new LlmResponse(text, usage: TokenUsage.FromOpenAiUsage(responseJson["usage"] as JObject));
+                        return new LlmResponse(parsedText, usage: parsedUsage);
                     }
-                    else
+                    if (LooksLikeServerSentEvents(responseString))
                     {
                         retry--;
                         continue;
                     }
+
+                    var responseJson = JObject.Parse(responseString);
+
+                    if (responseJson == null)
+                    {
+                        throw new Exception("Failed to parse response");
+                    }
+                    else
+                    {
+
+                        if (!responseJson.TryGetValue("choices", out var choicesToken) || choicesToken.Type == JTokenType.Null) { retry--; continue; } // Changed
+                        var choicesArray = choicesToken as JArray;
+                        if (choicesArray == null || !choicesArray.HasValues) { retry--; continue; }
+
+                        var firstChoice = choicesArray.FirstOrDefault();
+                        if (firstChoice == null) { retry--; continue; }
+
+                        var messageToken = firstChoice["message"];
+                        if (messageToken == null || messageToken.Type == JTokenType.Null) { retry--; continue; }
+
+                        var contentToken = messageToken["content"];
+                        if (contentToken == null || contentToken.Type == JTokenType.Null) { retry--; continue; }
+
+                        var text = contentToken.ToString();
+                        if (!string.IsNullOrWhiteSpace(text))
+                        {
+                            return new LlmResponse(text, usage: TokenUsage.FromOpenAiUsage(responseJson["usage"] as JObject));
+                        }
+                        else
+                        {
+                            retry--;
+                            continue;
+                        }
+                    }
                 }
-            }
-            catch (Exception ex)
-            {
-                if (ex.InnerException is HttpRequestException httpException && httpException.StatusCode.HasValue)
+                catch (Exception ex)
                 {
-                    apiResponseCode = (int)httpException.StatusCode.Value;
-                }
-                else if (ex is HttpRequestException directHttpException && directHttpException.StatusCode.HasValue)
-                {
-                    apiResponseCode = (int)directHttpException.StatusCode.Value;
-                }
-                Log.Debug(ex.Message);
-                retry--;
-                if (retry > 0)
-                {
-                    Log.Debug("Retrying...");
-                    await Task.Delay(100);
+                    if (ex.InnerException is HttpRequestException httpException && httpException.StatusCode.HasValue)
+                    {
+                        apiResponseCode = (int)httpException.StatusCode.Value;
+                    }
+                    else if (ex is HttpRequestException directHttpException && directHttpException.StatusCode.HasValue)
+                    {
+                        apiResponseCode = (int)directHttpException.StatusCode.Value;
+                    }
+                    Log.Debug(ex.Message);
+                    retry--;
+                    if (retry > 0)
+                    {
+                        Log.Debug("Retrying...");
+                        await Task.Delay(100);
+                    }
                 }
             }
         }
