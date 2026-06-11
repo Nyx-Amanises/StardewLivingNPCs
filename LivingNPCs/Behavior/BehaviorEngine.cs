@@ -134,6 +134,7 @@ internal sealed class BehaviorEngine
             this.TryPause,
             this.TryFacePlayer,
             (npc, text) => this.feedback.TryShowNpcSpeechBubble(npc, text),
+            this.companionOutings.HasActiveOuting,
             (npc, debugMessage) => this.PushInteractionContext(npc, debugMessage)
         );
     }

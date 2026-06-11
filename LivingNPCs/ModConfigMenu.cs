@@ -368,10 +368,10 @@ internal static class ModConfigMenu
         configMenu.AddNumberOption(
             mod: manifest,
             name: () => "出游最短停留时间",
-            tooltip: () => "NPC 到达目的地后至少停留多少游戏分钟；默认 300 分钟，也就是 5 个游戏小时。",
+            tooltip: () => "NPC 到达目的地后至少停留多少游戏分钟；默认 120 分钟，也就是 2 个游戏小时。",
             getValue: () => config.MinimumCompanionOutingStayMinutes,
             setValue: value => config.MinimumCompanionOutingStayMinutes = value,
-            min: 300,
+            min: 120,
             max: 600,
             interval: 30
         );

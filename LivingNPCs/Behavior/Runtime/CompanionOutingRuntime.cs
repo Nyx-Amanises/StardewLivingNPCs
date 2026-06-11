@@ -18,6 +18,9 @@ internal delegate bool TryResolveNpcScheduleTargetHandler(
 
 internal sealed class CompanionOutingRuntime
 {
+    private const int OutingSpeechCooldownMilliseconds = 5500;
+    private const float ArrivalRemarkDistanceTiles = 5f;
+
     private readonly ModConfig config;
     private readonly IMonitor monitor;
     private readonly BehaviorMemory memory;
@@ -98,10 +101,13 @@ internal sealed class CompanionOutingRuntime
             return false;
         }
 
-        int minimumStayMinutes = Math.Max(300, this.config.MinimumCompanionOutingStayMinutes);
+        int minimumStayMinutes = Math.Max(
+            CompanionOutingRules.MinimumStayMinutes,
+            this.config.MinimumCompanionOutingStayMinutes
+        );
         if (!CompanionOutingRules.CanFitMinimumStay(Game1.timeOfDay, minimumStayMinutes))
         {
-            reason = "there is not enough time left today for a five-hour outing";
+            reason = "there is not enough time left today for a two-hour outing";
             return false;
         }
 
@@ -207,6 +213,7 @@ internal sealed class CompanionOutingRuntime
             $"they agreed to spend time with the farmer at {outing.TargetLocationLabel}"
         );
 
+        this.ShowOutingRemark(npc, BuildStartRemark(outing.TargetLocation, outing.ActivityStyle));
         if (IsAtTile(npc, destination, outing.AnchorTile))
         {
             this.BeginStay(npc, outing);
@@ -217,6 +224,11 @@ internal sealed class CompanionOutingRuntime
         }
 
         return true;
+    }
+
+    public bool HasActiveOuting(NPC npc)
+    {
+        return this.pendingOutings.Any(outing => outing.NpcName == npc.Name);
     }
 
     public void TryUpdatePending()
@@ -316,6 +328,7 @@ internal sealed class CompanionOutingRuntime
             return;
         }
 
+        this.TryShowArrivalRemarkNearAnchor(npc, outing, destination);
         if (IsAtTile(npc, destination, outing.AnchorTile))
         {
             this.BeginStay(npc, outing);
@@ -367,7 +380,7 @@ internal sealed class CompanionOutingRuntime
         outing.ArrivalTimeOfDay = Game1.timeOfDay;
         outing.StayUntilTimeOfDay = BehaviorTimeMath.AddMinutesToTime(
             Game1.timeOfDay,
-            Math.Max(300, this.config.MinimumCompanionOutingStayMinutes)
+            Math.Max(CompanionOutingRules.MinimumStayMinutes, this.config.MinimumCompanionOutingStayMinutes)
         );
         outing.LastObservedTimeOfDay = Game1.timeOfDay;
         outing.RouteRetryCount = 0;
@@ -381,6 +394,7 @@ internal sealed class CompanionOutingRuntime
             );
         }
 
+        this.TryShowArrivalRemark(npc, outing);
         this.refreshPromptContext(npc, $"Companion outing reached {outing.TargetLocation} for {npc.Name}.");
     }
 
@@ -458,6 +472,7 @@ internal sealed class CompanionOutingRuntime
         this.RecordCompletedStay(npc, outing);
         outing.Phase = CompanionOutingPhase.Returning;
         outing.RouteRetryCount = 0;
+        this.TryShowReturnRemark(npc, outing);
 
         if (!this.tryResolveScheduleTarget(
                 npc,
@@ -516,6 +531,57 @@ internal sealed class CompanionOutingRuntime
         }
 
         this.FinishReturn(npc, outing, useFallback: true);
+    }
+
+    private void TryShowArrivalRemarkNearAnchor(
+        NPC npc,
+        PendingCompanionOuting outing,
+        GameLocation destination)
+    {
+        if (outing.ArrivalRemarkShown || npc.currentLocation != destination)
+        {
+            return;
+        }
+
+        float distanceToAnchor = Vector2.Distance(
+            npc.Tile,
+            new Vector2(outing.AnchorTile.X, outing.AnchorTile.Y)
+        );
+        if (distanceToAnchor <= ArrivalRemarkDistanceTiles)
+        {
+            this.TryShowArrivalRemark(npc, outing);
+        }
+    }
+
+    private void TryShowArrivalRemark(NPC npc, PendingCompanionOuting outing)
+    {
+        if (outing.ArrivalRemarkShown)
+        {
+            return;
+        }
+
+        if (this.ShowOutingRemark(npc, BuildArrivalRemark(outing.TargetLocation, outing.ActivityStyle)))
+        {
+            outing.ArrivalRemarkShown = true;
+        }
+    }
+
+    private void TryShowReturnRemark(NPC npc, PendingCompanionOuting outing)
+    {
+        if (outing.ReturnRemarkShown)
+        {
+            return;
+        }
+
+        if (this.ShowOutingRemark(npc, BuildReturnRemark(outing.TargetLocation, outing.ActivityStyle)))
+        {
+            outing.ReturnRemarkShown = true;
+        }
+    }
+
+    private bool ShowOutingRemark(NPC npc, string text)
+    {
+        return this.feedback.TryShowNpcSpeechBubble(npc, text, OutingSpeechCooldownMilliseconds);
     }
 
     private bool TryAssignRoute(
@@ -740,6 +806,94 @@ internal sealed class CompanionOutingRuntime
 
         reason = string.Empty;
         return false;
+    }
+
+    private static string BuildStartRemark(string targetLocation, string activityStyle)
+    {
+        return targetLocation switch
+        {
+            "Beach" or "Custom_GrampletonCoast" => "走吧，去海边透透气。",
+            "SeedShop" => "走吧，去店里看看。",
+            "ArchaeologyHouse" => "走吧，去里面慢慢看看。",
+            "Saloon" => "走吧，去酒吧坐一会儿。",
+            "Mountain" => "走吧，去山边看看。",
+            "Forest" or "Custom_ForestWest" => "走吧，去林子里走走。",
+            "Farm" => "走吧，去农场待一会儿。",
+            "FlowerDance" => "走吧，去花田边看看。",
+            _ when activityStyle == "scenic" => "走吧，去看看那边的风景。",
+            _ when activityStyle == "browse" => "走吧，去逛一会儿。",
+            _ when activityStyle == "quiet" => "走吧，找个安静点的地方。",
+            _ => "走吧。"
+        };
+    }
+
+    private static string BuildArrivalRemark(string targetLocation, string activityStyle)
+    {
+        string timePrefix = GetSceneTimePrefix(Game1.timeOfDay);
+        return targetLocation switch
+        {
+            "Beach" or "Custom_GrampletonCoast" => $"{timePrefix}海边挺舒服的。",
+            "SeedShop" => "这会儿店里正好可以慢慢看看。",
+            "ArchaeologyHouse" => "这里安静下来以后，很适合慢慢看。",
+            "Saloon" => "这里的热闹声听着还挺安心。",
+            "Mountain" => $"{timePrefix}山边空气很好。",
+            "Forest" or "Custom_ForestWest" => $"{timePrefix}林子里很安静。",
+            "Farm" => $"{timePrefix}农场看起来很舒服。",
+            "BusStop" => "这里风吹过来的时候，还挺适合停一下。",
+            "Town" => "镇上的这个时候，刚好不算太吵。",
+            "Hospital" => "这里还是安静一点比较好。",
+            "FlowerDance" => $"{timePrefix}花田边真好看。",
+            "Custom_Ridgeside_RidgeFalls" => $"{timePrefix}瀑布声听起来很清楚。",
+            "Custom_Ridgeside_Ridge" or "Custom_Ridgeside_RSVCliff" => $"{timePrefix}这边的视野真开阔。",
+            _ when activityStyle == "scenic" => $"{timePrefix}这里的景色不错。",
+            _ when activityStyle == "browse" => "这里可以慢慢看看。",
+            _ when activityStyle == "quiet" => "这里安静得刚刚好。",
+            _ => "这里还挺适合待一会儿。"
+        };
+    }
+
+    private static string BuildReturnRemark(string targetLocation, string activityStyle)
+    {
+        string opening = GetReturnOpening(Game1.timeOfDay);
+        return targetLocation switch
+        {
+            "Beach" or "Custom_GrampletonCoast" => $"{opening}海风也吹够啦。",
+            "SeedShop" => $"{opening}东西也看得差不多了。",
+            "ArchaeologyHouse" => $"{opening}书和展品下次再慢慢看。",
+            "Saloon" => $"{opening}再坐下去就该忘了时间了。",
+            "Mountain" => $"{opening}山边待久了也该回去了。",
+            "Forest" or "Custom_ForestWest" => $"{opening}林子里开始有点静了。",
+            "Farm" => $"{opening}农场这边待得很舒服。",
+            "FlowerDance" => $"{opening}花田边的风也该留给别人了。",
+            "Custom_Ridgeside_RidgeFalls" => $"{opening}瀑布声听久了，反而有点舍不得走。",
+            _ when activityStyle == "scenic" => $"{opening}风景已经看得很满足了。",
+            _ when activityStyle == "browse" => $"{opening}这边也逛得差不多了。",
+            _ when activityStyle == "quiet" => $"{opening}这段安静时间刚刚好。",
+            _ => $"{opening}我们回去吧。"
+        };
+    }
+
+    private static string GetSceneTimePrefix(int timeOfDay)
+    {
+        return timeOfDay switch
+        {
+            < 900 => "清晨的",
+            < 1200 => "上午的",
+            < 1700 => "午后的",
+            < 2000 => "傍晚的",
+            _ => "夜里的"
+        };
+    }
+
+    private static string GetReturnOpening(int timeOfDay)
+    {
+        return timeOfDay switch
+        {
+            < 1200 => "差不多该回去了，",
+            < 1800 => "时间差不多了，",
+            < 2200 => "天色不早了，",
+            _ => "夜深了，"
+        };
     }
 
     private static string FormatPhase(CompanionOutingPhase phase)

@@ -14,6 +14,7 @@ internal sealed class DialogueBehaviorInfluenceRuntime
     private readonly Func<NPC, bool> tryPause;
     private readonly Func<NPC, bool> tryFacePlayer;
     private readonly Func<NPC, string, bool> tryShowNpcSpeechBubble;
+    private readonly Func<NPC, bool> hasActiveCompanionOuting;
     private readonly Action<NPC, string> pushInteractionContext;
 
     public DialogueBehaviorInfluenceRuntime(
@@ -24,6 +25,7 @@ internal sealed class DialogueBehaviorInfluenceRuntime
         Func<NPC, bool> tryPause,
         Func<NPC, bool> tryFacePlayer,
         Func<NPC, string, bool> tryShowNpcSpeechBubble,
+        Func<NPC, bool> hasActiveCompanionOuting,
         Action<NPC, string> pushInteractionContext)
     {
         this.config = config;
@@ -33,6 +35,7 @@ internal sealed class DialogueBehaviorInfluenceRuntime
         this.tryPause = tryPause;
         this.tryFacePlayer = tryFacePlayer;
         this.tryShowNpcSpeechBubble = tryShowNpcSpeechBubble;
+        this.hasActiveCompanionOuting = hasActiveCompanionOuting;
         this.pushInteractionContext = pushInteractionContext;
     }
 
@@ -106,6 +109,7 @@ internal sealed class DialogueBehaviorInfluenceRuntime
         return influence.Type switch
         {
             "visit_location" => this.IsTargetLocationCurrent(influence)
+                && !this.hasActiveCompanionOuting(npc)
                 && distance <= this.config.MaxInteractionDistanceTiles + 2,
             "offended" or "give_space" => distance <= 2.5f && npc.controller == null,
             "stay_near" or "comforted" or "pause_to_talk" => distance <= this.config.MaxInteractionDistanceTiles && npc.controller == null,

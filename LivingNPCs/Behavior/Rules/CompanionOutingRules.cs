@@ -4,6 +4,7 @@ namespace LivingNPCs.Behavior;
 
 internal static class CompanionOutingRules
 {
+    public const int MinimumStayMinutes = 120;
     public const int MinimumSharedMinutesForMemory = 30;
     public const int EstimatedTravelMinutes = 120;
     public const int LatestPlannedStayEndTime = 2500;
@@ -74,7 +75,7 @@ internal static class CompanionOutingRules
     {
         int projectedEnd = BehaviorTimeMath.AddMinutesToTime(
             currentTimeOfDay,
-            Math.Max(300, minimumStayMinutes) + EstimatedTravelMinutes
+            Math.Max(MinimumStayMinutes, minimumStayMinutes) + EstimatedTravelMinutes
         );
         return projectedEnd <= LatestPlannedStayEndTime;
     }

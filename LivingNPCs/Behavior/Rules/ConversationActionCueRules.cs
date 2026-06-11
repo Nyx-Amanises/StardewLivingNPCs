@@ -133,7 +133,7 @@ internal static class ConversationActionCueRules
         {
             Type = "companion_outing",
             TargetLocation = targetLocation,
-            DurationMinutes = 300,
+            DurationMinutes = CompanionOutingRules.MinimumStayMinutes,
             DelayMinutes = DetectPreparationDelayMinutes(npcResponse),
             Reason = "the visible conversation ended with an immediate shared outing plan"
         };

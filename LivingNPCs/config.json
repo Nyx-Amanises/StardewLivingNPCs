@@ -24,7 +24,7 @@
   "AllowAiFarmHelp": true,
   "MaxAiWateredTilesPerAction": 12,
   "AllowAiCompanionOutings": true,
-  "MinimumCompanionOutingStayMinutes": 300,
+  "MinimumCompanionOutingStayMinutes": 120,
   "EnableNpcState": true,
   "NpcStateDailyDecay": 12,
   "EnablePassiveBehaviors": true,

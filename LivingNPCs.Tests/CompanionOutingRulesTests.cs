@@ -14,7 +14,7 @@ public sealed class CompanionOutingRulesTests
     }
 
     [Fact]
-    public void MetadataParserEnforcesFiveHourMinimumForOutings()
+    public void MetadataParserEnforcesTwoHourMinimumForOutings()
     {
         var analysis = ValleyTalkExchangeParser.Parse(
             """
@@ -32,15 +32,15 @@ public sealed class CompanionOutingRulesTests
 
         var action = Assert.Single(analysis.Actions);
         Assert.Equal("companion_outing", action.Type);
-        Assert.Equal(300, action.DurationMinutes);
+        Assert.Equal(120, action.DurationMinutes);
     }
 
     [Theory]
-    [InlineData(1700, 300, true)]
-    [InlineData(1800, 300, true)]
-    [InlineData(1810, 300, false)]
-    [InlineData(1900, 300, false)]
-    public void OutingMustFitTravelAndFiveHourStay(int startTime, int stayMinutes, bool expected)
+    [InlineData(2000, 120, true)]
+    [InlineData(2100, 120, true)]
+    [InlineData(2110, 120, false)]
+    [InlineData(2200, 120, false)]
+    public void OutingMustFitTravelAndTwoHourStay(int startTime, int stayMinutes, bool expected)
     {
         Assert.Equal(expected, CompanionOutingRules.CanFitMinimumStay(startTime, stayMinutes));
     }
@@ -70,9 +70,9 @@ public sealed class CompanionOutingRulesTests
     }
 
     [Fact]
-    public void TimeMathTracksFiveGameHours()
+    public void TimeMathTracksTwoGameHours()
     {
-        Assert.Equal(1820, BehaviorTimeMath.AddMinutesToTime(1320, 300));
-        Assert.Equal(300, BehaviorTimeMath.GetElapsedMinutes(1320, 1820));
+        Assert.Equal(1520, BehaviorTimeMath.AddMinutesToTime(1320, 120));
+        Assert.Equal(120, BehaviorTimeMath.GetElapsedMinutes(1320, 1520));
     }
 }

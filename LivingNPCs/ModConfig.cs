@@ -36,7 +36,7 @@ internal sealed class ModConfig
     public bool AllowAiFarmHelp { get; set; } = true;
     public int MaxAiWateredTilesPerAction { get; set; } = 12;
     public bool AllowAiCompanionOutings { get; set; } = true;
-    public int MinimumCompanionOutingStayMinutes { get; set; } = 300;
+    public int MinimumCompanionOutingStayMinutes { get; set; } = 120;
     public bool AllowAiFestivalInteractions { get; set; } = true;
     public bool AllowAiQuestAssists { get; set; } = true;
     public bool EnableNpcState { get; set; } = true;

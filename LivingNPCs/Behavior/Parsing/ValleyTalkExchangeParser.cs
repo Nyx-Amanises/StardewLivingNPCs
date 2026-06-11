@@ -58,7 +58,13 @@ internal static class ValleyTalkExchangeParser
                     action.Amount = System.Math.Clamp(action.Amount, 0, 250);
                     action.TileCount = System.Math.Clamp(action.TileCount, 0, 12);
                     action.DurationMinutes = action.Type == "companion_outing"
-                        ? System.Math.Clamp(action.DurationMinutes <= 0 ? 300 : action.DurationMinutes, 300, 600)
+                        ? System.Math.Clamp(
+                            action.DurationMinutes <= 0
+                                ? CompanionOutingRules.MinimumStayMinutes
+                                : action.DurationMinutes,
+                            CompanionOutingRules.MinimumStayMinutes,
+                            600
+                        )
                         : System.Math.Clamp(action.DurationMinutes, 0, 20);
                     action.DelayMinutes = System.Math.Clamp(action.DelayMinutes, 0, 20);
                     action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
