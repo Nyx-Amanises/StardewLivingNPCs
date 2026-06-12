@@ -286,6 +286,11 @@ internal sealed class BehaviorEngine
             return;
         }
 
+        if (this.companionOutings.HasActiveOuting(npc))
+        {
+            return;
+        }
+
         this.QueueOrExecute(npc, BehaviorTrigger.Passive, "passive");
     }
 
@@ -301,6 +306,11 @@ internal sealed class BehaviorEngine
             this.pendingRequests.Remove(request);
 
             if (request.TotalDays != Game1.Date.TotalDays || !this.TryFindNpcInCurrentLocation(request.NpcName, out NPC? npc) || npc == null)
+            {
+                continue;
+            }
+
+            if (request.Source == "passive" && this.companionOutings.HasActiveOuting(npc))
             {
                 continue;
             }

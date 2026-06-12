@@ -55,6 +55,72 @@ public sealed class CompanionOutingRulesTests
         Assert.InRange(first, 0, 2);
     }
 
+    [Fact]
+    public void SettledEmoteChoiceIsDeterministicAndSuppressedByNegativeContext()
+    {
+        int first = CompanionOutingRules.SelectSettledEmoteId(
+            "Penny",
+            "Beach",
+            "scenic",
+            42,
+            warmRelationship: true,
+            emotionallyComfortable: true
+        );
+        int second = CompanionOutingRules.SelectSettledEmoteId(
+            "Penny",
+            "Beach",
+            "scenic",
+            42,
+            warmRelationship: true,
+            emotionallyComfortable: true
+        );
+        int suppressed = CompanionOutingRules.SelectSettledEmoteId(
+            "Penny",
+            "Beach",
+            "scenic",
+            42,
+            warmRelationship: true,
+            emotionallyComfortable: false
+        );
+
+        Assert.Equal(first, second);
+        Assert.Equal(0, suppressed);
+    }
+
+    [Fact]
+    public void SettledEmotesStaySparseAndMatchTheActivity()
+    {
+        int scenicEmotes = 0;
+        int browseEmotes = 0;
+        for (int day = 0; day < 200; day++)
+        {
+            int scenic = CompanionOutingRules.SelectSettledEmoteId(
+                "Penny",
+                "Beach",
+                "scenic",
+                day,
+                warmRelationship: true,
+                emotionallyComfortable: true
+            );
+            int browse = CompanionOutingRules.SelectSettledEmoteId(
+                "Penny",
+                "SeedShop",
+                "browse",
+                day,
+                warmRelationship: true,
+                emotionallyComfortable: true
+            );
+
+            Assert.Contains(scenic, new[] { 0, CompanionOutingRules.HeartEmoteId });
+            Assert.Contains(browse, new[] { 0, CompanionOutingRules.ExclamationEmoteId });
+            scenicEmotes += scenic == 0 ? 0 : 1;
+            browseEmotes += browse == 0 ? 0 : 1;
+        }
+
+        Assert.InRange(scenicEmotes, 1, 80);
+        Assert.InRange(browseEmotes, 1, 70);
+    }
+
     [Theory]
     [InlineData("SeedShop", "Let's browse the shop.", "browse")]
     [InlineData("Beach", "Let's look at the scenery.", "scenic")]

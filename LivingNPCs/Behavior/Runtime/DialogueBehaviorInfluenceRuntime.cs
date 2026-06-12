@@ -58,6 +58,11 @@ internal sealed class DialogueBehaviorInfluenceRuntime
                 continue;
             }
 
+            if (this.hasActiveCompanionOuting(npc))
+            {
+                continue;
+            }
+
             foreach (var influence in state.DialogueBehaviorInfluences.Where(influence => influence.Status == "Active").ToList())
             {
                 if (influence.ExpiresTotalDays < Game1.Date.TotalDays)
@@ -109,7 +114,6 @@ internal sealed class DialogueBehaviorInfluenceRuntime
         return influence.Type switch
         {
             "visit_location" => this.IsTargetLocationCurrent(influence)
-                && !this.hasActiveCompanionOuting(npc)
                 && distance <= this.config.MaxInteractionDistanceTiles + 2,
             "offended" or "give_space" => distance <= 2.5f && npc.controller == null,
             "stay_near" or "comforted" or "pause_to_talk" => distance <= this.config.MaxInteractionDistanceTiles && npc.controller == null,

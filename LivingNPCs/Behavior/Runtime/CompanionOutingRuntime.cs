@@ -394,6 +394,7 @@ internal sealed class CompanionOutingRuntime
             );
         }
 
+        this.PlanSettledEmote(outing, state);
         this.TryShowArrivalRemark(npc, outing);
         this.refreshPromptContext(npc, $"Companion outing reached {outing.TargetLocation} for {npc.Name}.");
     }
@@ -445,6 +446,7 @@ internal sealed class CompanionOutingRuntime
         npc.DirectionsToNewLocation = null;
         npc.Halt();
         npc.faceDirection(outing.AnchorFacingDirection);
+        this.TryShowSettledEmote(npc, outing, destination);
     }
 
     private void AccumulateSharedTime(PendingCompanionOuting outing)
@@ -577,6 +579,58 @@ internal sealed class CompanionOutingRuntime
         {
             outing.ReturnRemarkShown = true;
         }
+    }
+
+    private void PlanSettledEmote(PendingCompanionOuting outing, LivingNpcState? state)
+    {
+        outing.SettledEmoteNotBeforeTimeOfDay = BehaviorTimeMath.AddMinutesToTime(
+            Game1.timeOfDay,
+            CompanionOutingRules.SettledEmoteDelayMinutes
+        );
+        if (state == null)
+        {
+            outing.SettledEmoteId = 0;
+            return;
+        }
+
+        bool warmRelationship = state.Familiarity >= 45
+            || state.RelationshipTrust >= 55
+            || state.LastFriendshipHearts >= 4
+            || state.Mood is "Warm" or "Comfortable" or "Delighted" or "Pleased";
+        bool emotionallyComfortable = state.HighestUnresolvedConflictSeverity < 25
+            && state.CurrentEmotion is not ("Jealous" or "Disappointed" or "Uneasy" or "Upset" or "Angry" or "Sad")
+            && state.Mood is not ("Guarded" or "Upset" or "Overloaded" or "Awkward");
+        outing.SettledEmoteId = CompanionOutingRules.SelectSettledEmoteId(
+            outing.NpcName,
+            outing.TargetLocation,
+            outing.ActivityStyle,
+            outing.TotalDays,
+            warmRelationship,
+            emotionallyComfortable
+        );
+    }
+
+    private void TryShowSettledEmote(
+        NPC npc,
+        PendingCompanionOuting outing,
+        GameLocation destination)
+    {
+        if (outing.SettledEmoteShown
+            || outing.SettledEmoteId <= 0
+            || !outing.ArrivalRemarkShown
+            || !this.config.AllowEmotes
+            || Game1.timeOfDay < outing.SettledEmoteNotBeforeTimeOfDay
+            || Game1.activeClickableMenu != null
+            || Game1.eventUp
+            || Game1.player == null
+            || Game1.currentLocation != destination
+            || Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles + 2)
+        {
+            return;
+        }
+
+        npc.doEmote(outing.SettledEmoteId);
+        outing.SettledEmoteShown = true;
     }
 
     private bool ShowOutingRemark(NPC npc, string text)

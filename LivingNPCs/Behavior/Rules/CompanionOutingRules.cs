@@ -8,6 +8,9 @@ internal static class CompanionOutingRules
     public const int MinimumSharedMinutesForMemory = 30;
     public const int EstimatedTravelMinutes = 120;
     public const int LatestPlannedStayEndTime = 2500;
+    public const int SettledEmoteDelayMinutes = 20;
+    public const int ExclamationEmoteId = 16;
+    public const int HeartEmoteId = 20;
 
     public static string DetermineActivityStyle(string targetLocation, string reason)
     {
@@ -87,18 +90,41 @@ internal static class CompanionOutingRules
             return 0;
         }
 
-        unchecked
-        {
-            uint hash = 2166136261;
-            string value = $"{npcName}|{targetLocation}|{totalDays}";
-            foreach (char character in value)
-            {
-                hash ^= character;
-                hash *= 16777619;
-            }
+        uint hash = ComputeStableHash($"{npcName}|{targetLocation}|{totalDays}");
+        return (int)(hash % (uint)Math.Min(3, candidateCount));
+    }
 
-            return (int)(hash % (uint)Math.Min(3, candidateCount));
+    public static int SelectSettledEmoteId(
+        string npcName,
+        string targetLocation,
+        string activityStyle,
+        int totalDays,
+        bool warmRelationship,
+        bool emotionallyComfortable)
+    {
+        if (!emotionallyComfortable)
+        {
+            return 0;
         }
+
+        int roll = (int)(ComputeStableHash(
+            $"{npcName}|{targetLocation}|{activityStyle}|{totalDays}|settled-emote"
+        ) % 100);
+        if (warmRelationship
+            && activityStyle is "scenic" or "quiet" or "festival"
+            && roll < 28)
+        {
+            return HeartEmoteId;
+        }
+
+        if (activityStyle is "browse" or "social" or "festival" && roll < 22)
+        {
+            return ExclamationEmoteId;
+        }
+
+        return !warmRelationship && activityStyle == "scenic" && roll < 12
+            ? ExclamationEmoteId
+            : 0;
     }
 
     private static bool ContainsAny(string text, params string[] fragments)
@@ -112,6 +138,21 @@ internal static class CompanionOutingRules
         }
 
         return false;
+    }
+
+    private static uint ComputeStableHash(string value)
+    {
+        unchecked
+        {
+            uint hash = 2166136261;
+            foreach (char character in value)
+            {
+                hash ^= character;
+                hash *= 16777619;
+            }
+
+            return hash;
+        }
     }
 
     private static bool IsBrowseTarget(string targetLocation)

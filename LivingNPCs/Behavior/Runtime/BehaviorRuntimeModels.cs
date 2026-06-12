@@ -77,6 +77,9 @@ internal sealed class PendingCompanionOuting
     public int AnchorRelocationCount { get; set; }
     public bool ArrivalRemarkShown { get; set; }
     public bool ReturnRemarkShown { get; set; }
+    public int SettledEmoteId { get; set; }
+    public int SettledEmoteNotBeforeTimeOfDay { get; set; }
+    public bool SettledEmoteShown { get; set; }
     public bool SharedExperienceRecorded { get; set; }
     public PathFindController? LastAssignedController { get; set; }
     public string ReturnLocationName { get; set; } = string.Empty;
