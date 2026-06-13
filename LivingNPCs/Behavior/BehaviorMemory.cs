@@ -332,6 +332,25 @@ internal sealed class BehaviorMemory
             }
         }
 
+        // Creation safety net: if the AI mentioned an item favor in the visible reply but omitted
+        // the structured helpRequests field, synthesize it from the dialogue (still gated by Store).
+        if (storedHelpRequests == 0
+            && this.HelpRequests.TrySynthesizeItemRequestFromDialogue(
+                npc,
+                state,
+                playerText,
+                npcResponse,
+                maxPendingHelpRequestsPerNpc,
+                helpRequestCooldownDays,
+                minRelationshipTrustForHelpRequests))
+        {
+            storedHelpRequests++;
+            this.AddEntry(
+                this.CreateEntry(npc, "HelpRequest", "item_request", "the visible conversation raised an item favor"),
+                maxEntriesPerNpc
+            );
+        }
+
         foreach (var candidate in analysis.HelpRequestUpdates
                      .Where(update => !string.IsNullOrWhiteSpace(update.Summary))
                      .Take(2))

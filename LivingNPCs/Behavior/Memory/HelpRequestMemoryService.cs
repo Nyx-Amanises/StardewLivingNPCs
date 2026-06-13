@@ -275,6 +275,128 @@ internal sealed class HelpRequestMemoryService
         return true;
     }
 
+    /// <summary>
+    /// Creation safety net: when the AI omits the structured helpRequests field but the visible
+    /// dialogue clearly has the NPC ask the farmer for one of its currently-requestable items,
+    /// synthesize that request and store it through the normal gate (Offered, or Pending if the
+    /// farmer already agreed in this reply).
+    /// </summary>
+    public bool TrySynthesizeItemRequestFromDialogue(
+        NPC npc,
+        LivingNpcState state,
+        string playerText,
+        string npcResponse,
+        int maxPendingHelpRequestsPerNpc,
+        int helpRequestCooldownDays,
+        int minRelationshipTrustForHelpRequests)
+    {
+        if (string.IsNullOrWhiteSpace(npcResponse))
+        {
+            return false;
+        }
+
+        string combined = $"{playerText} {npcResponse}";
+        if (!LooksLikeItemFavorRequested(combined))
+        {
+            return false;
+        }
+
+        foreach (var item in HelpRequestAdvisor.GetRequestableItems(npc))
+        {
+            string localizedName = ResolveItemDisplayName(item.ItemId, item.Label);
+            if (!ContainsAny(combined, localizedName, item.Label))
+            {
+                continue;
+            }
+
+            bool farmerOnBoard = LooksLikeFarmerAcceptingHelp(playerText)
+                || IsFarmerExplicitlyOfferingHelp(playerText);
+            var candidate = new ValleyTalkHelpRequestCandidate
+            {
+                Type = "item_request",
+                Summary = localizedName,
+                RequestedItemId = item.ItemId,
+                RequestedItemLabel = localizedName,
+                DueInDays = 3,
+                RequiresAcceptance = !farmerOnBoard,
+                FollowUpPotential = "none"
+            };
+
+            // Store applies the readiness gate; this is only a synthesis of the candidate the AI
+            // failed to emit, never a bypass of trust/familiarity/cooldown rules.
+            return this.Store(
+                npc,
+                state,
+                candidate,
+                playerText,
+                maxPendingHelpRequestsPerNpc,
+                helpRequestCooldownDays,
+                minRelationshipTrustForHelpRequests);
+        }
+
+        return false;
+    }
+
+    internal static bool LooksLikeItemFavorRequested(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        return ContainsAny(
+            text,
+            "帮我找",
+            "帮我带",
+            "帮我弄",
+            "帮我留意",
+            "帮我捎",
+            "能帮我",
+            "能不能帮",
+            "可以帮我",
+            "帮忙找",
+            "帮忙带",
+            "给我带",
+            "给我找",
+            "带点",
+            "带些",
+            "带一些",
+            "带给我",
+            "找点",
+            "找些",
+            "找一些",
+            "弄点",
+            "需要一些",
+            "需要点",
+            "缺一些",
+            "缺点",
+            "能不能给我",
+            "可以给我带",
+            "can you bring",
+            "can you find",
+            "could you bring",
+            "could you find",
+            "bring me",
+            "find me",
+            "get me some",
+            "i need some",
+            "looking for some",
+            "could use some");
+    }
+
+    private static string ResolveItemDisplayName(string itemId, string fallback)
+    {
+        try
+        {
+            var obj = ItemRegistry.Create<StardewValley.Object>(itemId);
+            return string.IsNullOrWhiteSpace(obj?.DisplayName) ? fallback : obj.DisplayName;
+        }
+        catch
+        {
+            return fallback;
+        }
+    }
+
     private static List<NpcHelpRequestStepFact> BuildSteps(NPC npc, ValleyTalkHelpRequestCandidate candidate)
     {
         candidate.Steps ??= new List<ValleyTalkHelpRequestStepCandidate>();

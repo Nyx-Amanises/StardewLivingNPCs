@@ -90,7 +90,7 @@ internal static class HelpRequestAdvisor
         string routeText = BuildRouteGuidance(progression);
         string relationshipText = BuildRelationshipGuidance(world.FriendshipHearts);
 
-        return $"theme {profile.Theme}; currently reasonable item requests: {itemText}; allowed help request type: item_request only; never create question_request; request relationship tier: {relationshipText}; request depth: {stageText}; world-stage constraint: {routeText}; if the farmer directly asks whether they can help and item requests are listed, choose one concrete item_request from that list; if no listed item naturally fits, do not open a hidden help request and keep the visible reply as ordinary conversation.";
+        return $"theme {profile.Theme}; currently reasonable item requests: {itemText}; allowed help request type: item_request only; never create question_request; request relationship tier: {relationshipText}; request depth: {stageText}; world-stage constraint: {routeText}; whenever the visible reply has this NPC ask the farmer to bring or find one of the listed items — whether the farmer offered first or the NPC raised it — you MUST also include exactly one hidden helpRequests entry with a concrete itemId from this list, and never leave the favor only in the spoken text; when the farmer agrees to such a favor, include a hidden helpRequestUpdates entry with status accepted; if no listed item naturally fits, keep the visible reply as ordinary conversation and do not open a hidden request.";
     }
 
     public static string BuildDebugLabel(NPC npc, WorldProgressSnapshot progression)
@@ -136,6 +136,14 @@ internal static class HelpRequestAdvisor
     {
         return GetPreferredItems(npc, WorldProgression.Current())
             .Any(item => item.ItemId.Equals(itemId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>Currently reasonable item requests for this NPC, as (itemId, English label) pairs.</summary>
+    public static IReadOnlyList<(string ItemId, string Label)> GetRequestableItems(NPC npc)
+    {
+        return GetPreferredItems(npc, WorldProgression.Current())
+            .Select(item => (item.ItemId, item.Label))
+            .ToList();
     }
 
     private static List<HelpRequestItem> GetPreferredItems(NPC npc, WorldProgressSnapshot progression)

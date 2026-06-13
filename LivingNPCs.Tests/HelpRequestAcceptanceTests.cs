@@ -26,4 +26,23 @@ public sealed class HelpRequestAcceptanceTests
     {
         Assert.False(HelpRequestMemoryService.LooksLikeFarmerAcceptingHelp(playerText));
     }
+
+    [Theory]
+    [InlineData("你能帮我找点黄水仙吗？")]
+    [InlineData("能不能给我带些面包。")]
+    [InlineData("帮我留意一下石英好吗？")]
+    [InlineData("Could you bring me some quartz?")]
+    public void RecognizesItemFavorRequest(string text)
+    {
+        Assert.True(HelpRequestMemoryService.LooksLikeItemFavorRequested(text));
+    }
+
+    [Theory]
+    [InlineData("今天天气真好。")]
+    [InlineData("我很喜欢黄水仙。")]
+    [InlineData("")]
+    public void IgnoresNonFavorChatter(string text)
+    {
+        Assert.False(HelpRequestMemoryService.LooksLikeItemFavorRequested(text));
+    }
 }
