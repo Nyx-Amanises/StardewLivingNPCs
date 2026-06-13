@@ -1258,11 +1258,11 @@ public class Prompts
         instructions.AppendLine(Util.GetString(Character,"instructionsBreaks"));
         instructions.AppendLine(Util.GetString(Character,"instructionsSingleLine"));
         instructions.AppendLine(Util.GetString(Character,"instructionsResponses", new { Name= Name }));
-        instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcMetadata")));
-        instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcGiftIds")));
-        instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcImmediateTravel")));
-        instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcHelpRequests")));
-        instructions.AppendLine(Util.GetString(Character, LivingNpcInstructionKey("instructionsLivingNpcEmotionDepth")));
+        instructions.AppendLine(this.GetLivingNpcInstruction("instructionsLivingNpcMetadata"));
+        instructions.AppendLine(this.GetLivingNpcInstruction("instructionsLivingNpcGiftIds"));
+        instructions.AppendLine(this.GetLivingNpcInstruction("instructionsLivingNpcImmediateTravel"));
+        instructions.AppendLine(this.GetLivingNpcInstruction("instructionsLivingNpcHelpRequests"));
+        instructions.AppendLine(this.GetLivingNpcInstruction("instructionsLivingNpcEmotionDepth"));
         if (!Character.Bio.ExtraPortraits.ContainsKey("!"))
         {
             var extraPortraits = new StringBuilder();
@@ -1279,9 +1279,22 @@ public class Prompts
         return instructions.ToString();
     }
 
-    private static string LivingNpcInstructionKey(string key)
+    private string GetLivingNpcInstruction(string baseKey)
     {
-        return ModEntry.Config?.UseOptimizedLivingNpcMetadataPrompt == true ? $"{key}Optimized" : key;
+        if (ModEntry.Config?.UseOptimizedLivingNpcMetadataPrompt == true)
+        {
+            string optimized = Util.GetString(Character, $"{baseKey}Optimized");
+            if (!string.IsNullOrWhiteSpace(optimized))
+            {
+                return optimized;
+            }
+
+            // The optimized variant is missing or empty (e.g. HelpRequests and EmotionDepth were
+            // never filled in), so fall back to the full instruction instead of silently dropping
+            // that whole section — otherwise the model is never told the field exists.
+        }
+
+        return Util.GetString(Character, baseKey);
     }
 
     private string GetResponseStart()
