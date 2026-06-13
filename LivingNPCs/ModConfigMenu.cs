@@ -29,7 +29,11 @@ internal static class ModConfigMenu
         configMenu.Register(
             mod: manifest,
             reset: config.ResetToDefaults,
-            save: () => modEntry.Helper.WriteConfig(config)
+            save: () =>
+            {
+                config.Validate();
+                modEntry.Helper.WriteConfig(config);
+            }
         );
 
         configMenu.AddParagraph(

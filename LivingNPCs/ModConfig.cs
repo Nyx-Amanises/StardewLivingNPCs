@@ -71,6 +71,65 @@ internal sealed class ModConfig
         return false;
     }
 
+    /// <summary>
+    /// Clamps hand-editable numeric settings into safe ranges so a malformed config.json
+    /// (negative values, absurd magnitudes, inverted min/max pairs) cannot destabilize the game.
+    /// </summary>
+    /// <returns><c>true</c> if any value was adjusted and the config should be rewritten.</returns>
+    public bool Validate()
+    {
+        bool changed = false;
+
+        int Clamp(int value, int min, int max)
+        {
+            int clamped = value < min ? min : (value > max ? max : value);
+            if (clamped != value)
+            {
+                changed = true;
+            }
+
+            return clamped;
+        }
+
+        this.ManualEmoteId = Clamp(this.ManualEmoteId, 0, 120);
+        this.MaxMemoryEntriesPerNpc = Clamp(this.MaxMemoryEntriesPerNpc, 0, 1000);
+        this.PromptMemoryEntries = Clamp(this.PromptMemoryEntries, 0, 100);
+        this.MaxPendingHelpRequestsPerNpc = Clamp(this.MaxPendingHelpRequestsPerNpc, 0, 20);
+        this.HelpRequestCooldownDays = Clamp(this.HelpRequestCooldownDays, 0, 112);
+        this.MinRelationshipTrustForHelpRequests = Clamp(this.MinRelationshipTrustForHelpRequests, 0, 100);
+        this.MinHelpRequestFriendshipReward = Clamp(this.MinHelpRequestFriendshipReward, 0, 5000);
+        this.MaxHelpRequestFriendshipReward = Clamp(this.MaxHelpRequestFriendshipReward, 0, 5000);
+        this.MaxAiDialogueFriendshipPerNpcPerDay = Clamp(this.MaxAiDialogueFriendshipPerNpcPerDay, 0, 1000);
+        this.MaxDialogueBehaviorInfluenceDays = Clamp(this.MaxDialogueBehaviorInfluenceDays, 0, 28);
+        this.AiMeaningfulGiftCooldownDays = Clamp(this.AiMeaningfulGiftCooldownDays, 0, 112);
+        this.AiDailyGiftChanceMinPercent = Clamp(this.AiDailyGiftChanceMinPercent, 0, 100);
+        this.AiDailyGiftChanceMaxPercent = Clamp(this.AiDailyGiftChanceMaxPercent, 0, 100);
+        this.MaxAiMoneyGiftAmount = Clamp(this.MaxAiMoneyGiftAmount, 0, 100000);
+        this.MaxAiWateredTilesPerAction = Clamp(this.MaxAiWateredTilesPerAction, 0, 200);
+        this.MinimumCompanionOutingStayMinutes = Clamp(this.MinimumCompanionOutingStayMinutes, 0, 1200);
+        this.NpcStateDailyDecay = Clamp(this.NpcStateDailyDecay, 0, 100);
+        this.NpcEmotionDailyDecay = Clamp(this.NpcEmotionDailyDecay, 0, 100);
+        this.NpcConflictDailyDecay = Clamp(this.NpcConflictDailyDecay, 0, 100);
+        this.PassiveBehaviorChancePercent = Clamp(this.PassiveBehaviorChancePercent, 0, 100);
+        this.MaxBehaviorsPerNpcPerDay = Clamp(this.MaxBehaviorsPerNpcPerDay, 0, 100);
+        this.MaxInteractionDistanceTiles = Clamp(this.MaxInteractionDistanceTiles, 1, 128);
+        this.AiPlannerTimeoutSeconds = Clamp(this.AiPlannerTimeoutSeconds, 1, 120);
+
+        if (this.MinHelpRequestFriendshipReward > this.MaxHelpRequestFriendshipReward)
+        {
+            this.MaxHelpRequestFriendshipReward = this.MinHelpRequestFriendshipReward;
+            changed = true;
+        }
+
+        if (this.AiDailyGiftChanceMinPercent > this.AiDailyGiftChanceMaxPercent)
+        {
+            this.AiDailyGiftChanceMaxPercent = this.AiDailyGiftChanceMinPercent;
+            changed = true;
+        }
+
+        return changed;
+    }
+
     public void ResetToDefaults()
     {
         var defaults = new ModConfig();

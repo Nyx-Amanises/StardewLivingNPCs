@@ -39,6 +39,7 @@ internal sealed class BehaviorEngine
     private readonly ConversationStartRecorder conversationStartRecorder;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
+    private readonly HashSet<string> loggedHandlerExceptions = new();
 
     public BehaviorEngine(IModHelper helper, IMonitor monitor, ModConfig config)
     {
@@ -154,51 +155,73 @@ internal sealed class BehaviorEngine
 
     private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
     {
-        var saveData = this.helper.Data.ReadSaveData<BehaviorMemorySaveData>(SaveDataKey);
-        this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
-        this.conversationStartRecorder.Clear();
-        this.valleyTalkBridge.TryInitialize();
-        this.mailService.QueueDueGiftMailsForTomorrow();
-        this.helper.GameContent.InvalidateCache("Data/mail");
-        this.helpRequestQuestLog.Sync();
-
-        if (this.config.Debug)
+        this.SafeRun("save loaded", () =>
         {
-            this.monitor.Log("Loaded LivingNPCs behavior memory from the current save.", LogLevel.Debug);
-        }
+            BehaviorMemorySaveData? saveData;
+            try
+            {
+                saveData = this.helper.Data.ReadSaveData<BehaviorMemorySaveData>(SaveDataKey);
+            }
+            catch (Exception ex)
+            {
+                this.monitor.Log(
+                    $"Could not read LivingNPCs save data; continuing with fresh memory for this save. ({ex.Message})",
+                    LogLevel.Warn
+                );
+                saveData = null;
+            }
+
+            this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
+            this.conversationStartRecorder.Clear();
+            this.valleyTalkBridge.TryInitialize();
+            this.mailService.QueueDueGiftMailsForTomorrow();
+            this.helper.GameContent.InvalidateCache("Data/mail");
+            this.helpRequestQuestLog.Sync();
+
+            if (this.config.Debug)
+            {
+                this.monitor.Log("Loaded LivingNPCs behavior memory from the current save.", LogLevel.Debug);
+            }
+        });
     }
 
     private void OnSaving(object? sender, SavingEventArgs e)
     {
-        this.helper.Data.WriteSaveData(SaveDataKey, this.memory.ToSaveData());
-        if (this.config.Debug)
+        this.SafeRun("saving", () =>
         {
-            this.monitor.Log("Saved LivingNPCs behavior memory to the current save.", LogLevel.Debug);
-        }
+            this.helper.Data.WriteSaveData(SaveDataKey, this.memory.ToSaveData());
+            if (this.config.Debug)
+            {
+                this.monitor.Log("Saved LivingNPCs behavior memory to the current save.", LogLevel.Debug);
+            }
+        });
     }
 
     private void OnDayStarted(object? sender, DayStartedEventArgs e)
     {
-        if (this.config.EnableNpcState)
+        this.SafeRun("day started", () =>
         {
-            this.memory.DecayStates(
-                this.config.NpcStateDailyDecay,
-                this.config.NpcEmotionDailyDecay,
-                this.config.NpcConflictDailyDecay
-            );
-        }
+            if (this.config.EnableNpcState)
+            {
+                this.memory.DecayStates(
+                    this.config.NpcStateDailyDecay,
+                    this.config.NpcEmotionDailyDecay,
+                    this.config.NpcConflictDailyDecay
+                );
+            }
 
-        this.memory.ResetDaily();
-        this.valleyTalkBridge.ClearAll();
-        this.pendingRequests.Clear();
-        this.companionOutings.Clear();
-        this.conversationStartRecorder.Clear();
-        this.feedback.Clear();
-        this.delayedTravelActions.Clear();
-        this.communityRipples.TryPropagate();
-        this.mailService.QueueDueGiftMailsForTomorrow();
-        this.helper.GameContent.InvalidateCache("Data/mail");
-        this.helpRequestQuestLog.Sync();
+            this.memory.ResetDaily();
+            this.valleyTalkBridge.ClearAll();
+            this.pendingRequests.Clear();
+            this.companionOutings.Clear();
+            this.conversationStartRecorder.Clear();
+            this.feedback.Clear();
+            this.delayedTravelActions.Clear();
+            this.communityRipples.TryPropagate();
+            this.mailService.QueueDueGiftMailsForTomorrow();
+            this.helper.GameContent.InvalidateCache("Data/mail");
+            this.helpRequestQuestLog.Sync();
+        });
     }
 
     private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
@@ -210,88 +233,100 @@ internal sealed class BehaviorEngine
 
         e.Edit(asset =>
         {
-            var data = asset.AsDictionary<string, string>().Data;
-            this.mailService.ApplyMailData(data);
+            this.SafeRun("mail asset edit", () =>
+            {
+                var data = asset.AsDictionary<string, string>().Data;
+                this.mailService.ApplyMailData(data);
+            });
         });
     }
 
     private void OnReturnedToTitle(object? sender, ReturnedToTitleEventArgs e)
     {
-        this.memory.ResetDaily();
-        this.valleyTalkBridge.ClearAll();
-        this.pendingRequests.Clear();
-        this.companionOutings.Clear();
-        this.conversationStartRecorder.Clear();
-        this.feedback.Clear();
-        this.delayedTravelActions.Clear();
+        this.SafeRun("returned to title", () =>
+        {
+            this.memory.ResetDaily();
+            this.valleyTalkBridge.ClearAll();
+            this.pendingRequests.Clear();
+            this.companionOutings.Clear();
+            this.conversationStartRecorder.Clear();
+            this.feedback.Clear();
+            this.delayedTravelActions.Clear();
+        });
     }
 
     private void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
     {
-        if (!Context.IsWorldReady || Game1.activeClickableMenu != null)
+        this.SafeRun("button pressed", () =>
         {
-            return;
-        }
-
-        if (this.config.InspectMemoryHotkey.JustPressed())
-        {
-            this.helper.Input.Suppress(e.Button);
-            this.debugCommands.ShowNearestNpcMemory();
-            return;
-        }
-
-        if (!this.config.BehaviorHotkey.JustPressed())
-        {
-            this.conversationStartRecorder.TryRecord(e);
-            return;
-        }
-
-        this.helper.Input.Suppress(e.Button);
-
-        if (this.TryFindNearestNpc(out NPC? npc) && npc != null)
-        {
-            this.QueueOrExecute(npc, BehaviorTrigger.Manual, "hotkey");
-        }
-        else
-        {
-            this.feedback.Show("LivingNPCs：附近没有可触发的 NPC。");
-            if (this.config.Debug)
+            if (!Context.IsWorldReady || Game1.activeClickableMenu != null)
             {
-                this.monitor.Log("No nearby NPC found for LivingNPCs behavior hotkey.", LogLevel.Debug);
+                return;
             }
-        }
+
+            if (this.config.InspectMemoryHotkey.JustPressed())
+            {
+                this.helper.Input.Suppress(e.Button);
+                this.debugCommands.ShowNearestNpcMemory();
+                return;
+            }
+
+            if (!this.config.BehaviorHotkey.JustPressed())
+            {
+                this.conversationStartRecorder.TryRecord(e);
+                return;
+            }
+
+            this.helper.Input.Suppress(e.Button);
+
+            if (this.TryFindNearestNpc(out NPC? npc) && npc != null)
+            {
+                this.QueueOrExecute(npc, BehaviorTrigger.Manual, "hotkey");
+            }
+            else
+            {
+                this.feedback.Show("LivingNPCs：附近没有可触发的 NPC。");
+                if (this.config.Debug)
+                {
+                    this.monitor.Log("No nearby NPC found for LivingNPCs behavior hotkey.", LogLevel.Debug);
+                }
+            }
+        });
     }
 
     private void OnTimeChanged(object? sender, TimeChangedEventArgs e)
     {
-        if (!Context.IsWorldReady)
+        this.SafeRun("time changed", () =>
         {
-            return;
-        }
+            if (!Context.IsWorldReady)
+            {
+                return;
+            }
 
-        this.helpRequests.UpdateTimers();
+            this.helpRequests.UpdateTimers();
 
-        if (!this.config.EnablePassiveBehaviors || Game1.activeClickableMenu != null)
-        {
-            return;
-        }
+            if (!this.config.EnablePassiveBehaviors || Game1.activeClickableMenu != null)
+            {
+                return;
+            }
 
-        if (this.random.Next(100) >= this.config.PassiveBehaviorChancePercent)
-        {
-            return;
-        }
+            if (this.random.Next(100) >= this.config.PassiveBehaviorChancePercent)
+            {
+                return;
+            }
 
-        if (!this.TryFindNearestNpc(out NPC? npc) || npc == null)
-        {
-            return;
-        }
+            if (!this.TryFindNearestNpc(out NPC? npc) || npc == null)
+            {
+                return;
+            }
 
-        if (this.companionOutings.HasActiveOuting(npc))
-        {
-            return;
-        }
+            if (this.companionOutings.HasActiveOuting(npc))
+            {
+                return;
+            }
 
-        this.QueueOrExecute(npc, BehaviorTrigger.Passive, "passive");
+            this.QueueOrExecute(npc, BehaviorTrigger.Passive, "passive");
+        });
     }
 
     private void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
@@ -301,6 +336,19 @@ internal sealed class BehaviorEngine
             return;
         }
 
+        this.SafeRun("update tick: pending behavior requests", this.ProcessPendingBehaviorRequests);
+        this.SafeRun("update tick: HUD messages", () => this.feedback.TryShowPendingHudMessages());
+        this.SafeRun("update tick: ambient remarks", () => this.feedback.TryShowPendingAmbientRemarks());
+        this.SafeRun("update tick: delayed travel actions", () => this.delayedTravelActions.TryStartPending());
+        this.SafeRun("update tick: companion outings", () => this.companionOutings.TryUpdatePending());
+        if (e.IsMultipleOf(120))
+        {
+            this.SafeRun("update tick: dialogue behavior influences", () => this.dialogueBehaviorInfluences.TryApply());
+        }
+    }
+
+    private void ProcessPendingBehaviorRequests()
+    {
         foreach (var request in this.pendingRequests.Where(request => request.Task.IsCompleted).ToList())
         {
             this.pendingRequests.Remove(request);
@@ -323,14 +371,25 @@ internal sealed class BehaviorEngine
 
             this.TryExecute(npc, intent, request.Source);
         }
+    }
 
-        this.feedback.TryShowPendingHudMessages();
-        this.feedback.TryShowPendingAmbientRemarks();
-        this.delayedTravelActions.TryStartPending();
-        this.companionOutings.TryUpdatePending();
-        if (e.IsMultipleOf(120))
+    private void SafeRun(string context, Action action)
+    {
+        try
         {
-            this.dialogueBehaviorInfluences.TryApply();
+            action();
+        }
+        catch (Exception ex)
+        {
+            string signature = $"{context}|{ex.GetType().FullName}|{ex.Message}";
+            if (this.loggedHandlerExceptions.Add(signature))
+            {
+                this.monitor.Log($"LivingNPCs recovered from an error during {context}: {ex}", LogLevel.Error);
+            }
+            else if (this.config.Debug)
+            {
+                this.monitor.Log($"LivingNPCs error during {context} recurred: {ex.Message}", LogLevel.Trace);
+            }
         }
     }
 

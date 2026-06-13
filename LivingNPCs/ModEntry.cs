@@ -19,7 +19,9 @@ public sealed class ModEntry : Mod
     {
         this.config = helper.ReadConfig<ModConfig>();
         ActiveConfig = this.config;
-        if (this.config.Migrate())
+        bool configChanged = this.config.Migrate();
+        configChanged |= this.config.Validate();
+        if (configChanged)
         {
             helper.WriteConfig(this.config);
         }

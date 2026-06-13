@@ -46,8 +46,16 @@ internal sealed class ValleyTalkPromptBridge
             return false;
         }
 
-        this.api.RegisterPromptOverride(npc.Name, PromptElement, promptText);
-        return true;
+        try
+        {
+            this.api.RegisterPromptOverride(npc.Name, PromptElement, promptText);
+            return true;
+        }
+        catch (System.Exception ex)
+        {
+            this.monitor.Log($"ValleyTalk RegisterPromptOverride failed for {npc.Name}: {ex.Message}", LogLevel.Debug);
+            return false;
+        }
     }
 
     public bool TryRequestGiftDialogue(NPC npc, SObject gift, int taste)
@@ -80,6 +88,18 @@ internal sealed class ValleyTalkPromptBridge
 
     public void ClearAll()
     {
-        this.api?.ClearPromptOverrides();
+        if (this.api == null)
+        {
+            return;
+        }
+
+        try
+        {
+            this.api.ClearPromptOverrides();
+        }
+        catch (System.Exception ex)
+        {
+            this.monitor.Log($"ValleyTalk ClearPromptOverrides failed: {ex.Message}", LogLevel.Debug);
+        }
     }
 }

@@ -240,37 +240,71 @@ internal sealed class CompanionOutingRuntime
 
         foreach (var outing in this.pendingOutings.ToList())
         {
-            NPC? npc = Game1.getCharacterFromName(outing.NpcName);
-            if (outing.TotalDays != Game1.Date.TotalDays || npc == null)
+            try
+            {
+                NPC? npc = Game1.getCharacterFromName(outing.NpcName);
+                if (outing.TotalDays != Game1.Date.TotalDays || npc == null)
+                {
+                    this.pendingOutings.Remove(outing);
+                    continue;
+                }
+
+                if (Game1.eventUp || Game1.currentLocation?.currentEvent != null)
+                {
+                    this.Stop(outing, npc, returnToSchedule: true);
+                    continue;
+                }
+
+                if (Game1.activeClickableMenu != null)
+                {
+                    continue;
+                }
+
+                NpcTravelRuntime.SuppressSchedule(npc);
+                switch (outing.Phase)
+                {
+                    case CompanionOutingPhase.Traveling:
+                        this.UpdateTraveling(npc, outing);
+                        break;
+                    case CompanionOutingPhase.AtDestination:
+                        this.UpdateStay(npc, outing);
+                        break;
+                    case CompanionOutingPhase.Returning:
+                        this.UpdateReturning(npc, outing);
+                        break;
+                }
+            }
+            catch (Exception ex)
             {
                 this.pendingOutings.Remove(outing);
-                continue;
+                this.monitor.Log(
+                    $"Companion outing for {outing.NpcName} hit an error and was cancelled to keep the NPC safe: {ex.Message}",
+                    LogLevel.Warn
+                );
+                this.TryRecoverNpcAfterOutingFailure(outing);
+            }
+        }
+    }
+
+    private void TryRecoverNpcAfterOutingFailure(PendingCompanionOuting outing)
+    {
+        try
+        {
+            NPC? npc = Game1.getCharacterFromName(outing.NpcName);
+            if (npc == null)
+            {
+                return;
             }
 
-            if (Game1.eventUp || Game1.currentLocation?.currentEvent != null)
-            {
-                this.Stop(outing, npc, returnToSchedule: true);
-                continue;
-            }
-
-            if (Game1.activeClickableMenu != null)
-            {
-                continue;
-            }
-
-            NpcTravelRuntime.SuppressSchedule(npc);
-            switch (outing.Phase)
-            {
-                case CompanionOutingPhase.Traveling:
-                    this.UpdateTraveling(npc, outing);
-                    break;
-                case CompanionOutingPhase.AtDestination:
-                    this.UpdateStay(npc, outing);
-                    break;
-                case CompanionOutingPhase.Returning:
-                    this.UpdateReturning(npc, outing);
-                    break;
-            }
+            npc.controller = null;
+            npc.DirectionsToNewLocation = null;
+            npc.Halt();
+            NpcTravelRuntime.RestoreSchedule(npc, outing.OriginalIgnoreScheduleToday, outing.OriginalFollowSchedule);
+            this.returnNpcToSchedule(npc, npc.currentLocation != Game1.currentLocation);
+        }
+        catch
+        {
+            // best-effort recovery; the outing has already been removed from tracking
         }
     }
 
