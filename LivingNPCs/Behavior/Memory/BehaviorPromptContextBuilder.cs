@@ -470,7 +470,7 @@ internal static class BehaviorPromptContextBuilder
         );
         return result.Allowed
             ? $"may naturally ask for one modest favor now; {result.Reason}"
-            : $"should not open a new help request now; {result.Reason}";
+            : $"should not open a new help request now ({result.Reason}); even if the farmer offers to help, gently decline or deflect rather than naming a task, accepting the favor, or committing to one";
     }
 
     private static string BuildTravelInvitationPolicyPromptLabel(LivingNpcState state)
