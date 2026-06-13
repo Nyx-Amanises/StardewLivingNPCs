@@ -1,0 +1,38 @@
+{
+  "hud.noNearbyNpc": "LivingNPCs: No nearby NPC to trigger.",
+  "hud.planningBehavior": "LivingNPCs: Planning a behavior for {{npc}}...",
+  "hud.behaviorSkipped": "LivingNPCs: {{npc}} did not perform {{behavior}}: {{reason}}",
+  "hud.behaviorFailed": "LivingNPCs: {{npc}} could not perform {{behavior}}.",
+  "hud.behaviorDone": "LivingNPCs: {{npc}} performed {{behavior}}, {{bridge}}.",
+
+  "bridge.pushed": "ValleyTalk context pushed",
+  "bridge.notPushed": "ValleyTalk context not pushed",
+
+  "behavior.facePlayer": "turn toward you",
+  "behavior.emote": "show an emote",
+  "behavior.approachPlayer": "walk over to you",
+  "behavior.pause": "pause and look at you",
+  "behavior.lookAround": "look around",
+  "behavior.stepAway": "step back",
+
+  "skip.eventActive": "an event is in progress",
+  "skip.notInLocation": "the NPC is not on the current map",
+  "skip.dailyBudget": "this NPC's daily trigger limit has been reached",
+  "skip.facingDisabled": "facing behavior is disabled",
+  "skip.emoteDisabled": "emote behavior is disabled",
+  "skip.approachDisabled": "walking-over behavior is disabled",
+  "skip.movementDisabled": "movement behaviors are disabled",
+  "skip.attentionDisabled": "small attention behaviors are disabled",
+
+  "help.thanksFulfilled": "Thank you, this really helped.",
+  "help.thanksReceived": "Thanks, I'll take this for now.",
+  "hud.itemDelivered": "LivingNPCs: Gave {{item}} to {{npc}}.",
+
+  "gift.mailWhenInventoryFull": "LivingNPCs: Your inventory was full, so {{npc}} will mail you {{item}} tomorrow.",
+  "gift.gaveMoney": "LivingNPCs: {{npc}} gave you {{amount}}g.",
+  "gift.hud.preference": "LivingNPCs: {{npc}} remembered what you like and gave you {{item}}.",
+  "gift.hud.reciprocal": "LivingNPCs: {{npc}} gave you {{item}} in return.",
+  "gift.hud.thanks": "LivingNPCs: {{npc}} gave you {{item}} as a thank-you.",
+  "gift.hud.meaningful": "LivingNPCs: {{npc}} gave you a heartfelt gift: {{item}}.",
+  "gift.hud.default": "LivingNPCs: {{npc}} gave you {{item}}."
+}

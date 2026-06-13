@@ -95,11 +95,11 @@ internal static class GiftActionRules
     {
         return motive switch
         {
-            "preference" => $"LivingNPCs：{npc.displayName} 记得你的喜好，送给你了 {itemLabel}。",
-            "reciprocal" => $"LivingNPCs：{npc.displayName} 回送给你了 {itemLabel}。",
-            "thanks" => $"LivingNPCs：{npc.displayName} 送给你了 {itemLabel} 作为谢礼。",
-            "meaningful" => $"LivingNPCs：{npc.displayName} 送给你了一份用心的礼物：{itemLabel}。",
-            _ => $"LivingNPCs：{npc.displayName} 送给你了 {itemLabel}。"
+            "preference" => I18n.Get("gift.hud.preference", new { npc = npc.displayName, item = itemLabel }),
+            "reciprocal" => I18n.Get("gift.hud.reciprocal", new { npc = npc.displayName, item = itemLabel }),
+            "thanks" => I18n.Get("gift.hud.thanks", new { npc = npc.displayName, item = itemLabel }),
+            "meaningful" => I18n.Get("gift.hud.meaningful", new { npc = npc.displayName, item = itemLabel }),
+            _ => I18n.Get("gift.hud.default", new { npc = npc.displayName, item = itemLabel })
         };
     }
 

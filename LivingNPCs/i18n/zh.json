@@ -1,0 +1,38 @@
+{
+  "hud.noNearbyNpc": "LivingNPCs：附近没有可触发的 NPC。",
+  "hud.planningBehavior": "LivingNPCs：正在为 {{npc}} 规划行为...",
+  "hud.behaviorSkipped": "LivingNPCs：{{npc}} 未执行 {{behavior}}：{{reason}}",
+  "hud.behaviorFailed": "LivingNPCs：{{npc}} 未能执行 {{behavior}}。",
+  "hud.behaviorDone": "LivingNPCs：{{npc}} 已执行 {{behavior}}，{{bridge}}。",
+
+  "bridge.pushed": "已推送 ValleyTalk 上下文",
+  "bridge.notPushed": "未推送 ValleyTalk 上下文",
+
+  "behavior.facePlayer": "转向玩家",
+  "behavior.emote": "显示表情",
+  "behavior.approachPlayer": "走近玩家",
+  "behavior.pause": "停下看向玩家",
+  "behavior.lookAround": "环顾四周",
+  "behavior.stepAway": "后退一步",
+
+  "skip.eventActive": "当前正在事件中",
+  "skip.notInLocation": "NPC 不在当前地图",
+  "skip.dailyBudget": "今天该 NPC 的触发次数已达上限",
+  "skip.facingDisabled": "转向行为已关闭",
+  "skip.emoteDisabled": "表情行为已关闭",
+  "skip.approachDisabled": "走近玩家行为已关闭",
+  "skip.movementDisabled": "移动类行为已关闭",
+  "skip.attentionDisabled": "小型注意力行为已关闭",
+
+  "help.thanksFulfilled": "谢谢你，真的帮上忙了。",
+  "help.thanksReceived": "谢谢你，我先收下这个。",
+  "hud.itemDelivered": "LivingNPCs：已把 {{item}} 交给 {{npc}}。",
+
+  "gift.mailWhenInventoryFull": "LivingNPCs：你的背包满了，{{npc}} 会把 {{item}} 明天寄给你。",
+  "gift.gaveMoney": "LivingNPCs：{{npc}} 给了你 {{amount}}g。",
+  "gift.hud.preference": "LivingNPCs：{{npc}} 记得你的喜好，送给你了 {{item}}。",
+  "gift.hud.reciprocal": "LivingNPCs：{{npc}} 回送给你了 {{item}}。",
+  "gift.hud.thanks": "LivingNPCs：{{npc}} 送给你了 {{item}} 作为谢礼。",
+  "gift.hud.meaningful": "LivingNPCs：{{npc}} 送给你了一份用心的礼物：{{item}}。",
+  "gift.hud.default": "LivingNPCs：{{npc}} 送给你了 {{item}}。"
+}

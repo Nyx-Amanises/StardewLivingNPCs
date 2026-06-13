@@ -101,7 +101,7 @@ internal sealed class GiftActionRuntime
                 this.config.MaxMemoryEntriesPerNpc
             );
             MarkStateAfterWorldAction(state, "they mailed the farmer a small gift after the farmer's inventory was full");
-            this.feedback.ShowAfterDialogue($"LivingNPCs：你的背包满了，{npc.displayName} 会把 {gift.DisplayName} 明天寄给你。");
+            this.feedback.ShowAfterDialogue(I18n.Get("gift.mailWhenInventoryFull", new { npc = npc.displayName, item = gift.DisplayName }));
             return true;
         }
 
@@ -158,7 +158,7 @@ internal sealed class GiftActionRuntime
             this.config.MaxMemoryEntriesPerNpc
         );
         MarkStateAfterWorldAction(state, "they gave the farmer some money");
-        this.feedback.ShowAfterDialogue($"LivingNPCs：{npc.displayName} 给了你 {amount}g。");
+        this.feedback.ShowAfterDialogue(I18n.Get("gift.gaveMoney", new { npc = npc.displayName, amount }));
         return true;
     }
 
@@ -244,7 +244,7 @@ internal sealed class GiftActionRuntime
                 this.config.MaxMemoryEntriesPerNpc
             );
             MarkStateAfterWorldAction(state, "they mailed the farmer a meaningful gift after the farmer's inventory was full");
-            this.feedback.ShowAfterDialogue($"LivingNPCs：你的背包满了，{npc.displayName} 会把 {gift.DisplayName} 明天寄给你。");
+            this.feedback.ShowAfterDialogue(I18n.Get("gift.mailWhenInventoryFull", new { npc = npc.displayName, item = gift.DisplayName }));
             return true;
         }
 

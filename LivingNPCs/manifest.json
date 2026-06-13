@@ -1,11 +1,12 @@
 {
   "Name": "LivingNPCs",
-  "Author": "Codex and You",
+  "Author": "Yuki",
   "Version": "0.1.0",
   "Description": "Adds safe NPC behavior hooks and optional ValleyTalk prompt integration.",
   "UniqueID": "Codex.LivingNPCs",
   "EntryDll": "LivingNPCs.dll",
   "MinimumApiVersion": "4.1.0",
+  "UpdateKeys": [],
   "Dependencies": [
     {
       "UniqueID": "dandm1.ValleyTalk",

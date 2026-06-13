@@ -194,14 +194,14 @@ internal sealed class ConversationStartRecorder
         {
             this.feedback.QueueAmbientRemark(
                 npc,
-                fulfilledCount > 0 ? "谢谢你，真的帮上忙了。" : "谢谢你，我先收下这个。",
+                fulfilledCount > 0 ? I18n.Get("help.thanksFulfilled") : I18n.Get("help.thanksReceived"),
                 0
             );
         }
 
         if (fulfilledCount == 0)
         {
-            this.feedback.Show($"LivingNPCs：已把 {gift.ItemName} 交给 {npc.displayName}。");
+            this.feedback.Show(I18n.Get("hud.itemDelivered", new { item = gift.ItemName, npc = npc.displayName }));
         }
     }
 

@@ -17,6 +17,7 @@ public sealed class ModEntry : Mod
 
     public override void Entry(IModHelper helper)
     {
+        I18n.Init(helper.Translation);
         this.config = helper.ReadConfig<ModConfig>();
         ActiveConfig = this.config;
         bool configChanged = this.config.Migrate();

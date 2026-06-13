@@ -285,7 +285,7 @@ internal sealed class BehaviorEngine
             }
             else
             {
-                this.feedback.Show("LivingNPCs：附近没有可触发的 NPC。");
+                this.feedback.Show(I18n.Get("hud.noNearbyNpc"));
                 if (this.config.Debug)
                 {
                     this.monitor.Log("No nearby NPC found for LivingNPCs behavior hotkey.", LogLevel.Debug);
@@ -450,7 +450,7 @@ internal sealed class BehaviorEngine
 
         if (trigger == BehaviorTrigger.Manual)
         {
-            this.feedback.Show($"LivingNPCs：正在为 {npc.displayName} 规划行为...");
+            this.feedback.Show(I18n.Get("hud.planningBehavior", new { npc = npc.displayName }));
         }
     }
 
@@ -1048,7 +1048,7 @@ internal sealed class BehaviorEngine
         {
             if (source == "hotkey")
             {
-                this.feedback.Show($"LivingNPCs：{npc.displayName} 未执行 {this.DescribeIntent(intent.Type)}：{this.TranslateSkipReason(reason)}");
+                this.feedback.Show(I18n.Get("hud.behaviorSkipped", new { npc = npc.displayName, behavior = this.DescribeIntent(intent.Type), reason = this.TranslateSkipReason(reason) }));
             }
 
             if (this.config.Debug)
@@ -1074,7 +1074,7 @@ internal sealed class BehaviorEngine
         {
             if (source == "hotkey")
             {
-                this.feedback.Show($"LivingNPCs：{npc.displayName} 未能执行 {this.DescribeIntent(intent.Type)}。");
+                this.feedback.Show(I18n.Get("hud.behaviorFailed", new { npc = npc.displayName, behavior = this.DescribeIntent(intent.Type) }));
             }
 
             return false;
@@ -1109,8 +1109,8 @@ internal sealed class BehaviorEngine
 
         if (source == "hotkey")
         {
-            string bridge = pushedToValleyTalk ? "已推送 ValleyTalk 上下文" : "未推送 ValleyTalk 上下文";
-            this.feedback.Show($"LivingNPCs：{npc.displayName} 已执行 {this.DescribeIntent(intent.Type)}，{bridge}。");
+            string bridge = I18n.Get(pushedToValleyTalk ? "bridge.pushed" : "bridge.notPushed");
+            this.feedback.Show(I18n.Get("hud.behaviorDone", new { npc = npc.displayName, behavior = this.DescribeIntent(intent.Type), bridge }));
         }
 
         return true;
@@ -1234,12 +1234,12 @@ internal sealed class BehaviorEngine
     {
         return intentType switch
         {
-            BehaviorIntentType.FacePlayer => "转向玩家",
-            BehaviorIntentType.Emote => "显示表情",
-            BehaviorIntentType.ApproachPlayer => "走近玩家",
-            BehaviorIntentType.Pause => "停下看向玩家",
-            BehaviorIntentType.LookAround => "环顾四周",
-            BehaviorIntentType.StepAway => "后退一步",
+            BehaviorIntentType.FacePlayer => I18n.Get("behavior.facePlayer"),
+            BehaviorIntentType.Emote => I18n.Get("behavior.emote"),
+            BehaviorIntentType.ApproachPlayer => I18n.Get("behavior.approachPlayer"),
+            BehaviorIntentType.Pause => I18n.Get("behavior.pause"),
+            BehaviorIntentType.LookAround => I18n.Get("behavior.lookAround"),
+            BehaviorIntentType.StepAway => I18n.Get("behavior.stepAway"),
             _ => intentType.ToString()
         };
     }
@@ -1248,14 +1248,14 @@ internal sealed class BehaviorEngine
     {
         return reason switch
         {
-            "an event is active" => "当前正在事件中",
-            "the NPC is not in the current location" => "NPC 不在当前地图",
-            "daily behavior budget reached" => "今天该 NPC 的触发次数已达上限",
-            "facing behavior is disabled" => "转向行为已关闭",
-            "emote behavior is disabled" => "表情行为已关闭",
-            "approach behavior is disabled" => "走近玩家行为已关闭",
-            "movement behavior is disabled" => "移动类行为已关闭",
-            "small attention behavior is disabled" => "小型注意力行为已关闭",
+            "an event is active" => I18n.Get("skip.eventActive"),
+            "the NPC is not in the current location" => I18n.Get("skip.notInLocation"),
+            "daily behavior budget reached" => I18n.Get("skip.dailyBudget"),
+            "facing behavior is disabled" => I18n.Get("skip.facingDisabled"),
+            "emote behavior is disabled" => I18n.Get("skip.emoteDisabled"),
+            "approach behavior is disabled" => I18n.Get("skip.approachDisabled"),
+            "movement behavior is disabled" => I18n.Get("skip.movementDisabled"),
+            "small attention behavior is disabled" => I18n.Get("skip.attentionDisabled"),
             _ => reason
         };
     }
