@@ -5,7 +5,7 @@ namespace ValleyTalk;
 
 internal static class LivingNpcConversationBridge
 {
-    private const string LivingNpcUniqueId = "Codex.LivingNPCs";
+    private const string LivingNpcUniqueId = "Yuki.LivingNPCs";
 
     private static bool initialized;
     private static ILivingNPCsApi api;

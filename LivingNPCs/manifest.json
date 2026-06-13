@@ -3,7 +3,7 @@
   "Author": "Yuki",
   "Version": "0.1.0",
   "Description": "Adds safe NPC behavior hooks and optional ValleyTalk prompt integration.",
-  "UniqueID": "Codex.LivingNPCs",
+  "UniqueID": "Yuki.LivingNPCs",
   "EntryDll": "LivingNPCs.dll",
   "MinimumApiVersion": "4.1.0",
   "UpdateKeys": [],
