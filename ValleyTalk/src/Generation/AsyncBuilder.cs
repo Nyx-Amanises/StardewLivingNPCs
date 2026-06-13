@@ -24,6 +24,8 @@ public class AsyncBuilder
     private IEnumerable<ConversationElement> _currentConversation = null;
     private StardewValley.Object _currentGift = null;
     private int _currentTaste = 0;
+    private int _generationId = 0;
+    private bool _generationCancelled = false;
 
     public bool AwaitingGeneration => _awaitingGeneration;
     public NPC SpeakingNpc => _speakingNpc;
@@ -34,13 +36,15 @@ public class AsyncBuilder
         if (_awaitingGeneration && Game1.activeClickableMenu == null)
         {
             _awaitingGeneration = false;
+            _generationCancelled = false;
+            int generationId = ++_generationId;
             ThinkingDialogueController.Start(_speakingNpc);
 
-            _ = PerformGeneration();
+            _ = PerformGeneration(generationId);
         }
     }
 
-    private async Task PerformGeneration()
+    private async Task PerformGeneration(int generationId)
     {
         try
         {
@@ -85,6 +89,12 @@ public class AsyncBuilder
 
             void UpdateUI()
             {
+                if (!IsCurrentGeneration(generationId))
+                {
+                    // The player cancelled (Esc) or a newer request superseded this one.
+                    return;
+                }
+
                 ThinkingDialogueController.Close();
 
                 if (newDialogue != null && newDialogue.dialogues.Count > 0)
@@ -97,6 +107,12 @@ public class AsyncBuilder
         {
             var npc = _speakingNpc;
             ModEntry.SMonitor?.Log($"Error generating NPC response for {npc?.Name ?? "unknown NPC"}: {ex}", StardewModdingAPI.LogLevel.Error);
+
+            if (!IsCurrentGeneration(generationId))
+            {
+                // The player cancelled or a newer request superseded this one; nothing to show.
+                return;
+            }
 
             // Make sure to hide thinking window even if there's an error
             if (AndroidHelper.IsAndroid)
@@ -118,15 +134,19 @@ public class AsyncBuilder
         }
         finally
         {
-            // Reset state
-            _awaitingGeneration = false;
-            _speakingNpc = null;
-            _currentDialogueKey = "";
-            _originalLine = null;
-            _currentConversation = null;
-            _currentGift = null;
-            _currentTaste = 0;
-            _awaitedType = GenerationType.None;
+            // Only reset shared state if this is still the active generation; a cancelled or
+            // superseded run must not clobber a newer request's state.
+            if (generationId == _generationId)
+            {
+                _awaitingGeneration = false;
+                _speakingNpc = null;
+                _currentDialogueKey = "";
+                _originalLine = null;
+                _currentConversation = null;
+                _currentGift = null;
+                _currentTaste = 0;
+                _awaitedType = GenerationType.None;
+            }
         }
 
         void ShowFallbackDialogue(NPC npc)
@@ -146,6 +166,24 @@ public class AsyncBuilder
                 ModEntry.SMonitor?.Log($"Error showing fallback NPC response for {npc.Name}: {fallbackException}", StardewModdingAPI.LogLevel.Error);
             }
         }
+    }
+
+    private bool IsCurrentGeneration(int generationId)
+    {
+        return generationId == _generationId && !_generationCancelled;
+    }
+
+    /// <summary>
+    /// Cancels the in-flight "thinking" generation (e.g. when the player presses Esc).
+    /// The thinking box is closed immediately and any late result is discarded; the
+    /// underlying request still ends on its own query timeout in the background.
+    /// </summary>
+    internal void CancelActiveGeneration()
+    {
+        _generationCancelled = true;
+        _generationId++;
+        _awaitingGeneration = false;
+        ThinkingDialogueController.Close();
     }
 
     private static void ShowNativeDialogue(NPC npc, Dialogue dialogue)

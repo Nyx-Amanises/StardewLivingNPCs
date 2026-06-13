@@ -60,6 +60,18 @@ internal static class DialogueBox_ReceiveKeyPress_ThinkingDialogue_Patch
             return false;
         }
 
-        return !ThinkingDialogueController.IsThinkingBox(__instance);
+        if (ThinkingDialogueController.IsThinkingBox(__instance))
+        {
+            // Let the player bail out of a slow or stuck generation by pressing Esc.
+            if (key == Keys.Escape)
+            {
+                AsyncBuilder.Instance.CancelActiveGeneration();
+            }
+
+            // Keep the thinking box otherwise non-interactive.
+            return false;
+        }
+
+        return true;
     }
 }
