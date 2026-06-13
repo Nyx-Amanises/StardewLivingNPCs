@@ -6,6 +6,7 @@ using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewModdingAPI.Events;
 using StardewValley;
+using StardewValley.Menus;
 using StardewValley.Pathfinding;
 
 namespace LivingNPCs.Behavior;
@@ -40,6 +41,9 @@ internal sealed class BehaviorEngine
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
     private readonly HashSet<string> loggedHandlerExceptions = new();
+    private string pendingGiftMailKey = string.Empty;
+    private int pendingGiftMailOpenChecks;
+    private string activeGiftMailKey = string.Empty;
 
     public BehaviorEngine(IModHelper helper, IMonitor monitor, ModConfig config)
     {
@@ -52,8 +56,8 @@ internal sealed class BehaviorEngine
         this.aiBehaviorClient = new AiBehaviorClient(config, monitor);
         this.feedback = new BehaviorFeedbackService(config, monitor);
         this.communityRipples = new CommunityRippleRuntime(config, monitor, this.memory, this.random);
-        this.debugCommands = new BehaviorDebugCommandHandler(helper, monitor, config, this.memory, this.feedback.Show);
         this.mailService = new BehaviorMailService(helper, this.memory, this.random);
+        this.debugCommands = new BehaviorDebugCommandHandler(helper, monitor, config, this.memory, this.mailService, this.feedback.Show);
         this.giftOpportunities = new GiftOpportunityService(
             config,
             this.memory,
@@ -149,6 +153,7 @@ internal sealed class BehaviorEngine
         this.helper.Events.GameLoop.TimeChanged += this.OnTimeChanged;
         this.helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
         this.helper.Events.Input.ButtonPressed += this.OnButtonPressed;
+        this.helper.Events.Display.MenuChanged += this.OnMenuChanged;
         this.helper.Events.Content.AssetRequested += this.OnAssetRequested;
         this.debugCommands.RegisterConsoleCommands();
     }
@@ -213,6 +218,7 @@ internal sealed class BehaviorEngine
             this.memory.ResetDaily();
             this.valleyTalkBridge.ClearAll();
             this.pendingRequests.Clear();
+            this.ClearGiftMailTracking();
             this.companionOutings.Clear();
             this.conversationStartRecorder.Clear();
             this.feedback.Clear();
@@ -248,6 +254,7 @@ internal sealed class BehaviorEngine
             this.memory.ResetDaily();
             this.valleyTalkBridge.ClearAll();
             this.pendingRequests.Clear();
+            this.ClearGiftMailTracking();
             this.companionOutings.Clear();
             this.conversationStartRecorder.Clear();
             this.feedback.Clear();
@@ -271,6 +278,8 @@ internal sealed class BehaviorEngine
                 return;
             }
 
+            this.TryRememberGiftMailOpening(e);
+
             if (!this.config.BehaviorHotkey.JustPressed())
             {
                 this.conversationStartRecorder.TryRecord(e);
@@ -290,6 +299,34 @@ internal sealed class BehaviorEngine
                 {
                     this.monitor.Log("No nearby NPC found for LivingNPCs behavior hotkey.", LogLevel.Debug);
                 }
+            }
+        });
+    }
+
+    private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
+    {
+        this.SafeRun("menu changed", () =>
+        {
+            if (e.OldMenu is LetterViewerMenu && !string.IsNullOrWhiteSpace(this.activeGiftMailKey))
+            {
+                this.mailService.MarkGiftMailClaimed(this.activeGiftMailKey);
+                this.activeGiftMailKey = string.Empty;
+            }
+
+            if (e.NewMenu is LetterViewerMenu letter
+                && letter.isMail
+                && !string.IsNullOrWhiteSpace(this.pendingGiftMailKey))
+            {
+                this.activeGiftMailKey = this.pendingGiftMailKey;
+                this.pendingGiftMailKey = string.Empty;
+                this.pendingGiftMailOpenChecks = 0;
+                return;
+            }
+
+            if (e.NewMenu != null && !string.IsNullOrWhiteSpace(this.pendingGiftMailKey))
+            {
+                this.pendingGiftMailKey = string.Empty;
+                this.pendingGiftMailOpenChecks = 0;
             }
         });
     }
@@ -337,6 +374,7 @@ internal sealed class BehaviorEngine
         }
 
         this.SafeRun("update tick: pending behavior requests", this.ProcessPendingBehaviorRequests);
+        this.SafeRun("update tick: gift mail restore", this.TryRestoreStalledGiftMailOpening);
         this.SafeRun("update tick: HUD messages", () => this.feedback.TryShowPendingHudMessages());
         this.SafeRun("update tick: ambient remarks", () => this.feedback.TryShowPendingAmbientRemarks());
         this.SafeRun("update tick: delayed travel actions", () => this.delayedTravelActions.TryStartPending());
@@ -1004,6 +1042,72 @@ internal sealed class BehaviorEngine
             "- If naming a specific gift, use an itemId from the two lists above and the matching itemLabel. Generic wording such as 'a small thing' is fine when no specific item is named.",
             "- If the moment feels emotionally wrong, crowded, or abrupt, skip the gift rather than forcing it."
         );
+    }
+
+    private void TryRememberGiftMailOpening(ButtonPressedEventArgs e)
+    {
+        if (!e.Button.IsActionButton()
+            || Game1.player == null
+            || !this.IsMailboxInteraction(e.Cursor)
+            || !this.mailService.TryGetCurrentGiftMailInMailbox(out string mailKey, out _))
+        {
+            return;
+        }
+
+        this.pendingGiftMailKey = mailKey;
+        this.pendingGiftMailOpenChecks = 20;
+    }
+
+    private void TryRestoreStalledGiftMailOpening()
+    {
+        if (string.IsNullOrWhiteSpace(this.pendingGiftMailKey) || Game1.player == null)
+        {
+            return;
+        }
+
+        if (Game1.activeClickableMenu is LetterViewerMenu)
+        {
+            return;
+        }
+
+        if (this.pendingGiftMailOpenChecks > 0)
+        {
+            this.pendingGiftMailOpenChecks--;
+            return;
+        }
+
+        string mailKey = this.pendingGiftMailKey;
+        this.pendingGiftMailKey = string.Empty;
+        this.pendingGiftMailOpenChecks = 0;
+
+        if (this.mailService.RestoreGiftMailToMailbox(mailKey, includeReceived: true))
+        {
+            this.feedback.Show(I18n.Get("gift.mailRestored"));
+            if (this.config.Debug)
+            {
+                this.monitor.Log($"Restored stalled LivingNPCs gift mail to the mailbox: {mailKey}", LogLevel.Debug);
+            }
+        }
+    }
+
+    private void ClearGiftMailTracking()
+    {
+        this.pendingGiftMailKey = string.Empty;
+        this.pendingGiftMailOpenChecks = 0;
+        this.activeGiftMailKey = string.Empty;
+    }
+
+    private bool IsMailboxInteraction(ICursorPosition cursor)
+    {
+        if (Game1.player == null)
+        {
+            return false;
+        }
+
+        Point mailbox = Game1.player.getMailboxPosition();
+        Point facingTile = this.GetPlayerFacingTile();
+        Point grabTile = new((int)cursor.GrabTile.X, (int)cursor.GrabTile.Y);
+        return facingTile == mailbox || grabTile == mailbox;
     }
 
     private bool TryFindNpcForInteraction(ICursorPosition cursor, out NPC? npc)

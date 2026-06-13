@@ -13,6 +13,7 @@ internal sealed class BehaviorDebugCommandHandler
     private readonly IMonitor monitor;
     private readonly ModConfig config;
     private readonly BehaviorMemory memory;
+    private readonly BehaviorMailService mailService;
     private readonly Action<string> showFeedback;
 
     public BehaviorDebugCommandHandler(
@@ -20,12 +21,14 @@ internal sealed class BehaviorDebugCommandHandler
         IMonitor monitor,
         ModConfig config,
         BehaviorMemory memory,
+        BehaviorMailService mailService,
         Action<string> showFeedback)
     {
         this.helper = helper;
         this.monitor = monitor;
         this.config = config;
         this.memory = memory;
+        this.mailService = mailService;
         this.showFeedback = showFeedback;
     }
 
@@ -50,6 +53,11 @@ internal sealed class BehaviorDebugCommandHandler
             "livingnpcs_eval",
             "运行一组轻量运行时诊断，检查关键人格化规则是否还在。",
             this.OnEvalCommand
+        );
+        this.helper.ConsoleCommands.Add(
+            "livingnpcs_restore_gift_mail",
+            "恢复未领取但已从邮箱消失的 LivingNPCs 礼物信。用法：livingnpcs_restore_gift_mail [latest|all]",
+            this.OnRestoreGiftMailCommand
         );
     }
 
@@ -162,6 +170,25 @@ internal sealed class BehaviorDebugCommandHandler
     private void OnEvalCommand(string command, string[] args)
     {
         this.monitor.Log(BehaviorDiagnostics.RunRuntimeEvaluationSuite(), LogLevel.Info);
+    }
+
+    private void OnRestoreGiftMailCommand(string command, string[] args)
+    {
+        if (!Context.IsWorldReady)
+        {
+            this.monitor.Log("LivingNPCs：请先载入存档后再恢复礼物信。", LogLevel.Info);
+            return;
+        }
+
+        string target = JoinCommandArgs(args);
+        bool restoreAll = target.Equals("all", StringComparison.OrdinalIgnoreCase);
+        int restored = this.mailService.RestoreMissingGiftMailsToMailbox(includeReceived: true, restoreAll);
+        string message = restored > 0
+            ? $"LivingNPCs：已恢复 {restored} 封未领取的礼物信到邮箱。"
+            : "LivingNPCs：没有找到可恢复的未领取礼物信。";
+
+        this.monitor.Log(message, LogLevel.Info);
+        this.showFeedback(message);
     }
 
     private bool TryResolveNpcArgument(string[] args, out NPC? npc, out string error)

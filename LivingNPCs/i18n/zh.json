@@ -29,6 +29,7 @@
   "hud.itemDelivered": "LivingNPCs：已把 {{item}} 交给 {{npc}}。",
 
   "gift.mailWhenInventoryFull": "LivingNPCs：你的背包满了，{{npc}} 会把 {{item}} 明天寄给你。",
+  "gift.mailRestored": "LivingNPCs：刚才那封礼物信没有正常打开，已放回邮箱。",
   "gift.gaveMoney": "LivingNPCs：{{npc}} 给了你 {{amount}}g。",
   "gift.hud.preference": "LivingNPCs：{{npc}} 记得你的喜好，送给你了 {{item}}。",
   "gift.hud.reciprocal": "LivingNPCs：{{npc}} 回送给你了 {{item}}。",
@@ -93,7 +94,7 @@
   "outing.return.default": "{{opening}}我们回去吧。",
 
   "gmcm.para.loaded": "LivingNPCs 已加载。能看到这个页面，就说明 Mod 正在运行。",
-  "gmcm.para.commands": "SMAPI 调试命令：livingnpcs_debug、livingnpcs_prompt、livingnpcs_export、livingnpcs_eval。",
+  "gmcm.para.commands": "SMAPI 调试命令：livingnpcs_debug、livingnpcs_prompt、livingnpcs_export、livingnpcs_eval、livingnpcs_restore_gift_mail。",
 
   "gmcm.section.basic": "基础设置",
   "gmcm.section.manualTest": "手动测试",

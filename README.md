@@ -204,6 +204,7 @@ LivingNPCs 现在还会把“这个存档已经走到哪一步”写进隐藏上
 | `livingnpcs_prompt [near\|NPC名]` | 输出 LivingNPCs 即将注入 ValleyTalk 的完整隐藏上下文 |
 | `livingnpcs_export [near\|all\|NPC名]` | 导出 Markdown 调试报告到 `Mods/LivingNPCs/debug_reports/<存档名>/` |
 | `livingnpcs_eval` | 在游戏内跑一组轻量运行时诊断，确认关键人格化规则还在 |
+| `livingnpcs_restore_gift_mail [latest\|all]` | 恢复未领取但已从邮箱消失的 LivingNPCs 礼物信 |
 
 导出的报告会包含：
 

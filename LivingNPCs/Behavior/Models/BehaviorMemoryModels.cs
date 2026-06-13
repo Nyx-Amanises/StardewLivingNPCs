@@ -319,6 +319,9 @@ internal sealed class NpcGiftMailFact
     public int CreatedTimeOfDay { get; set; }
     public int DueTotalDays { get; set; } = -1;
     public bool QueuedForDelivery { get; set; }
+    public bool Claimed { get; set; }
+    public int ClaimedTotalDays { get; set; } = -1;
+    public int ClaimedTimeOfDay { get; set; }
 }
 
 internal sealed class NpcHelpRequestStepFact

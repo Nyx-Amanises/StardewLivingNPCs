@@ -90,6 +90,115 @@ internal sealed class BehaviorMailService
             && string.Equals(mail.Motive, motive, StringComparison.OrdinalIgnoreCase));
     }
 
+    public bool TryGetCurrentGiftMailInMailbox(out string mailKey, out NpcGiftMailFact? giftMail)
+    {
+        mailKey = string.Empty;
+        giftMail = null;
+        if (!Context.IsWorldReady || Game1.player == null || Game1.player.mailbox.Count == 0)
+        {
+            return false;
+        }
+
+        mailKey = Game1.player.mailbox[0];
+        return this.TryGetGiftMail(mailKey, out giftMail);
+    }
+
+    public bool MarkGiftMailClaimed(string mailKey)
+    {
+        if (!Context.IsWorldReady || !this.TryGetGiftMail(mailKey, out NpcGiftMailFact? giftMail) || giftMail == null)
+        {
+            return false;
+        }
+
+        giftMail.Claimed = true;
+        giftMail.ClaimedTotalDays = Game1.Date.TotalDays;
+        giftMail.ClaimedTimeOfDay = Game1.timeOfDay;
+        return true;
+    }
+
+    public bool RestoreGiftMailToMailbox(string mailKey, bool includeReceived)
+    {
+        if (!Context.IsWorldReady
+            || Game1.player == null
+            || !this.TryGetGiftMail(mailKey, out NpcGiftMailFact? giftMail)
+            || giftMail == null
+            || giftMail.Claimed)
+        {
+            return false;
+        }
+
+        string key = GetGiftMailKey(giftMail);
+        if (ContainsMailKey(Game1.player.mailbox, key) || ContainsMailKey(Game1.player.mailForTomorrow, key))
+        {
+            return false;
+        }
+
+        if (ContainsMailKey(Game1.player.mailReceived, key))
+        {
+            if (!includeReceived)
+            {
+                return false;
+            }
+
+            Game1.player.mailReceived.Remove(key);
+        }
+
+        Game1.player.mailbox.Add(key);
+        this.helper.GameContent.InvalidateCache("Data/mail");
+        return true;
+    }
+
+    public int RestoreMissingGiftMailsToMailbox(bool includeReceived, bool restoreAll)
+    {
+        if (!Context.IsWorldReady || Game1.player == null)
+        {
+            return 0;
+        }
+
+        var candidates = this.GetGiftMailRequests()
+            .Where(mail => !mail.Claimed && mail.QueuedForDelivery && mail.DueTotalDays <= Game1.Date.TotalDays)
+            .Select(mail => new
+            {
+                Mail = mail,
+                Key = GetGiftMailKey(mail)
+            })
+            .Where(entry => !string.IsNullOrWhiteSpace(entry.Key)
+                && !ContainsMailKey(Game1.player.mailbox, entry.Key)
+                && !ContainsMailKey(Game1.player.mailForTomorrow, entry.Key)
+                && (includeReceived || !ContainsMailKey(Game1.player.mailReceived, entry.Key)))
+            .OrderByDescending(entry => entry.Mail.DueTotalDays)
+            .ThenByDescending(entry => entry.Mail.CreatedTotalDays)
+            .ThenByDescending(entry => entry.Mail.CreatedTimeOfDay)
+            .ToList();
+
+        if (!restoreAll)
+        {
+            candidates = candidates.Take(1).ToList();
+        }
+
+        int restored = 0;
+        foreach (var candidate in candidates)
+        {
+            if (ContainsMailKey(Game1.player.mailReceived, candidate.Key))
+            {
+                Game1.player.mailReceived.Remove(candidate.Key);
+            }
+
+            if (!ContainsMailKey(Game1.player.mailbox, candidate.Key))
+            {
+                Game1.player.mailbox.Add(candidate.Key);
+                restored++;
+            }
+        }
+
+        if (restored > 0)
+        {
+            this.helper.GameContent.InvalidateCache("Data/mail");
+        }
+
+        return restored;
+    }
+
     public bool ScheduleGiftMail(
         NPC npc,
         LivingNpcState state,
@@ -148,7 +257,8 @@ internal sealed class BehaviorMailService
         foreach (var state in this.memory.GetTrackedStates())
         {
             foreach (var mail in state.GiftMails.Where(mail =>
-                         !mail.QueuedForDelivery
+                         !mail.Claimed
+                         && !mail.QueuedForDelivery
                          && mail.DueTotalDays <= Game1.Date.TotalDays + 1))
             {
                 string key = GetGiftMailKey(mail);
@@ -222,6 +332,25 @@ internal sealed class BehaviorMailService
             .Where(mail => !string.IsNullOrWhiteSpace(mail.MailKey)
                 && !string.IsNullOrWhiteSpace(mail.ItemId)
                 && !string.IsNullOrWhiteSpace(mail.ItemLabel));
+    }
+
+    private bool TryGetGiftMail(string mailKey, out NpcGiftMailFact? giftMail)
+    {
+        giftMail = null;
+        if (string.IsNullOrWhiteSpace(mailKey))
+        {
+            return false;
+        }
+
+        string normalizedKey = mailKey.Trim();
+        giftMail = this.GetGiftMailRequests()
+            .FirstOrDefault(mail => string.Equals(GetGiftMailKey(mail), normalizedKey, StringComparison.OrdinalIgnoreCase));
+        return giftMail != null;
+    }
+
+    private static bool ContainsMailKey(IEnumerable<string> mailKeys, string key)
+    {
+        return mailKeys.Any(mailKey => string.Equals(mailKey, key, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string GetGiftMailKey(NpcGiftMailFact mail)

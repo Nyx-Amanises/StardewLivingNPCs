@@ -29,6 +29,7 @@
   "hud.itemDelivered": "LivingNPCs: Gave {{item}} to {{npc}}.",
 
   "gift.mailWhenInventoryFull": "LivingNPCs: Your inventory was full, so {{npc}} will mail you {{item}} tomorrow.",
+  "gift.mailRestored": "LivingNPCs: That gift letter did not open correctly, so it was returned to your mailbox.",
   "gift.gaveMoney": "LivingNPCs: {{npc}} gave you {{amount}}g.",
   "gift.hud.preference": "LivingNPCs: {{npc}} remembered what you like and gave you {{item}}.",
   "gift.hud.reciprocal": "LivingNPCs: {{npc}} gave you {{item}} in return.",
@@ -93,7 +94,7 @@
   "outing.return.default": "{{opening}}let's head back.",
 
   "gmcm.para.loaded": "LivingNPCs is loaded. If you can see this page, the mod is running.",
-  "gmcm.para.commands": "SMAPI debug commands: livingnpcs_debug, livingnpcs_prompt, livingnpcs_export, livingnpcs_eval.",
+  "gmcm.para.commands": "SMAPI debug commands: livingnpcs_debug, livingnpcs_prompt, livingnpcs_export, livingnpcs_eval, livingnpcs_restore_gift_mail.",
 
   "gmcm.section.basic": "General",
   "gmcm.section.manualTest": "Manual testing",

@@ -844,6 +844,12 @@ internal sealed class LivingNpcState
                 mail.DueTotalDays = mail.DueTotalDays < 0
                     ? Game1.Date.TotalDays + 1
                     : mail.DueTotalDays;
+                if (!mail.Claimed)
+                {
+                    mail.ClaimedTotalDays = -1;
+                    mail.ClaimedTimeOfDay = 0;
+                }
+
                 return mail;
             })
             .OrderBy(mail => mail.QueuedForDelivery)
@@ -1065,7 +1071,10 @@ internal sealed class LivingNpcState
                     CreatedTotalDays = mail.CreatedTotalDays,
                     CreatedTimeOfDay = mail.CreatedTimeOfDay,
                     DueTotalDays = mail.DueTotalDays,
-                    QueuedForDelivery = mail.QueuedForDelivery
+                    QueuedForDelivery = mail.QueuedForDelivery,
+                    Claimed = mail.Claimed,
+                    ClaimedTotalDays = mail.ClaimedTotalDays,
+                    ClaimedTimeOfDay = mail.ClaimedTimeOfDay
                 })
                 .ToList(),
             Conflicts = this.Conflicts
