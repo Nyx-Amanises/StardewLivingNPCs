@@ -959,11 +959,13 @@ internal sealed class BehaviorEngine
         if (this.config.Debug)
         {
             this.monitor.Log(
-                pushedToValleyTalk
-                    ? $"{debugMessage} Primed ValleyTalk context:\n{promptContext}"
-                    : $"{debugMessage} ValleyTalk context was not pushed.",
+                pushedToValleyTalk ? debugMessage : $"{debugMessage} ValleyTalk context was not pushed.",
                 LogLevel.Debug
             );
+            if (pushedToValleyTalk)
+            {
+                this.monitor.Log($"Primed ValleyTalk context for {npc.Name}:\n{promptContext}", LogLevel.Trace);
+            }
         }
     }
 
@@ -1099,12 +1101,14 @@ internal sealed class BehaviorEngine
         if (this.config.Debug)
         {
             this.monitor.Log($"Executed {intent.Type} for {npc.Name} from {source}.", LogLevel.Debug);
-            this.monitor.Log(
-                pushedToValleyTalk
-                    ? $"Pushed behavior context to ValleyTalk for {npc.Name}:\n{promptContext}"
-                    : $"ValleyTalk context was not pushed for {npc.Name}. ValleyTalk may be missing or bridge disabled.",
-                LogLevel.Debug
-            );
+            if (pushedToValleyTalk)
+            {
+                this.monitor.Log($"Pushed behavior context to ValleyTalk for {npc.Name}:\n{promptContext}", LogLevel.Trace);
+            }
+            else
+            {
+                this.monitor.Log($"ValleyTalk context was not pushed for {npc.Name}. ValleyTalk may be missing or bridge disabled.", LogLevel.Debug);
+            }
         }
 
         if (source == "hotkey")
