@@ -184,6 +184,10 @@ internal static class ConversationActionCueRules
             "来我农场",
             "去农场看看",
             "一起走",
+            "我们去",
+            "咱们去",
+            "带你去",
+            "带我去",
             "go with me",
             "come to my farm",
             "visit my farm",
@@ -205,7 +209,45 @@ internal static class ConversationActionCueRules
             "i can go",
             "sure"
         );
-        return farmerInvited && npcAccepted;
+        // The NPC may also be the one who proposes the outing, with the farmer simply agreeing.
+        bool npcProposedOuting = ContainsAny(
+            npcResponse,
+            "一起去",
+            "我们去",
+            "咱们去",
+            "我陪你",
+            "那我们",
+            "一起走",
+            "要不要一起",
+            "要不要去",
+            "带你去",
+            "let's go",
+            "shall we",
+            "why don't we",
+            "want to go",
+            "wanna go"
+        );
+        bool farmerAgreed = ContainsAny(
+            playerText,
+            "好啊",
+            "好呀",
+            "好的",
+            "好吧",
+            "可以呀",
+            "当然",
+            "没问题",
+            "走吧",
+            "一起去",
+            "愿意",
+            "行啊",
+            "okay",
+            "ok",
+            "sure",
+            "yes",
+            "let's",
+            "sounds good"
+        );
+        return (farmerInvited && npcAccepted) || (npcProposedOuting && farmerAgreed);
     }
 
     private static bool LooksLikeDeferredOrRejectedTravel(string npcResponse)
