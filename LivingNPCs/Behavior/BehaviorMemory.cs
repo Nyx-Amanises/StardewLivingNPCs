@@ -353,6 +353,17 @@ internal sealed class BehaviorMemory
             }
         }
 
+        // Deterministic fallback: if the farmer's reply clearly agrees to help and an offered
+        // request is still waiting, accept it even when the AI did not emit an accepted update.
+        if (this.HelpRequests.TryAcceptOfferedFromPlayerAffirmation(state, playerText))
+        {
+            updatedHelpRequests++;
+            this.AddEntry(
+                this.CreateEntry(npc, "HelpRequestUpdate", "accepted", "the farmer agreed to help"),
+                maxEntriesPerNpc
+            );
+        }
+
         foreach (var candidate in analysis.Conflicts
                      .Where(conflict => !string.IsNullOrWhiteSpace(conflict.Summary) && conflict.Severity > 0)
                      .Take(2))

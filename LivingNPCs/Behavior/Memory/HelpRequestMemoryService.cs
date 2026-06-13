@@ -204,10 +204,19 @@ internal sealed class HelpRequestMemoryService
     {
         fulfilledRequest = null;
         string normalizedSummary = NormalizeMemorySummary(candidate.Summary);
-        var existing = state.HelpRequests
+        var openRequests = state.HelpRequests
             .Where(request => request.Status is "Offered" or "Pending")
             .OrderBy(request => request.DueTotalDays)
+            .ToList();
+        var existing = openRequests
             .FirstOrDefault(request => NormalizeMemorySummary(request.Summary) == normalizedSummary);
+        if (existing == null && openRequests.Count == 1)
+        {
+            // The AI's update summary often does not line up word-for-word with the original ask;
+            // when there is exactly one open request, treat the update as referring to it.
+            existing = openRequests[0];
+        }
+
         if (existing == null)
         {
             return false;
@@ -239,6 +248,30 @@ internal sealed class HelpRequestMemoryService
                 break;
         }
 
+        return true;
+    }
+
+    /// <summary>
+    /// Deterministic safety net: when the farmer's reply clearly agrees to help and an offered
+    /// request is still waiting, accept it without relying on the AI to emit an accepted update.
+    /// </summary>
+    public bool TryAcceptOfferedFromPlayerAffirmation(LivingNpcState state, string playerText)
+    {
+        if (!LooksLikeFarmerAcceptingHelp(playerText))
+        {
+            return false;
+        }
+
+        var request = state.HelpRequests
+            .Where(candidate => candidate.Status == "Offered")
+            .OrderBy(candidate => candidate.DueTotalDays)
+            .FirstOrDefault();
+        if (request == null)
+        {
+            return false;
+        }
+
+        this.Accept(state, request, "The farmer agreed to help.");
         return true;
     }
 
@@ -322,6 +355,80 @@ internal sealed class HelpRequestMemoryService
             "help you",
             "what can i do"
         );
+    }
+
+    internal static bool LooksLikeFarmerAcceptingHelp(string playerText)
+    {
+        if (string.IsNullOrWhiteSpace(playerText))
+        {
+            return false;
+        }
+
+        string text = playerText.ToLowerInvariant();
+        if (ContainsAny(
+                text,
+                "不用了",
+                "不用帮",
+                "不帮",
+                "不行",
+                "不可以",
+                "算了",
+                "下次再",
+                "下次吧",
+                "改天",
+                "以后再",
+                "以后吧",
+                "没办法",
+                "做不到",
+                "不想",
+                "no thanks",
+                "not now",
+                "maybe later",
+                "can't help",
+                "won't help",
+                "i can't",
+                "i won't"))
+        {
+            return false;
+        }
+
+        return ContainsAny(
+            text,
+            "好的",
+            "好啊",
+            "好呀",
+            "好吧",
+            "可以",
+            "当然",
+            "没问题",
+            "我帮你",
+            "帮你找",
+            "帮你留意",
+            "帮你弄",
+            "我来帮",
+            "我去找",
+            "我找找",
+            "我找给你",
+            "留意",
+            "我看看",
+            "带给你",
+            "给你带",
+            "交给我",
+            "包在我身上",
+            "愿意",
+            "成交",
+            "sure",
+            "okay",
+            "of course",
+            "i'll help",
+            "i can help",
+            "i'll get",
+            "i'll find",
+            "i'll keep an eye",
+            "no problem",
+            "you got it",
+            "will do",
+            "happy to");
     }
 
     private void Accept(LivingNpcState state, NpcHelpRequestFact request, string resolution)

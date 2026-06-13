@@ -469,7 +469,7 @@ internal static class BehaviorPromptContextBuilder
             currentTotalDays
         );
         return result.Allowed
-            ? $"may naturally ask for one modest favor now; {result.Reason}"
+            ? $"may naturally ask for one modest favor now; {result.Reason}; if you do ask, ask once and clearly, then let the farmer reply — do not also withdraw it or answer for them in the same message"
             : $"should not open a new help request now ({result.Reason}); even if the farmer offers to help, gently decline or deflect rather than naming a task, accepting the favor, or committing to one";
     }
 
