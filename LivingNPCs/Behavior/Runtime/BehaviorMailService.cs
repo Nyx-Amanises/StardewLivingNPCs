@@ -356,19 +356,16 @@ internal sealed class BehaviorMailService
             "thanks" => $"{npcName}的谢礼",
             _ => $"{npcName}的礼物"
         };
-        string itemId = GetMailObjectId(mail.ItemId);
-        return $"{body}^^    - {npcName}%item object {itemId} 1 %%[#]{title}";
+        string itemId = EnsureQualifiedItemId(mail.ItemId);
+        return $"{body}^^    - {npcName}%item id {itemId} 1 %%[#]{title}";
     }
 
-    private static string GetMailObjectId(string itemId)
+    private static string EnsureQualifiedItemId(string itemId)
     {
         string trimmed = itemId.Trim();
-        if (trimmed.StartsWith("(O)", StringComparison.OrdinalIgnoreCase))
-        {
-            trimmed = trimmed[3..];
-        }
-
-        return trimmed;
+        // 1.6 mail attachments use "%item id <qualifiedId> <count> %%"; make sure the id is
+        // qualified (default to the object category) so the attachment resolves and is grabbable.
+        return trimmed.StartsWith("(", StringComparison.Ordinal) ? trimmed : $"(O){trimmed}";
     }
 
     private static string SanitizeFileName(string value)
