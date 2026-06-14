@@ -163,21 +163,10 @@ internal sealed class HelpRequestRewardService
             return;
         }
 
+        // Vanilla item-delivery quests pay out immediately on hand-in, so grant the gold directly
+        // rather than mailing it later.
         int amount = Math.Clamp(request.RewardMoney <= 0 ? 200 : request.RewardMoney, 200, 10000);
         request.RewardMoney = amount;
-        if (this.mailService.ShouldSendHelpRequestMoneyByMail(request))
-        {
-            this.mailService.ScheduleHelpRequestMoneyRewardMail(request);
-            this.memory.RecordNpcWorldAction(
-                npc,
-                "ScheduledHelpRequestMoneyReward",
-                $"the help request system scheduled a {amount}g mail reward for tomorrow: {request.Summary}",
-                this.config.MaxMemoryEntriesPerNpc
-            );
-            this.feedback.ShowAfterDialogue($"LivingNPCs：系统将在明天通过信件发放 {amount}g 求助奖励。");
-            return;
-        }
-
         Game1.player.Money += amount;
         request.RewardMoneyByMail = false;
         request.RewardMoneyMailKey = string.Empty;
@@ -189,7 +178,7 @@ internal sealed class HelpRequestRewardService
             $"the help request system granted a {amount}g reward: {request.Summary}",
             this.config.MaxMemoryEntriesPerNpc
         );
-        this.feedback.ShowAfterDialogue($"LivingNPCs：系统发放求助奖励 {amount}g。");
+        this.feedback.ShowAfterDialogue($"LivingNPCs：求助奖励 +{amount}g。");
     }
 
     private static void MarkStateAfterWorldAction(LivingNpcState state, string lastInteraction)

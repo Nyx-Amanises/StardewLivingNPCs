@@ -85,16 +85,17 @@ internal sealed class HelpRequestQuestLogService
             : request.NpcDisplayName;
         string due = BuildDueText(request);
         string stepText = BuildStepProgressText(request);
-        string rewardText = this.BuildRewardText(request);
         quest.questTitle = $"求助：{npcDisplayName}";
         quest.questDescription = request.Type == "item_request"
-            ? $"{npcDisplayName} 请你帮忙找一件东西。{stepText}{BuildDetailText(request)}\n{due}\n{rewardText}"
-            : $"{npcDisplayName} 想就一件事请教你。{stepText}{BuildDetailText(request)}\n{due}\n{rewardText}";
+            ? $"{npcDisplayName} 请你帮忙找一件东西。{stepText}{BuildDetailText(request)}\n{due}"
+            : $"{npcDisplayName} 想就一件事请教你。{stepText}{BuildDetailText(request)}\n{due}";
         quest.currentObjective = request.Type == "item_request"
             ? $"{stepText}把 {GetItemLabel(request)} 交给 {npcDisplayName}。{due}"
             : $"{stepText}和 {npcDisplayName} 继续聊聊：{GetQuestionLabel(request)}。{due}";
-        quest.moneyReward.Value = GetMoneyReward(request);
-        quest.rewardDescription.Value = this.BuildRewardDescription(request);
+        // Rewards are granted directly on hand-in (vanilla item-delivery style), so the quest entry
+        // shows no reward hint or claimable reward box.
+        quest.moneyReward.Value = 0;
+        quest.rewardDescription.Value = "-1";
     }
 
     private static string BuildStepProgressText(NpcHelpRequestFact request)
@@ -140,50 +141,5 @@ internal sealed class HelpRequestQuestLogService
             1 => "明天到期。",
             _ => $"还剩 {daysRemaining} 天。"
         };
-    }
-
-    private string BuildRewardText(NpcHelpRequestFact request)
-    {
-        int money = GetMoneyReward(request);
-        int friendship = this.GetFriendshipReward(request);
-        string delivery = this.WillSendMoneyByMail(request)
-            ? "金币次日来信"
-            : "金币当场发放";
-        string gift = this.config.AllowAiSmallGifts
-            ? "，可能有小礼物"
-            : string.Empty;
-        return $"预计奖励：{money}g、好感 +{friendship}（{delivery}{gift}）。";
-    }
-
-    private string BuildRewardDescription(NpcHelpRequestFact request)
-    {
-        string delivery = this.WillSendMoneyByMail(request)
-            ? "金币次日来信"
-            : "金币当场发放";
-        string gift = this.config.AllowAiSmallGifts
-            ? "；可能有小礼物"
-            : string.Empty;
-        return $"好感 +{this.GetFriendshipReward(request)}；{delivery}{gift}";
-    }
-
-    private static int GetMoneyReward(NpcHelpRequestFact request)
-    {
-        int amount = request.RewardMoney <= 0
-            ? HelpRequestMemoryRules.DetermineMoneyReward(request.Steps)
-            : request.RewardMoney;
-        return Math.Clamp(amount, 200, 10000);
-    }
-
-    private int GetFriendshipReward(NpcHelpRequestFact request)
-    {
-        int minReward = Math.Min(this.config.MinHelpRequestFriendshipReward, this.config.MaxHelpRequestFriendshipReward);
-        int maxReward = Math.Max(this.config.MinHelpRequestFriendshipReward, this.config.MaxHelpRequestFriendshipReward);
-        return Math.Clamp(request.RewardFriendship <= 0 ? minReward : request.RewardFriendship, minReward, maxReward);
-    }
-
-    private bool WillSendMoneyByMail(NpcHelpRequestFact request)
-    {
-        return request.RewardMoneyByMail
-            || (!request.RewardMoneyGranted && this.mailService.ShouldSendHelpRequestMoneyByMail(request));
     }
 }
