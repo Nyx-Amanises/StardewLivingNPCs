@@ -59,6 +59,25 @@ internal sealed class BehaviorDebugCommandHandler
             "恢复未领取但已从邮箱消失的 LivingNPCs 礼物信。用法：livingnpcs_restore_gift_mail [latest|all]",
             this.OnRestoreGiftMailCommand
         );
+        this.helper.ConsoleCommands.Add(
+            "livingnpcs_giftmail",
+            "诊断 LivingNPCs 礼物信：追踪状态、邮箱位置、Data/mail 是否有对应条目、生成文本、孤儿死信。",
+            this.OnGiftMailCommand
+        );
+    }
+
+    private void OnGiftMailCommand(string command, string[] args)
+    {
+        if (!Context.IsWorldReady)
+        {
+            this.monitor.Log("需要先进入存档再运行。", LogLevel.Info);
+            return;
+        }
+
+        foreach (string line in this.mailService.DescribeGiftMails())
+        {
+            this.monitor.Log(line, LogLevel.Info);
+        }
     }
 
     public void ShowNearestNpcMemory()

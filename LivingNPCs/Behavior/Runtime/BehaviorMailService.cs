@@ -167,6 +167,58 @@ internal sealed class BehaviorMailService
         return restored;
     }
 
+    /// <summary>Diagnostic dump of every tracked gift mail vs. the player's actual mail lists and Data/mail.</summary>
+    public List<string> DescribeGiftMails()
+    {
+        var lines = new List<string>();
+        if (!Context.IsWorldReady || Game1.player == null)
+        {
+            lines.Add("世界未就绪。");
+            return lines;
+        }
+
+        Dictionary<string, string> mailData;
+        try
+        {
+            mailData = this.helper.GameContent.Load<Dictionary<string, string>>("Data/mail");
+        }
+        catch (Exception ex)
+        {
+            mailData = new Dictionary<string, string>();
+            lines.Add($"无法加载 Data/mail：{ex.Message}");
+        }
+
+        var mails = this.GetGiftMailRequests().ToList();
+        lines.Add($"已追踪礼物信 {mails.Count} 封；邮箱 {Game1.player.mailbox.Count} 封，明日 {Game1.player.mailForTomorrow.Count} 封。当前是第 {Game1.Date.TotalDays} 天。");
+        foreach (var mail in mails)
+        {
+            string key = GetGiftMailKey(mail);
+            string text = BuildGiftMailText(mail);
+            lines.Add(
+                $"- [{mail.Motive}] {mail.ItemLabel} ({mail.ItemId}) 到期第{mail.DueTotalDays}天 claimed={mail.Claimed} queued={mail.QueuedForDelivery} | "
+                + $"邮箱={ContainsMailKey(Game1.player.mailbox, key)} 明日={ContainsMailKey(Game1.player.mailForTomorrow, key)} 已收={ContainsMailKey(Game1.player.mailReceived, key)} Data/mail有此条={mailData.ContainsKey(key)}");
+            lines.Add($"    key={key}");
+            lines.Add($"    text={text.Replace("^", " / ")}");
+        }
+
+        var trackedKeys = mails.Select(GetGiftMailKey).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var orphans = Game1.player.mailbox
+            .Concat(Game1.player.mailForTomorrow)
+            .Where(k => k.StartsWith(GiftMailKeyPrefix, StringComparison.OrdinalIgnoreCase) && !trackedKeys.Contains(k))
+            .Distinct()
+            .ToList();
+        if (orphans.Count > 0)
+        {
+            lines.Add($"⚠ 邮箱/明日里有 {orphans.Count} 个无追踪记录的孤儿礼物信（很可能是改名或旧测试遗留的死信，点开即消失、无内容）：");
+            foreach (string key in orphans)
+            {
+                lines.Add($"    孤儿 key={key} Data/mail有此条={mailData.ContainsKey(key)}");
+            }
+        }
+
+        return lines;
+    }
+
     public bool ScheduleGiftMail(
         NPC npc,
         LivingNpcState state,
