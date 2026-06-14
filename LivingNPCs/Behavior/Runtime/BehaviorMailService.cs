@@ -180,6 +180,7 @@ internal sealed class BehaviorMailService
         Dictionary<string, string> mailData;
         try
         {
+            this.helper.GameContent.InvalidateCache("Data/mail");
             mailData = this.helper.GameContent.Load<Dictionary<string, string>>("Data/mail");
         }
         catch (Exception ex)
@@ -188,8 +189,13 @@ internal sealed class BehaviorMailService
             lines.Add($"无法加载 Data/mail：{ex.Message}");
         }
 
+        int livingEntries = mailData.Keys.Count(k =>
+            k.StartsWith(GiftMailKeyPrefix, StringComparison.OrdinalIgnoreCase)
+            || k.StartsWith(HelpRequestRewardMailKeyPrefix, StringComparison.OrdinalIgnoreCase));
         var mails = this.GetGiftMailRequests().ToList();
         lines.Add($"已追踪礼物信 {mails.Count} 封；邮箱 {Game1.player.mailbox.Count} 封，明日 {Game1.player.mailForTomorrow.Count} 封。当前是第 {Game1.Date.TotalDays} 天。");
+        lines.Add($"强制重载后 Data/mail 共 {mailData.Count} 条，其中 LivingNPCs 条目 {livingEntries} 条（正常应≈已追踪数；若为 0 则说明 Data/mail 编辑根本没生效）。");
+        lines.Add($"邮箱原始 key：{(Game1.player.mailbox.Count == 0 ? "（空）" : string.Join(" | ", Game1.player.mailbox))}");
         foreach (var mail in mails)
         {
             string key = GetGiftMailKey(mail);

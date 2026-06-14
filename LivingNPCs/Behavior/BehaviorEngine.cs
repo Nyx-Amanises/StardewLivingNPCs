@@ -232,7 +232,10 @@ internal sealed class BehaviorEngine
 
     private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
     {
-        if (!e.Name.IsEquivalentTo("Data/mail"))
+        // Use NameWithoutLocale so the edit also applies to localized variants such as
+        // "Data/mail.zh-CN"; otherwise gift/reward mail entries are never added for non-English
+        // players and their letters open to nothing.
+        if (!e.NameWithoutLocale.IsEquivalentTo("Data/mail"))
         {
             return;
         }
@@ -242,7 +245,12 @@ internal sealed class BehaviorEngine
             this.SafeRun("mail asset edit", () =>
             {
                 var data = asset.AsDictionary<string, string>().Data;
+                int before = data.Count;
                 this.mailService.ApplyMailData(data);
+                if (this.config.Debug)
+                {
+                    this.monitor.Log($"Data/mail edit applied: +{data.Count - before} LivingNPCs entries (total {data.Count}).", LogLevel.Debug);
+                }
             });
         });
     }
