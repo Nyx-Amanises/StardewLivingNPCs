@@ -29,7 +29,6 @@
   "hud.itemDelivered": "LivingNPCs: Gave {{item}} to {{npc}}.",
 
   "gift.mailWhenInventoryFull": "LivingNPCs: Your inventory was full, so {{npc}} will mail you {{item}} tomorrow.",
-  "gift.mailRestored": "LivingNPCs: That gift letter did not open correctly, so it was returned to your mailbox.",
   "gift.gaveMoney": "LivingNPCs: {{npc}} gave you {{amount}}g.",
   "gift.hud.preference": "LivingNPCs: {{npc}} remembered what you like and gave you {{item}}.",
   "gift.hud.reciprocal": "LivingNPCs: {{npc}} gave you {{item}} in return.",

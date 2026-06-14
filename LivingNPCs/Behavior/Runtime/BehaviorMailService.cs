@@ -116,38 +116,6 @@ internal sealed class BehaviorMailService
         return true;
     }
 
-    public bool RestoreGiftMailToMailbox(string mailKey, bool includeReceived)
-    {
-        if (!Context.IsWorldReady
-            || Game1.player == null
-            || !this.TryGetGiftMail(mailKey, out NpcGiftMailFact? giftMail)
-            || giftMail == null
-            || giftMail.Claimed)
-        {
-            return false;
-        }
-
-        string key = GetGiftMailKey(giftMail);
-        if (ContainsMailKey(Game1.player.mailbox, key) || ContainsMailKey(Game1.player.mailForTomorrow, key))
-        {
-            return false;
-        }
-
-        if (ContainsMailKey(Game1.player.mailReceived, key))
-        {
-            if (!includeReceived)
-            {
-                return false;
-            }
-
-            Game1.player.mailReceived.Remove(key);
-        }
-
-        Game1.player.mailbox.Add(key);
-        this.helper.GameContent.InvalidateCache("Data/mail");
-        return true;
-    }
-
     public int RestoreMissingGiftMailsToMailbox(bool includeReceived, bool restoreAll)
     {
         if (!Context.IsWorldReady || Game1.player == null)

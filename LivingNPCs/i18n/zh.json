@@ -29,7 +29,6 @@
   "hud.itemDelivered": "LivingNPCs：已把 {{item}} 交给 {{npc}}。",
 
   "gift.mailWhenInventoryFull": "LivingNPCs：你的背包满了，{{npc}} 会把 {{item}} 明天寄给你。",
-  "gift.mailRestored": "LivingNPCs：刚才那封礼物信没有正常打开，已放回邮箱。",
   "gift.gaveMoney": "LivingNPCs：{{npc}} 给了你 {{amount}}g。",
   "gift.hud.preference": "LivingNPCs：{{npc}} 记得你的喜好，送给你了 {{item}}。",
   "gift.hud.reciprocal": "LivingNPCs：{{npc}} 回送给你了 {{item}}。",

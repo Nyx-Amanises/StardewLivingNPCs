@@ -42,7 +42,7 @@ internal sealed class BehaviorEngine
     private readonly CancellationTokenSource cancellationTokenSource = new();
     private readonly HashSet<string> loggedHandlerExceptions = new();
     private string pendingGiftMailKey = string.Empty;
-    private int pendingGiftMailOpenChecks;
+    private int pendingGiftMailTrackTicks;
     private string activeGiftMailKey = string.Empty;
 
     public BehaviorEngine(IModHelper helper, IMonitor monitor, ModConfig config)
@@ -307,10 +307,15 @@ internal sealed class BehaviorEngine
     {
         this.SafeRun("menu changed", () =>
         {
-            if (e.OldMenu is LetterViewerMenu && !string.IsNullOrWhiteSpace(this.activeGiftMailKey))
+            if (e.OldMenu is LetterViewerMenu)
             {
-                this.mailService.MarkGiftMailClaimed(this.activeGiftMailKey);
+                string mailKey = string.IsNullOrWhiteSpace(this.activeGiftMailKey)
+                    ? this.pendingGiftMailKey
+                    : this.activeGiftMailKey;
+                this.mailService.MarkGiftMailClaimed(mailKey);
                 this.activeGiftMailKey = string.Empty;
+                this.pendingGiftMailKey = string.Empty;
+                this.pendingGiftMailTrackTicks = 0;
             }
 
             if (e.NewMenu is LetterViewerMenu letter
@@ -319,14 +324,14 @@ internal sealed class BehaviorEngine
             {
                 this.activeGiftMailKey = this.pendingGiftMailKey;
                 this.pendingGiftMailKey = string.Empty;
-                this.pendingGiftMailOpenChecks = 0;
+                this.pendingGiftMailTrackTicks = 0;
                 return;
             }
 
             if (e.NewMenu != null && !string.IsNullOrWhiteSpace(this.pendingGiftMailKey))
             {
                 this.pendingGiftMailKey = string.Empty;
-                this.pendingGiftMailOpenChecks = 0;
+                this.pendingGiftMailTrackTicks = 0;
             }
         });
     }
@@ -374,7 +379,7 @@ internal sealed class BehaviorEngine
         }
 
         this.SafeRun("update tick: pending behavior requests", this.ProcessPendingBehaviorRequests);
-        this.SafeRun("update tick: gift mail restore", this.TryRestoreStalledGiftMailOpening);
+        this.SafeRun("update tick: gift mail tracking", this.TryTrackGiftMailOpening);
         this.SafeRun("update tick: HUD messages", () => this.feedback.TryShowPendingHudMessages());
         this.SafeRun("update tick: ambient remarks", () => this.feedback.TryShowPendingAmbientRemarks());
         this.SafeRun("update tick: delayed travel actions", () => this.delayedTravelActions.TryStartPending());
@@ -1055,45 +1060,38 @@ internal sealed class BehaviorEngine
         }
 
         this.pendingGiftMailKey = mailKey;
-        this.pendingGiftMailOpenChecks = 20;
+        this.pendingGiftMailTrackTicks = 60;
     }
 
-    private void TryRestoreStalledGiftMailOpening()
+    private void TryTrackGiftMailOpening()
     {
-        if (string.IsNullOrWhiteSpace(this.pendingGiftMailKey) || Game1.player == null)
+        if (string.IsNullOrWhiteSpace(this.pendingGiftMailKey))
         {
             return;
         }
 
-        if (Game1.activeClickableMenu is LetterViewerMenu)
+        if (Game1.activeClickableMenu is LetterViewerMenu letter && letter.isMail)
         {
+            this.activeGiftMailKey = this.pendingGiftMailKey;
+            this.pendingGiftMailKey = string.Empty;
+            this.pendingGiftMailTrackTicks = 0;
             return;
         }
 
-        if (this.pendingGiftMailOpenChecks > 0)
+        if (Game1.activeClickableMenu != null || this.pendingGiftMailTrackTicks <= 0)
         {
-            this.pendingGiftMailOpenChecks--;
+            this.pendingGiftMailKey = string.Empty;
+            this.pendingGiftMailTrackTicks = 0;
             return;
         }
 
-        string mailKey = this.pendingGiftMailKey;
-        this.pendingGiftMailKey = string.Empty;
-        this.pendingGiftMailOpenChecks = 0;
-
-        if (this.mailService.RestoreGiftMailToMailbox(mailKey, includeReceived: true))
-        {
-            this.feedback.Show(I18n.Get("gift.mailRestored"));
-            if (this.config.Debug)
-            {
-                this.monitor.Log($"Restored stalled LivingNPCs gift mail to the mailbox: {mailKey}", LogLevel.Debug);
-            }
-        }
+        this.pendingGiftMailTrackTicks--;
     }
 
     private void ClearGiftMailTracking()
     {
         this.pendingGiftMailKey = string.Empty;
-        this.pendingGiftMailOpenChecks = 0;
+        this.pendingGiftMailTrackTicks = 0;
         this.activeGiftMailKey = string.Empty;
     }
 
