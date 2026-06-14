@@ -135,6 +135,8 @@
   "gmcm.helpCooldown.tooltip": "Minimum number of days between two new help requests from the same NPC.",
   "gmcm.helpMinTrust.name": "Min trust for help requests",
   "gmcm.helpMinTrust.tooltip": "An NPC only opens up to ask for help once relationship trust reaches this value.",
+  "gmcm.helpDailyChance.name": "Daily help-request chance",
+  "gmcm.helpDailyChance.tooltip": "When you first talk to an eligible NPC each day, the chance they bring up a small favor on their own. 0 disables proactive asking (the gate above still applies).",
   "gmcm.helpMinReward.name": "Min friendship reward on completion",
   "gmcm.helpMinReward.tooltip": "The least extra friendship granted for completing an NPC help request.",
   "gmcm.helpMaxReward.name": "Max friendship reward on completion",

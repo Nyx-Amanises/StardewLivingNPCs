@@ -195,6 +195,18 @@ internal static class ModConfigMenu
 
         configMenu.AddNumberOption(
             mod: manifest,
+            name: () => I18n.Get("gmcm.helpDailyChance.name"),
+            tooltip: () => I18n.Get("gmcm.helpDailyChance.tooltip"),
+            getValue: () => config.HelpRequestDailyOfferChancePercent,
+            setValue: value => config.HelpRequestDailyOfferChancePercent = value,
+            min: 0,
+            max: 100,
+            interval: 5,
+            formatValue: value => $"{value}%"
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
             name: () => I18n.Get("gmcm.helpMinReward.name"),
             tooltip: () => I18n.Get("gmcm.helpMinReward.tooltip"),
             getValue: () => config.MinHelpRequestFriendshipReward,

@@ -57,6 +57,8 @@ internal sealed class LivingNpcState
     public int DailyGiftOpportunityTotalDays { get; set; } = -1;
     public int DailyGiftOpportunityChancePercent { get; set; }
     public string DailyGiftOpportunityReason { get; set; } = string.Empty;
+    public int LastDailyHelpRequestOpportunityRollTotalDays { get; set; } = -1;
+    public int DailyHelpRequestOpportunityTotalDays { get; set; } = -1;
     public int PendingReciprocalGiftDueTotalDays { get; set; } = -1;
     public string PendingReciprocalGiftSourceGiftName { get; set; } = string.Empty;
     public string PendingReciprocalGiftReason { get; set; } = string.Empty;
@@ -812,6 +814,11 @@ internal sealed class LivingNpcState
             this.DailyGiftOpportunityReason = string.Empty;
         }
 
+        if (this.LastDailyHelpRequestOpportunityRollTotalDays != Game1.Date.TotalDays)
+        {
+            this.DailyHelpRequestOpportunityTotalDays = -1;
+        }
+
         this.PendingReciprocalGiftDueTotalDays = -1;
         this.PendingReciprocalGiftSourceGiftName = string.Empty;
         this.PendingReciprocalGiftReason = string.Empty;
@@ -1120,6 +1127,8 @@ internal sealed class LivingNpcState
             DailyGiftOpportunityTotalDays = this.DailyGiftOpportunityTotalDays,
             DailyGiftOpportunityChancePercent = this.DailyGiftOpportunityChancePercent,
             DailyGiftOpportunityReason = this.DailyGiftOpportunityReason,
+            LastDailyHelpRequestOpportunityRollTotalDays = this.LastDailyHelpRequestOpportunityRollTotalDays,
+            DailyHelpRequestOpportunityTotalDays = this.DailyHelpRequestOpportunityTotalDays,
             PendingReciprocalGiftDueTotalDays = this.PendingReciprocalGiftDueTotalDays,
             PendingReciprocalGiftSourceGiftName = this.PendingReciprocalGiftSourceGiftName,
             PendingReciprocalGiftReason = this.PendingReciprocalGiftReason,

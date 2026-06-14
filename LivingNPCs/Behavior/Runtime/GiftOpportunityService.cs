@@ -68,6 +68,45 @@ internal sealed class GiftOpportunityService
         state.DailyGiftOpportunityReason = $"{npc.displayName} is at {WorldContext.For(npc).FriendshipHearts} hearts and may naturally offer a small everyday gift during this conversation";
     }
 
+    /// <summary>
+    /// Once per day, on the first conversation with an eligible NPC, rolls a chance for the NPC to
+    /// feel inclined to ask the farmer for a small favor during this chat (mirrors the daily gift
+    /// opportunity). The readiness gate (trust/familiarity/cooldown/active request) still applies.
+    /// </summary>
+    public void TryPrepareDailyHelpRequestOpportunity(NPC npc, LivingNpcState state)
+    {
+        if (!this.config.EnableHelpRequests
+            || this.config.HelpRequestDailyOfferChancePercent <= 0
+            || state.DailyHelpRequestOpportunityTotalDays == Game1.Date.TotalDays
+            || state.LastDailyHelpRequestOpportunityRollTotalDays == Game1.Date.TotalDays)
+        {
+            return;
+        }
+
+        state.LastDailyHelpRequestOpportunityRollTotalDays = Game1.Date.TotalDays;
+
+        var readiness = BehaviorMemory.EvaluateHelpRequestReadiness(
+            state,
+            WorldContext.For(npc).FriendshipHearts,
+            this.config.MaxPendingHelpRequestsPerNpc,
+            this.config.HelpRequestCooldownDays,
+            this.config.MinRelationshipTrustForHelpRequests,
+            Game1.Date.TotalDays
+        );
+        if (!readiness.Allowed)
+        {
+            return;
+        }
+
+        int chance = Math.Clamp(this.config.HelpRequestDailyOfferChancePercent, 0, 100);
+        if (this.random.Next(100) >= chance)
+        {
+            return;
+        }
+
+        state.DailyHelpRequestOpportunityTotalDays = Game1.Date.TotalDays;
+    }
+
     public bool TryScheduleReciprocalGiftOpportunity(NPC npc, LivingNpcState state, GiftMemoryDetails gift)
     {
         if (!this.config.EnableAiWorldActions

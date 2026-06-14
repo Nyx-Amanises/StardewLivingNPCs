@@ -994,6 +994,12 @@ internal sealed class BehaviorEngine
             promptContext = $"{promptContext}\n{giftOpportunityContext}";
         }
 
+        string helpRequestOpportunityContext = this.BuildHelpRequestOpportunityPromptContext(npc);
+        if (!string.IsNullOrWhiteSpace(helpRequestOpportunityContext))
+        {
+            promptContext = $"{promptContext}\n{helpRequestOpportunityContext}";
+        }
+
         string companionOutingContext = this.companionOutings.BuildPromptContext(npc);
         if (!string.IsNullOrWhiteSpace(companionOutingContext))
         {
@@ -1054,6 +1060,27 @@ internal sealed class BehaviorEngine
             $"- {npc.displayName}'s personalized small gift IDs: {this.giftSelector.BuildPersonalizedPromptList(npc, GiftTier.Small)}.",
             "- If naming a specific gift, use an itemId from the two lists above and the matching itemLabel. Generic wording such as 'a small thing' is fine when no specific item is named.",
             "- If the moment feels emotionally wrong, crowded, or abrupt, skip the gift rather than forcing it."
+        );
+    }
+
+    private string BuildHelpRequestOpportunityPromptContext(NPC npc)
+    {
+        var state = this.memory.GetState(npc);
+        if (state == null
+            || !this.config.EnableHelpRequests
+            || state.DailyHelpRequestOpportunityTotalDays != Game1.Date.TotalDays
+            || state.HighestUnresolvedConflictSeverity >= 30
+            || state.HelpRequests.Any(request => request.Status is "Offered" or "Pending"))
+        {
+            return string.Empty;
+        }
+
+        return string.Join(
+            "\n",
+            "## LivingNPCs Help Request Opportunity",
+            $"- Today {npc.displayName} is inclined to ask the farmer for one small favor during this conversation.",
+            "- If the visible reply allows, naturally bring up needing one concrete item from the help-request fit list, and include exactly one hidden helpRequests entry (item_request) with that itemId — do not leave the favor only in the spoken text.",
+            "- Keep it brief and in character; if the moment genuinely does not fit, it is fine to wait for another day rather than forcing it."
         );
     }
 

@@ -133,6 +133,11 @@ internal sealed class ConversationStartRecorder
         {
             LivingNpcState state = this.memory.UpdateStateForConversationStart(npc);
             this.giftOpportunities.TryPrepareDailyGiftOpportunity(npc, state);
+            if (this.config.EnableHelpRequests)
+            {
+                this.giftOpportunities.TryPrepareDailyHelpRequestOpportunity(npc, state);
+            }
+
             this.communityRipples.TrySpreadConversationSocialRipple(npc, state);
         }
 

@@ -18,6 +18,7 @@ internal sealed class ModConfig
     public int MaxPendingHelpRequestsPerNpc { get; set; } = 1;
     public int HelpRequestCooldownDays { get; set; } = 3;
     public int MinRelationshipTrustForHelpRequests { get; set; } = 35;
+    public int HelpRequestDailyOfferChancePercent { get; set; } = 25;
     public int MinHelpRequestFriendshipReward { get; set; } = 50;
     public int MaxHelpRequestFriendshipReward { get; set; } = 100;
     public bool EnableAiDialogueFriendship { get; set; } = true;
@@ -97,6 +98,7 @@ internal sealed class ModConfig
         this.MaxPendingHelpRequestsPerNpc = Clamp(this.MaxPendingHelpRequestsPerNpc, 0, 20);
         this.HelpRequestCooldownDays = Clamp(this.HelpRequestCooldownDays, 0, 112);
         this.MinRelationshipTrustForHelpRequests = Clamp(this.MinRelationshipTrustForHelpRequests, 0, 100);
+        this.HelpRequestDailyOfferChancePercent = Clamp(this.HelpRequestDailyOfferChancePercent, 0, 100);
         this.MinHelpRequestFriendshipReward = Clamp(this.MinHelpRequestFriendshipReward, 0, 5000);
         this.MaxHelpRequestFriendshipReward = Clamp(this.MaxHelpRequestFriendshipReward, 0, 5000);
         this.MaxAiDialogueFriendshipPerNpcPerDay = Clamp(this.MaxAiDialogueFriendshipPerNpcPerDay, 0, 1000);
@@ -147,6 +149,7 @@ internal sealed class ModConfig
         this.MaxPendingHelpRequestsPerNpc = defaults.MaxPendingHelpRequestsPerNpc;
         this.HelpRequestCooldownDays = defaults.HelpRequestCooldownDays;
         this.MinRelationshipTrustForHelpRequests = defaults.MinRelationshipTrustForHelpRequests;
+        this.HelpRequestDailyOfferChancePercent = defaults.HelpRequestDailyOfferChancePercent;
         this.MinHelpRequestFriendshipReward = defaults.MinHelpRequestFriendshipReward;
         this.MaxHelpRequestFriendshipReward = defaults.MaxHelpRequestFriendshipReward;
         this.EnableAiDialogueFriendship = defaults.EnableAiDialogueFriendship;
