@@ -725,7 +725,7 @@ D:\SteamLibrary\steamapps\common\Stardew Valley\StardewModdingAPI.exe
 
 ## 许可证
 
-- `ValleyTalk/` 保留原项目 LGPL v3 许可证，见 `ValleyTalk/LICENSE.txt`。
+- `ValleyTalk/` 保留原项目 LGPL v2.1 许可证，见 `ValleyTalk/LICENSE.txt`。
 - `LivingNPCs/` 是当前仓库新增代码。
 
 当前仓库仍然更接近“正在快速迭代的开发总仓库”，不是已经打磨完的正式发布包。
