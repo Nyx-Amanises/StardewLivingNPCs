@@ -41,7 +41,16 @@ internal class LlmClaude : Llm, IGetModelNames
 
     internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true)
     {
-        var promptCached = gameCacheString;
+        // Cache breakpoint 1: the static world summary (system). Breakpoint 2: the per-NPC
+        // biography/samples, kept in the user turn but split into its own cache_control block so
+        // repeated turns with the same NPC reuse it. The variable prompt tail stays uncached.
+        object userContent = string.IsNullOrEmpty(npcCacheString)
+            ? promptString
+            : new object[]
+            {
+                new { type = "text", text = npcCacheString, cache_control = new { type = "ephemeral" } },
+                new { type = "text", text = promptString }
+            };
         var inputString = JsonConvert.SerializeObject(new
             {
                 model = this.modelName,
@@ -57,7 +66,7 @@ internal class LlmClaude : Llm, IGetModelNames
                     {
                         type = "text",
                         cache_control = new { type = "ephemeral" },
-                        text = promptCached
+                        text = gameCacheString
                     }
                 },
                 messages = new[]
@@ -65,7 +74,7 @@ internal class LlmClaude : Llm, IGetModelNames
                     new
                     {
                         role = "user",
-                        content = npcCacheString + promptString
+                        content = userContent
                     }
                 }
             });
