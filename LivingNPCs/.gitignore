@@ -1,5 +1,5 @@
 bin/
 obj/
 
-# 面向玩家的 Nexus 发布说明，按作者要求不纳入版本管理
-NEXUS.md
+# 面向玩家的 Nexus 发布说明（md + 可粘贴的 BBCode），按作者要求不纳入版本管理
+NEXUS.*
