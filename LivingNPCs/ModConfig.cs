@@ -44,8 +44,8 @@ internal sealed class ModConfig
     public int NpcStateDailyDecay { get; set; } = 12;
     public int NpcEmotionDailyDecay { get; set; } = 12;
     public int NpcConflictDailyDecay { get; set; } = 8;
-    public bool EnablePassiveBehaviors { get; set; } = true;
-    public int PassiveBehaviorChancePercent { get; set; } = 6;
+    public bool EnablePassiveBehaviors { get; set; } = false;
+    public int PassiveBehaviorChancePercent { get; set; } = 0;
     public int MaxBehaviorsPerNpcPerDay { get; set; } = 2;
     public int MaxInteractionDistanceTiles { get; set; } = 6;
     public bool AllowFacePlayer { get; set; } = true;
