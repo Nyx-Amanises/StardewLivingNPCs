@@ -59,6 +59,7 @@ internal sealed class ModConfig
     public string AiPlannerModel { get; set; } = string.Empty;
     public int AiPlannerTimeoutSeconds { get; set; } = 8;
     public bool EnableValleyTalkPromptBridge { get; set; } = true;
+    public bool ConcisePromptContext { get; set; } = false;
     public bool ShowHudMessages { get; set; } = true;
 
     public bool Migrate()
@@ -190,6 +191,7 @@ internal sealed class ModConfig
         this.AiPlannerModel = defaults.AiPlannerModel;
         this.AiPlannerTimeoutSeconds = defaults.AiPlannerTimeoutSeconds;
         this.EnableValleyTalkPromptBridge = defaults.EnableValleyTalkPromptBridge;
+        this.ConcisePromptContext = defaults.ConcisePromptContext;
         this.ShowHudMessages = defaults.ShowHudMessages;
     }
 }

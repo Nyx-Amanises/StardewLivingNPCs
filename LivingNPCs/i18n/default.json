@@ -212,6 +212,8 @@
 
   "gmcm.bridge.name": "Send behavior context to ValleyTalk",
   "gmcm.bridge.tooltip": "Let ValleyTalk's dialogue generation take an NPC's recent LivingNPCs behavior into account.",
+  "gmcm.concisePrompt.name": "Concise prompt context",
+  "gmcm.concisePrompt.tooltip": "Send ValleyTalk a slimmer hidden context: keeps mood, memory, relationship and situational cues (gifts/help/outings), but drops the repeated world-stage and reply-guidance text to save tokens. The AI's response format is unaffected. Off by default.",
 
   "gmcm.aiPlanner.name": "Enable AI behavior planner",
   "gmcm.aiPlanner.tooltip": "Optional. Use an OpenAI-compatible endpoint to choose NPC behavior intents.",

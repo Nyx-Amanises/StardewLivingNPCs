@@ -21,6 +21,13 @@ internal static class BehaviorPromptContextBuilder
         int minRelationshipTrustForHelpRequests,
         int currentTotalDays)
     {
+        if (ModEntry.ActiveConfig.ConcisePromptContext)
+        {
+            return BuildConcisePromptContext(
+                npc, recentEntries, state, world, disposition, emotionalStyle, recallPlan,
+                maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, minRelationshipTrustForHelpRequests, currentTotalDays);
+        }
+
         var prompt = new StringBuilder();
         prompt.AppendLine($"## LivingNPCs Context: {npc.displayName}");
         prompt.AppendLine("Purpose: hidden continuity for ValleyTalk's next in-character reply.");
@@ -113,6 +120,97 @@ internal static class BehaviorPromptContextBuilder
         }
 
         return prompt.ToString();
+    }
+
+    private static string BuildConcisePromptContext(
+        NPC npc,
+        IReadOnlyList<BehaviorMemoryEntry> recentEntries,
+        LivingNpcState? state,
+        WorldContextSnapshot world,
+        NpcDispositionProfile disposition,
+        EmotionalExpressionCue emotionalStyle,
+        MemoryRecallPlan recallPlan,
+        int maxPendingHelpRequestsPerNpc,
+        int helpRequestCooldownDays,
+        int minRelationshipTrustForHelpRequests,
+        int currentTotalDays)
+    {
+        var prompt = new StringBuilder();
+        prompt.AppendLine($"## LivingNPCs Context: {npc.displayName}");
+        prompt.AppendLine("Rules: hidden body language and memory for the next in-character reply; do not quote it or mention LivingNPCs/AI/JSON; use at most one or two details naturally.");
+        prompt.AppendLine();
+        prompt.AppendLine("Current state:");
+        prompt.AppendLine($"- Disposition: {disposition.PromptLabel}.");
+        prompt.AppendLine($"- Scene: {world.PromptLabel}; location: {world.LocationDisplayName}; {world.Season} {world.DayOfMonth}, {world.TimeOfDay}.");
+
+        if (state == null)
+        {
+            prompt.AppendLine("- No persistent LivingNPCs state yet; use disposition and scene conservatively.");
+            return prompt.ToString().TrimEnd();
+        }
+
+        prompt.AppendLine($"- Mood: {state.Mood}; emotion: {state.EmotionPromptLabel}; inclination: {state.CurrentInclination}.");
+        prompt.AppendLine($"- Emotional expression style: {emotionalStyle.PromptLabel}.");
+        prompt.AppendLine($"- Familiarity {state.Familiarity}/100; trust: {state.RelationshipTrustPromptLabel}; rhythm: {state.InteractionRhythmPromptLabel}.");
+        AppendIfMeaningful(prompt, "Recall focus", MemoryRecallService.FormatLongTermMemoryPromptLabel(recallPlan.LongTermMemories));
+        AppendIfMeaningful(prompt, "Known farmer preferences", MemoryRecallService.FormatPlayerPreferencePromptLabel(recallPlan.PlayerPreferences));
+        AppendIfMeaningful(prompt, "Behavior tendencies", state.DialogueBehaviorInfluencePromptLabel);
+        AppendIfMeaningful(prompt, "Recent gift", state.LastGiftPromptLabel);
+        AppendIfMeaningful(prompt, "Recent event", state.LastEventPromptLabel);
+        AppendIfMeaningful(prompt, "Shared experiences", state.SharedExperiencePromptLabel);
+        AppendIfMeaningful(prompt, "Conflict", state.ConflictPromptLabel);
+        AppendIfMeaningful(prompt, "Personal memory", state.FarmerNicknamePromptLabel);
+
+        bool helpRelevant = state.HelpRequests.Any(request => request.Status is "Offered" or "Pending")
+            || state.DailyHelpRequestOpportunityTotalDays == currentTotalDays
+            || HelpRequestReadinessRules.Evaluate(
+                state,
+                world.FriendshipHearts,
+                maxPendingHelpRequestsPerNpc,
+                helpRequestCooldownDays,
+                minRelationshipTrustForHelpRequests,
+                currentTotalDays).Allowed;
+        if (helpRelevant)
+        {
+            AppendIfMeaningful(prompt, "Help requests", state.HelpRequestPromptLabel);
+            prompt.AppendLine("- Help-request lifecycle: Offered = asked but not accepted; Pending = accepted/active; only Pending is a task.");
+            prompt.AppendLine($"- Help-request readiness: {BuildHelpRequestReadinessLabel(state, world, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, minRelationshipTrustForHelpRequests, currentTotalDays)}.");
+            prompt.AppendLine($"- Help-request fit: {HelpRequestAdvisor.BuildPromptLabel(npc, world.Progression)}");
+        }
+
+        AppendIfMeaningful(prompt, "Last interaction", state.LastInteraction);
+
+        if (recentEntries.Count > 0)
+        {
+            prompt.AppendLine();
+            prompt.AppendLine("Recent tracked moments, oldest to newest:");
+            foreach (var entry in recentEntries.TakeLast(3))
+            {
+                prompt.AppendLine($"- {FormatPromptEntry(entry)}");
+            }
+        }
+
+        prompt.AppendLine();
+        prompt.AppendLine("- Reply guidance: let the mood, emotion, and relationship pace above shape tone and word choice; surface at most one or two details, and keep references to town progress, the farmer's household, and shared history consistent with what this NPC plausibly knows.");
+
+        return prompt.ToString().TrimEnd();
+    }
+
+    private static void AppendIfMeaningful(StringBuilder prompt, string label, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        // The empty form of these labels reads as "no recent…/no durable…/no shared…"; skip those
+        // so the concise context only carries lines that actually say something.
+        if (value.TrimStart().StartsWith("no ", System.StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        prompt.AppendLine($"- {label}: {value}");
     }
 
     public static string BuildDebugSummary(

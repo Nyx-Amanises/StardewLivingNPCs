@@ -212,6 +212,8 @@
 
   "gmcm.bridge.name": "发送行为上下文到 ValleyTalk",
   "gmcm.bridge.tooltip": "让 ValleyTalk 的对话生成参考 NPC 最近的 LivingNPCs 行为。",
+  "gmcm.concisePrompt.name": "精简提示上下文",
+  "gmcm.concisePrompt.tooltip": "给 ValleyTalk 发送更精简的隐藏上下文：保留心情、记忆、关系和情境提示（送礼/求助/出游），但去掉重复的世界进度段和冗长的回复指引以省 token。不影响 AI 的返回格式。默认关闭。",
 
   "gmcm.aiPlanner.name": "启用 AI 行为规划",
   "gmcm.aiPlanner.tooltip": "可选功能。使用 OpenAI-compatible 接口来选择 NPC 行为意图。",

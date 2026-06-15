@@ -559,6 +559,14 @@ internal static class ModConfigMenu
             setValue: value => config.EnableValleyTalkPromptBridge = value
         );
 
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => I18n.Get("gmcm.concisePrompt.name"),
+            tooltip: () => I18n.Get("gmcm.concisePrompt.tooltip"),
+            getValue: () => config.ConcisePromptContext,
+            setValue: value => config.ConcisePromptContext = value
+        );
+
         configMenu.AddSectionTitle(
             mod: manifest,
             text: () => I18n.Get("gmcm.section.aiPlanner")
