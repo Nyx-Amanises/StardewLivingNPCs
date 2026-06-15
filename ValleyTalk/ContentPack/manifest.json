@@ -5,7 +5,7 @@
     "Description": "CP Infinite dialogue for Stardew Valley",
     "UniqueID": "dandm1.CPValleyTalk",
     "MinimumApiVersion": "4.1.0",
-    "UpdateKeys": [ "Nexus:30319" ],
+    "UpdateKeys": [],
     "ContentPackFor": {
     "UniqueID": "Pathoschild.ContentPatcher"
      }
