@@ -59,22 +59,17 @@ internal static class ModConfigMenu
             setValue: value => config.ShowHudMessages = value
         );
 
-        configMenu.AddParagraph(
-            mod: manifest,
-            text: () => I18n.Get("gmcm.para.commands")
-        );
-
-        configMenu.AddSectionTitle(
-            mod: manifest,
-            text: () => I18n.Get("gmcm.section.memory")
-        );
-
         configMenu.AddBoolOption(
             mod: manifest,
             name: () => I18n.Get("gmcm.helpRequests.name"),
             tooltip: () => I18n.Get("gmcm.helpRequests.tooltip"),
             getValue: () => config.EnableHelpRequests,
             setValue: value => config.EnableHelpRequests = value
+        );
+
+        configMenu.AddParagraph(
+            mod: manifest,
+            text: () => I18n.Get("gmcm.para.commands")
         );
 
         configMenu.AddSectionTitle(
