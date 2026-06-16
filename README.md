@@ -1,6 +1,6 @@
 # StardewLivingNPCs
 
-**[English README](./README.en.md)** ·
+**[English README](./README.en.md)** 
 
 这是一个把 **AI 对话** 和 **NPC 行为层** 接到《星露谷物语》里的实验项目总仓库。
 
