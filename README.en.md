@@ -1,6 +1,6 @@
 # StardewLivingNPCs
 
-**English (this file)** · [中文 README](./README.md)
+[中文 README](./README.md)
 
 An experimental umbrella repo that wires an **AI conversation** layer and an **NPC behavior** layer into *Stardew Valley*.
 
