@@ -6,7 +6,7 @@
   "UniqueID": "Yuki.LivingNPCs",
   "EntryDll": "LivingNPCs.dll",
   "MinimumApiVersion": "4.1.0",
-  "UpdateKeys": [],
+  "UpdateKeys": [ "Nexus:47704" ],
   "Dependencies": [
     {
       "UniqueID": "dandm1.ValleyTalk",
