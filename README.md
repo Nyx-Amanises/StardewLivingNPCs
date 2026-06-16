@@ -7,6 +7,10 @@
 - `LivingNPCs/`：我们自己写的 SMAPI companion mod，负责记忆、状态、行为、关系节奏，以及 AI 对游戏世界的受控影响。
 - `ValleyTalk/`：基于 dandm1/ValleyTalk 的本地 fork，负责生成 AI 对话，并额外提供流式对话、日志导出、隐藏元数据和第三方上下文注入。
 
+> **Attribution & license** — `ValleyTalk/` is a **modified build of [dandm1/ValleyTalk](https://github.com/dandm1/ValleyTalk)** (Nexus mod 30319), redistributed under its original **LGPL v2.1** (see [`ValleyTalk/LICENSE.txt`](./ValleyTalk/LICENSE.txt)). It is bundled here only because LivingNPCs needs a small bridge that stock ValleyTalk lacks. `LivingNPCs/` is this project's own code.
+>
+> **署名与许可** —— `ValleyTalk/` 是 [dandm1/ValleyTalk](https://github.com/dandm1/ValleyTalk) 的**修改版**，以其原始 **LGPL v2.1** 再发布（见 [`ValleyTalk/LICENSE.txt`](./ValleyTalk/LICENSE.txt)）。`LivingNPCs/` 是本项目的自有代码。
+
 一句话概括当前设计：
 
 > ValleyTalk 负责“NPC 说什么”，LivingNPCs 负责“NPC 记住什么、为什么这样说、以及在安全范围内能做什么”。
