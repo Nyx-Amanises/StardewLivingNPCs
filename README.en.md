@@ -109,7 +109,7 @@ LivingNPCs keeps a limited-spread "community impression" layer between NPCs:
 - Eyewitnesses store a higher-confidence `Witnessed` memory.
 - Using `FriendsAndFamily` from `Data/Characters`, news passes to a close circle as lower-confidence `CloseCircle`.
 - If a fact is public enough and happens in `Town` or `Saloon`, a few present NPCs get a weaker `PublicRumor` impression.
-- Facts have privacy tiers `Public` / `Personal` / `Private`; the more private, the more it depends on high trust or a very small close circle.
+- Facts have privacy tiers `公开` / `Personal` / `私有`; the more private, the more it depends on high trust or a very small close circle.
 - The same fact gets each NPC's own tone (gentle, reserved, direct, curious), so it doesn't sound identical in every mouth.
 - ValleyTalk only ever receives the one or two most relevant impressions, and is told to stay vague about second-hand news (no omniscient NPCs).
 - Messages have a lifecycle (`fresh` → `settled` → `fading`) and decay out; eyewitness memories last longer than retold or public ones.
@@ -189,7 +189,7 @@ Dialogue-driven leanings currently supported:
 
 ### 6. Controlled AI influence on the world
 
-The AI can *request* a few world actions, but **cannot freely change the game**:
+The AI can *请求* a few world actions, but **cannot freely change the game**:
 
 ```text
 AI proposes an action in hidden metadata
@@ -228,7 +228,7 @@ AI gifts have two tiers:
 
 A light "help-request" layer where an NPC asks the player for a small favor. New requests are item requests only:
 
-| Type | Completion |
+|类型| Completion |
 | --- | --- |
 | `item_request` | the NPC asks for a low-value, whitelisted item; hand it over to complete |
 
@@ -359,8 +359,6 @@ The ValleyTalk fork adds: provider config (OpenAI-compatible / others), `AllowLo
 - More hand-authored semantic anchors for vanilla and expansion maps.
 - Richer follow-up chains growing out of completed shared experiences (multi-step invites, cross-location experiences, deeper quest-line tie-ins).
 - Longer-arc emotional evolution (cross-season grudges, long-term reassurance, more complex echoes when re-hurt after a repair).
-- A fuller hand-written custom-NPC profile library (the JSON profile entry point exists; the focus shifts to filling it).
-- More advanced (currently-disabled) world actions such as planting, assigning work, or changing routes.
 
 ## License
 
