@@ -28,7 +28,9 @@ internal static class ThinkingDialogueController
         active = true;
         activeNpc = npc;
         npcName = npc.Name;
-        baseText = $"{npc.displayName}正在思考";
+        string thinkingText = Util.GetString("uiThinking", new { Name = npc.displayName }, returnNull: true)
+            ?? $"{npc.displayName} is thinking";
+        baseText = thinkingText;
         activeBox = null;
 
         var dialogue = new Dialogue(npc, ThinkingDialogueKey, $"{baseText}...")
@@ -171,6 +173,9 @@ internal static class ThinkingDialogueController
 
         return dialogue.dialogues?.Any(line =>
             !string.IsNullOrWhiteSpace(line?.Text)
-            && line.Text.Contains("正在思考", StringComparison.Ordinal)) == true;
+            && (
+                line.Text.Contains("正在思考", StringComparison.Ordinal)
+                || line.Text.Contains("is thinking", StringComparison.OrdinalIgnoreCase)
+            )) == true;
     }
 }

@@ -130,8 +130,8 @@ namespace ValleyTalk
             }
             ConfigMenu.AddNumberOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configQueryTimeout", returnNull: true) ?? "请求超时",
-                tooltip: () => Util.GetString("configQueryTimeoutTooltip", returnNull: true) ?? "等待模型回复的秒数。较慢模型可以调高，快速测试模型可以调低。",
+                name: () => Util.GetString("configQueryTimeout", returnNull: true) ?? "Request timeout",
+                tooltip: () => Util.GetString("configQueryTimeoutTooltip", returnNull: true) ?? "How many seconds to wait for a model response. Increase for slower models; lower for fast testing models.",
                 getValue: () => Config.QueryTimeout,
                 setValue: (value) =>
                 {
@@ -144,8 +144,8 @@ namespace ValleyTalk
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configTypedResponses", returnNull: true) ?? "自由输入",
-                tooltip: () => Util.GetString("configTypedResponsesTooltip", returnNull: true) ?? "控制玩家什么时候可以自由输入回复。",
+                name: () => Util.GetString("configTypedResponses", returnNull: true) ?? "Typed responses",
+                tooltip: () => Util.GetString("configTypedResponsesTooltip", returnNull: true) ?? "Choose when the player can type a free-form response.",
                 getValue: () => Config.TypedResponses,
                 allowedValues: TypedResponseOptions,
                 formatAllowedValue: FormatTypedResponseOption,
@@ -153,57 +153,57 @@ namespace ValleyTalk
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configAllowLocalContentPackDialogueForAi", returnNull: true) ?? "允许本地内容包对白进入 AI 上下文",
-                tooltip: () => Util.GetString("configAllowLocalContentPackDialogueForAiTooltip", returnNull: true) ?? "即使内容包没有声明 PermitAiUse，也允许已加载的内容包对白进入 AI 上下文。",
+                name: () => Util.GetString("configAllowLocalContentPackDialogueForAi", returnNull: true) ?? "Allow local content-pack dialogue in AI context",
+                tooltip: () => Util.GetString("configAllowLocalContentPackDialogueForAiTooltip", returnNull: true) ?? "Allow loaded content-pack dialogue in AI context even if the content pack doesn't declare PermitAiUse.",
                 getValue: () => Config.AllowLocalContentPackDialogueForAi,
                 setValue: (value) =>{ Config.AllowLocalContentPackDialogueForAi = value; }
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configEnableSveCompatibility", returnNull: true) ?? "启用 SVE 兼容",
-                tooltip: () => Util.GetString("configEnableSveCompatibilityTooltip", returnNull: true) ?? "关闭后，ValleyTalk 不再把 SVE 专用世界摘要、角色 biography 和对白样本用于 AI 上下文。",
+                name: () => Util.GetString("configEnableSveCompatibility", returnNull: true) ?? "Enable SVE compatibility",
+                tooltip: () => Util.GetString("configEnableSveCompatibilityTooltip", returnNull: true) ?? "When disabled, ValleyTalk stops using SVE-specific world summary text, character biographies, and dialogue samples in AI context.",
                 getValue: () => Config.EnableSveCompatibility,
                 setValue: (value) =>{ Config.EnableSveCompatibility = value; }
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configEnableRsvCompatibility", returnNull: true) ?? "启用 RSV 兼容",
-                tooltip: () => Util.GetString("configEnableRsvCompatibilityTooltip", returnNull: true) ?? "关闭后，ValleyTalk 不再把 RSV 专用角色资料和对白样本用于 AI 上下文。",
+                name: () => Util.GetString("configEnableRsvCompatibility", returnNull: true) ?? "Enable RSV compatibility",
+                tooltip: () => Util.GetString("configEnableRsvCompatibilityTooltip", returnNull: true) ?? "When disabled, ValleyTalk stops using RSV-specific character profiles and dialogue samples in AI context.",
                 getValue: () => Config.EnableRsvCompatibility,
                 setValue: (value) =>{ Config.EnableRsvCompatibility = value; }
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configUseOptimizedGameSummaryPrompt", returnNull: true) ?? "启用优化后的世界设定提示词",
-                tooltip: () => Util.GetString("configUseOptimizedGameSummaryPromptTooltip", returnNull: true) ?? "关闭时使用当前完整世界摘要；开启后改用精简世界摘要，便于对比 token 消耗和对白质量。",
+                name: () => Util.GetString("configUseOptimizedGameSummaryPrompt", returnNull: true) ?? "Use optimized world-summary prompt",
+                tooltip: () => Util.GetString("configUseOptimizedGameSummaryPromptTooltip", returnNull: true) ?? "Use the compact optimized world summary instead of the current full GameSummary. Leave disabled to preserve existing prompt behavior.",
                 getValue: () => Config.UseOptimizedGameSummaryPrompt,
                 setValue: (value) =>{ Config.UseOptimizedGameSummaryPrompt = value; }
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configUseOptimizedLivingNpcMetadataPrompt", returnNull: true) ?? "启用优化后的 LivingNPCs 元数据说明",
-                tooltip: () => Util.GetString("configUseOptimizedLivingNpcMetadataPromptTooltip", returnNull: true) ?? "关闭时使用当前完整 LivingNPCs 隐藏元数据说明；开启后改用精简说明，便于对比 token 消耗和行为稳定性。",
+                name: () => Util.GetString("configUseOptimizedLivingNpcMetadataPrompt", returnNull: true) ?? "Use optimized LivingNPCs metadata instructions",
+                tooltip: () => Util.GetString("configUseOptimizedLivingNpcMetadataPromptTooltip", returnNull: true) ?? "Use compact LivingNPCs hidden-metadata instructions instead of the current full version. Leave disabled to preserve existing prompt behavior.",
                 getValue: () => Config.UseOptimizedLivingNpcMetadataPrompt,
                 setValue: (value) =>{ Config.UseOptimizedLivingNpcMetadataPrompt = value; }
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configGenerateAiForNormalRightClick", returnNull: true) ?? "普通右键也生成 AI 对话",
-                tooltip: () => Util.GetString("configGenerateAiForNormalRightClickTooltip", returnNull: true) ?? "关闭时，普通右键保留原版对白；只有按住设置的热键点击 NPC 才会开启 ValleyTalk AI 聊天。",
+                name: () => Util.GetString("configGenerateAiForNormalRightClick", returnNull: true) ?? "Generate AI dialogue on normal right-click",
+                tooltip: () => Util.GetString("configGenerateAiForNormalRightClickTooltip", returnNull: true) ?? "When disabled, normal right-click keeps vanilla dialogue; hold the configured key while clicking an NPC to start a ValleyTalk AI chat.",
                 getValue: () => Config.GenerateAiForNormalRightClick,
                 setValue: (value) =>{ Config.GenerateAiForNormalRightClick = value; }
             );
             ConfigMenu.AddKeybind(
                 mod: ModManifest,
-                name: () => Util.GetString("configKeybind", returnNull: true) ?? "开启自由输入的按键",
-                tooltip: () => Util.GetString("configKeybindTooltip", returnNull: true) ?? "按住这个键点击 NPC，会开启 ValleyTalk 的自由输入对话。",
+                name: () => Util.GetString("configKeybind", returnNull: true) ?? "Key to start typed dialogue",
+                tooltip: () => Util.GetString("configKeybindTooltip", returnNull: true) ?? "Hold this key while clicking an NPC to start ValleyTalk typed dialogue.",
                 getValue: () => ModEntry.Config.InitiateTypedDialogueKey,
                 setValue: (value) =>{ ModEntry.Config.InitiateTypedDialogueKey = value; }
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configTranslation", returnNull: true) ?? "翻译模型输出",
-                tooltip: () => Util.GetString("configTranslationTooltip", returnNull: true) ?? "把模型输出翻译成游戏语言。中文模型或中文提示词下通常建议关闭。",
+                name: () => Util.GetString("configTranslation", returnNull: true) ?? "Translate outputs",
+                tooltip: () => Util.GetString("configTranslationTooltip", returnNull: true) ?? "Translate the AI model outputs to the game language.",
                 getValue: () => Config.ApplyTranslation,
                 setValue: (value) =>
                 {
@@ -212,32 +212,32 @@ namespace ValleyTalk
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configFrequencyGeneral", returnNull: true) ?? "普通对白生成频率",
-                tooltip: () => Util.GetString("configFrequencyGeneralTooltip", returnNull: true) ?? "控制普通对白由 AI 生成的频率。",
+                name: () => Util.GetString("configFrequencyGeneral", returnNull: true) ?? "Frequency of general lines",
+                tooltip: () => Util.GetString("configFrequencyGeneralTooltip", returnNull: true) ?? "How often the mod should generate general lines.",
                 getValue: () => GetFrequencyOptions()[Config.GeneralFrequency],
                 setValue: (value) =>{ Config.GeneralFrequency = GetFrequencyOptions().First(x => x.Value == value).Key; },
                 allowedValues: GetFrequencyOptions().Values.ToArray()
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configFrequencyGift", returnNull: true) ?? "礼物回应生成频率",
-                tooltip: () => Util.GetString("configFrequencyGiftTooltip", returnNull: true) ?? "控制送礼回应由 AI 生成的频率。",
+                name: () => Util.GetString("configFrequencyGift", returnNull: true) ?? "Frequency of gift lines",
+                tooltip: () => Util.GetString("configFrequencyGiftTooltip", returnNull: true) ?? "How often the mod should generate gift reactions.",
                 getValue: () => GetFrequencyOptions()[Config.GiftFrequency],
                 setValue: (value) =>{ Config.GiftFrequency = GetFrequencyOptions().First(x => x.Value == value).Key; },
                 allowedValues: GetFrequencyOptions().Values.ToArray()
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configFrequencyMarriage", returnNull: true) ?? "婚后对白生成频率",
-                tooltip: () => Util.GetString("configFrequencyMarriageTooltip", returnNull: true) ?? "控制婚后对白由 AI 生成的频率。",
+                name: () => Util.GetString("configFrequencyMarriage", returnNull: true) ?? "Frequency of marriage lines",
+                tooltip: () => Util.GetString("configFrequencyMarriageTooltip", returnNull: true) ?? "How often the mod should generate marriage lines.",
                 getValue: () => GetFrequencyOptions()[Config.MarriageFrequency],
                 setValue: (value) =>{ Config.MarriageFrequency = GetFrequencyOptions().First(x => x.Value == value).Key; },
                 allowedValues: GetFrequencyOptions().Values.ToArray()
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configDiableForCharacters", returnNull: true) ?? "禁用角色",
-                tooltip: () => Util.GetString("configDiableForCharactersTooltip", returnNull: true) ?? "用逗号分隔要禁用 ValleyTalk 的角色英文名，例如 Abigail, Leah, Sam。",
+                name: () => Util.GetString("configDiableForCharacters", returnNull: true) ?? "Disable for characters",
+                tooltip: () => Util.GetString("configDiableForCharactersTooltip", returnNull: true) ?? "Comma-separated list of villagers to disable, e.g. Abigail, Leah, Sam.",
                 getValue: () => Config.DisableCharacters,
                 setValue: (value) =>{ Config.DisableCharacters = value; }
             );
@@ -257,11 +257,11 @@ namespace ValleyTalk
         {
             return new Dictionary<int, string>()
             {
-                { 0, Util.GetString("configNever", returnNull: true) is { } never ? $"{never} (0%)" : "从不 (0%)" },
-                { 1, Util.GetString("configRarely", returnNull: true) is { } rarely ? $"{rarely} (25%)" : "很少 (25%)" },
-                { 2, Util.GetString("configOccasionally", returnNull: true) is { } occasionally ? $"{occasionally} (50%)" : "偶尔 (50%)" },
-                { 3, Util.GetString("configMostly", returnNull: true) is { } mostly ? $"{mostly} (75%)" : "经常 (75%)" },
-                { 4, Util.GetString("configAlways", returnNull: true) is { } always ? $"{always} (100%)" : "总是 (100%)" }
+                { 0, Util.GetString("configNever", returnNull: true) is { } never ? $"{never} (0%)" : "Never (0%)" },
+                { 1, Util.GetString("configRarely", returnNull: true) is { } rarely ? $"{rarely} (25%)" : "Rarely (25%)" },
+                { 2, Util.GetString("configOccasionally", returnNull: true) is { } occasionally ? $"{occasionally} (50%)" : "Occasionally (50%)" },
+                { 3, Util.GetString("configMostly", returnNull: true) is { } mostly ? $"{mostly} (75%)" : "Mostly (75%)" },
+                { 4, Util.GetString("configAlways", returnNull: true) is { } always ? $"{always} (100%)" : "Always (100%)" }
             };
         }
 
@@ -269,9 +269,9 @@ namespace ValleyTalk
         {
             return value switch
             {
-                "Always" => Util.GetString("configTypedResponsesAlways", returnNull: true) ?? "总是",
-                "With Generated" => Util.GetString("configTypedResponsesWithGenerated", returnNull: true) ?? "有 AI 选项时",
-                "Never" => Util.GetString("configTypedResponsesNever", returnNull: true) ?? "从不",
+                "Always" => Util.GetString("configTypedResponsesAlways", returnNull: true) ?? "Always",
+                "With Generated" => Util.GetString("configTypedResponsesWithGenerated", returnNull: true) ?? "With generated choices",
+                "Never" => Util.GetString("configTypedResponsesNever", returnNull: true) ?? "Never",
                 _ => value
             };
         }
@@ -280,14 +280,14 @@ namespace ValleyTalk
         {
             return value switch
             {
-                "OpenAI" => Util.GetString("configProviderOpenAi", returnNull: true) ?? "OpenAI 官方接口",
-                "OpenAiCompatible" => Util.GetString("configProviderOpenAiCompatible", returnNull: true) ?? "OpenAI 兼容接口",
+                "OpenAI" => Util.GetString("configProviderOpenAi", returnNull: true) ?? "OpenAI official API",
+                "OpenAiCompatible" => Util.GetString("configProviderOpenAiCompatible", returnNull: true) ?? "OpenAI-compatible API",
                 "Google" => Util.GetString("configProviderGoogle", returnNull: true) ?? "Google Gemini",
                 "Anthropic" => Util.GetString("configProviderAnthropic", returnNull: true) ?? "Anthropic Claude",
                 "Mistral" => Util.GetString("configProviderMistral", returnNull: true) ?? "Mistral",
                 "DeepSeek" => Util.GetString("configProviderDeepSeek", returnNull: true) ?? "DeepSeek",
-                "VolcEngine" => Util.GetString("configProviderVolcEngine", returnNull: true) ?? "火山引擎",
-                "LlamaCpp" => Util.GetString("configProviderLlamaCpp", returnNull: true) ?? "本地 Llama.cpp",
+                "VolcEngine" => Util.GetString("configProviderVolcEngine", returnNull: true) ?? "VolcEngine",
+                "LlamaCpp" => Util.GetString("configProviderLlamaCpp", returnNull: true) ?? "Local Llama.cpp",
                 _ => value
             };
         }

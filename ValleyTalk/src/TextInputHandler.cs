@@ -31,7 +31,7 @@ namespace ValleyTalk
         public static void RequestTextInput(string title, NPC npc, string dialogueKey = "", List<ConversationElement> dialogueHistory = null)
         {
             _awaitingTextInput = true;
-            _inputTitle = string.IsNullOrWhiteSpace(title) ? "你想说什么？" : title;
+            _inputTitle = string.IsNullOrWhiteSpace(title) ? "What do you want to say?" : title;
             _currentNpc = npc;
             _currentDialogueKey = dialogueKey;
             _currentResponse = dialogueHistory ?? new List<ConversationElement>();

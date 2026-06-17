@@ -41,7 +41,7 @@ internal static class NativeDialogueTextInputController
         active = true;
         currentNpc = npc;
         activeBox = null;
-        prompt = string.IsNullOrWhiteSpace(title) ? "你想说什么？" : title;
+        prompt = string.IsNullOrWhiteSpace(title) ? "What do you want to say?" : title;
         text = string.Empty;
         caretPosition = 0;
         onSubmitted = callback;

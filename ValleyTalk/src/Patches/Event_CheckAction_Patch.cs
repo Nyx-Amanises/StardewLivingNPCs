@@ -39,7 +39,7 @@ namespace ValleyTalk
                 "uiStartConversation",
                 new { Name = npc.displayName },
                 returnNull: true
-            ) ?? "你想说什么？";
+            ) ?? "What do you want to say?";
 
             TextInputManager.RequestTextInput(prompt, npc);
             __result = true;

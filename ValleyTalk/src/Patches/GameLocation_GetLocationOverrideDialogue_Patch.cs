@@ -30,7 +30,7 @@ namespace ValleyTalk
                     "uiStartConversation",
                     new { Name = character.displayName },
                     returnNull: true
-                ) ?? "你想说什么？";
+                ) ?? "What do you want to say?";
                 TextInputManager.RequestTextInput(prompt, character);
                 __result = string.Empty;
                 return false;

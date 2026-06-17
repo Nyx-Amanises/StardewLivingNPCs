@@ -44,7 +44,7 @@ namespace ValleyTalk
             get
             {
                 GetLocale();
-                return _locale.DisplayName;
+                return _locale.EnglishName;
             }
         }
 

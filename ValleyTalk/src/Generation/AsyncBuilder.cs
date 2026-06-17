@@ -261,7 +261,7 @@ public class AsyncBuilder
                     if (selected.Kind == StreamingResponseOptionKind.Typed)
                     {
                         TextInputManager.RequestTextInput(
-                            Util.GetString("uiYourResponse", returnNull: true) ?? "你的回复",
+                            Util.GetString("uiYourResponse", returnNull: true) ?? "Your response",
                             npc,
                             npc.LoadedDialogueKey ?? "default",
                             DialogueBuilder.Instance.LastContext?.ChatHistory?.ToList() ?? new List<ConversationElement>());

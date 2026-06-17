@@ -225,7 +225,7 @@ namespace ValleyTalk
             }
 
             yield return new StreamingResponseOption(
-                Util.GetString("outputStaySilent", returnNull: true) ?? "保持沉默",
+                Util.GetString("outputStaySilent", returnNull: true) ?? "Stay silent",
                 StreamingResponseOptionKind.Silent);
 
             foreach (string option in theLine.Skip(1).Where(option => !string.IsNullOrWhiteSpace(option)))
@@ -236,7 +236,7 @@ namespace ValleyTalk
             if (ModEntry.Config.TypedResponses != "Never")
             {
                 yield return new StreamingResponseOption(
-                    Util.GetString("uiTypeYourResponse", returnNull: true) ?? "自由输入",
+                    Util.GetString("uiTypeYourResponse", returnNull: true) ?? "Type your response",
                     StreamingResponseOptionKind.Typed);
             }
         }

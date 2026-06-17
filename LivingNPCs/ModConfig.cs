@@ -30,8 +30,8 @@ internal sealed class ModConfig
     public bool AllowAiSmallGifts { get; set; } = true;
     public bool AllowAiMeaningfulGifts { get; set; } = true;
     public int AiMeaningfulGiftCooldownDays { get; set; } = 7;
-    public int AiDailyGiftChanceMinPercent { get; set; } = 30;
-    public int AiDailyGiftChanceMaxPercent { get; set; } = 50;
+    public int AiDailyGiftChanceMinPercent { get; set; } = 3;
+    public int AiDailyGiftChanceMaxPercent { get; set; } = 5;
     public bool AllowAiMoneyGifts { get; set; } = true;
     public int MaxAiMoneyGiftAmount { get; set; } = 250;
     public bool AllowAiFarmHelp { get; set; } = true;
