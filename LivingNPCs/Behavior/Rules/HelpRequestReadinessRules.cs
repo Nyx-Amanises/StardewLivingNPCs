@@ -32,9 +32,7 @@ internal static class HelpRequestReadinessRules
             return new HelpRequestReadinessResult(false, "unresolved conflict makes asking for help feel wrong");
         }
 
-        bool enoughTrust = state.RelationshipTrust >= minRelationshipTrustForHelpRequests;
-        bool enoughFamiliarity = state.Familiarity >= 20 || friendshipHearts >= 2;
-        if (!enoughTrust || !enoughFamiliarity)
+        if (friendshipHearts < 2)
         {
             return new HelpRequestReadinessResult(false, "the relationship is not close enough yet");
         }

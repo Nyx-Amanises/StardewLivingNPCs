@@ -323,7 +323,7 @@ internal sealed class HelpRequestMemoryService
             };
 
             // Store applies the readiness gate; this is only a synthesis of the candidate the AI
-            // failed to emit, never a bypass of trust/familiarity/cooldown rules.
+            // failed to emit, never a bypass of vanilla hearts/cooldown rules.
             return this.Store(
                 npc,
                 state,

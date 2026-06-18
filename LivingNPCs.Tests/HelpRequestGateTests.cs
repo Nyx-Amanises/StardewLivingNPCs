@@ -5,12 +5,13 @@ namespace LivingNPCs.Tests;
 public sealed class HelpRequestGateTests
 {
     [Fact]
-    public void LowTrustIsRejected()
+    public void BelowTwoHeartsIsRejected()
     {
         var state = TestScenarios.TrustedState();
-        state.RelationshipTrust = 25;
+        state.RelationshipTrust = 100;
+        state.Familiarity = 100;
 
-        var result = Evaluate(state);
+        var result = Evaluate(state, friendshipHearts: 1);
 
         Assert.False(result.Allowed);
         Assert.Contains("not close enough", result.Reason);
@@ -62,9 +63,13 @@ public sealed class HelpRequestGateTests
     }
 
     [Fact]
-    public void TrustedRelationshipWithoutBlockersIsAllowed()
+    public void TwoHeartsWithoutBlockersIsAllowedEvenWithLowTrustAndFamiliarity()
     {
-        var result = Evaluate(TestScenarios.TrustedState());
+        var state = TestScenarios.TrustedState();
+        state.RelationshipTrust = 0;
+        state.Familiarity = 0;
+
+        var result = Evaluate(state, friendshipHearts: 2);
 
         Assert.True(result.Allowed);
     }

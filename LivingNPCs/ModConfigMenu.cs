@@ -67,6 +67,18 @@ internal static class ModConfigMenu
             setValue: value => config.EnableHelpRequests = value
         );
 
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => I18n.Get("gmcm.helpDailyChance.name"),
+            tooltip: () => I18n.Get("gmcm.helpDailyChance.tooltip"),
+            getValue: () => config.HelpRequestDailyOfferChancePercent,
+            setValue: value => config.HelpRequestDailyOfferChancePercent = value,
+            min: 0,
+            max: ModConfig.MaxHelpRequestDailyOfferChancePercent,
+            interval: 1,
+            formatValue: FormatPercent
+        );
+
         configMenu.AddParagraph(
             mod: manifest,
             text: () => I18n.Get("gmcm.para.commands")
@@ -83,6 +95,38 @@ internal static class ModConfigMenu
             tooltip: () => I18n.Get("gmcm.aiWorldActions.tooltip"),
             getValue: () => config.EnableAiWorldActions,
             setValue: value => config.EnableAiWorldActions = value
+        );
+
+        configMenu.AddBoolOption(
+            mod: manifest,
+            name: () => I18n.Get("gmcm.smallGifts.name"),
+            tooltip: () => I18n.Get("gmcm.smallGifts.tooltip"),
+            getValue: () => config.AllowAiSmallGifts,
+            setValue: value => config.AllowAiSmallGifts = value
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => I18n.Get("gmcm.giftChanceMin.name"),
+            tooltip: () => I18n.Get("gmcm.giftChanceMin.tooltip"),
+            getValue: () => config.AiDailyGiftChanceMinPercent,
+            setValue: value => config.AiDailyGiftChanceMinPercent = value,
+            min: 0,
+            max: ModConfig.MaxAiDailyGiftChancePercent,
+            interval: 1,
+            formatValue: FormatPercent
+        );
+
+        configMenu.AddNumberOption(
+            mod: manifest,
+            name: () => I18n.Get("gmcm.giftChanceMax.name"),
+            tooltip: () => I18n.Get("gmcm.giftChanceMax.tooltip"),
+            getValue: () => config.AiDailyGiftChanceMaxPercent,
+            setValue: value => config.AiDailyGiftChanceMaxPercent = value,
+            min: 0,
+            max: ModConfig.MaxAiDailyGiftChancePercent,
+            interval: 1,
+            formatValue: FormatPercent
         );
 
         configMenu.AddBoolOption(
@@ -134,5 +178,10 @@ internal static class ModConfigMenu
             getValue: () => config.ConcisePromptContext,
             setValue: value => config.ConcisePromptContext = value
         );
+    }
+
+    private static string FormatPercent(int value)
+    {
+        return $"{value}%";
     }
 }

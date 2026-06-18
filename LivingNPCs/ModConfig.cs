@@ -5,6 +5,9 @@ namespace LivingNPCs;
 
 internal sealed class ModConfig
 {
+    public const int MaxHelpRequestDailyOfferChancePercent = 60;
+    public const int MaxAiDailyGiftChancePercent = 25;
+
     public bool EnableMod { get; set; } = true;
     public bool Debug { get; set; } = false;
     public KeybindList BehaviorHotkey { get; set; } = KeybindList.Parse("LeftShift + H");
@@ -98,14 +101,14 @@ internal sealed class ModConfig
         this.MaxPendingHelpRequestsPerNpc = Clamp(this.MaxPendingHelpRequestsPerNpc, 0, 20);
         this.HelpRequestCooldownDays = Clamp(this.HelpRequestCooldownDays, 0, 112);
         this.MinRelationshipTrustForHelpRequests = Clamp(this.MinRelationshipTrustForHelpRequests, 0, 100);
-        this.HelpRequestDailyOfferChancePercent = Clamp(this.HelpRequestDailyOfferChancePercent, 0, 100);
+        this.HelpRequestDailyOfferChancePercent = Clamp(this.HelpRequestDailyOfferChancePercent, 0, MaxHelpRequestDailyOfferChancePercent);
         this.MinHelpRequestFriendshipReward = Clamp(this.MinHelpRequestFriendshipReward, 0, 5000);
         this.MaxHelpRequestFriendshipReward = Clamp(this.MaxHelpRequestFriendshipReward, 0, 5000);
         this.MaxAiDialogueFriendshipPerNpcPerDay = Clamp(this.MaxAiDialogueFriendshipPerNpcPerDay, 0, 1000);
         this.MaxDialogueBehaviorInfluenceDays = Clamp(this.MaxDialogueBehaviorInfluenceDays, 0, 28);
         this.AiMeaningfulGiftCooldownDays = Clamp(this.AiMeaningfulGiftCooldownDays, 0, 112);
-        this.AiDailyGiftChanceMinPercent = Clamp(this.AiDailyGiftChanceMinPercent, 0, 100);
-        this.AiDailyGiftChanceMaxPercent = Clamp(this.AiDailyGiftChanceMaxPercent, 0, 100);
+        this.AiDailyGiftChanceMinPercent = Clamp(this.AiDailyGiftChanceMinPercent, 0, MaxAiDailyGiftChancePercent);
+        this.AiDailyGiftChanceMaxPercent = Clamp(this.AiDailyGiftChanceMaxPercent, 0, MaxAiDailyGiftChancePercent);
         this.MaxAiMoneyGiftAmount = Clamp(this.MaxAiMoneyGiftAmount, 0, 100000);
         this.MaxAiWateredTilesPerAction = Clamp(this.MaxAiWateredTilesPerAction, 0, 200);
         this.MinimumCompanionOutingStayMinutes = Clamp(this.MinimumCompanionOutingStayMinutes, 0, 1200);

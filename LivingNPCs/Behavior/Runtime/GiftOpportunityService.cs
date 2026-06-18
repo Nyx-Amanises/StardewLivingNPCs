@@ -71,7 +71,7 @@ internal sealed class GiftOpportunityService
     /// <summary>
     /// Once per day, on the first conversation with an eligible NPC, rolls a chance for the NPC to
     /// feel inclined to ask the farmer for a small favor during this chat (mirrors the daily gift
-    /// opportunity). The readiness gate (trust/familiarity/cooldown/active request) still applies.
+    /// opportunity). The readiness gate (vanilla hearts/cooldown/active request) still applies.
     /// </summary>
     public void TryPrepareDailyHelpRequestOpportunity(NPC npc, LivingNpcState state)
     {
