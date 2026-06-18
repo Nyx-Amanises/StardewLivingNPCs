@@ -30,7 +30,8 @@ internal sealed record GiftMemoryDetails(
     string ItemName,
     string TasteLabel,
     string TastePromptLabel,
-    int TasteScore
+    int TasteScore,
+    bool IsBirthdayGift = false
 );
 
 internal sealed record MemoryRecallContext(

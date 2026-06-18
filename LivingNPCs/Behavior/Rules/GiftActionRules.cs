@@ -78,6 +78,11 @@ internal static class GiftActionRules
             return "reciprocal";
         }
 
+        if (ConversationActionCueRules.ContainsAny(reason, "birthday", "生日"))
+        {
+            return "birthday";
+        }
+
         if (ConversationActionCueRules.ContainsAny(reason, "thank", "thanks", "谢礼", "感谢", "help request"))
         {
             return "thanks";
@@ -99,6 +104,7 @@ internal static class GiftActionRules
             "reciprocal" => I18n.Get("gift.hud.reciprocal", new { npc = npc.displayName, item = itemLabel }),
             "thanks" => I18n.Get("gift.hud.thanks", new { npc = npc.displayName, item = itemLabel }),
             "meaningful" => I18n.Get("gift.hud.meaningful", new { npc = npc.displayName, item = itemLabel }),
+            "birthday" => I18n.Get("gift.hud.birthday", new { npc = npc.displayName, item = itemLabel }),
             _ => I18n.Get("gift.hud.default", new { npc = npc.displayName, item = itemLabel })
         };
     }

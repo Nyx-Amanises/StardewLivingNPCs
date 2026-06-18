@@ -616,7 +616,8 @@ internal sealed class BehaviorEngine
             string.IsNullOrWhiteSpace(giftName) ? "a gift" : giftName,
             labels.DebugLabel,
             labels.PromptLabel,
-            taste
+            taste,
+            GiftMemoryDetailsFactory.IsBirthdayGift(npc)
         );
         LivingNpcState state = this.memory.GetState(npc) ?? this.memory.UpdateStateForGift(npc, gift);
         var matchingHelpRequests = FindMatchingItemHelpRequestGiftContexts(state, gift).ToList();
@@ -630,10 +631,12 @@ internal sealed class BehaviorEngine
             return string.Empty;
         }
 
-        bool scheduledReciprocalGift = this.giftOpportunities.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
-        bool hasReciprocalMail = scheduledReciprocalGift || this.mailService.HasPendingGiftMail(state, "reciprocal");
-        return hasReciprocalMail
-            ? BuildGiftResponseMailPrompt(npc, gift.ItemName)
+        bool scheduledResponseGift = this.giftOpportunities.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
+        bool hasResponseMail = scheduledResponseGift
+            || this.mailService.HasPendingGiftMail(state, "reciprocal")
+            || this.mailService.HasPendingGiftMail(state, "birthday");
+        return hasResponseMail
+            ? BuildGiftResponseMailPrompt(npc, gift)
             : string.Empty;
     }
 
@@ -722,15 +725,21 @@ internal sealed class BehaviorEngine
         return string.Join("\n", lines);
     }
 
-    private static string BuildGiftResponseMailPrompt(NPC npc, string giftName)
+    private static string BuildGiftResponseMailPrompt(NPC npc, GiftMemoryDetails gift)
     {
-        string itemLabel = string.IsNullOrWhiteSpace(giftName)
+        string itemLabel = string.IsNullOrWhiteSpace(gift.ItemName)
             ? "the farmer's gift"
-            : giftName.Trim();
+            : gift.ItemName.Trim();
+        string header = gift.IsBirthdayGift
+            ? "## LivingNPCs Birthday Gift Mail"
+            : "## LivingNPCs Reciprocal Gift Mail";
+        string reason = gift.IsBirthdayGift
+            ? $"LivingNPCs has scheduled a later birthday thank-you mail from {npc.displayName} because the farmer remembered their birthday with {itemLabel}."
+            : $"LivingNPCs has scheduled a later mailbox return gift from {npc.displayName} because the farmer gave them {itemLabel}.";
         return string.Join(
             "\n",
-            "## LivingNPCs Reciprocal Gift Mail",
-            $"- LivingNPCs has scheduled a later mailbox return gift from {npc.displayName} because the farmer gave them {itemLabel}.",
+            header,
+            $"- {reason}",
             "- In this immediate gift reaction, the NPC may briefly imply they will send something later if it sounds natural.",
             "- Do not give the farmer an item now, do not include a hidden give_small_gift or give_meaningful_gift action, and do not promise a specific item."
         );

@@ -365,17 +365,24 @@ internal sealed class BehaviorMailService
     {
         if (UsesProfiledGiftMail(motive) && !string.IsNullOrWhiteSpace(profile))
         {
-            int firstVariant = SelectProfiledMailVariant(mail);
-            for (int offset = 0; offset < ProfiledMailVariantCount; offset++)
+            if (TryGetGiftMailVariantBody(motive, profile, mail, tokens, out string profiledBody))
             {
-                int variant = (firstVariant + offset) % ProfiledMailVariantCount;
-                string key = $"gift.mail.body.{motive}.{profile}.{variant}";
-                string text = I18n.Get(key, tokens);
-                if (!LooksMissingTranslation(key, text))
-                {
-                    return text;
-                }
+                return profiledBody;
             }
+
+            string tone = ResolveGiftMailToneProfile(motive, profile);
+            if (!string.IsNullOrWhiteSpace(tone)
+                && !string.Equals(tone, profile, StringComparison.OrdinalIgnoreCase)
+                && TryGetGiftMailVariantBody(motive, tone, mail, tokens, out string toneBody))
+            {
+                return toneBody;
+            }
+        }
+
+        if (UsesVariantGiftMail(motive)
+            && TryGetGiftMailVariantBody(motive, string.Empty, mail, tokens, out string variantBody))
+        {
+            return variantBody;
         }
 
         return I18n.Get($"gift.mail.body.{motive}", tokens);
@@ -383,7 +390,33 @@ internal sealed class BehaviorMailService
 
     private static bool UsesProfiledGiftMail(string motive)
     {
-        return motive is "reciprocal" or "help_request_reward";
+        return motive is "reciprocal" or "help_request_reward" or "birthday";
+    }
+
+    private static bool UsesVariantGiftMail(string motive)
+    {
+        return motive is "reciprocal" or "help_request_reward" or "birthday";
+    }
+
+    private static bool TryGetGiftMailVariantBody(string motive, string profile, NpcGiftMailFact mail, object tokens, out string body)
+    {
+        int firstVariant = SelectProfiledMailVariant(mail);
+        for (int offset = 0; offset < ProfiledMailVariantCount; offset++)
+        {
+            int variant = (firstVariant + offset) % ProfiledMailVariantCount;
+            string key = string.IsNullOrWhiteSpace(profile)
+                ? $"gift.mail.body.{motive}.{variant}"
+                : $"gift.mail.body.{motive}.{profile}.{variant}";
+            string text = I18n.Get(key, tokens);
+            if (!LooksMissingTranslation(key, text))
+            {
+                body = text;
+                return true;
+            }
+        }
+
+        body = string.Empty;
+        return false;
     }
 
     private static int SelectProfiledMailVariant(NpcGiftMailFact mail)
@@ -463,6 +496,30 @@ internal sealed class BehaviorMailService
             : value.Trim().ToLowerInvariant().Replace(" ", string.Empty);
     }
 
+    private static string ResolveGiftMailToneProfile(string motive, string profile)
+    {
+        if (motive != "birthday")
+        {
+            return string.Empty;
+        }
+
+        return profile switch
+        {
+            "penny" or "caroline" or "claire" or "sophia" => "gentle",
+            "sebastian" or "george" or "pam" or "clint" or "shane" => "reserved",
+            "abigail" or "alex" or "sam" or "martin" => "energetic",
+            "haley" or "emily" or "sandy" or "olivia" or "scarlett" => "bright",
+            "robin" or "pierre" or "demetrius" or "andy" or "susan" or "maru" => "practical",
+            "harvey" or "kent" or "lewis" or "victor" or "gunther" or "morris" => "formal",
+            "wizard" or "krobus" or "dwarf" => "mystic",
+            "willy" or "linus" or "leo" or "lance" => "outdoors",
+            "gus" or "marnie" or "evelyn" or "jodi" => "warm",
+            "vincent" or "jas" => "child",
+            "leah" or "elliott" => "artistic",
+            _ => string.Empty
+        };
+    }
+
     private static bool LooksMissingTranslation(string key, string text)
     {
         return string.IsNullOrWhiteSpace(text)
@@ -501,6 +558,7 @@ internal sealed class BehaviorMailService
             "thanks" => "thanks",
             "preference" => "preference",
             "help_request_reward" => "help_request_reward",
+            "birthday" => "birthday",
             _ => "default"
         };
     }

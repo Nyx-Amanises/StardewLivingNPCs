@@ -11,7 +11,20 @@ internal static class GiftMemoryDetailsFactory
         int taste = TryGetTaste(npc, gift);
         var labels = DescribeTaste(taste);
         string itemName = string.IsNullOrWhiteSpace(gift.DisplayName) ? gift.Name : gift.DisplayName;
-        return new GiftMemoryDetails(gift.QualifiedItemId, itemName, labels.DebugLabel, labels.PromptLabel, taste);
+        return new GiftMemoryDetails(gift.QualifiedItemId, itemName, labels.DebugLabel, labels.PromptLabel, taste, IsBirthdayGift(npc));
+    }
+
+    public static bool IsBirthdayGift(NPC npc)
+    {
+        try
+        {
+            return npc.isBirthday();
+        }
+        catch
+        {
+            return string.Equals(npc.Birthday_Season, Game1.currentSeason, StringComparison.OrdinalIgnoreCase)
+                && npc.Birthday_Day == Game1.dayOfMonth;
+        }
     }
 
     public static GiftTasteLabels DescribeTaste(int taste)

@@ -464,7 +464,7 @@ LivingNPCs 当前允许的世界动作只有：
 - 如果 NPC 的对白是“等我一下，我准备一下再走”，系统会先记录一个很短的延迟，再开始出游，但不会额外显示准备完成气泡。
 - 没有明确目的地的“一起走走”不会再触发移动动作。
 - NPC 使用原版 `pathfindToNextScheduleLocation` 生成跨地图路线，在真实的门和出口处切图；不会再在玩家靠近出口时手动搬运到下一张地图。
-- 到达后 NPC 会在语义锚点或安全评分选出的公共位置至少停留 120 游戏分钟，并保持稳定朝向，不再跟随玩家。
+- 到达后 NPC 会在语义锚点或安全评分选出的公共位置至少停留 60 游戏分钟，并保持稳定朝向，不再跟随玩家。
 - NPC 安顿至少 20 游戏分钟、玩家仍在附近时，才可能低频显示一次与活动匹配的感叹号或爱心；整次出游最多一次，负面情绪或明显冲突时不会显示。
 - 出游支持常见目标：农场、鹈鹕镇、山上、矿井、海边、煤矿森林、巴士站、酒吧、杂货店、图书馆 / 博物馆、诊所和常见 NPC 住宅。
 
@@ -473,7 +473,7 @@ LivingNPCs 当前允许的世界动作只有：
 - 小礼物：至少有一点熟悉；每天每个 NPC 最多一次 AI 礼物。
 - 有意义礼物：至少友好，并且满足高关系 / 近期事件 / 重要长期记忆之一；默认 7 天冷却。
 - 送钱：至少友好；金额默认 100g，受单次上限控制。
-- 陪伴出游：至少有一点熟悉；只接受明确目的地，需能容纳路程和抵达后至少 2 个游戏小时，不改永久日程。
+- 陪伴出游：至少有一点熟悉；只接受明确目的地，需能容纳路程和抵达后至少 60 游戏分钟，不改永久日程。
 - 节日互动：只在事件 / 节日场景中允许。
 - 任务协助：只围绕已有任务做轻量协助，不直接完成任务。
 
@@ -509,7 +509,7 @@ LivingNPCs 当前允许的世界动作只有：
 
 如果 NPC 已经记得玩家喜欢某类物品，礼物选择会明显向该类倾斜；如果记得玩家讨厌某类物品，相关候选会被压低。ValleyTalk 也会在合适时自然提一句类似“记得你喜欢这个”，让礼物和记忆接上，而不是凭空出现。
 
-回礼与求助谢礼邮件会优先使用 NPC 性格模板。当前覆盖原版主要可社交 / 可送礼 NPC：所有原版可结婚对象，以及 Linus、Robin、Gus、Marnie、Willy、Evelyn、George、Pam、Clint、Wizard、Krobus、Pierre、Caroline、Demetrius、Jodi、Kent、Lewis、Sandy、Dwarf、Leo、Vincent、Jas；也覆盖 SVE 核心角色 Andy、Claire、Sophia、Susan、Victor、Olivia、Lance、Scarlett、Gunther、Martin、Morris（Magnus 复用 Wizard 模板）。每人每类邮件各有 3 个稳定变体，未覆盖 NPC 会回退到通用模板。
+回礼与求助谢礼邮件会优先使用 NPC 性格模板。当前覆盖原版主要可社交 / 可送礼 NPC：所有原版可结婚对象，以及 Linus、Robin、Gus、Marnie、Willy、Evelyn、George、Pam、Clint、Wizard、Krobus、Pierre、Caroline、Demetrius、Jodi、Kent、Lewis、Sandy、Dwarf、Leo、Vincent、Jas；也覆盖 SVE 核心角色 Andy、Claire、Sophia、Susan、Victor、Olivia、Lance、Scarlett、Gunther、Martin、Morris（Magnus 复用 Wizard 模板）。每人每类邮件各有 3 个稳定变体，未覆盖 NPC 会回退到通用模板。生日当天送给 NPC 的礼物会使用单独的生日谢礼邮件，按 NPC 性格组选择 3 个稳定变体之一，并在次日寄出。
 
 ### 主动求助
 

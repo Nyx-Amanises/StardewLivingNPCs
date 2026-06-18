@@ -137,11 +137,12 @@ internal sealed class BehaviorMemory
 
     public BehaviorMemoryEntry RecordGiftOffered(NPC npc, GiftMemoryDetails gift, int maxEntriesPerNpc)
     {
+        string birthdayNote = gift.IsBirthdayGift ? "; this was given on their birthday" : string.Empty;
         var entry = this.CreateEntry(
             npc,
             "Gift",
             "GiftOffered",
-            $"the farmer offered {gift.ItemName}; gift taste: {gift.TastePromptLabel}"
+            $"the farmer offered {gift.ItemName}; gift taste: {gift.TastePromptLabel}{birthdayNote}"
         );
 
         this.AddEntry(entry, maxEntriesPerNpc);
@@ -574,7 +575,9 @@ internal sealed class BehaviorMemory
 
         state.GiftsToday += 1;
         state.LastGiftName = gift.ItemName;
-        state.LastGiftTaste = gift.TasteLabel;
+        state.LastGiftTaste = gift.IsBirthdayGift
+            ? $"{gift.TasteLabel}，生日礼物"
+            : gift.TasteLabel;
         state.LastGiftTotalDays = Game1.Date.TotalDays;
         state.LastGiftTimeOfDay = Game1.timeOfDay;
 
@@ -617,14 +620,14 @@ internal sealed class BehaviorMemory
         switch (gift.TasteScore)
         {
             case 0:
-                this.ApplyEmotion(state, "Happy", 18, $"the farmer gave them a loved gift: {gift.ItemName}");
+                this.ApplyEmotion(state, "Happy", 18, $"the farmer gave them a loved gift: {gift.ItemName}{(gift.IsBirthdayGift ? " on their birthday" : string.Empty)}");
                 this.ApplyRelationshipTrustDelta(state, 4);
                 this.MarkRepairGiftReceived(state, gift.ItemName);
                 this.ApplyConflictRepair(state, 18, apology: false, specificRepairTalk: false);
                 break;
 
             case 2:
-                this.ApplyEmotion(state, "Happy", 10, $"the farmer gave them a liked gift: {gift.ItemName}");
+                this.ApplyEmotion(state, "Happy", 10, $"the farmer gave them a liked gift: {gift.ItemName}{(gift.IsBirthdayGift ? " on their birthday" : string.Empty)}");
                 this.ApplyRelationshipTrustDelta(state, 2);
                 this.MarkRepairGiftReceived(state, gift.ItemName);
                 this.ApplyConflictRepair(state, 10, apology: false, specificRepairTalk: false);

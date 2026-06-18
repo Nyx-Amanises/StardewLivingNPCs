@@ -844,6 +844,7 @@ internal sealed class LivingNpcState
                     "thanks" => "thanks",
                     "preference" => "preference",
                     "help_request_reward" => "help_request_reward",
+                    "birthday" => "birthday",
                     _ => "daily"
                 };
                 mail.Reason = mail.Reason?.Trim() ?? string.Empty;

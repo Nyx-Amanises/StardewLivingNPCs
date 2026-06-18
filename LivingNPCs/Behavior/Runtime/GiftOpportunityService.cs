@@ -114,29 +114,30 @@ internal sealed class GiftOpportunityService
             || !GiftActionRules.IsEligibleForSmallGift(npc, state)
             || state.HighestUnresolvedConflictSeverity >= 30
             || gift.TasteScore is 4 or 6
-            || this.mailService.HasPendingGiftMail(state, "reciprocal"))
+            || this.mailService.HasPendingGiftMail(state, "reciprocal")
+            || this.mailService.HasPendingGiftMail(state, "birthday"))
         {
             return false;
         }
 
-        int chance = gift.TasteScore switch
-        {
-            0 => 75,
-            2 => 45,
-            8 => 10,
-            _ => 0
-        };
+        int chance = GetReciprocalGiftChance(gift);
         if (chance <= 0 || this.random.Next(100) >= chance)
         {
             return false;
         }
 
-        int delayDays = gift.TasteScore switch
-        {
-            0 => this.random.Next(1, 3),
-            2 => this.random.Next(1, 4),
-            _ => this.random.Next(1, 4)
-        };
+        int delayDays = gift.IsBirthdayGift
+            ? 1
+            : gift.TasteScore switch
+            {
+                0 => this.random.Next(1, 3),
+                2 => this.random.Next(1, 4),
+                _ => this.random.Next(1, 4)
+            };
+        string motive = gift.IsBirthdayGift ? "birthday" : "reciprocal";
+        string responseReason = gift.IsBirthdayGift
+            ? $"they planned a birthday thank-you gift because the farmer remembered {npc.displayName}'s birthday with {gift.ItemName}, a {gift.TastePromptLabel}"
+            : $"they planned a delayed return gift because the farmer recently gave {npc.displayName} {gift.ItemName}, a {gift.TastePromptLabel}";
         GiftTier reciprocalTier = this.ShouldUseMeaningfulReciprocalGift(npc, state, gift)
             ? GiftTier.Meaningful
             : GiftTier.Small;
@@ -144,10 +145,10 @@ internal sealed class GiftOpportunityService
             ? this.giftSelector.ChooseMeaningful(npc, state, gift.ItemName, gift.TastePromptLabel)
             : this.giftSelector.Choose(npc, state, gift.ItemName, gift.TastePromptLabel);
         string mailReason = GiftActionRules.BuildGiftSelectionReason(
-            $"they planned a delayed return gift because the farmer recently gave {npc.displayName} {gift.ItemName}, a {gift.TastePromptLabel}",
+            responseReason,
             selection
         );
-        if (!this.mailService.ScheduleGiftMail(npc, state, selection, "reciprocal", mailReason, delayDays, gift.ItemName))
+        if (!this.mailService.ScheduleGiftMail(npc, state, selection, motive, mailReason, delayDays, gift.ItemName))
         {
             return false;
         }
@@ -164,11 +165,33 @@ internal sealed class GiftOpportunityService
         GiftActionRules.ClearGiftOpportunities(state);
         this.memory.RecordNpcWorldAction(
             npc,
-            "ScheduledReciprocalGiftMail",
+            gift.IsBirthdayGift ? "ScheduledBirthdayGiftMail" : "ScheduledReciprocalGiftMail",
             mailReason,
             this.config.MaxMemoryEntriesPerNpc
         );
         return true;
+    }
+
+    private static int GetReciprocalGiftChance(GiftMemoryDetails gift)
+    {
+        if (gift.IsBirthdayGift)
+        {
+            return gift.TasteScore switch
+            {
+                0 => 95,
+                2 => 80,
+                8 => 35,
+                _ => 0
+            };
+        }
+
+        return gift.TasteScore switch
+        {
+            0 => 75,
+            2 => 45,
+            8 => 10,
+            _ => 0
+        };
     }
 
     private bool ShouldUseMeaningfulReciprocalGift(NPC npc, LivingNpcState state, GiftMemoryDetails gift)
