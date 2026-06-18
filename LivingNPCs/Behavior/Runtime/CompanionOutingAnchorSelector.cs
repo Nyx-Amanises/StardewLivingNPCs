@@ -241,6 +241,37 @@ internal sealed class CompanionOutingAnchorSelector
                 new(new Point(59, 47), 2, "along the upper SVE town square path", ["social", "quiet", "visit"], ["town_center", "stroll", "square", "path"], 30),
                 new(new Point(96, 65), 1, "by the SVE Pelican Town park path", ["scenic", "quiet", "visit"], ["park", "path"], 24),
                 new(new Point(53, 52), 2, "beside a quieter SVE town center path", ["quiet", "visit"], ["town_center", "stroll", "path"], 20)
+            ],
+            ["Beach"] =
+            [
+                new(new Point(44, 34), 2, "on the SVE beach shoreline where the tide comes in", ["scenic", "quiet", "visit"], ["shore", "waves"], 38),
+                new(new Point(90, 36), 2, "along the wide SVE eastern beach where the surf is open", ["scenic", "quiet", "visit"], ["shore", "waves"], 34),
+                new(new Point(74, 28), 2, "on the longer SVE beach walk with room to linger", ["scenic", "quiet", "visit"], ["shore", "sand", "waves"], 28),
+                new(new Point(60, 14), 1, "near the SVE dock approach with the sea beside them", ["scenic", "visit"], ["pier", "dock"], 30),
+                new(new Point(56, 10), 1, "beside the SVE pier path without blocking the dock", ["scenic", "quiet", "visit"], ["pier", "dock"], 24)
+            ],
+            ["Forest"] =
+            [
+                new(new Point(88, 47), 2, "near the SVE forest river where the trees open up", ["scenic", "quiet", "visit"], ["river"], 36),
+                new(new Point(80, 55), 2, "beside the SVE forest bend with a quiet view of the water", ["scenic", "quiet", "visit"], ["river"], 32),
+                new(new Point(60, 60), 2, "on a central SVE forest path with room to talk", ["scenic", "quiet", "visit"], ["path", "clearing"], 26),
+                new(new Point(54, 100), 2, "near the lower SVE forest brook", ["scenic", "quiet", "visit"], ["river", "clearing"], 28),
+                new(new Point(64, 111), 0, "in the deeper SVE forest clearing away from the main road", ["scenic", "quiet", "visit"], ["clearing"], 24)
+            ],
+            ["Mountain"] =
+            [
+                new(new Point(31, 20), 0, "near the SVE mountain lake where a quiet conversation fits", ["scenic", "quiet", "visit"], ["lake"], 36),
+                new(new Point(42, 13), 2, "at an SVE mountain overlook above the lake", ["scenic", "quiet", "visit"], ["overlook", "lake"], 32),
+                new(new Point(57, 31), 0, "beside the lower SVE mountain lake path", ["scenic", "quiet", "visit"], ["lake", "path"], 28),
+                new(new Point(78, 12), 2, "near the SVE summit trail approach", ["scenic", "quiet", "visit"], ["path", "overlook"], 24),
+                new(new Point(15, 10), 1, "beside the SVE mountain path without crowding the pass", ["scenic", "visit"], ["path"], 18)
+            ],
+            ["BusStop"] =
+            [
+                new(new Point(24, 12), 2, "near the SVE bus platform without blocking the bus", ["quiet", "visit"], ["bus", "road"], 34),
+                new(new Point(31, 18), 3, "on the open SVE road shoulder near the bus stop", ["visit", "quiet"], ["road", "path"], 28),
+                new(new Point(16, 10), 3, "beside the SVE roadside sign", ["visit"], ["bus", "road"], 24),
+                new(new Point(12, 11), 2, "on the quiet SVE path toward the backwoods", ["scenic", "quiet", "visit"], ["path", "road"], 20)
             ]
         };
 
@@ -342,7 +373,7 @@ internal sealed class CompanionOutingAnchorSelector
         string reason)
     {
         string focus = DetermineAnchorFocus(targetLocation, activityStyle, reason, npcName);
-        return TryGetAuthoredAnchorsForPreview(targetLocation, useSveTownAnchors: false, out var authored)
+        return TryGetAuthoredAnchorsForPreview(targetLocation, useSveAnchors: false, out var authored)
             ? authored
                 .Where(candidate => candidate.Styles.Contains(activityStyle, StringComparer.OrdinalIgnoreCase))
                 .Select(candidate => new CompanionOutingAnchorPreview(
@@ -364,10 +395,10 @@ internal sealed class CompanionOutingAnchorSelector
         string targetLocation,
         string activityStyle,
         string reason,
-        bool useSveTownAnchors)
+        bool useSveAnchors)
     {
         string focus = DetermineAnchorFocus(targetLocation, activityStyle, reason, npcName);
-        return TryGetAuthoredAnchorsForPreview(targetLocation, useSveTownAnchors, out var authored)
+        return TryGetAuthoredAnchorsForPreview(targetLocation, useSveAnchors, out var authored)
             ? authored
                 .Where(candidate => candidate.Styles.Contains(activityStyle, StringComparer.OrdinalIgnoreCase))
                 .Select(candidate => new CompanionOutingAnchorPreview(
@@ -389,18 +420,17 @@ internal sealed class CompanionOutingAnchorSelector
         GameLocation location,
         out IReadOnlyList<AuthoredAnchor> authored)
     {
-        bool useSveTown = string.Equals(targetLocation, "Town", StringComparison.OrdinalIgnoreCase)
-            && ModCompatibility.EnableSve
-            && IsSveTownMap(location);
-        return TryGetAuthoredAnchorsForPreview(targetLocation, useSveTown, out authored);
+        bool useSveAnchors = ModCompatibility.EnableSve
+            && IsSveVariantMap(targetLocation, location);
+        return TryGetAuthoredAnchorsForPreview(targetLocation, useSveAnchors, out authored);
     }
 
     private static bool TryGetAuthoredAnchorsForPreview(
         string targetLocation,
-        bool useSveTownAnchors,
+        bool useSveAnchors,
         out IReadOnlyList<AuthoredAnchor> authored)
     {
-        if (useSveTownAnchors && SveAuthoredAnchors.TryGetValue(targetLocation, out IReadOnlyList<AuthoredAnchor>? sveAuthored))
+        if (useSveAnchors && SveAuthoredAnchors.TryGetValue(targetLocation, out IReadOnlyList<AuthoredAnchor>? sveAuthored))
         {
             authored = sveAuthored;
             return true;
@@ -416,16 +446,24 @@ internal sealed class CompanionOutingAnchorSelector
         return false;
     }
 
-    private static bool IsSveTownMap(GameLocation location)
+    private static bool IsSveVariantMap(string targetLocation, GameLocation location)
     {
-        if (!string.Equals(location.Name, "Town", StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(location.Name, targetLocation, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
         int width = location.Map.Layers[0].LayerWidth;
         int height = location.Map.Layers[0].LayerHeight;
-        return width >= 130 && height >= 116;
+        return targetLocation switch
+        {
+            "Town" => width >= 130 && height >= 116,
+            "Beach" => width >= 104 && height >= 50,
+            "Forest" => width >= 120 && height >= 120,
+            "Mountain" => width >= 135 && height >= 41,
+            "BusStop" => width >= 65 && height >= 30,
+            _ => false
+        };
     }
 
     private bool IsUsable(

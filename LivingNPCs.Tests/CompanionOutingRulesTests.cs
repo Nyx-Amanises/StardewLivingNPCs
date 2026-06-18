@@ -394,12 +394,35 @@ public sealed class CompanionOutingRulesTests
             "Town",
             "quiet",
             "Would you like to take a stroll around town with me?",
-            useSveTownAnchors: true
+            useSveAnchors: true
         );
 
         var first = anchors.First();
         Assert.Contains((first.X, first.Y), new[] { (66, 60), (72, 54), (76, 54), (59, 47) });
         Assert.Contains("SVE", first.SemanticLabel);
+    }
+
+    [Theory]
+    [InlineData("Beach", "scenic", "Let's watch the waves.", "SVE")]
+    [InlineData("Forest", "quiet", "Let's walk somewhere quiet in the forest.", "SVE")]
+    [InlineData("Mountain", "scenic", "Let's go to the mountain lake.", "SVE")]
+    [InlineData("BusStop", "quiet", "Let's wait near the bus stop.", "SVE")]
+    public void SveOutdoorMapsUseSveSpecificAnchors(
+        string target,
+        string style,
+        string reason,
+        string expectedLabelFragment)
+    {
+        var anchors = CompanionOutingAnchorSelector.GetAuthoredAnchorPreview(
+            "Penny",
+            target,
+            style,
+            reason,
+            useSveAnchors: true
+        );
+
+        var first = anchors.First();
+        Assert.Contains(expectedLabelFragment, first.SemanticLabel);
     }
 
     [Fact]
