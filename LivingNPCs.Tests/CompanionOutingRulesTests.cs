@@ -166,6 +166,73 @@ public sealed class CompanionOutingRulesTests
         Assert.Equal("companion_outing", action.Type);
     }
 
+    [Fact]
+    public void HiddenGiftActionRequiresVisibleGiftOffer()
+    {
+        var actions = new[]
+        {
+            new ValleyTalkWorldActionRequest
+            {
+                Type = "give_small_gift",
+                ItemId = "(O)233",
+                ItemLabel = "Ice Cream",
+                Reason = "AI metadata requested a gift"
+            }
+        };
+
+        var filtered = ConversationActionCueRules.FilterActionsContradictedByVisibleDialogue(
+            actions,
+            "is there anything i can help with?",
+            "That's kind of you. I don't need anything heavy lifted right now."
+        );
+
+        Assert.Empty(filtered);
+    }
+
+    [Fact]
+    public void HiddenGiftActionStaysWhenVisibleDialogueOffersGift()
+    {
+        var actions = new[]
+        {
+            new ValleyTalkWorldActionRequest
+            {
+                Type = "give_small_gift",
+                Reason = "AI metadata requested a gift"
+            }
+        };
+
+        var filtered = ConversationActionCueRules.FilterActionsContradictedByVisibleDialogue(
+            actions,
+            "Thanks for walking with me.",
+            "I brought you a small gift. This is for you."
+        );
+
+        var action = Assert.Single(filtered);
+        Assert.Equal("give_small_gift", action.Type);
+    }
+
+    [Fact]
+    public void HiddenMoneyActionRequiresVisibleMoneyOffer()
+    {
+        var actions = new[]
+        {
+            new ValleyTalkWorldActionRequest
+            {
+                Type = "give_money",
+                Amount = 100,
+                Reason = "AI metadata requested money"
+            }
+        };
+
+        var filtered = ConversationActionCueRules.FilterActionsContradictedByVisibleDialogue(
+            actions,
+            "is there anything i can help with?",
+            "That's kind of you. I don't need anything heavy lifted right now."
+        );
+
+        Assert.Empty(filtered);
+    }
+
     [Theory]
     [InlineData(2000, 120, true)]
     [InlineData(2100, 120, true)]
@@ -317,6 +384,22 @@ public sealed class CompanionOutingRulesTests
 
         var first = anchors.First();
         Assert.Contains(expectedLabelFragment, first.SemanticLabel, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void SveTownStrollUsesSveTownCenterAnchors()
+    {
+        var anchors = CompanionOutingAnchorSelector.GetAuthoredAnchorPreview(
+            "Penny",
+            "Town",
+            "quiet",
+            "Would you like to take a stroll around town with me?",
+            useSveTownAnchors: true
+        );
+
+        var first = anchors.First();
+        Assert.Contains((first.X, first.Y), new[] { (66, 60), (72, 54), (76, 54), (59, 47) });
+        Assert.Contains("SVE", first.SemanticLabel);
     }
 
     [Fact]

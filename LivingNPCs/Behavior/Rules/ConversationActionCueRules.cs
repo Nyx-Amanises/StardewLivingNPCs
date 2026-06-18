@@ -164,22 +164,46 @@ internal static class ConversationActionCueRules
             "收下",
             "带给你",
             "留给你",
+            "给你一个",
+            "送你一个",
             "一点心意",
             "小礼物",
             "回礼",
             "谢礼",
             "这个给",
             "这个是给",
+            "这点东西",
+            "这份",
             "this is for you",
             "this one's for you",
+            "here's something",
+            "here is something",
+            "i have something for you",
             "take this",
-            "take it",
+            "you can have this",
             "i brought you",
             "i saved this for you",
             "small gift",
             "return the favor",
             "to thank you"
         );
+    }
+
+    public static IReadOnlyList<ValleyTalkWorldActionRequest> FilterActionsContradictedByVisibleDialogue(
+        IReadOnlyList<ValleyTalkWorldActionRequest> actions,
+        string playerText,
+        string npcResponse
+    )
+    {
+        if (actions.Count == 0)
+        {
+            return actions;
+        }
+
+        var filtered = actions
+            .Where(action => ShouldKeepVisibleWorldAction(action, playerText, npcResponse))
+            .ToArray();
+        return filtered.Length == actions.Count ? actions : filtered;
     }
 
     public static bool LooksLikeGiftOfferRejection(string npcResponse)
@@ -191,10 +215,14 @@ internal static class ConversationActionCueRules
             "下次再给",
             "以后再给",
             "改天再给",
+            "没有什么能给",
+            "没什么能给",
             "not today",
             "next time",
             "another day",
-            "can't give"
+            "can't give",
+            "cannot give",
+            "nothing to give"
         );
     }
 
@@ -371,6 +399,96 @@ internal static class ConversationActionCueRules
 
         return LooksLikeImmediateTravelInvitation(playerText, npcResponse)
             && !LooksLikeDeferredRejectedOrUncertainTravel(playerText, npcResponse);
+    }
+
+    private static bool ShouldKeepVisibleWorldAction(
+        ValleyTalkWorldActionRequest action,
+        string playerText,
+        string npcResponse
+    )
+    {
+        return action.Type switch
+        {
+            "companion_outing" => ShouldKeepTravelAction(action, playerText, npcResponse),
+            "give_small_gift" or "give_meaningful_gift" => ShouldKeepGiftAction(action, npcResponse),
+            "give_money" => LooksLikeImmediateMoneyOffer(npcResponse),
+            _ => true
+        };
+    }
+
+    private static bool ShouldKeepGiftAction(ValleyTalkWorldActionRequest action, string npcResponse)
+    {
+        if (LooksLikeGiftOfferRejection(npcResponse))
+        {
+            return false;
+        }
+
+        if (LooksLikeImmediateGiftOffer(npcResponse))
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(action.ItemLabel)
+            && VisibleDialogueMentionsLabel(npcResponse, action.ItemLabel)
+            && ContainsAny(
+                npcResponse,
+                "给",
+                "送",
+                "拿",
+                "收下",
+                "for you",
+                "take",
+                "have this",
+                "brought you",
+                "saved this"
+            );
+    }
+
+    private static bool LooksLikeImmediateMoneyOffer(string npcResponse)
+    {
+        if (!ContainsAny(npcResponse, "钱", "金币", "gold", "money", "coin", "coins")
+            && !ContainsGoldAmount(npcResponse))
+        {
+            return false;
+        }
+
+        return ContainsAny(
+            npcResponse,
+            "给你",
+            "拿着",
+            "收下",
+            "贴补",
+            "补贴",
+            "这点钱",
+            "这些钱",
+            "this is for you",
+            "take this",
+            "here's",
+            "here is",
+            "i can spare",
+            "this should cover",
+            "some gold",
+            "some money"
+        );
+    }
+
+    private static bool ContainsGoldAmount(string text)
+    {
+        for (int index = 1; index < text.Length; index++)
+        {
+            if ((text[index] == 'g' || text[index] == 'G') && char.IsDigit(text[index - 1]))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool VisibleDialogueMentionsLabel(string npcResponse, string itemLabel)
+    {
+        string label = itemLabel.Trim();
+        return label.Length > 0 && npcResponse.Contains(label, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool LooksLikeImmediateTravelInvitation(string playerText, string npcResponse)

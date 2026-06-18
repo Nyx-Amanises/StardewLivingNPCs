@@ -704,7 +704,7 @@ internal sealed class BehaviorEngine
     {
         if (actions.Count > 0)
         {
-            var visibleSafeActions = ConversationActionCueRules.FilterTravelActionsContradictedByVisibleDialogue(
+            var visibleSafeActions = ConversationActionCueRules.FilterActionsContradictedByVisibleDialogue(
                 actions,
                 playerText,
                 npcResponse

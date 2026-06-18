@@ -43,10 +43,10 @@ internal sealed class CompanionOutingAnchorSelector
             ],
             ["Town"] =
             [
-                new(new Point(44, 57), 2, "in the town square near the fountain", ["social", "quiet", "visit"], ["square", "fountain"], 30),
-                new(new Point(52, 56), 3, "beside the notice board path without blocking traffic", ["social", "visit"], ["square", "community"], 24),
-                new(new Point(34, 72), 0, "on the river path through town", ["scenic", "quiet", "visit"], ["river", "path"], 22),
-                new(new Point(58, 66), 3, "along the central town walkway", ["social", "visit"], ["path"], 16)
+                new(new Point(44, 57), 2, "in the town square near the fountain", ["social", "quiet", "visit"], ["town_center", "stroll", "square", "fountain"], 34),
+                new(new Point(52, 56), 3, "beside the notice board path without blocking traffic", ["social", "quiet", "visit"], ["town_center", "stroll", "square", "community"], 30),
+                new(new Point(58, 66), 3, "along the central town walkway", ["social", "quiet", "visit"], ["town_center", "stroll", "path"], 24),
+                new(new Point(34, 72), 0, "on the river path through town", ["scenic", "quiet", "visit"], ["river", "path"], 22)
             ],
             ["BusStop"] =
             [
@@ -230,6 +230,20 @@ internal sealed class CompanionOutingAnchorSelector
             ],
         };
 
+    private static readonly IReadOnlyDictionary<string, IReadOnlyList<AuthoredAnchor>> SveAuthoredAnchors =
+        new Dictionary<string, IReadOnlyList<AuthoredAnchor>>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Town"] =
+            [
+                new(new Point(66, 60), 2, "in the SVE town square beside the fountain", ["social", "quiet", "visit"], ["town_center", "stroll", "square", "fountain"], 44),
+                new(new Point(72, 54), 2, "on the SVE central town walkway by the plaza", ["social", "quiet", "visit"], ["town_center", "stroll", "square", "path"], 40),
+                new(new Point(76, 54), 3, "near the SVE notice board approach without blocking traffic", ["social", "quiet", "visit"], ["town_center", "stroll", "community", "path"], 34),
+                new(new Point(59, 47), 2, "along the upper SVE town square path", ["social", "quiet", "visit"], ["town_center", "stroll", "square", "path"], 30),
+                new(new Point(96, 65), 1, "by the SVE Pelican Town park path", ["scenic", "quiet", "visit"], ["park", "path"], 24),
+                new(new Point(53, 52), 2, "beside a quieter SVE town center path", ["quiet", "visit"], ["town_center", "stroll", "path"], 20)
+            ]
+        };
+
     private readonly Func<GameLocation, Point, NPC?, bool> isSafeDestinationTile;
 
     public CompanionOutingAnchorSelector(Func<GameLocation, Point, NPC?, bool> isSafeDestinationTile)
@@ -252,7 +266,7 @@ internal sealed class CompanionOutingAnchorSelector
         var entryTiles = GetLikelyEntryTiles(location, sourceLocation).ToList();
         string focus = DetermineAnchorFocus(targetLocation, activityStyle, reason, npc.Name);
 
-        if (AuthoredAnchors.TryGetValue(targetLocation, out var authored))
+        if (TryGetAuthoredAnchors(targetLocation, location, out var authored))
         {
             foreach (var candidate in authored)
             {
@@ -328,7 +342,7 @@ internal sealed class CompanionOutingAnchorSelector
         string reason)
     {
         string focus = DetermineAnchorFocus(targetLocation, activityStyle, reason, npcName);
-        return AuthoredAnchors.TryGetValue(targetLocation, out var authored)
+        return TryGetAuthoredAnchorsForPreview(targetLocation, useSveTownAnchors: false, out var authored)
             ? authored
                 .Where(candidate => candidate.Styles.Contains(activityStyle, StringComparer.OrdinalIgnoreCase))
                 .Select(candidate => new CompanionOutingAnchorPreview(
@@ -343,6 +357,75 @@ internal sealed class CompanionOutingAnchorSelector
                 .ThenBy(candidate => candidate.Y)
                 .ToList()
             : [];
+    }
+
+    internal static IReadOnlyList<CompanionOutingAnchorPreview> GetAuthoredAnchorPreview(
+        string npcName,
+        string targetLocation,
+        string activityStyle,
+        string reason,
+        bool useSveTownAnchors)
+    {
+        string focus = DetermineAnchorFocus(targetLocation, activityStyle, reason, npcName);
+        return TryGetAuthoredAnchorsForPreview(targetLocation, useSveTownAnchors, out var authored)
+            ? authored
+                .Where(candidate => candidate.Styles.Contains(activityStyle, StringComparer.OrdinalIgnoreCase))
+                .Select(candidate => new CompanionOutingAnchorPreview(
+                    candidate.Tile.X,
+                    candidate.Tile.Y,
+                    candidate.FacingDirection,
+                    candidate.Label,
+                    candidate.Priority + ScoreAnchorFocus(candidate, focus)
+                ))
+                .OrderByDescending(candidate => candidate.Score)
+                .ThenBy(candidate => candidate.X)
+                .ThenBy(candidate => candidate.Y)
+                .ToList()
+            : [];
+    }
+
+    private static bool TryGetAuthoredAnchors(
+        string targetLocation,
+        GameLocation location,
+        out IReadOnlyList<AuthoredAnchor> authored)
+    {
+        bool useSveTown = string.Equals(targetLocation, "Town", StringComparison.OrdinalIgnoreCase)
+            && ModCompatibility.EnableSve
+            && IsSveTownMap(location);
+        return TryGetAuthoredAnchorsForPreview(targetLocation, useSveTown, out authored);
+    }
+
+    private static bool TryGetAuthoredAnchorsForPreview(
+        string targetLocation,
+        bool useSveTownAnchors,
+        out IReadOnlyList<AuthoredAnchor> authored)
+    {
+        if (useSveTownAnchors && SveAuthoredAnchors.TryGetValue(targetLocation, out IReadOnlyList<AuthoredAnchor>? sveAuthored))
+        {
+            authored = sveAuthored;
+            return true;
+        }
+
+        if (AuthoredAnchors.TryGetValue(targetLocation, out IReadOnlyList<AuthoredAnchor>? defaultAuthored))
+        {
+            authored = defaultAuthored;
+            return true;
+        }
+
+        authored = [];
+        return false;
+    }
+
+    private static bool IsSveTownMap(GameLocation location)
+    {
+        if (!string.Equals(location.Name, "Town", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        int width = location.Map.Layers[0].LayerWidth;
+        int height = location.Map.Layers[0].LayerHeight;
+        return width >= 130 && height >= 116;
     }
 
     private bool IsUsable(
@@ -481,6 +564,31 @@ internal sealed class CompanionOutingAnchorSelector
             {
                 return "library";
             }
+        }
+
+        if (targetLocation == "Town")
+        {
+            if (ContainsAny(text, "喷泉", "广场", "镇中心", "市中心", "fountain", "square", "town center", "town centre", "plaza"))
+            {
+                return "town_center";
+            }
+
+            if (ContainsAny(text, "公告栏", "告示板", "notice board", "bulletin", "community board"))
+            {
+                return "community";
+            }
+
+            if (ContainsAny(text, "公园", "长椅", "park", "bench"))
+            {
+                return "park";
+            }
+
+            if (ContainsAny(text, "镇上", "鹈鹕镇", "逛", "散步", "走走", "绕一圈", "town", "around town", "stroll", "walk"))
+            {
+                return "stroll";
+            }
+
+            return "town_center";
         }
 
         if (ContainsAny(text, "货架", "展示", "商品", "shelf", "shelves", "display"))
