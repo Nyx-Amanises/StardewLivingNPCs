@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -59,20 +60,20 @@ internal static class ConversationTranscriptExporter
         builder.AppendLine(T("transcriptExportTime", "- Export time: Day {{day}} {{time}}", new { day = Game1.Date.TotalDays, time = Game1.timeOfDay.ToString("0000") }));
         builder.AppendLine();
 
-        var conversations = history.ConversationHistory
-            .OrderBy(entry => entry.Item1)
+        var transcriptEntries = BuildTranscriptEntries(history)
+            .OrderBy(entry => entry.Time)
             .ToList();
 
-        if (conversations.Count == 0)
+        if (transcriptEntries.Count == 0)
         {
             builder.AppendLine(T("transcriptNoConversations", "No AI conversation records yet."));
             return builder.ToString();
         }
 
-        for (int i = 0; i < conversations.Count; i++)
+        for (int i = 0; i < transcriptEntries.Count; i++)
         {
-            var entry = conversations[i];
-            var time = entry.Item1;
+            var entry = transcriptEntries[i];
+            var time = entry.Time;
             builder.AppendLine(T(
                 "transcriptConversationHeading",
                 "## Conversation {{index}}: Year {{year}}, {{season}} {{day}} at {{time}}",
@@ -86,7 +87,7 @@ internal static class ConversationTranscriptExporter
                 }));
             builder.AppendLine();
 
-            foreach (var line in entry.Item2.ConversationElements)
+            foreach (var line in entry.Lines)
             {
                 string speaker = line.IsPlayerLine ? T("transcriptPlayer", "Player") : npcName;
                 builder.AppendLine(T(
@@ -99,6 +100,33 @@ internal static class ConversationTranscriptExporter
         }
 
         return builder.ToString();
+    }
+
+    private static IEnumerable<TranscriptEntry> BuildTranscriptEntries(StardewEventHistory history)
+    {
+        foreach (var entry in history.DialogueHistory)
+        {
+            var lines = entry.Item2.Dialogues
+                .Where(line => !string.IsNullOrWhiteSpace(line.Text))
+                .Select(line => new TranscriptLine(false, line.Text))
+                .ToList();
+            if (lines.Count > 0)
+            {
+                yield return new TranscriptEntry(entry.Item1, lines);
+            }
+        }
+
+        foreach (var entry in history.ConversationHistory)
+        {
+            var lines = entry.Item2.ConversationElements
+                .Where(line => !string.IsNullOrWhiteSpace(line.Text))
+                .Select(line => new TranscriptLine(line.IsPlayerLine, line.Text))
+                .ToList();
+            if (lines.Count > 0)
+            {
+                yield return new TranscriptEntry(entry.Item1, lines);
+            }
+        }
     }
 
     private static string SanitizeTranscriptText(string text)
@@ -150,5 +178,29 @@ internal static class ConversationTranscriptExporter
         }
 
         return builder.Length == 0 ? "unknown-npc" : builder.ToString();
+    }
+
+    private sealed class TranscriptEntry
+    {
+        public TranscriptEntry(StardewTime time, List<TranscriptLine> lines)
+        {
+            this.Time = time;
+            this.Lines = lines;
+        }
+
+        public StardewTime Time { get; }
+        public List<TranscriptLine> Lines { get; }
+    }
+
+    private sealed class TranscriptLine
+    {
+        public TranscriptLine(bool isPlayerLine, string text)
+        {
+            this.IsPlayerLine = isPlayerLine;
+            this.Text = text;
+        }
+
+        public bool IsPlayerLine { get; }
+        public string Text { get; }
     }
 }

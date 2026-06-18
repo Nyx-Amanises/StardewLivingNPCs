@@ -138,8 +138,35 @@ namespace ValleyTalk
                 formattedLine,
                 character.LastConversationAnalysis.ToJson()
             );
+            if (!string.IsNullOrWhiteSpace(formattedLine))
+            {
+                character.AddConversation(
+                    new List<ConversationElement>
+                    {
+                        new(FormatGiftTranscriptPlayerLine(instance, giftName), true),
+                        new(formattedLine, false)
+                    },
+                    Game1.year,
+                    Game1.season,
+                    Game1.dayOfMonth,
+                    Game1.timeOfDay
+                );
+            }
+
             var newDialogue = new Dialogue(instance, $"Accept_{gift.Name}", formattedLine);
             return newDialogue;
+        }
+
+        private static string FormatGiftTranscriptPlayerLine(NPC instance, string giftName)
+        {
+            string result = Util.GetString(
+                "transcriptGiftPlayerLine",
+                new { npcName = instance.displayName, giftName },
+                returnNull: true
+            );
+            return string.IsNullOrWhiteSpace(result)
+                ? $"The farmer gave {instance.displayName} {giftName}."
+                : result;
         }
 
         internal async Task<Dialogue> Generate(NPC instance, string dialogueKey, string originalLine = "")

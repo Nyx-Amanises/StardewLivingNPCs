@@ -610,11 +610,6 @@ internal sealed class BehaviorEngine
             return string.Empty;
         }
 
-        if (taste is 4 or 6)
-        {
-            return string.Empty;
-        }
-
         var labels = GiftMemoryDetailsFactory.DescribeTaste(taste);
         var gift = new GiftMemoryDetails(
             giftItemId ?? string.Empty,
@@ -624,11 +619,107 @@ internal sealed class BehaviorEngine
             taste
         );
         LivingNpcState state = this.memory.GetState(npc) ?? this.memory.UpdateStateForGift(npc, gift);
+        var matchingHelpRequests = FindMatchingItemHelpRequestGiftContexts(state, gift).ToList();
+        if (matchingHelpRequests.Count > 0)
+        {
+            return BuildHelpRequestGiftResponsePrompt(npc, gift, matchingHelpRequests);
+        }
+
+        if (taste is 4 or 6)
+        {
+            return string.Empty;
+        }
+
         bool scheduledReciprocalGift = this.giftOpportunities.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
         bool hasReciprocalMail = scheduledReciprocalGift || this.mailService.HasPendingGiftMail(state, "reciprocal");
         return hasReciprocalMail
             ? BuildGiftResponseMailPrompt(npc, gift.ItemName)
             : string.Empty;
+    }
+
+    private static IEnumerable<NpcHelpRequestFact> FindMatchingItemHelpRequestGiftContexts(
+        LivingNpcState state,
+        GiftMemoryDetails gift)
+    {
+        return state.HelpRequests.Where(request =>
+            request.Type == "item_request"
+            && (HelpRequestCurrentlyAsksForItem(request, gift.ItemId)
+                || HelpRequestJustReceivedItem(request, gift.ItemId)));
+    }
+
+    private static bool HelpRequestCurrentlyAsksForItem(NpcHelpRequestFact request, string giftItemId)
+    {
+        return request.Status == "Pending"
+            && string.Equals(request.RequestedItemId, giftItemId, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool HelpRequestJustReceivedItem(NpcHelpRequestFact request, string giftItemId)
+    {
+        if (request.LastUpdatedTotalDays != Game1.Date.TotalDays
+            || request.LastUpdatedTimeOfDay != Game1.timeOfDay)
+        {
+            return false;
+        }
+
+        if (request.Status == "Fulfilled"
+            && string.Equals(request.RequestedItemId, giftItemId, StringComparison.OrdinalIgnoreCase)
+            && request.FulfilledTotalDays == Game1.Date.TotalDays
+            && request.FulfilledTimeOfDay == Game1.timeOfDay)
+        {
+            return true;
+        }
+
+        return request.Steps.Any(step =>
+            step.Type == "item_request"
+            && step.Status == "Fulfilled"
+            && step.CompletedTotalDays == Game1.Date.TotalDays
+            && step.CompletedTimeOfDay == Game1.timeOfDay
+            && string.Equals(step.RequestedItemId, giftItemId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string BuildHelpRequestGiftResponsePrompt(
+        NPC npc,
+        GiftMemoryDetails gift,
+        IReadOnlyList<NpcHelpRequestFact> deliveredHelpRequests)
+    {
+        var lines = new List<string>
+        {
+            "## LivingNPCs Help Request Gift Response",
+            $"- The farmer just handed {npc.displayName} {gift.ItemName} ({gift.ItemId}) for a LivingNPCs help request.",
+            "- This is a requested task hand-in, not an unexpected daily gift.",
+            "- Override ordinary gift taste guidance: do not say the item is unwanted, neutral, poor taste, or not a favorite.",
+            "- Thank the farmer for following through and connect the item to the request in a natural, in-character way."
+        };
+
+        foreach (var request in deliveredHelpRequests)
+        {
+            lines.Add($"- Help request status after hand-in: {request.Status}; summary: {request.Summary}; resolution: {request.Resolution}");
+            if (request.Status == "Pending")
+            {
+                lines.Add($"- The request advanced to another step. Current next step: {request.CurrentStepPromptLabel}");
+            }
+            else if (request.Status == "Fulfilled")
+            {
+                lines.Add("- The request is now complete; the immediate reply should sound grateful and complete, not like a normal gift reaction.");
+            }
+
+            if (request.RewardGranted)
+            {
+                lines.Add($"- LivingNPCs already granted the configured friendship reward (+{request.RewardFriendship}); mention rewards only if it sounds natural.");
+            }
+
+            if (request.RewardMoneyGranted)
+            {
+                lines.Add($"- LivingNPCs already granted the configured money reward ({request.RewardMoney}g); do not promise extra payment beyond the system reward.");
+            }
+
+            if (request.RewardGiftGiven)
+            {
+                lines.Add("- LivingNPCs already gave the farmer a small item reward; mention it only if it feels natural.");
+            }
+        }
+
+        return string.Join("\n", lines);
     }
 
     private static string BuildGiftResponseMailPrompt(NPC npc, string giftName)

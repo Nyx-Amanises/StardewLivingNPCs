@@ -509,33 +509,45 @@ public class Prompts
     {
         if (Context.Accept != null)
         {
-        var giftName = Context.Accept.DisplayName;
-        prompt.AppendLine(Util.GetString(Character,"giftIntro", new { Name= Name, giftName= giftName }));
-        switch (Context.GiftTaste)
-        {
-            //TODO: Correct the cases
-            case 0:
-                prompt.AppendLine(Util.GetString(Character,"giftLoved", new { Name= Name }));
-                break;
-            case 2:
-                prompt.AppendLine(Util.GetString(Character,"giftLiked", new { Name= Name }));
-                break;
-            case 4:
-                prompt.AppendLine(Util.GetString(Character,"giftDislike", new { Name= Name }));
-                break;
-            case 6:
-                prompt.AppendLine(Util.GetString(Character,"giftHate", new { Name= Name }));
-                break;
-            default:
-                prompt.AppendLine(Util.GetString(Character,"giftNeutral", new { Name= Name }));
-                break;
-        }
-        prompt.AppendLine(Util.GetString(Character,"giftMustIncludeReaction", new { Name= Name }));
-        if (Context.Birthday)
-        {
-            prompt.AppendLine(Util.GetString(Character,"giftBirthday", new { Name= Name }));
-        }
-        prompt.AppendLine(Util.GetString(Character,"giftOutro"));
+            var giftName = Context.Accept.DisplayName;
+            if (IsLivingNpcHelpRequestGift())
+            {
+                prompt.AppendLine(Util.GetString(Character, "giftHelpRequestIntro", new { Name = Name, giftName = giftName }));
+                prompt.AppendLine(Util.GetString(Character, "giftHelpRequestReaction", new { Name = Name }));
+                if (Context.Birthday)
+                {
+                    prompt.AppendLine(Util.GetString(Character, "giftBirthday", new { Name = Name }));
+                }
+                prompt.AppendLine(Util.GetString(Character, "giftOutro"));
+                return;
+            }
+
+            prompt.AppendLine(Util.GetString(Character,"giftIntro", new { Name= Name, giftName= giftName }));
+            switch (Context.GiftTaste)
+            {
+                //TODO: Correct the cases
+                case 0:
+                    prompt.AppendLine(Util.GetString(Character,"giftLoved", new { Name= Name }));
+                    break;
+                case 2:
+                    prompt.AppendLine(Util.GetString(Character,"giftLiked", new { Name= Name }));
+                    break;
+                case 4:
+                    prompt.AppendLine(Util.GetString(Character,"giftDislike", new { Name= Name }));
+                    break;
+                case 6:
+                    prompt.AppendLine(Util.GetString(Character,"giftHate", new { Name= Name }));
+                    break;
+                default:
+                    prompt.AppendLine(Util.GetString(Character,"giftNeutral", new { Name= Name }));
+                    break;
+            }
+            prompt.AppendLine(Util.GetString(Character,"giftMustIncludeReaction", new { Name= Name }));
+            if (Context.Birthday)
+            {
+                prompt.AppendLine(Util.GetString(Character,"giftBirthday", new { Name= Name }));
+            }
+            prompt.AppendLine(Util.GetString(Character,"giftOutro"));
         }
         else if (!string.IsNullOrEmpty(giveGift))
         {
@@ -547,6 +559,11 @@ public class Prompts
             }
             prompt.AppendLine(Util.GetString(Character,"giftGiving", new { Name= Name, GiftName= giftName }));
         }
+    }
+
+    private bool IsLivingNpcHelpRequestGift()
+    {
+        return Context.LivingNpcExtraPrompt?.Contains("## LivingNPCs Help Request Gift Response", StringComparison.Ordinal) == true;
     }
 
     private void GetLivingNpcExtraPrompt(StringBuilder prompt)

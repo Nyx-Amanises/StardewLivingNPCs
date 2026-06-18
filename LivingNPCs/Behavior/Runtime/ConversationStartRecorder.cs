@@ -221,6 +221,7 @@ internal sealed class ConversationStartRecorder
             "## LivingNPCs Immediate Help Request Delivery",
             $"- The farmer just handed {npc.displayName} {gift.ItemName} ({gift.ItemId}) for a LivingNPCs help request.",
             "- This is a task hand-in, not an ordinary daily gift. Acknowledge the requested item even if the farmer has already given a normal gift today.",
+            "- Do not judge this item by ordinary gift taste; do not say it is unwanted, neutral, poor taste, or not a favorite.",
             "- Respond now with a natural thank-you or reaction to the completed request/step. Do not mention the game's daily gift limit."
         };
 
