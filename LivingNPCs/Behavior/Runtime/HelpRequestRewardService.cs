@@ -62,10 +62,10 @@ internal sealed class HelpRequestRewardService
             );
             if (queueAmbientThanks)
             {
-                this.feedback.QueueAmbientRemark(npc, "谢谢你，真的帮上忙了。", 0);
+                this.feedback.QueueAmbientRemark(npc, I18n.Get("help.thanksFulfilled"), 0);
             }
 
-            this.feedback.Show($"LivingNPCs：完成 {npc.displayName} 的求助，额外好感 +{friendshipReward}。");
+            this.feedback.Show(I18n.Get("help.reward.friendshipHud", new { npc = npc.displayName, amount = friendshipReward }));
             this.communityRipples.Spread(
                 npc,
                 "helped",
@@ -126,7 +126,7 @@ internal sealed class HelpRequestRewardService
                 this.config.MaxMemoryEntriesPerNpc
             );
             MarkStateAfterWorldAction(state, "they mailed the farmer a help request reward gift after the farmer's inventory was full");
-            this.feedback.ShowAfterDialogue($"LivingNPCs：你的背包满了，{npc.displayName} 会把 {gift.DisplayName} 明天寄给你作为谢礼。");
+            this.feedback.ShowAfterDialogue(I18n.Get("help.reward.inventoryFullMail", new { npc = npc.displayName, item = gift.DisplayName }));
             return true;
         }
 
@@ -178,7 +178,7 @@ internal sealed class HelpRequestRewardService
             $"the help request system granted a {amount}g reward: {request.Summary}",
             this.config.MaxMemoryEntriesPerNpc
         );
-        this.feedback.ShowAfterDialogue($"LivingNPCs：求助奖励 +{amount}g。");
+        this.feedback.ShowAfterDialogue(I18n.Get("help.reward.moneyHud", new { amount }));
     }
 
     private static void MarkStateAfterWorldAction(LivingNpcState state, string lastInteraction)

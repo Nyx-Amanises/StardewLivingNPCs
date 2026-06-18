@@ -901,7 +901,17 @@
             "trinketsCompanionParrot": "{{i18n:trinketsCompanionParrot}}",
             "uiClearHistoryConfirm": "{{i18n:uiClearHistoryConfirm}}",
             "uiClearHistoryAllConfirm": "{{i18n:uiClearHistoryAllConfirm}}",
-            "uiClearHover": "{{i18n:uiClearHover}}"
+            "uiClearHover": "{{i18n:uiClearHover}}",
+            "transcriptSave": "{{i18n:transcriptSave}}",
+            "transcriptExportTime": "{{i18n:transcriptExportTime}}",
+            "transcriptNoConversations": "{{i18n:transcriptNoConversations}}",
+            "transcriptConversationHeading": "{{i18n:transcriptConversationHeading}}",
+            "transcriptLine": "{{i18n:transcriptLine}}",
+            "transcriptPlayer": "{{i18n:transcriptPlayer}}",
+            "transcriptSeasonSpring": "{{i18n:transcriptSeasonSpring}}",
+            "transcriptSeasonSummer": "{{i18n:transcriptSeasonSummer}}",
+            "transcriptSeasonFall": "{{i18n:transcriptSeasonFall}}",
+            "transcriptSeasonWinter": "{{i18n:transcriptSeasonWinter}}"
             }
         }
     ]

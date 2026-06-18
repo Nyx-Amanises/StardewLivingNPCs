@@ -55,8 +55,8 @@ internal static class ConversationTranscriptExporter
         var builder = new StringBuilder();
         builder.AppendLine($"# {npcName}");
         builder.AppendLine();
-        builder.AppendLine($"- 存档：{Constants.SaveFolderName}");
-        builder.AppendLine($"- 导出时间：第 {Game1.Date.TotalDays} 天 {Game1.timeOfDay:0000}");
+        builder.AppendLine(T("transcriptSave", "- Save: {{save}}", new { save = Constants.SaveFolderName }));
+        builder.AppendLine(T("transcriptExportTime", "- Export time: Day {{day}} {{time}}", new { day = Game1.Date.TotalDays, time = Game1.timeOfDay.ToString("0000") }));
         builder.AppendLine();
 
         var conversations = history.ConversationHistory
@@ -65,7 +65,7 @@ internal static class ConversationTranscriptExporter
 
         if (conversations.Count == 0)
         {
-            builder.AppendLine("暂无 AI 聊天记录。");
+            builder.AppendLine(T("transcriptNoConversations", "No AI conversation records yet."));
             return builder.ToString();
         }
 
@@ -73,13 +73,26 @@ internal static class ConversationTranscriptExporter
         {
             var entry = conversations[i];
             var time = entry.Item1;
-            builder.AppendLine($"## 对话 {i + 1}：第 {time.year} 年 {FormatSeason(time.season)} {time.dayOfMonth} 日 {time.timeOfDay:0000}");
+            builder.AppendLine(T(
+                "transcriptConversationHeading",
+                "## Conversation {{index}}: Year {{year}}, {{season}} {{day}} at {{time}}",
+                new
+                {
+                    index = i + 1,
+                    year = time.year,
+                    season = FormatSeason(time.season),
+                    day = time.dayOfMonth,
+                    time = time.timeOfDay.ToString("0000")
+                }));
             builder.AppendLine();
 
             foreach (var line in entry.Item2.ConversationElements)
             {
-                string speaker = line.IsPlayerLine ? "玩家" : npcName;
-                builder.AppendLine($"- **{speaker}：** {SanitizeTranscriptText(line.Text)}");
+                string speaker = line.IsPlayerLine ? T("transcriptPlayer", "Player") : npcName;
+                builder.AppendLine(T(
+                    "transcriptLine",
+                    "- **{{speaker}}:** {{text}}",
+                    new { speaker, text = SanitizeTranscriptText(line.Text) }));
             }
 
             builder.AppendLine();
@@ -109,14 +122,20 @@ internal static class ConversationTranscriptExporter
         return cleaned.Trim();
     }
 
+    private static string T(string key, string fallback, object tokens = null)
+    {
+        string result = Util.GetString(key, tokens, returnNull: true);
+        return string.IsNullOrWhiteSpace(result) ? fallback : result;
+    }
+
     private static string FormatSeason(StardewValley.Season season)
     {
         return season switch
         {
-            StardewValley.Season.Spring => "春",
-            StardewValley.Season.Summer => "夏",
-            StardewValley.Season.Fall => "秋",
-            StardewValley.Season.Winter => "冬",
+            StardewValley.Season.Spring => T("transcriptSeasonSpring", "Spring"),
+            StardewValley.Season.Summer => T("transcriptSeasonSummer", "Summer"),
+            StardewValley.Season.Fall => T("transcriptSeasonFall", "Fall"),
+            StardewValley.Season.Winter => T("transcriptSeasonWinter", "Winter"),
             _ => season.ToString()
         };
     }

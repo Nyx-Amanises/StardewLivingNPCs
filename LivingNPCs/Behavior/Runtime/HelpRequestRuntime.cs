@@ -122,21 +122,21 @@ internal sealed class HelpRequestRuntime
         if (request.RewardMoneyByMail)
         {
             return request.Type == "question_request"
-                ? "上次那件事我后来又想了想。信应该也送到了吧？"
-                : "上次你带来的东西很有用，信应该也送到了吧？";
+                ? I18n.Get("help.followUp.questionMail")
+                : I18n.Get("help.followUp.itemMail");
         }
 
         if (request.RewardMoney >= 1000)
         {
             return request.Type == "question_request"
-                ? "上次那件事真的帮我理清了不少。"
-                : "上次你带来的东西，真的解了我的急。";
+                ? I18n.Get("help.followUp.questionBigReward")
+                : I18n.Get("help.followUp.itemBigReward");
         }
 
         return request.Type switch
         {
-            "question_request" => "上次你说的那些，我后来还想了想。",
-            _ => "上次你带来的东西，正好派上了用场。"
+            "question_request" => I18n.Get("help.followUp.question"),
+            _ => I18n.Get("help.followUp.item")
         };
     }
 }

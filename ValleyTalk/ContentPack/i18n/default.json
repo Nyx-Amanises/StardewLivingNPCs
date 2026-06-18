@@ -345,5 +345,15 @@
   "trinketsCompanionParrot": "The farmer is being followed around by a parrot, who is fluttering near the farmer's shoulder. After seeing the parrot a few times, it becomes unremarkable to {{Name}}.",
   "uiClearHistoryConfirm": "Clear {{Name}}'s conversation history? This can't be undone.",
   "uiClearHistoryAllConfirm": "Clear all villagers' conversation history? This can't be undone.",
-  "uiClearHover": "Clear {{Name}}'s conversation history (hold Shift to clear all)"
+  "uiClearHover": "Clear {{Name}}'s conversation history (hold Shift to clear all)",
+  "transcriptSave": "- Save: {{save}}",
+  "transcriptExportTime": "- Export time: Day {{day}} {{time}}",
+  "transcriptNoConversations": "No AI conversation records yet.",
+  "transcriptConversationHeading": "## Conversation {{index}}: Year {{year}}, {{season}} {{day}} at {{time}}",
+  "transcriptLine": "- **{{speaker}}:** {{text}}",
+  "transcriptPlayer": "Player",
+  "transcriptSeasonSpring": "Spring",
+  "transcriptSeasonSummer": "Summer",
+  "transcriptSeasonFall": "Fall",
+  "transcriptSeasonWinter": "Winter"
 }

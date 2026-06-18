@@ -83,6 +83,8 @@
   "configModelNameTooltip": "要调用的模型名称，例如 gemini-2.5-flash 或兼容接口里的具体模型。",
   "configServerAddress": "Base URL",
   "configServerAddressTooltip": "本地模型或 OpenAI 兼容接口的服务地址。",
+  "configPromptFormat": "提示词格式",
+  "configPromptFormatTooltip": "发送给 AI 模型的提示词格式。",
   "configTypedResponses": "自由输入",
   "configTypedResponsesTooltip": "控制玩家什么时候可以自由输入回复。",
   "configTypedResponsesAlways": "总是",
@@ -134,5 +136,18 @@
   "modelCheckGetNames": "无法获取模型列表，也无法生成对话，请检查 API Key 和 Base URL。",
   "modelCheckGenericError": "请检查 Base URL、模型名和服务商配置。",
   "modelCheckSuccess": "已成功连接模型。",
-  "modelCheckNonBlocking": "启动时的模型连接测试失败，但 ValleyTalk 不会因此禁用 AI 对话；实际和 NPC 对话时会再次尝试请求模型。"
+  "modelCheckNonBlocking": "启动时的模型连接测试失败，但 ValleyTalk 不会因此禁用 AI 对话；实际和 NPC 对话时会再次尝试请求模型。",
+  "uiClearHistoryConfirm": "清空 {{Name}} 的对话历史？此操作无法撤销。",
+  "uiClearHistoryAllConfirm": "清空所有村民的对话历史？此操作无法撤销。",
+  "uiClearHover": "清空 {{Name}} 的对话历史（按住 Shift 清空全部）",
+  "transcriptSave": "- 存档：{{save}}",
+  "transcriptExportTime": "- 导出时间：第 {{day}} 天 {{time}}",
+  "transcriptNoConversations": "暂无 AI 聊天记录。",
+  "transcriptConversationHeading": "## 对话 {{index}}：第 {{year}} 年 {{season}} {{day}} 日 {{time}}",
+  "transcriptLine": "- **{{speaker}}：** {{text}}",
+  "transcriptPlayer": "玩家",
+  "transcriptSeasonSpring": "春",
+  "transcriptSeasonSummer": "夏",
+  "transcriptSeasonFall": "秋",
+  "transcriptSeasonWinter": "冬"
 }

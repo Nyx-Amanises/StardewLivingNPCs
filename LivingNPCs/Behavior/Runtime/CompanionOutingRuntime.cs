@@ -150,7 +150,7 @@ internal sealed class CompanionOutingRuntime
             npc.Name,
             Game1.Date.TotalDays,
             targetLocation,
-            TravelLocationRules.GetChineseLabel(targetLocation),
+            TravelLocationRules.GetLocalizedLabel(targetLocation),
             activityStyle,
             action.Reason,
             anchor.Tile,

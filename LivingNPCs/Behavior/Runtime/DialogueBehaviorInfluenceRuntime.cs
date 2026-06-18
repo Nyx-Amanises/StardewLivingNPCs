@@ -222,13 +222,16 @@ internal sealed class DialogueBehaviorInfluenceRuntime
 
     private static string BuildLocationRemark(DialogueBehaviorInfluenceFact influence)
     {
+        string locationLabel = TravelLocationRules.IsKnownPublicOutingTarget(influence.TargetLocation)
+            ? TravelLocationRules.GetLocalizedLabel(influence.TargetLocation)
+            : influence.TargetLocationLabel;
         return influence.TargetLocation switch
         {
-            "Beach" => "你提到海边后，我也想来看看。",
-            "ArchaeologyHouse" => "你提到这里后，我就想顺路来看看。",
-            "Forest" => "刚才聊到森林，我就想来走走。",
-            "Mountain" => "你提到山上后，我也有点在意这里。",
-            _ => $"你刚才提到{influence.TargetLocationLabel}，我后来还想着这件事。"
+            "Beach" => I18n.Get("dialogueInfluence.location.beach"),
+            "ArchaeologyHouse" => I18n.Get("dialogueInfluence.location.archaeologyHouse"),
+            "Forest" => I18n.Get("dialogueInfluence.location.forest"),
+            "Mountain" => I18n.Get("dialogueInfluence.location.mountain"),
+            _ => I18n.Get("dialogueInfluence.location.default", new { location = locationLabel })
         };
     }
 }

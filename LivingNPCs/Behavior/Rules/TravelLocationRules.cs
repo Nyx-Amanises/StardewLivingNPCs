@@ -236,6 +236,49 @@ internal static class TravelLocationRules
         };
     }
 
+    public static string GetLocalizedLabel(string locationName)
+    {
+        string normalized = Normalize(locationName, locationName);
+        string key = normalized switch
+        {
+            "Farm" => "location.farm",
+            "Town" => "location.town",
+            "Mountain" => "location.mountain",
+            "Mine" => "location.mine",
+            "Beach" => "location.beach",
+            "Forest" => "location.forest",
+            "BusStop" => "location.busStop",
+            "Trailer" => "location.trailer",
+            "JoshHouse" => "location.joshHouse",
+            "HaleyHouse" => "location.haleyHouse",
+            "SamHouse" => "location.samHouse",
+            "ScienceHouse" => "location.scienceHouse",
+            "LeahHouse" => "location.leahHouse",
+            "AnimalShop" => "location.animalShop",
+            "ElliottHouse" => "location.elliottHouse",
+            "Blacksmith" => "location.blacksmith",
+            "FishShop" => "location.fishShop",
+            "WizardHouse" => "location.wizardHouse",
+            "Tent" => "location.tent",
+            "Saloon" => "location.saloon",
+            "SeedShop" => "location.seedShop",
+            "ArchaeologyHouse" => "location.archaeologyHouse",
+            "Hospital" => "location.hospital",
+            "FlowerDance" => "location.flowerDance",
+            "Custom_GrampletonCoast" => "location.grampletonCoast",
+            "Custom_BlueMoonVineyard" => "location.blueMoonVineyard",
+            "Custom_AuroraVineyard" => "location.auroraVineyard",
+            "Custom_ForestWest" => "location.forestWest",
+            "Custom_SVESummit" => "location.sveSummit",
+            "Custom_GrandpasShedOutside" => "location.grandpasShed",
+            "Custom_JunimoWoods" => "location.junimoWoods",
+            "Custom_EnchantedGrove" => "location.enchantedGrove",
+            _ => string.Empty
+        };
+
+        return string.IsNullOrWhiteSpace(key) ? GetLabel(normalized) : I18n.Get(key);
+    }
+
     public static string GetChineseLabel(string locationName)
     {
         return locationName switch

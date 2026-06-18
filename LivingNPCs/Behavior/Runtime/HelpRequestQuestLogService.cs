@@ -85,13 +85,22 @@ internal sealed class HelpRequestQuestLogService
             : request.NpcDisplayName;
         string due = BuildDueText(request);
         string stepText = BuildStepProgressText(request);
-        quest.questTitle = $"求助：{npcDisplayName}";
+        var tokens = new
+        {
+            npc = npcDisplayName,
+            step = stepText,
+            detail = BuildDetailText(request),
+            due,
+            item = GetItemLabel(request),
+            question = GetQuestionLabel(request)
+        };
+        quest.questTitle = I18n.Get("help.quest.title", tokens);
         quest.questDescription = request.Type == "item_request"
-            ? $"{npcDisplayName} 请你帮忙找一件东西。{stepText}{BuildDetailText(request)}\n{due}"
-            : $"{npcDisplayName} 想就一件事请教你。{stepText}{BuildDetailText(request)}\n{due}";
+            ? I18n.Get("help.quest.description.item", tokens)
+            : I18n.Get("help.quest.description.question", tokens);
         quest.currentObjective = request.Type == "item_request"
-            ? $"{stepText}把 {GetItemLabel(request)} 交给 {npcDisplayName}。{due}"
-            : $"{stepText}和 {npcDisplayName} 继续聊聊：{GetQuestionLabel(request)}。{due}";
+            ? I18n.Get("help.quest.objective.item", tokens)
+            : I18n.Get("help.quest.objective.question", tokens);
         // Rewards are granted directly on hand-in (vanilla item-delivery style), so the quest entry
         // shows no reward hint or claimable reward box.
         quest.moneyReward.Value = 0;
@@ -107,14 +116,14 @@ internal sealed class HelpRequestQuestLogService
         }
 
         int currentStep = Math.Clamp(request.CurrentStepIndex + 1, 1, totalSteps);
-        return $"第 {currentStep}/{totalSteps} 步：";
+        return I18n.Get("help.quest.step", new { current = currentStep, total = totalSteps });
     }
 
     private static string BuildDetailText(NpcHelpRequestFact request)
     {
         return request.Type == "item_request"
-            ? $"需要：{GetItemLabel(request)}。"
-            : $"问题：{GetQuestionLabel(request)}。";
+            ? I18n.Get("help.quest.detail.item", new { item = GetItemLabel(request) })
+            : I18n.Get("help.quest.detail.question", new { question = GetQuestionLabel(request) });
     }
 
     private static string GetItemLabel(NpcHelpRequestFact request)
@@ -136,10 +145,10 @@ internal sealed class HelpRequestQuestLogService
         int daysRemaining = request.DueTotalDays - Game1.Date.TotalDays;
         return daysRemaining switch
         {
-            < 0 => $"已逾期 {-daysRemaining} 天。",
-            0 => "今天到期。",
-            1 => "明天到期。",
-            _ => $"还剩 {daysRemaining} 天。"
+            < 0 => I18n.Get("help.quest.due.overdue", new { days = -daysRemaining }),
+            0 => I18n.Get("help.quest.due.today"),
+            1 => I18n.Get("help.quest.due.tomorrow"),
+            _ => I18n.Get("help.quest.due.remaining", new { days = daysRemaining })
         };
     }
 }

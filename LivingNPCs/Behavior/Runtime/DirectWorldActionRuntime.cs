@@ -82,7 +82,7 @@ internal sealed class DirectWorldActionRuntime
             this.config.MaxMemoryEntriesPerNpc
         );
         MarkStateAfterWorldAction(state, "they helped the farmer with watering");
-        this.feedback.Show($"LivingNPCs：{npc.displayName} 帮你浇了 {nearbyTiles.Count} 格作物。");
+        this.feedback.Show(I18n.Get("worldAction.wateredCrops", new { npc = npc.displayName, count = nearbyTiles.Count }));
         return true;
     }
 
