@@ -23,7 +23,7 @@ public sealed class CompanionOutingRulesTests
                 {
                   "type": "companion_outing",
                   "targetLocation": "Beach",
-                  "durationMinutes": 15
+                  "durationMinutes": 5
                 }
               ]
             }
@@ -32,7 +32,7 @@ public sealed class CompanionOutingRulesTests
 
         var action = Assert.Single(analysis.Actions);
         Assert.Equal("companion_outing", action.Type);
-        Assert.Equal(30, action.DurationMinutes);
+        Assert.Equal(CompanionOutingRules.MinimumShortVisitMinutes, action.DurationMinutes);
     }
 
     [Theory]
@@ -252,18 +252,18 @@ public sealed class CompanionOutingRulesTests
     }
 
     [Theory]
-    [InlineData(2000, 120, true)]
-    [InlineData(2100, 120, true)]
-    [InlineData(2110, 120, false)]
-    [InlineData(2200, 120, false)]
-    public void OutingMustFitTravelAndTwoHourStay(int startTime, int stayMinutes, bool expected)
+    [InlineData(2100, 60, true)]
+    [InlineData(2200, 60, true)]
+    [InlineData(2210, 60, false)]
+    [InlineData(2300, 60, false)]
+    public void OutingMustFitTravelAndConfiguredStay(int startTime, int stayMinutes, bool expected)
     {
         Assert.Equal(expected, CompanionOutingRules.CanFitMinimumStay(startTime, stayMinutes));
     }
 
     [Theory]
-    [InlineData(2300, 45, true)]
-    [InlineData(2400, 45, false)]
+    [InlineData(2330, 20, true)]
+    [InlineData(2400, 20, false)]
     public void ShortEscortOutingsUseShorterTimeWindow(int startTime, int stayMinutes, bool expected)
     {
         Assert.Equal(expected, CompanionOutingRules.CanFitMinimumStay(startTime, stayMinutes));

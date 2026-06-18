@@ -4,10 +4,10 @@ namespace LivingNPCs.Behavior;
 
 internal static class CompanionOutingRules
 {
-    public const int MinimumStayMinutes = 120;
-    public const int MinimumShortVisitMinutes = 30;
-    public const int MaximumShortVisitMinutes = 60;
-    public const int DefaultShortVisitMinutes = 45;
+    public const int MinimumStayMinutes = 60;
+    public const int MinimumShortVisitMinutes = 10;
+    public const int MaximumShortVisitMinutes = 30;
+    public const int DefaultShortVisitMinutes = 20;
     public const int MinimumSharedMinutesForMemory = 30;
     public const int EstimatedTravelMinutes = 120;
     public const int EstimatedShortVisitTravelMinutes = 60;

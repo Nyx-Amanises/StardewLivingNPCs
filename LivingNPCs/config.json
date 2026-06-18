@@ -22,7 +22,7 @@
   "AllowAiMoneyGifts": true,
   "MaxAiMoneyGiftAmount": 250,
   "AllowAiCompanionOutings": true,
-  "MinimumCompanionOutingStayMinutes": 120,
+  "MinimumCompanionOutingStayMinutes": 60,
   "EnableNpcState": true,
   "NpcStateDailyDecay": 12,
   "EnablePassiveBehaviors": false,

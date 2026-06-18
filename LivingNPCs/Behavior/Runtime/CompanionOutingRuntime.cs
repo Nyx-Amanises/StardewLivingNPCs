@@ -114,7 +114,7 @@ internal sealed class CompanionOutingRuntime
         {
             reason = CompanionOutingRules.IsShortVisit(plannedStayMinutes)
                 ? "there is not enough time left today for a short outing"
-                : "there is not enough time left today for a two-hour outing";
+                : "there is not enough time left today for a full outing";
             return false;
         }
 
@@ -353,7 +353,7 @@ internal sealed class CompanionOutingRuntime
             prompt.AppendLine($"- Shared time together at the destination so far: about {outing.SharedMinutesAtDestination} game minutes.");
             if (outing.IsShortVisit)
             {
-                prompt.AppendLine("- This is a brief escort or short visit, not a full two-hour outing.");
+                prompt.AppendLine("- This is a brief escort or short visit, not a full outing.");
             }
         }
         else if (outing.Phase == CompanionOutingPhase.Traveling)

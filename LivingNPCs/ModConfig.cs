@@ -38,7 +38,7 @@ internal sealed class ModConfig
     public bool AllowAiMoneyGifts { get; set; } = true;
     public int MaxAiMoneyGiftAmount { get; set; } = 250;
     public bool AllowAiCompanionOutings { get; set; } = true;
-    public int MinimumCompanionOutingStayMinutes { get; set; } = 120;
+    public int MinimumCompanionOutingStayMinutes { get; set; } = 60;
     public bool AllowAiFestivalInteractions { get; set; } = true;
     public bool AllowAiQuestAssists { get; set; } = true;
     public bool EnableNpcState { get; set; } = true;
