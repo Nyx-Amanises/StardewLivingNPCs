@@ -345,7 +345,9 @@ internal static class ConversationActionCueRules
             Type = "companion_outing",
             TargetLocation = targetLocation,
             TravelConsent = "accepted_now",
-            DurationMinutes = CompanionOutingRules.MinimumStayMinutes,
+            DurationMinutes = LooksLikeBriefEscortRequest(playerText, npcResponse)
+                ? CompanionOutingRules.DefaultShortVisitMinutes
+                : CompanionOutingRules.MinimumStayMinutes,
             DelayMinutes = DetectPreparationDelayMinutes(npcResponse),
             Reason = "the visible conversation ended with an immediate shared outing plan"
         };
@@ -557,6 +559,26 @@ internal static class ConversationActionCueRules
             "sounds good"
         );
         return (farmerInvited && npcAccepted) || (npcProposedOuting && farmerAgreed);
+    }
+
+    private static bool LooksLikeBriefEscortRequest(string playerText, string npcResponse)
+    {
+        string combinedText = $"{playerText} {npcResponse}";
+        return ContainsAny(
+            combinedText,
+            "带我去",
+            "给我带路",
+            "领我去",
+            "带我过去",
+            "陪我过去",
+            "认路",
+            "顺路",
+            "take me to",
+            "show me to",
+            "lead me to",
+            "walk me to",
+            "on the way"
+        );
     }
 
     public static bool LooksLikeDeferredOrRejectedTravel(string playerText, string npcResponse)

@@ -40,6 +40,7 @@ internal sealed class PendingCompanionOuting
         string targetLocationLabel,
         string activityStyle,
         string reason,
+        int plannedStayMinutes,
         Point anchorTile,
         int anchorFacingDirection,
         string anchorLabel,
@@ -53,6 +54,7 @@ internal sealed class PendingCompanionOuting
         this.TargetLocationLabel = targetLocationLabel;
         this.ActivityStyle = activityStyle;
         this.Reason = reason;
+        this.PlannedStayMinutes = plannedStayMinutes;
         this.AnchorTile = anchorTile;
         this.AnchorFacingDirection = anchorFacingDirection;
         this.AnchorLabel = anchorLabel;
@@ -66,6 +68,8 @@ internal sealed class PendingCompanionOuting
     public string TargetLocationLabel { get; }
     public string ActivityStyle { get; }
     public string Reason { get; }
+    public int PlannedStayMinutes { get; }
+    public bool IsShortVisit => this.PlannedStayMinutes < CompanionOutingRules.MinimumStayMinutes;
     public Point AnchorTile { get; set; }
     public int AnchorFacingDirection { get; set; }
     public string AnchorLabel { get; set; }

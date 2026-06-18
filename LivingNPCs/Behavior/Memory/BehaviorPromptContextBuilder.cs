@@ -573,7 +573,7 @@ internal static class BehaviorPromptContextBuilder
 
     private static string BuildTravelInvitationPolicyPromptLabel(LivingNpcState state)
     {
-        return state.InteractionComfortTier switch
+        string relationshipPolicy = state.InteractionComfortTier switch
         {
             "Intimate" or "Trusted" =>
                 "shared outings and private visits may be accepted when the scene and schedule allow",
@@ -584,6 +584,7 @@ internal static class BehaviorPromptContextBuilder
             _ =>
                 "the relationship is still distant, so private invitations such as visiting the farmer's farm or home should usually be declined politely; at most, brief public company may fit"
         };
+        return $"{relationshipPolicy}; ordinary daily schedule stops are soft constraints for LivingNPCs companion outings, so do not decline only because of a normal future destination; if the requested destination matches a current or upcoming ordinary schedule stop, treating it as going together or showing the farmer the way is especially natural; still refuse during events, sleep, severe conflict, unsafe scenes, or truly story-critical obligations";
     }
 
     private static string BuildToneCue(LivingNpcState state)

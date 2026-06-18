@@ -101,13 +101,20 @@ internal sealed class CompanionOutingRuntime
             return false;
         }
 
-        int minimumStayMinutes = Math.Max(
-            CompanionOutingRules.MinimumStayMinutes,
-            this.config.MinimumCompanionOutingStayMinutes
-        );
-        if (!CompanionOutingRules.CanFitMinimumStay(Game1.timeOfDay, minimumStayMinutes))
+        int plannedStayMinutes = CompanionOutingRules.NormalizeRequestedStayMinutes(action.DurationMinutes);
+        if (!CompanionOutingRules.IsShortVisit(plannedStayMinutes))
         {
-            reason = "there is not enough time left today for a two-hour outing";
+            plannedStayMinutes = CompanionOutingRules.NormalizeRequestedStayMinutes(Math.Max(
+                CompanionOutingRules.MinimumStayMinutes,
+                this.config.MinimumCompanionOutingStayMinutes
+            ));
+        }
+
+        if (!CompanionOutingRules.CanFitMinimumStay(Game1.timeOfDay, plannedStayMinutes))
+        {
+            reason = CompanionOutingRules.IsShortVisit(plannedStayMinutes)
+                ? "there is not enough time left today for a short outing"
+                : "there is not enough time left today for a two-hour outing";
             return false;
         }
 
@@ -153,6 +160,7 @@ internal sealed class CompanionOutingRuntime
             TravelLocationRules.GetLocalizedLabel(targetLocation),
             activityStyle,
             action.Reason,
+            plannedStayMinutes,
             anchor.Tile,
             anchor.FacingDirection,
             anchor.SemanticLabel,
@@ -332,7 +340,9 @@ internal sealed class CompanionOutingRuntime
             : npc.currentLocation == Game1.currentLocation;
         var prompt = new StringBuilder();
         prompt.AppendLine("## Active Companion Outing");
-        prompt.AppendLine($"- {npc.displayName} and the farmer have an active shared outing to {outing.TargetLocationLabel}.");
+        prompt.AppendLine(outing.IsShortVisit
+            ? $"- {npc.displayName} is briefly accompanying the farmer to {outing.TargetLocationLabel}."
+            : $"- {npc.displayName} and the farmer have an active shared outing to {outing.TargetLocationLabel}.");
         prompt.AppendLine($"- Phase: {FormatPhase(outing.Phase)}.");
         prompt.AppendLine($"- Shared activity: {CompanionOutingRules.GetActivityPromptLabel(outing.ActivityStyle)}.");
         prompt.AppendLine($"- The farmer is {(farmerPresent ? "currently present with the NPC" : "temporarily elsewhere")}.");
@@ -341,6 +351,10 @@ internal sealed class CompanionOutingRuntime
             prompt.AppendLine($"- They arrived at {BehaviorTimeMath.FormatTime(outing.ArrivalTimeOfDay)} and the NPC plans to remain until at least {BehaviorTimeMath.FormatTime(outing.StayUntilTimeOfDay)}.");
             prompt.AppendLine($"- The NPC is settled {outing.AnchorLabel}.");
             prompt.AppendLine($"- Shared time together at the destination so far: about {outing.SharedMinutesAtDestination} game minutes.");
+            if (outing.IsShortVisit)
+            {
+                prompt.AppendLine("- This is a brief escort or short visit, not a full two-hour outing.");
+            }
         }
         else if (outing.Phase == CompanionOutingPhase.Traveling)
         {
@@ -417,7 +431,7 @@ internal sealed class CompanionOutingRuntime
         outing.ArrivalTimeOfDay = Game1.timeOfDay;
         outing.StayUntilTimeOfDay = BehaviorTimeMath.AddMinutesToTime(
             Game1.timeOfDay,
-            Math.Max(CompanionOutingRules.MinimumStayMinutes, this.config.MinimumCompanionOutingStayMinutes)
+            outing.PlannedStayMinutes
         );
         outing.LastObservedTimeOfDay = Game1.timeOfDay;
         outing.RouteRetryCount = 0;
@@ -751,8 +765,12 @@ internal sealed class CompanionOutingRuntime
         var state = this.memory.GetState(npc);
         bool sharedEnough = outing.SharedMinutesAtDestination >= CompanionOutingRules.MinimumSharedMinutesForMemory;
         string result = sharedEnough
-            ? $"they spent a long shared outing with the farmer at {outing.TargetLocationLabel}"
-            : $"they stayed at {outing.TargetLocationLabel}, but the farmer was only briefly present";
+            ? outing.IsShortVisit
+                ? $"they briefly accompanied the farmer to {outing.TargetLocationLabel}"
+                : $"they spent a long shared outing with the farmer at {outing.TargetLocationLabel}"
+            : outing.IsShortVisit
+                ? $"they briefly went with the farmer to {outing.TargetLocationLabel}, but the farmer was only briefly present"
+                : $"they stayed at {outing.TargetLocationLabel}, but the farmer was only briefly present";
         this.memory.RecordNpcWorldAction(
             npc,
             sharedEnough ? "CompletedCompanionOuting" : "CompanionOutingWithoutSharedTime",
@@ -770,7 +788,9 @@ internal sealed class CompanionOutingRuntime
         }
 
         string key = $"companion_outing:{outing.TargetLocation.ToLowerInvariant()}";
-        string summary = $"the farmer and {npc.displayName} spent time together at {outing.TargetLocationLabel}, {CompanionOutingRules.GetActivityPromptLabel(outing.ActivityStyle)}";
+        string summary = outing.IsShortVisit
+            ? $"the farmer and {npc.displayName} briefly went together to {outing.TargetLocationLabel}, {CompanionOutingRules.GetActivityPromptLabel(outing.ActivityStyle)}"
+            : $"the farmer and {npc.displayName} spent time together at {outing.TargetLocationLabel}, {CompanionOutingRules.GetActivityPromptLabel(outing.ActivityStyle)}";
         var existing = state.SharedExperiences.FirstOrDefault(experience => experience.Key == key);
         if (existing != null)
         {
@@ -810,7 +830,9 @@ internal sealed class CompanionOutingRuntime
         this.communityRipples.Spread(
             npc,
             "shared_experience",
-            $"the farmer spent a long outing with {npc.displayName} at {outing.TargetLocationLabel}",
+            outing.IsShortVisit
+                ? $"the farmer briefly went with {npc.displayName} to {outing.TargetLocationLabel}"
+                : $"the farmer spent a long outing with {npc.displayName} at {outing.TargetLocationLabel}",
             importance: 58
         );
     }

@@ -14,7 +14,7 @@ public sealed class CompanionOutingRulesTests
     }
 
     [Fact]
-    public void MetadataParserEnforcesTwoHourMinimumForOutings()
+    public void MetadataParserAllowsShortEscortOutings()
     {
         var analysis = ValleyTalkExchangeParser.Parse(
             """
@@ -32,7 +32,7 @@ public sealed class CompanionOutingRulesTests
 
         var action = Assert.Single(analysis.Actions);
         Assert.Equal("companion_outing", action.Type);
-        Assert.Equal(120, action.DurationMinutes);
+        Assert.Equal(30, action.DurationMinutes);
     }
 
     [Theory]
@@ -98,6 +98,24 @@ public sealed class CompanionOutingRulesTests
         Assert.Equal("companion_outing", action.Type);
         Assert.Equal("Beach", action.TargetLocation);
         Assert.Equal("accepted_now", action.TravelConsent);
+        Assert.Equal(CompanionOutingRules.MinimumStayMinutes, action.DurationMinutes);
+    }
+
+    [Fact]
+    public void FallbackOutingUsesShortDurationForEscortRequests()
+    {
+        bool created = ConversationActionCueRules.TryBuildFallbackTravelActionForTesting(
+            "潘妮，可以带我去图书馆吗？我有点认路。",
+            "当然可以，那我们现在去图书馆吧。",
+            out ValleyTalkWorldActionRequest? action
+        );
+
+        Assert.True(created);
+        Assert.NotNull(action);
+        Assert.Equal("companion_outing", action.Type);
+        Assert.Equal("ArchaeologyHouse", action.TargetLocation);
+        Assert.Equal("accepted_now", action.TravelConsent);
+        Assert.Equal(CompanionOutingRules.DefaultShortVisitMinutes, action.DurationMinutes);
     }
 
     [Fact]
@@ -239,6 +257,14 @@ public sealed class CompanionOutingRulesTests
     [InlineData(2110, 120, false)]
     [InlineData(2200, 120, false)]
     public void OutingMustFitTravelAndTwoHourStay(int startTime, int stayMinutes, bool expected)
+    {
+        Assert.Equal(expected, CompanionOutingRules.CanFitMinimumStay(startTime, stayMinutes));
+    }
+
+    [Theory]
+    [InlineData(2300, 45, true)]
+    [InlineData(2400, 45, false)]
+    public void ShortEscortOutingsUseShorterTimeWindow(int startTime, int stayMinutes, bool expected)
     {
         Assert.Equal(expected, CompanionOutingRules.CanFitMinimumStay(startTime, stayMinutes));
     }

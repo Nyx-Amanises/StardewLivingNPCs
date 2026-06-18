@@ -5,8 +5,12 @@ namespace LivingNPCs.Behavior;
 internal static class CompanionOutingRules
 {
     public const int MinimumStayMinutes = 120;
+    public const int MinimumShortVisitMinutes = 30;
+    public const int MaximumShortVisitMinutes = 60;
+    public const int DefaultShortVisitMinutes = 45;
     public const int MinimumSharedMinutesForMemory = 30;
     public const int EstimatedTravelMinutes = 120;
+    public const int EstimatedShortVisitTravelMinutes = 60;
     public const int LatestPlannedStayEndTime = 2500;
     public const int SettledEmoteDelayMinutes = 20;
     public const int ExclamationEmoteId = 16;
@@ -76,11 +80,39 @@ internal static class CompanionOutingRules
 
     public static bool CanFitMinimumStay(int currentTimeOfDay, int minimumStayMinutes)
     {
+        int stayMinutes = NormalizeRequestedStayMinutes(minimumStayMinutes);
         int projectedEnd = BehaviorTimeMath.AddMinutesToTime(
             currentTimeOfDay,
-            Math.Max(MinimumStayMinutes, minimumStayMinutes) + EstimatedTravelMinutes
+            stayMinutes + GetEstimatedTravelMinutes(stayMinutes)
         );
         return projectedEnd <= LatestPlannedStayEndTime;
+    }
+
+    public static int NormalizeRequestedStayMinutes(int durationMinutes)
+    {
+        if (durationMinutes <= 0)
+        {
+            return MinimumStayMinutes;
+        }
+
+        if (durationMinutes < MinimumStayMinutes)
+        {
+            return Math.Clamp(durationMinutes, MinimumShortVisitMinutes, MaximumShortVisitMinutes);
+        }
+
+        return Math.Clamp(durationMinutes, MinimumStayMinutes, 600);
+    }
+
+    public static bool IsShortVisit(int durationMinutes)
+    {
+        return NormalizeRequestedStayMinutes(durationMinutes) < MinimumStayMinutes;
+    }
+
+    private static int GetEstimatedTravelMinutes(int stayMinutes)
+    {
+        return stayMinutes < MinimumStayMinutes
+            ? EstimatedShortVisitTravelMinutes
+            : EstimatedTravelMinutes;
     }
 
     public static int SelectStableTopCandidateIndex(string npcName, string targetLocation, int totalDays, int candidateCount)
