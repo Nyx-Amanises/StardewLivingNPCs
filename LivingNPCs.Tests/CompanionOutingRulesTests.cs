@@ -165,6 +165,29 @@ public sealed class CompanionOutingRulesTests
         Assert.Contains("museum", first.SemanticLabel);
     }
 
+    [Theory]
+    [InlineData("Gus", "Saloon", "social", "靠吧台喝一杯。", "bar")]
+    [InlineData("Emily", "Saloon", "quiet", "找张桌子坐一会。", "table")]
+    [InlineData("Elliott", "Beach", "scenic", "去海边看浪。", "shore")]
+    [InlineData("Willy", "Beach", "scenic", "去码头边看看。", "pier")]
+    [InlineData("Linus", "Mountain", "scenic", "去山湖边聊聊。", "lake")]
+    [InlineData("Harvey", "Hospital", "quiet", "去诊所候诊区坐一下。", "clinic")]
+    [InlineData("Clint", "Blacksmith", "browse", "去铁匠铺看看熔炉。", "forge")]
+    [InlineData("Willy", "FishShop", "browse", "去鱼店柜台看看。", "counter")]
+    [InlineData("Penny", "Town", "social", "去镇中心喷泉附近走走。", "fountain")]
+    public void AuthoredAnchorsPreferRequestedDestinationFocus(
+        string npc,
+        string target,
+        string style,
+        string reason,
+        string expectedLabelFragment)
+    {
+        var anchors = CompanionOutingAnchorSelector.GetAuthoredAnchorPreview(npc, target, style, reason);
+
+        var first = anchors.First();
+        Assert.Contains(expectedLabelFragment, first.SemanticLabel, StringComparison.OrdinalIgnoreCase);
+    }
+
     [Fact]
     public void TimeMathTracksTwoGameHours()
     {

@@ -35,41 +35,130 @@ internal sealed class CompanionOutingAnchorSelector
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<AuthoredAnchor>> AuthoredAnchors =
         new Dictionary<string, IReadOnlyList<AuthoredAnchor>>(StringComparer.OrdinalIgnoreCase)
         {
+            ["Farm"] =
+            [
+                new(new Point(64, 15), 2, "near the farmhouse porch without blocking the door", ["quiet", "visit"], ["porch", "farm"], 24),
+                new(new Point(72, 16), 2, "beside the farm path where the view opens up", ["scenic", "quiet", "visit"], ["farm", "path"], 20),
+                new(new Point(58, 17), 1, "at a calm farmyard spot with room to talk", ["scenic", "quiet", "visit"], ["farm", "yard"], 18)
+            ],
+            ["Town"] =
+            [
+                new(new Point(44, 57), 2, "in the town square near the fountain", ["social", "quiet", "visit"], ["square", "fountain"], 30),
+                new(new Point(52, 56), 3, "beside the notice board path without blocking traffic", ["social", "visit"], ["square", "community"], 24),
+                new(new Point(34, 72), 0, "on the river path through town", ["scenic", "quiet", "visit"], ["river", "path"], 22),
+                new(new Point(58, 66), 3, "along the central town walkway", ["social", "visit"], ["path"], 16)
+            ],
+            ["BusStop"] =
+            [
+                new(new Point(11, 11), 2, "beside the bus stop bench", ["quiet", "visit"], ["bench", "bus"], 30),
+                new(new Point(16, 10), 3, "near the road sign without blocking the bus", ["visit"], ["bus", "road"], 20),
+                new(new Point(8, 8), 1, "on the quiet path by the tunnel road", ["scenic", "quiet", "visit"], ["path", "road"], 16)
+            ],
+            ["Mine"] =
+            [
+                new(new Point(8, 9), 2, "near the mine entrance where adventurers gather", ["visit", "quiet"], ["mine", "entrance"], 30),
+                new(new Point(12, 13), 3, "beside the mine cart track", ["browse", "visit"], ["mine", "cart"], 20),
+                new(new Point(6, 14), 1, "at a safer edge of the mine lobby", ["quiet", "visit"], ["mine"], 16)
+            ],
+            ["Trailer"] =
+            [
+                new(new Point(8, 8), 2, "in the trailer's small living area", ["quiet", "visit"], ["home", "living"], 30),
+                new(new Point(12, 9), 3, "near the kitchen side of the trailer", ["quiet", "visit"], ["home", "kitchen"], 20),
+                new(new Point(6, 11), 1, "beside the trailer walkway with room to talk", ["quiet", "visit"], ["home"], 16)
+            ],
+            ["JoshHouse"] =
+            [
+                new(new Point(10, 14), 0, "in the public sitting area of Alex's house", ["quiet", "visit"], ["home", "sitting"], 28),
+                new(new Point(14, 16), 3, "beside the entry path inside Alex's house", ["visit"], ["home"], 16)
+            ],
+            ["HaleyHouse"] =
+            [
+                new(new Point(13, 17), 0, "near the living room table at Haley and Emily's house", ["quiet", "visit"], ["home", "sitting"], 28),
+                new(new Point(8, 16), 1, "beside the kitchen side of the house", ["visit"], ["home", "kitchen"], 18)
+            ],
+            ["SamHouse"] =
+            [
+                new(new Point(14, 19), 0, "near the family living room in Sam's house", ["quiet", "visit"], ["home", "sitting"], 28),
+                new(new Point(9, 18), 1, "beside the kitchen walkway at Sam's house", ["visit"], ["home", "kitchen"], 18)
+            ],
+            ["ScienceHouse"] =
+            [
+                new(new Point(16, 21), 0, "near Robin's shop counter without blocking customers", ["browse", "visit"], ["shop", "counter"], 30),
+                new(new Point(9, 16), 1, "beside the family sitting area at Robin's house", ["quiet", "visit"], ["home", "sitting"], 24),
+                new(new Point(22, 19), 3, "near the lab side of the mountain house", ["browse", "visit"], ["lab", "study"], 18)
+            ],
+            ["LeahHouse"] =
+            [
+                new(new Point(6, 8), 2, "near Leah's cottage work table", ["quiet", "browse", "visit"], ["home", "art"], 30),
+                new(new Point(9, 10), 3, "beside the cozy cottage sitting area", ["quiet", "visit"], ["home", "sitting"], 22)
+            ],
+            ["AnimalShop"] =
+            [
+                new(new Point(12, 16), 0, "near Marnie's ranch counter", ["browse", "visit"], ["shop", "counter"], 30),
+                new(new Point(7, 15), 1, "beside the ranch sitting area", ["quiet", "visit"], ["home", "sitting"], 20)
+            ],
+            ["ElliottHouse"] =
+            [
+                new(new Point(5, 7), 2, "beside Elliott's writing desk", ["quiet", "browse", "visit"], ["home", "writing"], 32),
+                new(new Point(7, 10), 0, "near the cabin's small sitting space", ["quiet", "visit"], ["home", "sitting"], 20)
+            ],
+            ["Blacksmith"] =
+            [
+                new(new Point(7, 14), 0, "near Clint's public counter", ["browse", "visit"], ["shop", "counter"], 32),
+                new(new Point(13, 13), 3, "beside the forge area without getting in the way", ["browse", "visit"], ["forge", "work"], 24),
+                new(new Point(5, 17), 1, "at the public side of the blacksmith shop", ["quiet", "visit"], ["shop"], 16)
+            ],
+            ["FishShop"] =
+            [
+                new(new Point(5, 4), 2, "near Willy's shop counter", ["browse", "visit"], ["shop", "counter"], 32),
+                new(new Point(7, 8), 0, "beside the fish shop display barrels", ["browse", "visit"], ["shop", "display"], 24),
+                new(new Point(3, 9), 1, "near the quiet side of Willy's shop", ["quiet", "visit"], ["shop"], 16)
+            ],
+            ["WizardHouse"] =
+            [
+                new(new Point(5, 12), 0, "near the Wizard's study circle", ["quiet", "browse", "visit"], ["study", "magic"], 32),
+                new(new Point(8, 15), 3, "beside the tower's public walkway", ["quiet", "visit"], ["tower"], 18)
+            ],
+            ["Tent"] =
+            [
+                new(new Point(4, 5), 2, "near the front of Linus's tent without crowding it", ["quiet", "visit"], ["tent", "camp"], 28),
+                new(new Point(6, 7), 3, "beside the small mountain camp clearing", ["scenic", "quiet", "visit"], ["camp", "clearing"], 20)
+            ],
             ["SeedShop"] =
             [
-                new(new Point(10, 17), 0, "beside the public shop shelves", ["browse", "visit"]),
-                new(new Point(12, 16), 3, "along a public aisle in the general store", ["browse", "visit"]),
-                new(new Point(8, 15), 1, "near the public display shelves", ["browse", "visit"])
+                new(new Point(10, 17), 0, "beside the public shop shelves", ["browse", "visit"], ["shop", "shelves"], 28),
+                new(new Point(12, 16), 3, "along a public aisle in the general store", ["browse", "visit"], ["shop", "aisle"], 22),
+                new(new Point(8, 15), 1, "near the public display shelves", ["browse", "visit"], ["shop", "display"], 20)
             ],
             ["Beach"] =
             [
-                new(new Point(32, 34), 2, "where the tide rolls in along the open shoreline", ["scenic", "quiet", "visit"]),
-                new(new Point(44, 24), 2, "on a quiet stretch of sand with room to watch the waves", ["scenic", "quiet", "visit"]),
-                new(new Point(60, 13), 1, "near the pier with a view across the water", ["scenic", "quiet", "visit"]),
-                new(new Point(38, 31), 2, "near the foam line where the waves keep breaking", ["scenic", "quiet"]),
-                new(new Point(56, 9), 1, "beside the dock approach with the sea beside them", ["scenic", "visit"])
+                new(new Point(32, 34), 2, "where the tide rolls in along the open shoreline", ["scenic", "quiet", "visit"], ["shore", "waves"], 30),
+                new(new Point(44, 24), 2, "on a quiet stretch of sand with room to watch the waves", ["scenic", "quiet", "visit"], ["shore", "waves"], 28),
+                new(new Point(60, 13), 1, "near the pier with a view across the water", ["scenic", "quiet", "visit"], ["pier", "dock"], 24),
+                new(new Point(38, 31), 2, "near the foam line where the waves keep breaking", ["scenic", "quiet"], ["shore", "waves"], 24),
+                new(new Point(56, 9), 1, "beside the dock approach with the sea beside them", ["scenic", "visit"], ["pier", "dock"], 18)
             ],
             ["Mountain"] =
             [
-                new(new Point(31, 20), 0, "near the mountain lake where a quiet conversation fits", ["scenic", "quiet", "visit"]),
-                new(new Point(39, 9), 1, "along the north shore of the mountain lake", ["scenic", "quiet", "visit"]),
-                new(new Point(54, 32), 0, "by the lower mountain lake path", ["scenic", "quiet", "visit"]),
-                new(new Point(42, 13), 2, "at an open mountain overlook above the lake", ["scenic", "quiet", "visit"]),
-                new(new Point(15, 10), 1, "beside the mountain path", ["scenic", "visit"])
+                new(new Point(31, 20), 0, "near the mountain lake where a quiet conversation fits", ["scenic", "quiet", "visit"], ["lake"], 32),
+                new(new Point(39, 9), 1, "along the north shore of the mountain lake", ["scenic", "quiet", "visit"], ["lake"], 28),
+                new(new Point(54, 32), 0, "by the lower mountain lake path", ["scenic", "quiet", "visit"], ["lake", "path"], 22),
+                new(new Point(42, 13), 2, "at an open mountain overlook above the lake", ["scenic", "quiet", "visit"], ["overlook", "lake"], 22),
+                new(new Point(15, 10), 1, "beside the mountain path", ["scenic", "visit"], ["path"], 16)
             ],
             ["Forest"] =
             [
-                new(new Point(58, 27), 2, "near the forest river", ["scenic", "quiet", "visit"]),
-                new(new Point(87, 36), 0, "in a quiet forest clearing", ["scenic", "quiet", "visit"]),
-                new(new Point(34, 34), 1, "beside a wooded path", ["scenic", "visit"])
+                new(new Point(58, 27), 2, "near the forest river", ["scenic", "quiet", "visit"], ["river"], 30),
+                new(new Point(87, 36), 0, "in a quiet forest clearing", ["scenic", "quiet", "visit"], ["clearing"], 26),
+                new(new Point(34, 34), 1, "beside a wooded path", ["scenic", "visit"], ["path"], 18)
             ],
             ["Saloon"] =
             [
-                new(new Point(11, 20), 0, "leaning near the public side of Gus's bar counter", ["social", "visit"]),
-                new(new Point(13, 19), 0, "close to the bar where conversation blends into the room", ["social", "visit"]),
-                new(new Point(20, 17), 0, "beside one of the saloon's side tables", ["social", "quiet", "visit"]),
-                new(new Point(26, 18), 3, "along the quieter side of the saloon", ["social", "quiet", "visit"]),
-                new(new Point(12, 18), 1, "near the public seating area", ["social", "visit"])
+                new(new Point(11, 20), 0, "leaning near the public side of Gus's bar counter", ["social", "visit"], ["bar"], 32),
+                new(new Point(13, 19), 0, "close to the bar where conversation blends into the room", ["social", "visit"], ["bar"], 28),
+                new(new Point(20, 17), 0, "beside one of the saloon's side tables", ["social", "quiet", "visit"], ["table"], 26),
+                new(new Point(26, 18), 3, "along the quieter side of the saloon", ["social", "quiet", "visit"], ["table", "quiet"], 22),
+                new(new Point(12, 18), 1, "near the public seating area", ["social", "visit"], ["table"], 20)
             ],
             ["ArchaeologyHouse"] =
             [
@@ -82,8 +171,8 @@ internal sealed class CompanionOutingAnchorSelector
             ],
             ["Hospital"] =
             [
-                new(new Point(9, 17), 0, "in the clinic's public waiting area", ["quiet", "visit"]),
-                new(new Point(12, 16), 3, "along the side of the clinic waiting room", ["quiet", "visit"])
+                new(new Point(9, 17), 0, "in the clinic's public waiting area", ["quiet", "visit"], ["clinic", "waiting"], 32),
+                new(new Point(12, 16), 3, "along the side of the clinic waiting room", ["quiet", "visit"], ["clinic", "waiting"], 24)
             ],
             ["FlowerDance"] =
             [
@@ -326,6 +415,56 @@ internal sealed class CompanionOutingAnchorSelector
         string npcName)
     {
         string text = reason ?? string.Empty;
+        if (ContainsAny(text, "吧台", "酒保", "喝一杯", "喝点", "bar counter", "bartop", "drink"))
+        {
+            return "bar";
+        }
+
+        if (ContainsAny(text, "桌", "坐", "座位", "餐桌", "table", "sit", "seat"))
+        {
+            return "table";
+        }
+
+        if (ContainsAny(text, "海浪", "浪", "海边", "沙滩", "shore", "waves", "surf", "sand"))
+        {
+            return "shore";
+        }
+
+        if (ContainsAny(text, "码头", "钓鱼", "pier", "dock", "fish"))
+        {
+            return "pier";
+        }
+
+        if (ContainsAny(text, "湖", "湖边", "lake"))
+        {
+            return "lake";
+        }
+
+        if (ContainsAny(text, "河", "河边", "river"))
+        {
+            return "river";
+        }
+
+        if (ContainsAny(text, "柜台", "买", "商店", "counter", "shop", "store", "buy"))
+        {
+            return "counter";
+        }
+
+        if (ContainsAny(text, "熔炉", "打铁", "铁匠", "forge", "anvil", "blacksmith"))
+        {
+            return "forge";
+        }
+
+        if (ContainsAny(text, "候诊", "诊所", "clinic", "doctor", "waiting"))
+        {
+            return "waiting";
+        }
+
+        if (ContainsAny(text, "家", "屋", "客厅", "home", "house", "living room"))
+        {
+            return "home";
+        }
+
         if (targetLocation == "ArchaeologyHouse")
         {
             if (ContainsAny(text, "图书馆", "书", "书架", "看书", "读书", "翻书", "学习", "教", "孩子", "library", "book", "bookshelf", "read", "reading", "study", "teach", "tutor"))
@@ -342,6 +481,11 @@ internal sealed class CompanionOutingAnchorSelector
             {
                 return "library";
             }
+        }
+
+        if (ContainsAny(text, "货架", "展示", "商品", "shelf", "shelves", "display"))
+        {
+            return "display";
         }
 
         return activityStyle;
