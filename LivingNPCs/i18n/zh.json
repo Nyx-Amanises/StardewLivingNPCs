@@ -66,8 +66,6 @@
   "outing.arrival.town": "镇上的这个时候，刚好不算太吵。",
   "outing.arrival.hospital": "这里还是安静一点比较好。",
   "outing.arrival.flowerDance": "{{time}}花田边真好看。",
-  "outing.arrival.ridgeFalls": "{{time}}瀑布声听起来很清楚。",
-  "outing.arrival.ridgeCliff": "{{time}}这边的视野真开阔。",
   "outing.arrival.scenic": "{{time}}这里的景色不错。",
   "outing.arrival.browse": "这里可以慢慢看看。",
   "outing.arrival.quiet": "这里安静得刚刚好。",
@@ -86,7 +84,6 @@
   "outing.return.forest": "{{opening}}林子里开始有点静了。",
   "outing.return.farm": "{{opening}}农场这边待得很舒服。",
   "outing.return.flowerDance": "{{opening}}花田边的风也该留给别人了。",
-  "outing.return.ridgeFalls": "{{opening}}瀑布声听久了，反而有点舍不得走。",
   "outing.return.scenic": "{{opening}}风景已经看得很满足了。",
   "outing.return.browse": "{{opening}}这边也逛得差不多了。",
   "outing.return.quiet": "{{opening}}这段安静时间刚刚好。",
@@ -207,8 +204,6 @@
 
   "gmcm.sve.name": "启用 SVE 兼容",
   "gmcm.sve.tooltip": "关闭后，LivingNPCs 不再使用 SVE 专用人设、扩展进度和扩展 NPC 上下文。",
-  "gmcm.rsv.name": "启用 RSV 兼容",
-  "gmcm.rsv.tooltip": "关闭后，LivingNPCs 不再使用 Ridgeside Village 专用人设、扩展进度和扩展 NPC 上下文。",
 
   "gmcm.bridge.name": "发送行为上下文到 ValleyTalk",
   "gmcm.bridge.tooltip": "让 ValleyTalk 的对话生成参考 NPC 最近的 LivingNPCs 行为。",

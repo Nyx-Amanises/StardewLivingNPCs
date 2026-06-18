@@ -1,4 +1,6 @@
 using System;
+using System.Globalization;
+using System.Linq;
 using System.Text.RegularExpressions;
 using StardewValley;
 
@@ -13,6 +15,9 @@ internal static class ConversationTextPostProcessor
     private static readonly Regex NpcFarewellPattern = new(
         @"(再见|拜拜|下次见|改天聊|我该走了|我得走了|我先走了|see\s+you|goodbye|bye|talk\s+later)",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly Regex InvisibleFormatPattern = new(
+        @"[\u200B-\u200D\u2060\uFEFF\u00AD\u202A-\u202E\u2066-\u2069]",
+        RegexOptions.Compiled);
 
     public static string NormalizeImmediateNicknameReply(string dialogue, string playerText)
     {
@@ -55,6 +60,59 @@ internal static class ConversationTextPostProcessor
     {
         return !string.IsNullOrWhiteSpace(npcText)
             && NpcFarewellPattern.IsMatch(npcText);
+    }
+
+    public static string RemoveInvisibleCharacters(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        var cleaned = InvisibleFormatPattern.Replace(text, string.Empty);
+        var builder = new System.Text.StringBuilder(cleaned.Length);
+        foreach (char c in cleaned)
+        {
+            if (c is '\r' or '\n' or '\t' or '\f')
+            {
+                builder.Append(c);
+                continue;
+            }
+
+            if (char.GetUnicodeCategory(c) is UnicodeCategory.Format or UnicodeCategory.Control or UnicodeCategory.OtherNotAssigned)
+            {
+                continue;
+            }
+
+            builder.Append(c);
+        }
+
+        return builder.ToString();
+    }
+
+    public static bool LooksLikeWrongLanguage(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || ModEntry.SHelper == null)
+        {
+            return false;
+        }
+
+        string locale = ModEntry.SHelper.Translation.Locale ?? string.Empty;
+        if (locale.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        int chineseCharacters = text.Count(c => c >= '\u4e00' && c <= '\u9fff');
+        int letters = text.Count(char.IsLetter);
+        return chineseCharacters >= 2 && chineseCharacters * 2 >= Math.Max(letters, 1);
+    }
+
+    public static string GetLanguageRetryInstruction()
+    {
+        return ModEntry.SHelper?.Translation.Locale?.StartsWith("zh", StringComparison.OrdinalIgnoreCase) == true
+            ? string.Empty
+            : "\nImportant: rewrite the NPC line and all player response options in English only. Do not use Chinese characters.";
     }
 
     private static bool TryExtractNicknameRequest(string playerText, out string nickname)

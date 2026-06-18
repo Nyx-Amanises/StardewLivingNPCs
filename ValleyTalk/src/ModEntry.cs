@@ -194,26 +194,37 @@ namespace ValleyTalk
             BlockModdedContent = false;
             var contentPacks = SHelper.ModRegistry.GetAll().Where(p => p.IsContentPack).ToList();
             var blockedContentPacks = contentPacks
-                .Where(p => !SldConstants.PermitListContentPacks.Contains(p.Manifest.UniqueID))
-                .Where(p =>
-                        !p.Manifest.ExtraFields.ContainsKey("PermitAiUse") ||
-                        !(p.Manifest.ExtraFields["PermitAiUse"] as bool? ?? false)
-                );
+                .Where(p => !SldConstants.PermitListContentPacks.Contains(p.Manifest.UniqueID, StringComparer.OrdinalIgnoreCase))
+                .Where(p => !ContentPackPermitsAiUse(p.Manifest));
             if (blockedContentPacks.Any())
             {
-                if (Config.AllowLocalContentPackDialogueForAi)
-                {
-                    Monitor.Log("Local content-pack dialogue override is enabled. ValleyTalk will allow loaded content-pack dialogue in AI context for this local fork.", LogLevel.Warn);
-                    Monitor.Log($"Content packs included by local override: {string.Join(", ", blockedContentPacks.Select(p => p.Manifest.Name))}", LogLevel.Info);
-                    return;
-                }
-
                 Monitor.Log("Note: Content packs have been found that don't have mod author approval for use with AI.", LogLevel.Warn);
-                Monitor.Log("While content from content packs will be displayed in-game, it will not be use for AI dialogue generation.", LogLevel.Warn);
+                Monitor.Log("While content from content packs will be displayed in-game, it will not be used for AI dialogue generation.", LogLevel.Warn);
                 Monitor.Log($"Content packs without author approval: {string.Join(", ", blockedContentPacks.Select(p => p.Manifest.Name))}", LogLevel.Info);
                 Monitor.Log("Mod authors can permit their content to be used in dialogue generation by adding \"permitAiUse\":true to their mod's manifest.", LogLevel.Warn);
                 BlockModdedContent = true;
             }
+        }
+
+        private static bool ContentPackPermitsAiUse(IManifest manifest)
+        {
+            foreach (var field in manifest.ExtraFields)
+            {
+                if (!string.Equals(field.Key, "PermitAiUse", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                if (field.Value is bool boolValue)
+                {
+                    return boolValue;
+                }
+
+                string textValue = Convert.ToString(field.Value, CultureInfo.InvariantCulture);
+                return bool.TryParse(textValue, out bool parsed) && parsed;
+            }
+
+            return false;
         }
 
         private void OnGameLaunched(object sender, GameLaunchedEventArgs e)

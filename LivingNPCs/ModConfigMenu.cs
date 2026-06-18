@@ -122,14 +122,6 @@ internal static class ModConfigMenu
             setValue: value => config.EnableSveCompatibility = value
         );
 
-        configMenu.AddBoolOption(
-            mod: manifest,
-            name: () => I18n.Get("gmcm.rsv.name"),
-            tooltip: () => I18n.Get("gmcm.rsv.tooltip"),
-            getValue: () => config.EnableRsvCompatibility,
-            setValue: value => config.EnableRsvCompatibility = value
-        );
-
         configMenu.AddSectionTitle(
             mod: manifest,
             text: () => I18n.Get("gmcm.section.valleyTalk")

@@ -10,8 +10,6 @@ public sealed class BehaviorNormalizationTests
     [InlineData("Trailer_Big", "Trailer")]
     [InlineData("The Mines", "Mine")]
     [InlineData("Blue Moon Vineyard", "Custom_BlueMoonVineyard")]
-    [InlineData("里奇赛德村", "Custom_Ridgeside_RidgesideVillage")]
-    [InlineData("Ridge Falls", "Custom_Ridgeside_RidgeFalls")]
     [InlineData("花舞节", "FlowerDance")]
     public void TravelAliasesNormalizeToCanonicalLocations(string input, string expected)
     {
@@ -21,8 +19,6 @@ public sealed class BehaviorNormalizationTests
     [Theory]
     [InlineData("Custom_GrampletonCoast")]
     [InlineData("Custom_BlueMoonVineyard")]
-    [InlineData("Custom_Ridgeside_RidgeForest")]
-    [InlineData("Custom_Ridgeside_LogCabinHotelLobby")]
     [InlineData("FlowerDance")]
     public void ExpandedLocationsArePublicOutingTargets(string locationName)
     {

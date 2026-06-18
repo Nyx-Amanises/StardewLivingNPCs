@@ -472,11 +472,17 @@ internal sealed class BehaviorEngine
     {
         return npc.currentLocation == Game1.currentLocation
             && !string.IsNullOrWhiteSpace(npc.Name)
+            && !RsvAiPolicy.IsBlockedNpc(npc)
             && this.memory.HasDailyBudget(npc, this.config.MaxBehaviorsPerNpcPerDay);
     }
 
     private void QueueOrExecute(NPC npc, BehaviorTrigger trigger, string source)
     {
+        if (RsvAiPolicy.IsBlockedNpc(npc))
+        {
+            return;
+        }
+
         var fallbackIntent = this.planner.ChooseIntent(npc, trigger);
         if (!this.aiBehaviorClient.CanUse || this.HasPendingRequest(npc.Name))
         {
@@ -513,12 +519,21 @@ internal sealed class BehaviorEngine
     private bool TryFindNpcInCurrentLocation(string npcName, out NPC? npc)
     {
         npc = Game1.currentLocation?.characters.FirstOrDefault(candidate => candidate.Name == npcName);
+        if (RsvAiPolicy.IsBlockedNpc(npc))
+        {
+            npc = null;
+            return false;
+        }
+
         return npc != null;
     }
 
     public bool RecordValleyTalkExchange(string npcName, string npcDisplayName, string playerText, string npcResponse, string analysisJson)
     {
-        if (!this.config.EnableConversationMemory || string.IsNullOrWhiteSpace(playerText))
+        if (RsvAiPolicy.IsBlockedNpcName(npcName)
+            || RsvAiPolicy.IsBlockedNpcName(npcDisplayName)
+            || !this.config.EnableConversationMemory
+            || string.IsNullOrWhiteSpace(playerText))
         {
             return false;
         }
@@ -923,6 +938,12 @@ internal sealed class BehaviorEngine
     )
     {
         reason = string.Empty;
+        if (RsvAiPolicy.IsBlockedNpc(npc))
+        {
+            reason = "RSV NPCs are excluded from AI world actions";
+            return false;
+        }
+
         if (!this.config.EnableAiWorldActions)
         {
             reason = "AI world actions are disabled";
@@ -980,6 +1001,11 @@ internal sealed class BehaviorEngine
 
     private void PushInteractionContext(NPC npc, string debugMessage, string immediatePromptContext = "")
     {
+        if (RsvAiPolicy.IsBlockedNpc(npc))
+        {
+            return;
+        }
+
         string promptContext = this.memory.BuildPromptContext(
             npc,
             this.config.PromptMemoryEntries,
@@ -1163,6 +1189,7 @@ internal sealed class BehaviorEngine
             .Where(candidate =>
                 candidate.currentLocation == Game1.currentLocation
                 && !string.IsNullOrWhiteSpace(candidate.Name)
+                && !RsvAiPolicy.IsBlockedNpc(candidate)
                 && !candidate.IsInvisible
                 && !candidate.isSleeping.Value
             )
@@ -1259,6 +1286,12 @@ internal sealed class BehaviorEngine
 
     private bool CanExecute(NPC npc, BehaviorIntent intent, out string reason)
     {
+        if (RsvAiPolicy.IsBlockedNpc(npc))
+        {
+            reason = "RSV NPCs are excluded from AI behavior";
+            return false;
+        }
+
         if (Game1.eventUp)
         {
             reason = "an event is active";

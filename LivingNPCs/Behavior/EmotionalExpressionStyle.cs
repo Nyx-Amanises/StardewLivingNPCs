@@ -13,24 +13,6 @@ internal static class EmotionalExpressionStyle
     public static EmotionalExpressionCue For(string npcName, NpcDispositionProfile disposition)
     {
         string name = npcName ?? string.Empty;
-        if (IsAny(name, "Flor"))
-        {
-            return new EmotionalExpressionCue(
-                "ReflectiveCareful",
-                "express hurt quietly and thoughtfully; becomes more measured than cold, and may need time before naming the feeling directly",
-                "细腻克制，受伤时会更安静、更谨慎",
-                "if hurt or disappointed, soften outward emotion into careful distance, reflective pauses, and small guarded wording rather than blunt accusation",
-                "after repair, acknowledge recovery gently and with emotional precision, without suddenly becoming bubbly",
-                "let negative emotion show as quiet caution, not generic anger",
-                18,
-                72,
-                0.9,
-                0.8,
-                0.95,
-                1
-            );
-        }
-
         if (IsAny(name, "Shane"))
         {
             return new EmotionalExpressionCue(
@@ -85,7 +67,7 @@ internal static class EmotionalExpressionStyle
             );
         }
 
-        if (IsAny(name, "Claire", "Sophia", "Shiro", "Penny"))
+        if (IsAny(name, "Claire", "Sophia", "Penny"))
         {
             return new EmotionalExpressionCue(
                 "SoftWithdrawn",
@@ -103,7 +85,7 @@ internal static class EmotionalExpressionStyle
             );
         }
 
-        if (IsAny(name, "Sebastian", "Zayne", "Jio", "Isaac"))
+        if (IsAny(name, "Sebastian", "Isaac"))
         {
             return new EmotionalExpressionCue(
                 "QuietGuarded",
@@ -121,7 +103,7 @@ internal static class EmotionalExpressionStyle
             );
         }
 
-        if (IsAny(name, "George", "Pam", "Morris", "Maive"))
+        if (IsAny(name, "George", "Pam", "Morris"))
         {
             return new EmotionalExpressionCue(
                 "BluntDirect",
@@ -139,7 +121,7 @@ internal static class EmotionalExpressionStyle
             );
         }
 
-        if (IsAny(name, "Emily", "Sam", "Sandy", "Maddie", "Sean"))
+        if (IsAny(name, "Emily", "Sam", "Sandy"))
         {
             return new EmotionalExpressionCue(
                 "OpenExpressive",

@@ -57,22 +57,34 @@ namespace ValleyTalk
         {
             if (npc == null) return string.Empty;
 
+            string FallbackToDefault(string value)
+            {
+                return string.IsNullOrWhiteSpace(value) ? null : value;
+            }
+
             if (npc.Bio.PromptOverrides.ContainsKey(key))
             {
-                return npc.Bio.PromptOverrides[key];
+                var overrideValue = FallbackToDefault(npc.Bio.PromptOverrides[key]);
+                if (overrideValue != null)
+                {
+                    return overrideValue;
+                }
             }
             string result = null;
             if (npc.Bio.IsMale ?? false)
             {
                 PromptCache.Instance.Cache.TryGetValue($"{key}.MaleNpc", out result);
+                result = FallbackToDefault(result);
             }
             else if (!(npc.Bio.IsMale ?? true))
             {
                 PromptCache.Instance.Cache.TryGetValue($"{key}.FemaleNpc", out result);
+                result = FallbackToDefault(result);
             }
             if (result == null)
             {
                 PromptCache.Instance.Cache.TryGetValue(key, out result);
+                result = FallbackToDefault(result);
             }
             
             if (returnNull && result == null)

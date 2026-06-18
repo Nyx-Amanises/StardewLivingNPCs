@@ -41,7 +41,7 @@ internal sealed class ValleyTalkPromptBridge
 
     public bool PushBehaviorContext(NPC npc, string promptText)
     {
-        if (this.api == null || string.IsNullOrWhiteSpace(promptText))
+        if (RsvAiPolicy.IsBlockedNpc(npc) || this.api == null || string.IsNullOrWhiteSpace(promptText))
         {
             return false;
         }
@@ -60,7 +60,7 @@ internal sealed class ValleyTalkPromptBridge
 
     public bool TryRequestGiftDialogue(NPC npc, SObject gift, int taste)
     {
-        if (npc == null || gift == null)
+        if (npc == null || gift == null || RsvAiPolicy.IsBlockedNpc(npc))
         {
             return false;
         }

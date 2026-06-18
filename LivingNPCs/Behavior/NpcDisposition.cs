@@ -123,67 +123,6 @@ internal static class NpcDisposition
         ["Qi"] = Sve("cryptic, testing, amused, and hard to read", "神秘、试探、难以看透", -0.02, 0.05, 8, "enigmatic challenger temperament", "A mysterious figure tied to late-game challenges, hidden knowledge, and deliberate tests of the farmer.", "Keep motives opaque and phrasing playful but controlled; do not over-explain him."),
         ["SVE_Henchman"] = Sve("gruff, simple, displaced, and void-marsh shaped", "粗声粗气、单纯、沼泽感", -0.02, 0.03, 16, "displaced swamp guard temperament", "The former guard of the Witch's hut who loses his post after the magic ink incident and later becomes a befriendable figure in the Forbidden Maze and marshlands.", "Use blunt, hungry, suspicious lines with simple wants and awkward gratitude; keep him strange rather than polished."),
 
-        // Ridgeside Village profiles.
-        ["Acorn"] = Rsv("bright, magical, childlike, and hard for ordinary villagers to read", "明亮、魔法感、孩子气", 0.05, 0.06, 32, "young hidden magical temperament", "A young hidden Ridgeside figure tied to the mountain's magical side rather than ordinary village routines.", "Keep lines simple, curious, and childlike; avoid making hidden magical details too explicit unless the scene has revealed them."),
-        ["Aguar"] = Rsv("blunt, water-focused, skeptical, and research-minded", "直率、水域研究、怀疑型", -0.03, 0.03, 16, "water research temperament", "Mr. Aguar is tied to Ridgeside's Water Research Facility and Laboratory, with a sharper manner and practical focus on aquatic work.", "Use curt technical observations, impatience with nonsense, and guarded respect for competence."),
-        ["Althea"] = Rsv("sharp, hidden, adult, and watchful", "尖锐、隐秘、观察型", -0.04, 0.03, 16, "hidden watcher temperament", "A non-giftable hidden Ridgeside figure whose presence belongs more to secretive or magical story spaces than daily village life.", "Keep speech clipped and guarded; do not invent extra lore beyond the current reveal state."),
-        ["Belinda"] = Rsv("mysterious, commanding, magical, and difficult to read", "神秘、强势、魔法感", -0.02, 0.05, 16, "seer cult leader temperament", "The Seer and leader of the Lady with the Red Tail followers, connected to Belinda's followers and Raeriyala in Ridgeside's magical story.", "Use controlled, cryptic authority and let motives stay partially opaque."),
-        ["Bliss"] = Rsv("devoted, intense, childlike, and eager to prove herself", "忠诚、强烈、孩子气", 0.02, 0.05, 20, "young attendant temperament", "A young member of Belinda's circle who acts as a devoted personal attendant within the Lady with the Red Tail storyline.", "Use youthful intensity, loyalty, and quick emotional shifts without making her fully carefree."),
-        ["Lenny"] = Rsv("warm, civic-minded, direct, and responsible", "亲切、有责任感、村务型", 0.06, 0.02, 20, "community leader temperament", "A central Ridgeside community figure and Lewis's sister, often framed around village work and responsibility.", "Let civic duty, familiarity, and practical care shape her tone."),
-        ["Richard"] = Rsv("steady, traditional, older, and family-minded", "沉稳、传统、长辈感", 0.01, 0.01, 16, "elder hotel-family temperament", "Lives around the Log Cabin Hotel and is tied closely to Ysabelle as her grandfather.", "Use older, grounded speech and measured warmth."),
-        ["Ysabelle"] = Rsv("outgoing, blunt, positive, and stylish", "外向、直白、积极", 0.06, 0.05, 32, "bold hotel resident temperament", "Richard's granddaughter at the Log Cabin Hotel, socially forward and not especially shy.", "Let her be lively and direct without making every line sugary."),
-        ["Kenneth"] = Rsv("technical, quiet, sincere, and thoughtful", "技术宅、安静、真诚", 0.01, 0.02, 8, "local electrician temperament", "Ridgeside's electrician, often associated with cable car systems, technical work, and careful problem solving.", "Use practical technical observations and understated kindness."),
-        ["Shiro"] = Rsv("gentle, wounded, protective, and reserved", "温和、受伤、保护型", -0.04, 0.02, 16, "wounded protector temperament", "An older brother figure with a difficult past and health limits, protective of Yuuma and careful with trust.", "Keep him soft-spoken, considerate, and slow to open up."),
-        ["Yuuma"] = Rsv("young, earnest, attached to family, and hopeful", "年轻、认真、依赖家人", 0.04, 0.04, 20, "younger sibling temperament", "Shiro's younger brother, shaped by family care and a need for stability.", "Use youth, sincerity, and cautious optimism."),
-        ["Naomi"] = Rsv("serious, burdened, maternal, and restrained", "严肃、有负担、母亲感", -0.02, 0.02, 16, "burdened parent temperament", "Connected to Shiro and Yuuma's family story, with responsibility and distance weighing on her.", "Let concern and regret show subtly rather than melodramatically."),
-        ["Flor"] = Rsv("thoughtful, gentle, educated, and emotionally perceptive", "温柔、细腻、有学识", 0.03, 0.03, 20, "perceptive student temperament", "A romanceable Ridgeside character whose tone should lean reflective and caring.", "Use empathetic, observant lines and avoid making her randomly bubbly."),
-        ["Ian"] = Rsv("outdoorsy, hardworking, modest, and practical", "户外、勤快、朴实", 0.04, 0.02, 20, "practical mountain worker temperament", "A Ridgeside local shaped by everyday work, outdoor life, and a down-to-earth routine.", "Use grounded, modest warmth."),
-        ["June"] = Rsv("artistic, charming, dramatic, and guarded", "艺术气、迷人、有防备", 0.02, 0.06, 32, "performer temperament", "A Ridgeside character with a more artistic, expressive presence and hidden emotional layers.", "Let charm and performance sit over more guarded feelings."),
-        ["Jio"] = Rsv("disciplined, intense, loyal, and wary", "自律、强烈、警觉", 0.01, 0.04, 16, "trained fighter temperament", "A Ridgeside character tied to conflict, training, and loyalty.", "Keep him alert and controlled, with warmth earned gradually."),
-        ["Maddie"] = Rsv("bright, energetic, young, and emotionally open", "开朗、年轻、直接", 0.07, 0.06, 32, "youthful social temperament", "A youthful Ridgeside local whose lines should feel lively and open.", "Use energetic friendliness, but keep reactions grounded in the current relationship."),
-        ["Sean"] = Rsv("playful, casual, restless, and fun-seeking", "随性、爱玩、不太安分", 0.06, 0.06, 32, "play-first temperament", "A recent Ridgeside resident known more for play and social energy than settled work.", "Use relaxed humor and casual momentum."),
-        ["Philip"] = Rsv("studious, polite, ambitious, and a little anxious", "好学、礼貌、有压力", 0.02, 0.02, 8, "student temperament", "A young Ridgeside character who should sound educated and still under pressure to find his place.", "Use politeness, thoughtfulness, and restrained nerves."),
-        ["Jeric"] = Rsv("cheerful, sporty, friendly, and straightforward", "阳光、运动型、友好", 0.07, 0.04, 32, "active friendly temperament", "A sociable Ridgeside local with a bright, active energy.", "Use simple direct warmth and physical energy."),
-        ["Blair"] = Rsv("friendly, creative, expressive, and sociable", "友好、创意、外向", 0.06, 0.06, 32, "creative social temperament", "A Ridgeside local whose tone can lean stylish, bright, and socially aware.", "Use lively social confidence."),
-        ["Alissa"] = Rsv("confident, social, polished, and image-aware", "自信、社交、在意形象", 0.04, 0.05, 32, "polished social temperament", "A Ridgeside villager with a more confident, social presence.", "Let confidence show, but scale warmth with relationship."),
-        ["Anton"] = Rsv("wry, drifting, intelligent, and bruised beneath the surface", "有点散漫、聪明、内里受挫", 0.01, 0.03, 16, "recovering architect temperament", "A former architect living with the Legame family while trying to get back on his feet; he is close to Paula and sits between Lorenzo and Kiarra in the sibling group.", "Use dry humor, sensitivity around failure, and gradual openness rather than making him simply lazy."),
-        ["Ariah"] = Rsv("dutiful, pressured, intelligent, and carefully composed", "自律、有压力、聪明", -0.01, 0.02, 8, "pressured heir temperament", "A young Amethyne family member and high school student living under Maive's expectations, with Louie and Zayne as close family.", "Let poise and pressure coexist; avoid making her sound carefree unless trust or context supports it."),
-        ["Bert"] = Rsv("cheerful, indulgent, family-loving, and easygoing", "乐天、宠家人、随和", 0.06, 0.03, 20, "happy-go-lucky parent temperament", "Olga's husband and Trinnie's father, known for doting on his family and balancing Olga's stricter temperament.", "Use affectionate, relaxed warmth and an older villager's easy humor."),
-        ["Bryle"] = Rsv("alert, capable, loyal, and more open than he first appears", "警觉、能干、讲义气", 0.03, 0.04, 16, "professional bodyguard temperament", "A bodyguard for the Governor and longtime friend of Jeric who periodically visits Ridgeside; his history with Faye can matter when already revealed.", "Use capable, straightforward lines with a guard's awareness of risk."),
-        ["Carmen"] = Rsv("hardworking, bluntly funny, maternal, and sea-minded", "勤快、直率、母亲感", 0.04, 0.03, 20, "fisherwoman temperament", "A fisherwoman and divorced single mother supporting Blair, with a longstanding connection to Willy and daily life shaped by the water.", "Use practical fishing talk, dry humor, and protective care for family."),
-        ["Corine"] = Rsv("motherly, practical, warm, and busy", "母亲感、务实、忙碌", 0.06, 0.02, 20, "busy family temperament", "A family-centered Ridgeside resident whose daily life should feel practical and caring.", "Use warm practicality and household awareness."),
-        ["Daia"] = Rsv("poised, reserved, and quietly perceptive", "克制、优雅、观察型", -0.01, 0.03, 16, "poised villager temperament", "A Ridgeside local best treated as composed and observant unless closer context says otherwise.", "Use measured speech and subtle reactions."),
-        ["Ezekiel"] = Rsv("gregarious, hearty, direct, and family-proud", "外向、爽朗、重视家人", 0.06, 0.04, 20, "boisterous elder temperament", "Corine's father and an older Ridgeside resident with a strong family presence and a more outgoing style than many elders.", "Use frank warmth, family references, and a little larger-than-life energy."),
-        ["Faye"] = Rsv("creative, ambitious, polished, and quietly vulnerable", "有创意、有野心、细腻", 0.03, 0.05, 20, "aspiring designer temperament", "A waitress at Pika's Restaurant who hopes to become a successful fashion designer in her own right.", "Use style awareness and ambition, with warmth that should still feel earned."),
-        ["Helen"] = Rsv("reserved, loyal, family-tied, and quietly intense", "克制、忠诚、家庭牵挂", -0.01, 0.02, 16, "loyal follower temperament", "A non-giftable Ridgeside figure connected to Ezekiel and Corine's family network and to Belinda's followers.", "Use restrained loyalty and family weight; keep magical-story details understated until revealed."),
-        ["Irene"] = Rsv("professional, composed, and caring", "专业、冷静、关怀", 0.02, 0.02, 16, "care professional temperament", "A Ridgeside resident whose role should feel competent and quietly supportive.", "Use calm, professional warmth."),
-        ["Keahi"] = Rsv("active, bright, practical, and community-oriented", "活跃、开朗、实干", 0.06, 0.04, 32, "energetic local temperament", "A Ridgeside local with a warm, practical presence.", "Use open friendliness and everyday village awareness."),
-        ["Kiarra"] = Rsv("confident, resilient, expressive, and strong-willed", "自信、坚韧、有主见", 0.04, 0.05, 32, "strong-willed temperament", "A Ridgeside villager whose tone can carry pride and resilience.", "Use direct confidence while respecting relationship pacing."),
-        ["Kimpoi"] = Rsv("playful, magical, small, and curious", "活泼、魔法感、小小的好奇", 0.06, 0.06, 32, "small magical companion temperament", "A small Ridgeside figure tied to the mountain's magical side, best handled as more whimsical than ordinary villager.", "Use tiny, bright, curious reactions and avoid adult-style social nuance."),
-        ["Kiwi"] = Rsv("bubbly, magical, excitable, ninja-like, and stab-happy", "活泼、魔法感、忍者式淘气", 0.07, 0.07, 32, "junimo ninja temperament", "A mysterious Junimo ninja from the Ridge, often treated as Jio's partner-in-crime and only fully perceived by people connected to forest magic.", "Keep the voice simple, playful, action-driven, and a little dangerous without making her cruel."),
-        ["Lorraine"] = Rsv("polite, hidden, composed, and cautious", "礼貌、隐秘、谨慎", -0.01, 0.01, 16, "hidden polite temperament", "A non-giftable hidden Ridgeside figure from story spaces outside normal village routine.", "Use courteous restraint and avoid adding specifics that the current scene has not earned."),
-        ["Malaya"] = Rsv("gentle, curious, thoughtful, and careful", "温和、好奇、谨慎", 0.02, 0.03, 8, "thoughtful local temperament", "A Ridgeside character who should feel attentive and emotionally careful.", "Use soft curiosity and restrained openness."),
-        ["Nadaline"] = Rsv("polite, hidden, gentle, and quietly sad", "礼貌、隐秘、轻微忧伤", -0.01, 0.02, 16, "hidden gentle temperament", "A non-giftable hidden Ridgeside figure whose context belongs to the mod's secretive story spaces rather than public village life.", "Use soft, reserved lines and keep deeper backstory vague unless the game state reveals it."),
-        ["Freddie"] = Rsv("steady, seasoned, affectionate, and quietly brave", "沉稳、老练、温厚", 0.02, 0.02, 16, "retired adventurer temperament", "Lola's husband and a retired former adventurer who chose a quieter life in Ridgeside after years of danger.", "Use older, grounded speech and let old competence sit beneath domestic calm."),
-        ["Lola"] = Rsv("quiet, formidable, affectionate, and adventure-seasoned", "安静、强悍、温厚", 0.01, 0.03, 16, "retired assassin temperament", "A retired ex-adventurer and ex-assassin living with Freddie, usually reserved until talk turns to old travels or monster slaying.", "Use calm, economical lines with flashes of formidable experience."),
-        ["Lorenzo"] = Rsv("responsible, courteous, worried, and family-first", "负责、礼貌、爱操心", 0.02, 0.02, 16, "family shopkeeper temperament", "Owner of Heaps Convenience Store, Shanice's husband, and the older Legame sibling who worries over Anton and Kiarra.", "Use practical store-owner talk and protective family concern."),
-        ["Louie"] = Rsv("privileged, bright, restless, and still very young", "家境优渥、聪明、孩子气", 0.04, 0.04, 20, "young heir temperament", "A young Amethyne family member growing up under expectations at the mansion, with Sonny often caring for him day to day.", "Keep him recognizably childlike even when he sounds precocious."),
-        ["Maive"] = Rsv("authoritative, refined, exacting, and legacy-minded", "威严、精致、要求高", -0.02, 0.02, 16, "family matriarch temperament", "The wealthy Amethyne matriarch and head of the family corporation, with Ariah and Louie currently in her household.", "Use controlled, polished speech shaped by status, legacy, and expectation."),
-        ["Olga"] = Rsv("strict, caring, practical, and protective", "严格、关心、务实", 0.02, 0.02, 16, "protective parent temperament", "Bert's wife and Trinnie's mother, often the firmer counterweight in a loving family household.", "Let care show through discipline, planning, and concern rather than softness alone."),
-        ["Paula"] = Rsv("capable, busy, blunt, and caring underneath", "能干、忙碌、嘴硬心软", 0.02, 0.03, 16, "busy caretaker temperament", "A Ridgeside local whose warmth is best shown through practical concern.", "Use brisk lines with care underneath."),
-        ["Pika"] = Rsv("hardworking, hospitable, paternal, and food-focused", "勤快、好客、父亲感", 0.05, 0.03, 20, "restaurant owner temperament", "Owner of Pika's Restaurant and Keahi's father, working hard while carrying memories of his late wife Leilani.", "Use warm hospitality, kitchen awareness, and fatherly concern without flattening him into generic cheer."),
-        ["Pipo"] = Rsv("young, polite, curious, and close to family", "年轻、礼貌、好奇", 0.05, 0.04, 20, "young family temperament", "Sari's son and a young Ridgeside character whose world should stay grounded in family, play, and small observations.", "Keep him age-appropriate, earnest, and a little curious."),
-        ["Raeriyala"] = Rsv("ancient, magical, serene, and protective of the mountain", "古老、魔法感、守护型", -0.01, 0.05, 8, "mountain spirit temperament", "The Lady with the Red Tail, a mountain spirit connected to Belinda and the Spirit Realm side of Ridgeside's story.", "Use calm, otherworldly language with protective weight; do not over-explain spirit lore."),
-        ["RelicSpirit"] = Rsv("ancient, sorrowful, courteous, and memory-bound", "古老、忧伤、礼貌", -0.02, 0.03, 8, "relic spirit temperament", "A spirit-like Ridgeside figure tied to relics, memory, and magical spaces rather than normal village routine.", "Use quiet, formal lines with a sense of distance and old grief."),
-        ["Sari"] = Rsv("warm, polite, protective, and family-centered", "温和、礼貌、保护家人", 0.05, 0.03, 20, "protective parent temperament", "Pipo's mother and a Ridgeside figure whose warmth is anchored in family care.", "Use gentle practicality, maternal concern, and polite openness."),
-        ["Shanice"] = Rsv("capable, hospitable, organized, and family-minded", "能干、好客、有条理", 0.05, 0.02, 20, "shopkeeper temperament", "Runs Heaps Convenience Store with her husband Lorenzo and is part of the Legame household with Anton and Kiarra nearby.", "Use practical shopkeeper warmth and grounded household awareness."),
-        ["Sonny"] = Rsv("dutiful, polished, observant, and quietly kind", "尽责、得体、观察型", 0.01, 0.02, 16, "butler temperament", "The Amethyne family butler, especially present around Maive, Ariah, Louie, and Zayne.", "Use formal, attentive language with warmth kept subtle and service-oriented."),
-        ["Torts"] = Rsv("ancient, slow, stubborn, and wordlessly expressive", "年长、慢吞吞、固执", -0.02, 0.02, 16, "old turtle temperament", "A very old turtle living by the pond near the Akina Residence, cared for by Ridgeside children and treated as one of the village's longest-lasting residents.", "Treat him as a turtle, not a normal speaking villager; use tiny physical reactions or very simple impressions if dialogue is forced."),
-        ["TreehouseGirl"] = Rsv("silent, hidden, childlike, and comfort-seeking", "沉默、隐秘、孩子气", -0.03, 0.02, 8, "hidden child temperament", "A quiet hidden childlike Ridgeside figure associated with a treehouse and a treasured toy-like presence.", "Keep communication minimal, shy, and gesture-driven; avoid inventing full adult speech."),
-        ["Trinnie"] = Rsv("bright, playful, social, and strongly childlike", "活泼、爱玩、孩子气", 0.07, 0.06, 32, "lively child temperament", "Bert and Olga's daughter, often connected to the village children and younger social life.", "Keep lines energetic, simple, and age-appropriate."),
-        ["Undreya"] = Rsv("quiet, wary, childlike, and slowly opening up", "安静、警惕、孩子气", -0.02, 0.03, 8, "shy hidden child temperament", "A childlike Ridgeside figure from the abandoned-house side of the mod's hidden story, with social access gated by later events.", "Use cautious, sparse lines that soften only after trust or story progress supports it."),
-        ["Zachary"] = Rsv("polite, hidden, adult, and restrained", "礼貌、隐秘、克制", -0.01, 0.01, 16, "hidden restrained temperament", "A non-giftable hidden Ridgeside adult whose presence belongs to story spaces outside normal village routines.", "Keep him polite and minimal, avoiding unearned detail."),
-        ["Zayne"] = Rsv("guarded, intense, sharp, and slow to trust", "有防备、强烈、锋利", -0.05, 0.04, 16, "guarded outsider temperament", "A Ridgeside character who should feel wary and emotionally defended until trust develops.", "Keep early lines clipped or cool, then soften with relationship."),
     };
 
     private static readonly HashSet<string> SveNames = new(StringComparer.OrdinalIgnoreCase)
@@ -191,16 +130,6 @@ internal static class NpcDisposition
         "Alesia", "Andy", "Apples", "Bear", "Camilla", "Charlie", "CharlieChicken", "Claire", "Dusty", "Gunther", "GuntherSilvian", "Henchman", "Isaac", "Jadu", "Jolyne",
         "Lance", "Magnus", "Martin", "Morgan", "Morris", "Olivia", "Scarlett", "Sophia", "Susan", "Victor", "Gil",
         "MarlonFay", "MrQi", "Qi", "SVE_Henchman"
-    };
-
-    private static readonly HashSet<string> RsvNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Acorn", "Aguar", "Alissa", "Althea", "Anton", "Ariah", "Belinda", "Bert", "Blair", "Bliss", "Bryle", "Carmen",
-        "Corine", "Daia", "Ezekiel", "Faye", "Flor", "Freddie", "Helen", "Ian", "Irene", "Jeric", "Jio", "June", "Keahi",
-        "Kenneth", "Kiarra", "Kimpoi", "Kiwi", "Lenny", "Lola", "Lorenzo", "Lorraine", "Louie", "Maddie", "Maive",
-        "Malaya", "Nadaline", "Naomi", "Olga", "Paula", "Philip", "Pika", "Pipo", "Raeriyala", "RelicSpirit", "Richard",
-        "Sari", "Sean", "Shanice", "Shiro", "Sonny", "Torts", "TreehouseGirl", "Trinnie", "Undreya", "Ysabelle", "Yuuma",
-        "Zachary", "Zayne"
     };
 
     public static void LoadCommunityProfiles(string modDirectoryPath, IMonitor monitor)
@@ -307,7 +236,7 @@ internal static class NpcDisposition
 
     internal static bool IsRsvNpcName(string? name)
     {
-        return !string.IsNullOrWhiteSpace(name) && RsvNames.Contains(name);
+        return RsvAiPolicy.IsBlockedNpcName(name);
     }
 
     private static bool IsProfileCompatibilityEnabled(string name, NpcDispositionProfile profile)
@@ -318,8 +247,7 @@ internal static class NpcDisposition
             return false;
         }
 
-        if (!ModCompatibility.EnableRsv
-            && (IsRsvNpcName(name) || ModCompatibility.IsRsvSource(profile.SourceLabel)))
+        if (IsRsvNpcName(name) || ModCompatibility.IsRsvSource(profile.SourceLabel))
         {
             return false;
         }
@@ -388,11 +316,6 @@ internal static class NpcDisposition
         {
             details.Add("This is part of the Stardew Valley Expanded world, so keep continuity compatible with SVE's added locations, jobs, families, and larger adventure/magic arcs without quoting mod dialogue.");
         }
-        else if (ModCompatibility.IsRsvSource(sourceLabel))
-        {
-            details.Add("This is part of Ridgeside Village, so keep continuity compatible with the mountain village community, local family networks, and RSV social life without quoting mod dialogue.");
-        }
-
         details.Add($"Age category: {data.Age}; home region: {data.HomeRegion}; romanceable: {(data.CanBeRomanced ? "yes" : "no")}.");
 
         if (data.FriendsAndFamily is { Count: > 0 })
@@ -508,11 +431,6 @@ internal static class NpcDisposition
             return ModCompatibility.SveSourceLabel;
         }
 
-        if (ModCompatibility.EnableRsv && IsRsvNpcName(npcName))
-        {
-            return ModCompatibility.RsvSourceLabel;
-        }
-
         return "custom NPC";
     }
 
@@ -521,11 +439,6 @@ internal static class NpcDisposition
         if (ModCompatibility.EnableSve && IsSveNpcName(npcName))
         {
             return ModCompatibility.SveSourceLabel;
-        }
-
-        if (ModCompatibility.EnableRsv && IsRsvNpcName(npcName))
-        {
-            return ModCompatibility.RsvSourceLabel;
         }
 
         return "自定义 NPC";
@@ -688,30 +601,6 @@ internal static class NpcDisposition
             reason,
             ModCompatibility.SveSourceLabel,
             "Stardew Valley Expanded（专属摘要）",
-            backgroundPrompt,
-            dialoguePrompt
-        );
-    }
-
-    private static NpcDispositionProfile Rsv(
-        string promptLabel,
-        string debugLabel,
-        double approachModifier,
-        double emoteModifier,
-        int passiveEmoteId,
-        string reason,
-        string backgroundPrompt,
-        string dialoguePrompt)
-    {
-        return new NpcDispositionProfile(
-            promptLabel,
-            debugLabel,
-            approachModifier,
-            emoteModifier,
-            passiveEmoteId,
-            reason,
-            ModCompatibility.RsvSourceLabel,
-            "Ridgeside Village（专属摘要）",
             backgroundPrompt,
             dialoguePrompt
         );

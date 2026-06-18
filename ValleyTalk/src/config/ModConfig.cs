@@ -23,9 +23,7 @@ namespace ValleyTalk
         public int GiftFrequency { get; set; } = 4;
         public bool GenerateAiForNormalRightClick { get; set; } = false;
         public string TypedResponses { get; set; } = "With Generated";
-        public bool AllowLocalContentPackDialogueForAi { get; set; } = true;
         public bool EnableSveCompatibility { get; set; } = true;
-        public bool EnableRsvCompatibility { get; set; } = true;
         public bool UseOptimizedGameSummaryPrompt { get; set; } = false;
         public bool UseOptimizedLivingNpcMetadataPrompt { get; set; } = false;
         public string DisableCharacters

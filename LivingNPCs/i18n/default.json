@@ -66,8 +66,6 @@
   "outing.arrival.town": "The town isn't too noisy at this hour.",
   "outing.arrival.hospital": "It's better to keep things quiet in here.",
   "outing.arrival.flowerDance": "The flower field looks beautiful {{time}}.",
-  "outing.arrival.ridgeFalls": "You can hear the falls so clearly {{time}}.",
-  "outing.arrival.ridgeCliff": "The view from here is so open {{time}}.",
   "outing.arrival.scenic": "The scenery here is nice {{time}}.",
   "outing.arrival.browse": "We can take our time looking around here.",
   "outing.arrival.quiet": "It's just the right kind of quiet here.",
@@ -86,7 +84,6 @@
   "outing.return.forest": "{{opening}}the forest is starting to grow still.",
   "outing.return.farm": "{{opening}}it's been really pleasant here at the farm.",
   "outing.return.flowerDance": "{{opening}}we should leave the breeze by the flowers for others now.",
-  "outing.return.ridgeFalls": "{{opening}}after listening to the falls so long, it's almost hard to leave.",
   "outing.return.scenic": "{{opening}}we've taken in the view to our heart's content.",
   "outing.return.browse": "{{opening}}we've browsed about enough here.",
   "outing.return.quiet": "{{opening}}this quiet time was just right.",
@@ -207,8 +204,6 @@
 
   "gmcm.sve.name": "Enable SVE compatibility",
   "gmcm.sve.tooltip": "When off, LivingNPCs no longer uses SVE-specific profiles, expansion progress, or expansion NPC context.",
-  "gmcm.rsv.name": "Enable RSV compatibility",
-  "gmcm.rsv.tooltip": "When off, LivingNPCs no longer uses Ridgeside Village-specific profiles, expansion progress, or expansion NPC context.",
 
   "gmcm.bridge.name": "Send behavior context to ValleyTalk",
   "gmcm.bridge.tooltip": "Let ValleyTalk's dialogue generation take an NPC's recent LivingNPCs behavior into account.",

@@ -10,13 +10,11 @@ internal static class ModWorldProgression
     public static ModWorldProgressSnapshot Current(Farmer farmer)
     {
         var sve = ModCompatibility.EnableSve ? BuildSveProgress(farmer) : SveWorldProgressSnapshot.NotInstalled;
-        var rsv = ModCompatibility.EnableRsv ? BuildRsvProgress(farmer) : RsvWorldProgressSnapshot.NotInstalled;
         return new ModWorldProgressSnapshot(
             sve,
-            rsv,
-            BuildPromptLabel(sve, rsv),
-            BuildDebugLabel(sve, rsv),
-            BuildReplyGuidance(sve, rsv)
+            BuildPromptLabel(sve),
+            BuildDebugLabel(sve),
+            BuildReplyGuidance(sve)
         );
     }
 
@@ -27,7 +25,6 @@ internal static class ModWorldProgression
         IReadOnlyCollection<string> attitudeTraits)
     {
         bool isSveNpc = ModCompatibility.EnableSve && ModCompatibility.IsSveSource(disposition.SourceLabel);
-        bool isRsvNpc = ModCompatibility.EnableRsv && ModCompatibility.IsRsvSource(disposition.SourceLabel);
         var promptParts = new List<string>();
         var debugParts = new List<string>();
         var guidanceParts = new List<string>();
@@ -37,13 +34,6 @@ internal static class ModWorldProgression
             promptParts.Add($"SVE personal context: {BuildSveNpcPrompt(progress.Sve, npc, attitudeTraits)}");
             debugParts.Add($"SVE：{BuildSveNpcDebug(progress.Sve, npc, attitudeTraits)}");
             guidanceParts.Add("For SVE story/location references, this NPC may treat confirmed SVE milestones as part of their own world; do not mention unconfirmed SVE milestones as completed.");
-        }
-
-        if (isRsvNpc && progress.Rsv.Installed)
-        {
-            promptParts.Add($"Ridgeside personal context: {BuildRsvNpcPrompt(progress.Rsv, npc, attitudeTraits)}");
-            debugParts.Add($"RSV：{BuildRsvNpcDebug(progress.Rsv, npc, attitudeTraits)}");
-            guidanceParts.Add("For Ridgeside references, this NPC may treat confirmed RSV milestones as part of their own village life; do not mention unconfirmed RSV milestones as completed.");
         }
 
         if (promptParts.Count == 0)
@@ -102,50 +92,7 @@ internal static class ModWorldProgression
         );
     }
 
-    private static RsvWorldProgressSnapshot BuildRsvProgress(Farmer farmer)
-    {
-        bool installed = HasKnownCharacter("Lenny")
-            || HasKnownCharacter("Flor")
-            || LocationExists("Custom_Ridgeside_RidgesideVillage")
-            || LocationExists("Custom_Ridgeside_RSVCableCar");
-
-        if (!installed)
-        {
-            return RsvWorldProgressSnapshot.NotInstalled;
-        }
-
-        bool villageVisited = HasVisited(farmer, "Custom_Ridgeside_RidgesideVillage", "Custom_Ridgeside_RSVCliff", "Custom_Ridgeside_Ridge");
-        bool cableCarUsed = HasVisited(farmer, "Custom_Ridgeside_RSVCableCar", "Custom_Ridgeside_RSVTheRide_static")
-            || villageVisited;
-        bool gatheringSeen = HasSeenEvent(farmer, "75160120")
-            || HasVisited(farmer, "Custom_Ridgeside_RSVGathering");
-        bool greenhouseRestored = HasSeenEvent(farmer, "75160174")
-            || HasVisited(farmer, "Custom_Ridgeside_RSVGreenhouse1", "Custom_Ridgeside_RSVGreenhouse2");
-        bool ridgeForestVisited = HasVisited(farmer, "Custom_Ridgeside_RidgeForest");
-        bool spiritRealmKnown = HasVisited(farmer, "Custom_Ridgeside_RSVSpiritRealm");
-        bool ninjaHouseKnown = HasVisited(farmer, "Custom_Ridgeside_RSVNinjaHouse", "Custom_Ridgeside_RSVHiddenWarp");
-        bool undreyaKnown = HasSeenEvent(farmer, "75160182")
-            || HasSeenEvent(farmer, "75160385")
-            || HasFriendshipRecord(farmer, "Undreya")
-            || HasVisited(farmer, "Custom_Ridgeside_RSVAbandonedHouse");
-        bool daiaKnown = HasSeenEvent(farmer, "75160201")
-            || HasFriendshipRecord(farmer, "Daia");
-
-        return new RsvWorldProgressSnapshot(
-            true,
-            villageVisited,
-            cableCarUsed,
-            gatheringSeen,
-            greenhouseRestored,
-            ridgeForestVisited,
-            spiritRealmKnown,
-            ninjaHouseKnown,
-            undreyaKnown,
-            daiaKnown
-        );
-    }
-
-    private static string BuildPromptLabel(SveWorldProgressSnapshot sve, RsvWorldProgressSnapshot rsv)
+    private static string BuildPromptLabel(SveWorldProgressSnapshot sve)
     {
         var parts = new List<string>();
         if (sve.Installed)
@@ -153,17 +100,12 @@ internal static class ModWorldProgression
             parts.Add($"SVE: {sve.PromptLabel}");
         }
 
-        if (rsv.Installed)
-        {
-            parts.Add($"Ridgeside Village: {rsv.PromptLabel}");
-        }
-
         return parts.Count == 0
             ? "no supported expansion-specific progress detected"
             : string.Join("; ", parts);
     }
 
-    private static string BuildDebugLabel(SveWorldProgressSnapshot sve, RsvWorldProgressSnapshot rsv)
+    private static string BuildDebugLabel(SveWorldProgressSnapshot sve)
     {
         var parts = new List<string>();
         if (sve.Installed)
@@ -171,27 +113,17 @@ internal static class ModWorldProgression
             parts.Add($"SVE：{sve.DebugLabel}");
         }
 
-        if (rsv.Installed)
-        {
-            parts.Add($"RSV：{rsv.DebugLabel}");
-        }
-
         return parts.Count == 0
             ? "无已识别扩展进度"
             : string.Join("；", parts);
     }
 
-    private static string BuildReplyGuidance(SveWorldProgressSnapshot sve, RsvWorldProgressSnapshot rsv)
+    private static string BuildReplyGuidance(SveWorldProgressSnapshot sve)
     {
         var parts = new List<string>();
         if (sve.Installed)
         {
             parts.Add("Only treat confirmed SVE milestones as completed; if an SVE milestone is unconfirmed, avoid claiming the farmer has already done it.");
-        }
-
-        if (rsv.Installed)
-        {
-            parts.Add("Only treat confirmed Ridgeside milestones as completed; if an RSV milestone is unconfirmed, avoid claiming the farmer has already done it.");
         }
 
         return parts.Count == 0
@@ -259,70 +191,6 @@ internal static class ModWorldProgression
         return string.Join("；", parts);
     }
 
-    private static string BuildRsvNpcPrompt(
-        RsvWorldProgressSnapshot rsv,
-        NPC npc,
-        IReadOnlyCollection<string> attitudeTraits)
-    {
-        var parts = new List<string> { rsv.PromptLabel };
-        if ((IsAny(npc.Name, "Lenny", "Keahi", "Pika", "Richard", "Ysabelle") || attitudeTraits.Contains("community", StringComparer.OrdinalIgnoreCase))
-            && (rsv.VillageVisited || rsv.GatheringSeen))
-        {
-            parts.Add("community-linked RSV characters may treat village visits and gatherings as shared social context");
-        }
-
-        if ((IsAny(npc.Name, "Kenneth", "Bryle", "June") || attitudeTraits.Contains("technical", StringComparer.OrdinalIgnoreCase))
-            && rsv.CableCarUsed)
-        {
-            parts.Add("cable-car-linked RSV characters may treat the cable car as everyday infrastructure");
-        }
-
-        if ((IsAny(npc.Name, "Jio", "Corine", "Bryle", "Lola", "Freddie") || attitudeTraits.Contains("adventurous", StringComparer.OrdinalIgnoreCase))
-            && (rsv.RidgeForestVisited || rsv.NinjaHouseKnown || rsv.SpiritRealmKnown))
-        {
-            parts.Add("adventure-linked RSV characters may recognize the mountain's hidden dangers when confirmed");
-        }
-
-        if (IsAny(npc.Name, "Daia", "Raeriyala", "Undreya") && (rsv.DaiaKnown || rsv.UndreyaKnown || rsv.SpiritRealmKnown))
-        {
-            parts.Add("mystical RSV characters may treat confirmed magical or hidden-village events as personally relevant");
-        }
-
-        return string.Join("; ", parts);
-    }
-
-    private static string BuildRsvNpcDebug(
-        RsvWorldProgressSnapshot rsv,
-        NPC npc,
-        IReadOnlyCollection<string> attitudeTraits)
-    {
-        var parts = new List<string> { rsv.DebugLabel };
-        if ((IsAny(npc.Name, "Lenny", "Keahi", "Pika", "Richard", "Ysabelle") || attitudeTraits.Contains("community", StringComparer.OrdinalIgnoreCase))
-            && (rsv.VillageVisited || rsv.GatheringSeen))
-        {
-            parts.Add("社区型 RSV 角色可感知村庄来往");
-        }
-
-        if ((IsAny(npc.Name, "Kenneth", "Bryle", "June") || attitudeTraits.Contains("technical", StringComparer.OrdinalIgnoreCase))
-            && rsv.CableCarUsed)
-        {
-            parts.Add("缆车相关角色可感知缆车日常化");
-        }
-
-        if ((IsAny(npc.Name, "Jio", "Corine", "Bryle", "Lola", "Freddie") || attitudeTraits.Contains("adventurous", StringComparer.OrdinalIgnoreCase))
-            && (rsv.RidgeForestVisited || rsv.NinjaHouseKnown || rsv.SpiritRealmKnown))
-        {
-            parts.Add("冒险线 RSV 角色可感知山地危险进展");
-        }
-
-        if (IsAny(npc.Name, "Daia", "Raeriyala", "Undreya") && (rsv.DaiaKnown || rsv.UndreyaKnown || rsv.SpiritRealmKnown))
-        {
-            parts.Add("神秘线 RSV 角色可感知隐藏/魔法进展");
-        }
-
-        return string.Join("；", parts);
-    }
-
     private static bool HasKnownCharacter(string name)
     {
         return Game1.characterData?.ContainsKey(name) == true;
@@ -368,13 +236,12 @@ internal static class ModWorldProgression
 
 internal sealed record ModWorldProgressSnapshot(
     SveWorldProgressSnapshot Sve,
-    RsvWorldProgressSnapshot Rsv,
     string PromptLabel,
     string DebugLabel,
     string ReplyGuidance
 )
 {
-    public bool HasAnyInstalled => this.Sve.Installed || this.Rsv.Installed;
+    public bool HasAnyInstalled => this.Sve.Installed;
 }
 
 internal sealed record ModWorldProgressKnowledgeSnapshot(
@@ -433,62 +300,5 @@ internal sealed record SveWorldProgressSnapshot(
         yield return this.CastleVillageOutpostVisited ? "已去过 Castle Village 前哨" : "未确认 Castle Village 前哨";
         yield return this.SusanMet ? "已接触 Susan" : "未确认 Susan";
         yield return this.JojaEmporiumVisited ? "已去过 Joja Emporium" : "未确认 Joja Emporium";
-    }
-}
-
-internal sealed record RsvWorldProgressSnapshot(
-    bool Installed,
-    bool VillageVisited,
-    bool CableCarUsed,
-    bool GatheringSeen,
-    bool GreenhouseRestored,
-    bool RidgeForestVisited,
-    bool SpiritRealmKnown,
-    bool NinjaHouseKnown,
-    bool UndreyaKnown,
-    bool DaiaKnown
-)
-{
-    public static RsvWorldProgressSnapshot NotInstalled { get; } = new(
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false,
-        false
-    );
-
-    public string PromptLabel => string.Join(", ", this.BuildPromptParts());
-
-    public string DebugLabel => string.Join("，", this.BuildDebugParts());
-
-    private IEnumerable<string> BuildPromptParts()
-    {
-        yield return this.VillageVisited ? "Ridgeside village visited" : "Ridgeside village visit not confirmed";
-        yield return this.CableCarUsed ? "cable car use confirmed" : "cable car use not confirmed";
-        yield return this.GatheringSeen ? "Ridgeside gathering seen" : "Ridgeside gathering not confirmed";
-        yield return this.GreenhouseRestored ? "Ridgeside greenhouse restored" : "Ridgeside greenhouse restoration not confirmed";
-        yield return this.RidgeForestVisited ? "ridge forest visited" : "ridge forest visit not confirmed";
-        yield return this.SpiritRealmKnown ? "spirit realm known" : "spirit realm not confirmed";
-        yield return this.NinjaHouseKnown ? "ninja house known" : "ninja house not confirmed";
-        yield return this.UndreyaKnown ? "Undreya known" : "Undreya not confirmed known";
-        yield return this.DaiaKnown ? "Daia known" : "Daia not confirmed known";
-    }
-
-    private IEnumerable<string> BuildDebugParts()
-    {
-        yield return this.VillageVisited ? "已到过里奇赛德村" : "未确认到过里奇赛德村";
-        yield return this.CableCarUsed ? "已确认缆车" : "未确认缆车";
-        yield return this.GatheringSeen ? "已见过里奇赛德聚会" : "未确认里奇赛德聚会";
-        yield return this.GreenhouseRestored ? "里奇赛德温室已修复" : "里奇赛德温室未确认修复";
-        yield return this.RidgeForestVisited ? "已去过 Ridge Forest" : "未确认 Ridge Forest";
-        yield return this.SpiritRealmKnown ? "已确认 Spirit Realm" : "未确认 Spirit Realm";
-        yield return this.NinjaHouseKnown ? "已确认 Ninja House" : "未确认 Ninja House";
-        yield return this.UndreyaKnown ? "已认识 Undreya" : "未确认 Undreya";
-        yield return this.DaiaKnown ? "已认识 Daia" : "未确认 Daia";
     }
 }

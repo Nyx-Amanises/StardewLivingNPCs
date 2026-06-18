@@ -53,9 +53,13 @@ public class PromptCache
             }
             foreach (var entry in promptDict)
             {
-                if (entry.Value is string && !entry.Value.ToString().StartsWith("(no translation"))
+                if (entry.Value is string rawValue && !rawValue.StartsWith("(no translation"))
                 {
-                    _promptCache.Add(entry.Key, Game1.content.PreprocessString(entry.Value.ToString()));
+                    string processedValue = Game1.content.PreprocessString(rawValue);
+                    if (!string.IsNullOrWhiteSpace(processedValue) && !processedValue.StartsWith("(no translation"))
+                    {
+                        _promptCache.Add(entry.Key, processedValue);
+                    }
                 }
             }
         }

@@ -1,0 +1,25 @@
+LivingNPCs - install
+====================
+
+This download contains TWO mod folders. Put BOTH into your Stardew Valley
+"Mods" folder, the same way you install any SMAPI mod:
+
+  Mods/LivingNPCs/
+  Mods/ValleyTalk/
+
+Requirements
+  - SMAPI 4.1.0+                            https://smapi.io/
+  - Content Patcher                         https://www.nexusmods.com/stardewvalley/mods/1915
+  - Generic Mod Config Menu (recommended)   https://www.nexusmods.com/stardewvalley/mods/5098
+  - An LLM provider / API key (set in ValleyTalk's config)
+
+Setup
+  1. Extract both folders above into Mods/.
+  2. Launch the game via SMAPI.
+  3. Open Generic Mod Config Menu, find ValleyTalk, set your AI provider /
+     API key. Then talk to any supported villager.
+
+Note: ValleyTalk here is a MODIFIED build of dandm1's ValleyTalk (LGPL v2.1) -
+see ValleyTalk/README-FORK.txt. Do not replace it with the stock version.
+
+Full details: the LivingNPCs Nexus page.

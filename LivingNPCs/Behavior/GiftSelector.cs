@@ -61,33 +61,7 @@ internal sealed class GiftSelector
         ["Camilla"] = ["magical", "scholarly"],
         ["Isaac"] = ["adventurous", "practical"],
         ["Jadu"] = ["magical"],
-        ["Jolyne"] = ["practical"],
-
-        ["Lenny"] = ["comfort", "practical"],
-        ["Richard"] = ["comfort", "food"],
-        ["Ysabelle"] = ["sweet", "artistic"],
-        ["Kenneth"] = ["scholarly", "practical"],
-        ["Shiro"] = ["comfort", "practical"],
-        ["Yuuma"] = ["youthful", "sweet"],
-        ["Naomi"] = ["comfort", "practical"],
-        ["Flor"] = ["scholarly", "comfort"],
-        ["Ian"] = ["practical", "nature"],
-        ["June"] = ["artistic", "flower"],
-        ["Jio"] = ["adventurous", "practical"],
-        ["Maddie"] = ["youthful", "sweet"],
-        ["Sean"] = ["active", "sweet"],
-        ["Philip"] = ["scholarly", "practical"],
-        ["Jeric"] = ["active", "practical"],
-        ["Blair"] = ["artistic", "sweet"],
-        ["Alissa"] = ["artistic", "sweet"],
-        ["Corine"] = ["comfort", "food"],
-        ["Daia"] = ["artistic", "flower"],
-        ["Irene"] = ["comfort", "practical"],
-        ["Keahi"] = ["active", "practical"],
-        ["Kiarra"] = ["active", "practical"],
-        ["Malaya"] = ["scholarly", "comfort"],
-        ["Paula"] = ["comfort", "practical"],
-        ["Zayne"] = ["adventurous", "practical"]
+        ["Jolyne"] = ["practical"]
     };
 
     private readonly Random random;

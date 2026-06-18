@@ -85,7 +85,7 @@ Rules:
 - Ordinary conflict heals gradually via apology, gifts and time; severe conflict needs a multi-step chain (apology + a fitting gift + time + a real talk-it-out) and softens gradually instead of resetting on one polite line.
 - A severe conflict that is genuinely repaired can leave the relationship slightly deeper than before.
 
-An **emotional expression style** layer makes "the same upset" play differently per character (e.g. Flor goes quiet and reflective; Shane gets guarded; Haley is sharper but cools fast; Harvey leans to polite worry). It also nudges the actual numbers: daily emotion decay, conflict decay, repair responsiveness, and how long a severe conflict must last.
+An **emotional expression style** layer makes "the same upset" play differently per character (e.g. Penny gets quieter and more careful; Shane gets guarded; Haley is sharper but cools fast; Harvey leans to polite worry). It also nudges the actual numbers: daily emotion decay, conflict decay, repair responsiveness, and how long a severe conflict must last.
 
 ### 4. Relationship & chat pacing
 
@@ -136,16 +136,15 @@ Progress is split into two tiers:
 - **Public facts** — route, public facilities, which year you're in, marriage and kids.
 - **Privately-knowable info** — rough farm scale, vocation leaning. Only exposed when the relationship is close enough, the NPC is on the farm to see it, the NPC's job/interest gives a real reason to know (Robin/Marnie for the farm, Willy for fishing, Clint for mining), or you told them directly.
 
-There is also an **SVE / RSV progress-awareness layer**:
+There is also an **SVE progress-awareness layer**:
 
 | Expansion | Recognized progress |
 | --- | --- |
 | SVE | Grandpa's shed restored, Apples, Enchanted Grove, Aurora Vineyard restored, Crimson Badlands, Castle Village Outpost, Susan, Joja Emporium |
-| RSV | Visited Ridgeside, cable car, public gatherings, greenhouse restored, Ridge Forest, Spirit Realm, Ninja House, Undreya, Daia |
 
-Filtered by NPC origin: SVE characters treat confirmed SVE milestones as real; RSV characters treat confirmed RSV milestones as part of Ridgeside life; vanilla NPCs treat them as distant background unless context supports knowing. Unconfirmed milestones are explicitly marked unfinished to avoid spoilers or invented progress.
+Filtered by NPC origin: SVE characters treat confirmed SVE milestones as real; vanilla NPCs treat them as distant background unless context supports knowing. Unconfirmed milestones are explicitly marked unfinished to avoid spoilers or invented progress.
 
-This layer also gates help-request depth (Y1 spring: only light one-step favors; later Y1: occasional two-step; Y2+: fuller multi-step when relationship and context fit) and passes through each NPC's own values (community-minded characters weigh the Community Center more; Pierre vs. Morris diverge on Joja; Pam on the bus, Willy on Ginger Island, farm types on the greenhouse, family types on marriage/kids). It applies to vanilla, SVE and RSV characters.
+This layer also gates help-request depth (Y1 spring: only light one-step favors; later Y1: occasional two-step; Y2+: fuller multi-step when relationship and context fit) and passes through each NPC's own values (community-minded characters weigh the Community Center more; Pierre vs. Morris diverge on Joja; Pam on the bus, Willy on Ginger Island, farm types on the greenhouse, family types on marriage/kids). It applies to vanilla and SVE characters.
 
 ### 4.7. Debug & eval tools
 
@@ -258,15 +257,15 @@ On completion: light `Grateful`; relationship trust and familiarity rise; interm
 
 LivingNPCs pushes a "hidden continuity summary" to ValleyTalk rather than a few raw logs. It tells the model: the NPC's current tone, how close you are, whether you've already chatted a lot today, recent gifts/events, nearby NPCs, how time/weather/location should color things, key recent memories, known player preferences, recent community impressions, any open help request, any current/just-healed conflict, and any nickname the NPC accepted. It also instructs the model not to restate the mechanics, not to mention LivingNPCs/prompt/AI/JSON, and to absorb only the one or two most relevant points as normal NPC speech.
 
-### 10. Custom NPC / SVE / RSV support
+### 10. Custom NPC / SVE support
 
-**LivingNPCs:** prefers built-in profiles; SVE recognized characters have hand-written summaries (with common alias handling); RSV has summaries for many main villagers, others fall back to `Data/Characters` inference; custom NPCs without a profile get base traits inferred from `Data/Characters`. SVE and RSV get dedicated recognition (summary-backed characters get clearer hints; others carry their mod's worldview hint and fall back to inference). World-progress awareness, personalized attitudes, relationship memory and help requests all apply to SVE/RSV characters. A `LivingNPCs/npc_profiles/` directory lets the community add or override profiles via JSON (single-object, array, or `{ "profiles": [...] }`), with a bundled `_template.json` — no C# changes needed.
+**LivingNPCs:** prefers built-in profiles; SVE recognized characters have hand-written summaries (with common alias handling); custom NPCs without a profile get base traits inferred from `Data/Characters`. SVE gets dedicated recognition (summary-backed characters get clearer hints; others carry their mod's worldview hint and fall back to inference). World-progress awareness, personalized attitudes, relationship memory and help requests apply to SVE characters. A `LivingNPCs/npc_profiles/` directory lets the community add or override profiles via JSON (single-object, array, or `{ "profiles": [...] }`), with a bundled `_template.json` — no C# changes needed.
 
-**ValleyTalk fork:** reads custom NPCs already loaded at runtime; adds `AllowLocalContentPackDialogueForAi` (on by default) so SVE/RSV characters can trigger AI dialogue; and auto-generates a light biography from `Data/Characters` (age, politeness, sociability, optimism, datability, family/friends) when one isn't provided.
+**ValleyTalk fork:** reads custom NPCs already loaded at runtime; uses local content-pack dialogue as AI context only when the content pack explicitly permits AI use; and auto-generates a light biography from `Data/Characters` (age, politeness, sociability, optimism, datability, family/friends) when one isn't provided.
 
 ### 10.5. Prompt size
 
-A full SVE/RSV AI prompt stacks: vanilla world summary (~13.7k chars) + expansion world summary (~5k for SVE) + the current NPC's biography + sample dialogue + game state + chat history + ValleyTalk event history + the LivingNPCs hidden context + memories/preferences/impressions/help/emotion — easily 20k+ chars. Levers to trim it: the ValleyTalk fork has `UseOptimizedGameSummaryPrompt` and `UseOptimizedLivingNpcMetadataPrompt` (both off by default), and LivingNPCs has `ConcisePromptContext` (off by default) which sends a slimmer hidden continuity context. Debug logs break prompt size down by section (`system, game, npc, core, instructions, command, responseStart`).
+A full SVE or custom-NPC AI prompt stacks: vanilla world summary (~13.7k chars) + expansion world summary (~5k for SVE) + the current NPC's biography + sample dialogue + game state + chat history + ValleyTalk event history + the LivingNPCs hidden context + memories/preferences/impressions/help/emotion — easily 20k+ chars. Levers to trim it: the ValleyTalk fork has `UseOptimizedGameSummaryPrompt` and `UseOptimizedLivingNpcMetadataPrompt` (both off by default), and LivingNPCs has `ConcisePromptContext` (off by default) which sends a slimmer hidden continuity context. Debug logs break prompt size down by section (`system, game, npc, core, instructions, command, responseStart`).
 
 ### 11. Conversation logs & observability
 
@@ -343,7 +342,7 @@ dotnet build src\ValleyTalk.csproj -p:GamePath="D:\SteamLibrary\steamapps\common
 
 ## Main config
 
-LivingNPCs ships a deliberately small in-game Generic Mod Config Menu (enable mod, HUD messages, the inspect-memory hotkey, the help-request toggle, the AI world-actions master plus watering/festival/quest-assist, SVE/RSV compatibility, and the concise-prompt switch). Everything else lives in `config.json` with safe defaults, including:
+LivingNPCs ships a deliberately small in-game Generic Mod Config Menu (enable mod, HUD messages, the inspect-memory hotkey, the help-request toggle, the AI world-actions master plus watering/festival/quest-assist, SVE compatibility, and the concise-prompt switch). Everything else lives in `config.json` with safe defaults, including:
 
 - Hotkeys and manual-behavior test mode; memory sizes; whether to log conversation starts.
 - Help requests: pending cap, cooldown days, minimum relationship trust, daily offer chance, completion reward range.
@@ -352,7 +351,7 @@ LivingNPCs ships a deliberately small in-game Generic Mod Config Menu (enable mo
 - State / emotion / conflict daily decay; passive-behavior chance; daily behavior cap; interaction range.
 - ValleyTalk prompt bridge; `ConcisePromptContext`; the optional AI behavior planner.
 
-The ValleyTalk fork adds: provider config (OpenAI-compatible / others), `AllowLocalContentPackDialogueForAi`, the optimized world-summary and LivingNPCs-metadata prompt switches, custom prompt/language/entry config, and the free-input hotkey (which now also works in festival / event scenes).
+The ValleyTalk fork adds: provider config (OpenAI-compatible / others), the optimized world-summary and LivingNPCs-metadata prompt switches, custom prompt/language/entry config, and the free-input hotkey (which now also works in festival / event scenes).
 
 ## Not done yet
 

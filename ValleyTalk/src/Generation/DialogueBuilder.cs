@@ -91,6 +91,11 @@ namespace ValleyTalk
             bool dontSkipNext = false,
             Action<string> onToken = null)
         {
+            if (!CanGenerateForNpc(instance))
+            {
+                return new GeneratedResponse(string.Empty, Array.Empty<string>());
+            }
+
             var character = GetCharacter(instance);
 
             DialogueContext context = GetBasicContext(instance);
@@ -113,6 +118,11 @@ namespace ValleyTalk
 
         internal async Task<Dialogue> GenerateGift(NPC instance, StardewValley.Object gift, int taste)
         {
+            if (!CanGenerateForNpc(instance))
+            {
+                return null;
+            }
+
             var character = GetCharacter(instance);
             DialogueContext context = GetBasicContext(instance);
             context.Accept = gift;
@@ -134,6 +144,11 @@ namespace ValleyTalk
 
         internal async Task<Dialogue> Generate(NPC instance, string dialogueKey, string originalLine = "")
         {
+            if (!CanGenerateForNpc(instance))
+            {
+                return null;
+            }
+
             var character = GetCharacter(instance);
             DialogueContext context = GetBasicContext(instance);
             var splitKey = dialogueKey.Split('_');
@@ -542,7 +557,7 @@ namespace ValleyTalk
 
         internal bool PatchNpc(NPC n,int probability=4,bool retainResult=false)
         {
-            if (LlmDisabled || !ModEntry.Config.EnableMod || probability == 0)
+            if (LlmDisabled || !ModEntry.Config.EnableMod || probability == 0 || !CanGenerateForNpc(n))
             {
                 return false;
             }
@@ -595,6 +610,11 @@ namespace ValleyTalk
             }
 
             return true;
+        }
+
+        internal static bool CanGenerateForNpc(NPC n)
+        {
+            return n != null && !RsvAiPolicy.IsBlockedNpc(n);
         }
 
         internal bool PatchPassiveNpc(NPC n, int probability = 4, bool retainResult = false)

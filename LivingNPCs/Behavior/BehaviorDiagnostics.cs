@@ -114,11 +114,9 @@ internal static class BehaviorDiagnostics
     {
         var results = new List<DiagnosticCheckResult>
         {
-            CheckEmotionStyle("Flor", "ReflectiveCareful"),
             CheckEmotionStyle("Shane", "GuardedBlunt"),
             CheckEmotionStyle("Haley", "SharpQuick"),
             CheckEmotionStyle("Harvey", "PoliteAnxious"),
-            CheckDispositionSource("Flor", "Ridgeside Village"),
             CheckDispositionSource("Claire", "Stardew Valley Expanded")
         };
 

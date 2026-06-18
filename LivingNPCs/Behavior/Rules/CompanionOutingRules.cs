@@ -157,9 +157,7 @@ internal static class CompanionOutingRules
 
     private static bool IsBrowseTarget(string targetLocation)
     {
-        return targetLocation is "SeedShop" or "ArchaeologyHouse" or "Blacksmith" or "FishShop"
-            or "Custom_Ridgeside_LogCabinHotelLobby" or "Custom_Ridgeside_PurpleMansion"
-            or "Custom_Ridgeside_RSVGreenhouse1";
+        return targetLocation is "SeedShop" or "ArchaeologyHouse" or "Blacksmith" or "FishShop";
     }
 
     private static bool IsScenicTarget(string targetLocation)
@@ -167,15 +165,11 @@ internal static class CompanionOutingRules
         return targetLocation is "Beach" or "Mountain" or "Forest" or "Farm"
             or "Custom_GrampletonCoast" or "Custom_BlueMoonVineyard" or "Custom_AuroraVineyard"
             or "Custom_ForestWest" or "Custom_SVESummit" or "Custom_GrandpasShedOutside"
-            or "Custom_JunimoWoods" or "Custom_EnchantedGrove"
-            or "Custom_Ridgeside_Ridge" or "Custom_Ridgeside_RidgeFalls"
-            or "Custom_Ridgeside_RidgeForest" or "Custom_Ridgeside_RSVCableCar"
-            or "Custom_Ridgeside_RSVCliff" or "Custom_Ridgeside_RSVTheHike"
-            or "Custom_Ridgeside_RSVSpiritRealm";
+            or "Custom_JunimoWoods" or "Custom_EnchantedGrove";
     }
 
     private static bool IsSocialTarget(string targetLocation)
     {
-        return targetLocation is "Saloon" or "Town" or "Custom_Ridgeside_RidgesideVillage";
+        return targetLocation is "Saloon" or "Town";
     }
 }

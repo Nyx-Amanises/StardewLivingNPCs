@@ -108,7 +108,6 @@ internal static class TestScenarios
             0,
             new ModWorldProgressSnapshot(
                 SveWorldProgressSnapshot.NotInstalled,
-                RsvWorldProgressSnapshot.NotInstalled,
                 "no installed expansion progression",
                 "无扩展进度",
                 "no expansion guidance"

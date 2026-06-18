@@ -153,24 +153,10 @@ namespace ValleyTalk
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configAllowLocalContentPackDialogueForAi", returnNull: true) ?? "Allow local content-pack dialogue in AI context",
-                tooltip: () => Util.GetString("configAllowLocalContentPackDialogueForAiTooltip", returnNull: true) ?? "Allow loaded content-pack dialogue in AI context even if the content pack doesn't declare PermitAiUse.",
-                getValue: () => Config.AllowLocalContentPackDialogueForAi,
-                setValue: (value) =>{ Config.AllowLocalContentPackDialogueForAi = value; }
-            );
-            ConfigMenu.AddBoolOption(
-                mod: ModManifest,
                 name: () => Util.GetString("configEnableSveCompatibility", returnNull: true) ?? "Enable SVE compatibility",
                 tooltip: () => Util.GetString("configEnableSveCompatibilityTooltip", returnNull: true) ?? "When disabled, ValleyTalk stops using SVE-specific world summary text, character biographies, and dialogue samples in AI context.",
                 getValue: () => Config.EnableSveCompatibility,
                 setValue: (value) =>{ Config.EnableSveCompatibility = value; }
-            );
-            ConfigMenu.AddBoolOption(
-                mod: ModManifest,
-                name: () => Util.GetString("configEnableRsvCompatibility", returnNull: true) ?? "Enable RSV compatibility",
-                tooltip: () => Util.GetString("configEnableRsvCompatibilityTooltip", returnNull: true) ?? "When disabled, ValleyTalk stops using RSV-specific character profiles and dialogue samples in AI context.",
-                getValue: () => Config.EnableRsvCompatibility,
-                setValue: (value) =>{ Config.EnableRsvCompatibility = value; }
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,

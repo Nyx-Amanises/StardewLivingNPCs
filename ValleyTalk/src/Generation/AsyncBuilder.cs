@@ -310,6 +310,11 @@ public class AsyncBuilder
 
     internal void RequestNpcResponse(NPC currentNpc, IEnumerable<ConversationElement> currentConversation)
     {
+        if (!DialogueBuilder.CanGenerateForNpc(currentNpc))
+        {
+            return;
+        }
+
         if (_awaitingGeneration)
         {
             ModEntry.SMonitor?.Log("Already awaiting NPC response generation. Ignoring new request.", StardewModdingAPI.LogLevel.Warn);
@@ -324,6 +329,11 @@ public class AsyncBuilder
 
     internal void RequestNpcGiftResponse(NPC currentNpc, StardewValley.Object gift, int taste)
     {
+        if (!DialogueBuilder.CanGenerateForNpc(currentNpc))
+        {
+            return;
+        }
+
         if (_awaitingGeneration)
         {
             ModEntry.SMonitor?.Log("Already awaiting NPC response generation. Ignoring new request.", StardewModdingAPI.LogLevel.Warn);
@@ -339,6 +349,11 @@ public class AsyncBuilder
 
     internal void RequestNpcBasic(NPC currentNpc, string dialogueKey, string originalLine)
     {
+        if (!DialogueBuilder.CanGenerateForNpc(currentNpc))
+        {
+            return;
+        }
+
         if (_awaitingGeneration)
         {
             ModEntry.SMonitor?.Log("Already awaiting NPC response generation. Ignoring new request.", StardewModdingAPI.LogLevel.Warn);

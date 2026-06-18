@@ -52,7 +52,6 @@ internal sealed class ModConfig
     public bool AllowEmotes { get; set; } = true;
     public bool AllowApproachPlayer { get; set; } = true;
     public bool EnableSveCompatibility { get; set; } = true;
-    public bool EnableRsvCompatibility { get; set; } = true;
     public bool EnableAiPlanner { get; set; } = false;
     public string AiPlannerEndpoint { get; set; } = "http://localhost:11434/v1/chat/completions";
     public string AiPlannerApiKey { get; set; } = string.Empty;
@@ -184,7 +183,6 @@ internal sealed class ModConfig
         this.AllowEmotes = defaults.AllowEmotes;
         this.AllowApproachPlayer = defaults.AllowApproachPlayer;
         this.EnableSveCompatibility = defaults.EnableSveCompatibility;
-        this.EnableRsvCompatibility = defaults.EnableRsvCompatibility;
         this.EnableAiPlanner = defaults.EnableAiPlanner;
         this.AiPlannerEndpoint = defaults.AiPlannerEndpoint;
         this.AiPlannerApiKey = defaults.AiPlannerApiKey;

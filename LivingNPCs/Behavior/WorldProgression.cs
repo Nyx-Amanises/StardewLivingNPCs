@@ -37,7 +37,6 @@ internal static class WorldProgression
             ["Susan"] = ["farming"],
             ["Sophia"] = ["farming"],
             ["Willy"] = ["fishing"],
-            ["Carmen"] = ["fishing"],
             ["Clint"] = ["mining"],
             ["Dwarf"] = ["mining"],
             ["MarlonFay"] = ["mining", "combat"],
@@ -55,7 +54,6 @@ internal static class WorldProgression
         new Dictionary<string, IReadOnlyCollection<string>>(StringComparer.OrdinalIgnoreCase)
         {
             ["Lewis"] = ["community", "civic"],
-            ["Lenny"] = ["community", "civic"],
             ["Gus"] = ["community", "hospitality"],
             ["Pierre"] = ["anti_joja", "community", "shopkeeper"],
             ["Morris"] = ["pro_joja", "corporate"],
@@ -68,9 +66,7 @@ internal static class WorldProgression
             ["Willy"] = ["travel", "fishing"],
             ["Sandy"] = ["travel"],
             ["Pam"] = ["bus", "work"],
-            ["Kenneth"] = ["technical", "practical"],
             ["Olivia"] = ["social", "refined"],
-            ["Pika"] = ["hospitality", "family"],
             ["Jodi"] = ["family"],
             ["Evelyn"] = ["family", "community"],
             ["Penny"] = ["family", "community"],

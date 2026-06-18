@@ -1,7 +1,7 @@
 {
   "Name": "LivingNPCs",
   "Author": "Yuki",
-  "Version": "0.1.0",
+  "Version": "0.1.2",
   "Description": "Adds safe NPC behavior hooks and optional ValleyTalk prompt integration.",
   "UniqueID": "Yuki.LivingNPCs",
   "EntryDll": "LivingNPCs.dll",

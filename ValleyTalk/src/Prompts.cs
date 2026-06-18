@@ -326,9 +326,12 @@ public class Prompts
             prompt.AppendLine($"###{Util.GetString(Character, "currentConversationHeading")}");
             prompt.AppendLine(Util.GetString(Character, "currentConversationIntro", new { Name = Name }));
             // Append each line from the chat history, labelling each one alternatively with the NPC's name or 'Farmer'
-            for (int i = 0; i < Context.ChatHistory.Count; i++)
+            var visibleHistory = Context.ChatHistory
+                .Where(line => !ConversationTextPostProcessor.LooksLikeWrongLanguage(line.Text))
+                .ToList();
+            for (int i = 0; i < visibleHistory.Count; i++)
             {
-                prompt.AppendLine(Context.ChatHistory[i].IsPlayerLine ? $"- {Util.GetString(Character, "generalFarmerLabel")}: {Context.ChatHistory[i].Text}" : $"- {Name}: {Context.ChatHistory[i].Text}");
+                prompt.AppendLine(visibleHistory[i].IsPlayerLine ? $"- {Util.GetString(Character, "generalFarmerLabel")}: {visibleHistory[i].Text}" : $"- {Name}: {visibleHistory[i].Text}");
             }
         }
         else if (Character.SpokeJustNow())

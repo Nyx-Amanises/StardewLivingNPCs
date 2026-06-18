@@ -25,12 +25,7 @@ internal static class HelpRequestAdvisor
             ["Claire"] = new("everyday fatigue and small comforts", ["drink", "practical", "comfort"]),
             ["Sophia"] = new("vineyard life and small comforts", ["flower", "comfort", "food"]),
             ["Susan"] = new("farm work", ["food", "nature", "practical", "forage"]),
-            ["Victor"] = new("engineering and careful planning", ["scholarly", "practical", "mineral"]),
-            ["Flor"] = new("study and emotional insight", ["scholarly", "comfort", "flower"]),
-            ["Kenneth"] = new("electrical work and problem solving", ["scholarly", "practical", "mineral"]),
-            ["Pika"] = new("restaurant work", ["food", "comfort"]),
-            ["Carmen"] = new("fishing and water life", ["nature", "practical", "forage"]),
-            ["June"] = new("performance and taste", ["flower", "artistic", "comfort"])
+            ["Victor"] = new("engineering and careful planning", ["scholarly", "practical", "mineral"])
         };
 
     private static readonly IReadOnlyList<HelpRequestItem> ProgressionItems =

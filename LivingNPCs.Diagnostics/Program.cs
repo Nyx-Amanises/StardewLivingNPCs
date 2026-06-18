@@ -44,14 +44,12 @@ var tests = new List<RegressionCheck>
         ]
     ),
     CheckFileContains(
-        "关键 NPC 情绪表达风格未丢失",
+        "关键原版 NPC 情绪表达风格未丢失",
         Path.Combine(root, "LivingNPCs", "Behavior", "EmotionalExpressionStyle.cs"),
         [
-            "\"Flor\"",
             "\"Shane\"",
             "\"Haley\"",
             "\"Harvey\"",
-            "ReflectiveCareful",
             "GuardedBlunt",
             "SharpQuick",
             "PoliteAnxious"

@@ -21,12 +21,12 @@ public class ValleyTalkInterface : IValleyTalkInterface
 
     public bool IsEnabledForCharacter(NPC character)
     {
-        return DialogueBuilder.Instance.PatchNpc(character);
+        return DialogueBuilder.CanGenerateForNpc(character) && DialogueBuilder.Instance.PatchNpc(character);
     }
 
     public bool RequestGiftDialogue(NPC character, StardewValley.Object gift, int taste)
     {
-        if (character == null || gift == null)
+        if (character == null || gift == null || !DialogueBuilder.CanGenerateForNpc(character))
         {
             return false;
         }
@@ -52,6 +52,11 @@ public class ValleyTalkInterface : IValleyTalkInterface
 
     public void RegisterPromptOverride(string characterName, string promptElement, string overrideText)
     {
+        if (RsvAiPolicy.IsBlockedNpcName(characterName))
+        {
+            return;
+        }
+
         ModInteropManager.Instance.RegisterPromptOverride(_modName, characterName, promptElement, overrideText);
     }
 

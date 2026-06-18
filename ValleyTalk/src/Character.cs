@@ -28,15 +28,6 @@ public class Character
         "Lance", "Magnus", "Martin", "Morgan", "Morris", "Olivia", "Scarlett", "Sophia", "Susan", "Victor", "Gil",
         "MarlonFay", "MrQi", "Qi"
     };
-    private static readonly HashSet<string> RsvCompatibilityNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Acorn", "Aguar", "Alissa", "Althea", "Anton", "Ariah", "Belinda", "Bert", "Blair", "Bliss", "Bryle", "Carmen",
-        "Corine", "Daia", "Ezekiel", "Faye", "Flor", "Freddie", "Helen", "Ian", "Irene", "Jeric", "Jio", "June", "Keahi",
-        "Kenneth", "Kiarra", "Kimpoi", "Kiwi", "Lenny", "Lola", "Lorenzo", "Lorraine", "Louie", "Maddie", "Maive",
-        "Malaya", "Nadaline", "Naomi", "Olga", "Paula", "Philip", "Pika", "Pipo", "Raeriyala", "RelicSpirit", "Richard",
-        "Sari", "Sean", "Shanice", "Shiro", "Sonny", "Torts", "TreehouseGirl", "Trinnie", "Undreya", "Ysabelle", "Yuuma",
-        "Zachary", "Zayne"
-    };
     private StardewEventHistory eventHistory = new();
     private DialogueFile dialogueData;
     private Season? _sampleCacheSeason;
@@ -103,7 +94,7 @@ public class Character
             return false;
         }
 
-        if (RsvCompatibilityNames.Contains(baseName) && ModEntry.Config?.EnableRsvCompatibility == false)
+        if (RsvAiPolicy.IsBlockedNpcName(baseName))
         {
             return false;
         }
@@ -304,6 +295,11 @@ public class Character
 
     private BioData BuildFallbackBioData()
     {
+        if (RsvAiPolicy.IsBlockedNpc(StardewNpc) || RsvAiPolicy.IsBlockedNpcName(Name))
+        {
+            return null;
+        }
+
         if (Game1.characterData == null || !Game1.characterData.TryGetValue(Name, out CharacterData data))
         {
             return null;
@@ -314,7 +310,7 @@ public class Character
             Name = Name,
             Biography = BuildFallbackBiography(data),
             BiographyEnd = "This biography was generated locally from Stardew Valley 1.6 Data/Characters because no ValleyTalk bio file was found. Treat it as lightweight guidance, not full canon.",
-            UsePatchedDialogue = ModEntry.Config.AllowLocalContentPackDialogueForAi && IsExpansionCompatibilityEnabledForCharacter(),
+            UsePatchedDialogue = false,
             Missing = false
         };
 
@@ -371,14 +367,7 @@ public class Character
             details.Add($"Known family or close connections include {string.Join(", ", data.FriendsAndFamily.Keys.Take(6))}.");
         }
 
-        if (ModEntry.Config.AllowLocalContentPackDialogueForAi)
-        {
-            details.Add("Local content-pack dialogue is allowed for AI in this fork, so patched dialogue samples may be used when available.");
-        }
-        else
-        {
-            details.Add("Content-pack dialogue may be filtered unless the pack declares PermitAiUse, so rely more on this baseline profile and current game context.");
-        }
+        details.Add("Content-pack dialogue samples are used only when the pack explicitly permits AI use; otherwise rely on this baseline profile and current game context.");
 
         return string.Join(" ", details);
     }
@@ -440,13 +429,18 @@ public class Character
     public async Task<string[]> CreateBasicDialogue(DialogueContext context, Action<string> onToken = null)
     {
         this.LastConversationAnalysis = ConversationAnalysis.Empty;
+        if (RsvAiPolicy.IsBlockedNpc(StardewNpc) || RsvAiPolicy.IsBlockedNpcName(Name))
+        {
+            return Array.Empty<string>();
+        }
+
         var totalWatch = Stopwatch.StartNew();
         var promptInitWatch = Stopwatch.StartNew();
         string[] results = Array.Empty<string>();
         var prompts = new Prompts(context, this);
         promptInitWatch.Stop();
 
-        int maxRetryAttempts = context.ChatHistory.Any() ? 0 : 1;
+        int maxRetryAttempts = 1;
         int timeoutSeconds = ModEntry.Config.QueryTimeout;
         int retryCount = 0;
         bool loggedTiming = false;
@@ -504,6 +498,10 @@ public class Character
                     string corePrompt = prompts.CorePrompt;
                     string instructions = prompts.Instructions;
                     string command = prompts.Command;
+                    if (attempt > 0)
+                    {
+                        command += ConversationTextPostProcessor.GetLanguageRetryInstruction();
+                    }
                     string generatedPrompt = $"{corePrompt}{instructions}{command}";
                     string responseStart = prompts.ResponseStart;
                     promptBuildWatch.Stop();
@@ -591,6 +589,11 @@ public class Character
                         if (this.LastConversationAnalysis.EndConversation && resultsInternal.Length > 1)
                         {
                             resultsInternal = resultsInternal.Take(1).ToArray();
+                        }
+                        if (resultsInternal.Length > 0 && ConversationTextPostProcessor.LooksLikeWrongLanguage(resultsInternal[0]))
+                        {
+                            Log.Warning($"AI response for {Name} used the wrong language. Retrying with a stronger language instruction.");
+                            resultsInternal = Array.Empty<string>();
                         }
                     }
                     else
@@ -710,7 +713,7 @@ public class Character
 
     public IEnumerable<string> ProcessLines(string resultString,bool relaxedValidation = false)
     {
-        resultString = NormalizeRawModelOutput(resultString);
+        resultString = NormalizeRawModelOutput(ConversationTextPostProcessor.RemoveInvisibleCharacters(resultString));
         var resultLines = resultString.Split('\n').AsEnumerable();
         // Remove any line breaks
         resultLines = resultLines.Select(x => x.Replace("\n", "").Replace("\r", "").Trim());
@@ -816,6 +819,7 @@ public class Character
 
     private string CommonCleanup(string line)
     {
+        line = ConversationTextPostProcessor.RemoveInvisibleCharacters(line);
         line = StreamingDialoguePreview.StripHiddenAndResponseTail(line);
         // Remove any leading punctuation and trailing quotation marks
         line = line.Trim().TrimStart('-', ' ', '"', '“', '%');

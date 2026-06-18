@@ -35,7 +35,7 @@ internal static class StreamingDialoguePreview
             return string.Empty;
         }
 
-        var lines = rawText
+        var lines = ConversationTextPostProcessor.RemoveInvisibleCharacters(rawText)
             .Replace("\r", string.Empty)
             .Split('\n')
             .Select(line => line.Trim())
@@ -64,7 +64,7 @@ internal static class StreamingDialoguePreview
             return string.Empty;
         }
 
-        string display = StripHiddenAndResponseTail(text);
+        string display = StripHiddenAndResponseTail(ConversationTextPostProcessor.RemoveInvisibleCharacters(text));
         display = display.Trim().TrimStart('-', ' ', '"', '“').TrimEnd('"', '”');
         display = display.Replace("#b#", "#$b#", StringComparison.OrdinalIgnoreCase);
         display = display.Replace("#e#", "#$e#", StringComparison.OrdinalIgnoreCase);

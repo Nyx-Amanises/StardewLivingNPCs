@@ -7,7 +7,7 @@ internal static class ModCompatibility
 
     internal static bool EnableSve => ModEntry.ActiveConfig.EnableSveCompatibility;
 
-    internal static bool EnableRsv => ModEntry.ActiveConfig.EnableRsvCompatibility;
+    internal static bool EnableRsv => false;
 
     internal static bool IsSveSource(string? sourceLabel)
     {
