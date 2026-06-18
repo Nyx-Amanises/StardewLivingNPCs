@@ -68,6 +68,7 @@ internal static class ValleyTalkExchangeParser
                         : System.Math.Clamp(action.DurationMinutes, 0, 20);
                     action.DelayMinutes = System.Math.Clamp(action.DelayMinutes, 0, 20);
                     action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
+                    action.TravelConsent = BehaviorValueNormalizer.NormalizeTravelConsent(action.TravelConsent);
                     action.QuestHint = action.QuestHint?.Trim() ?? string.Empty;
                     action.ItemId = action.ItemId?.Trim() ?? string.Empty;
                     action.ItemLabel = action.ItemLabel?.Trim() ?? string.Empty;

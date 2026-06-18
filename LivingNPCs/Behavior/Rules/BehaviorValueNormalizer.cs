@@ -144,6 +144,22 @@ internal static class BehaviorValueNormalizer
         };
     }
 
+    public static string NormalizeTravelConsent(string consent)
+    {
+        return consent?.Trim().ToLowerInvariant() switch
+        {
+            "accepted_now" => "accepted_now",
+            "accepted_later" => "accepted_later",
+            "deferred" => "accepted_later",
+            "declined" => "declined",
+            "rejected" => "declined",
+            "tentative" => "tentative",
+            "maybe" => "tentative",
+            "none" => "none",
+            _ => string.Empty
+        };
+    }
+
     public static string NormalizeDialogueBehaviorInfluenceType(string type)
     {
         return type?.Trim().ToLowerInvariant() switch

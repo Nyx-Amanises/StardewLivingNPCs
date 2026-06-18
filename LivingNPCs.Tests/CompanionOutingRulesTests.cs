@@ -36,6 +36,137 @@ public sealed class CompanionOutingRulesTests
     }
 
     [Theory]
+    [InlineData("accepted_now", "accepted_now")]
+    [InlineData("deferred", "accepted_later")]
+    [InlineData("maybe", "tentative")]
+    [InlineData("rejected", "declined")]
+    public void MetadataParserNormalizesTravelConsent(string input, string expected)
+    {
+        var analysis = ValleyTalkExchangeParser.Parse(
+            $$"""
+            {
+              "actions": [
+                {
+                  "type": "companion_outing",
+                  "targetLocation": "Beach",
+                  "travelConsent": "{{input}}"
+                }
+              ]
+            }
+            """
+        );
+
+        var action = Assert.Single(analysis.Actions);
+        Assert.Equal(expected, action.TravelConsent);
+    }
+
+    [Fact]
+    public void FallbackOutingDoesNotTriggerForDeferredTextbookReply()
+    {
+        bool created = ConversationActionCueRules.TryBuildFallbackTravelActionForTesting(
+            "潘妮，现在要不要去海滩走走？",
+            "现在就去吗？你真有精神……不过我得先把文森特和贾斯今天要用的课本整理好。如果你只是想认路，从镇子往南走就能到海边；清晨的海风应该很安静。等我忙完，也许可以在路上碰见你。",
+            out _
+        );
+
+        Assert.False(created);
+    }
+
+    [Fact]
+    public void FallbackOutingDoesNotTriggerForRainyTomorrowPlan()
+    {
+        bool created = ConversationActionCueRules.TryBuildFallbackTravelActionForTesting(
+            "那我明天再来邀请你。",
+            "今天下雨不太合适，明天如果天气好，我们再去海边吧。",
+            out _
+        );
+
+        Assert.False(created);
+    }
+
+    [Fact]
+    public void FallbackOutingTriggersForClearImmediateAcceptance()
+    {
+        bool created = ConversationActionCueRules.TryBuildFallbackTravelActionForTesting(
+            "潘妮，现在要不要去海滩走走？",
+            "好啊，那我们现在去海边走走吧。",
+            out ValleyTalkWorldActionRequest? action
+        );
+
+        Assert.True(created);
+        Assert.NotNull(action);
+        Assert.Equal("companion_outing", action.Type);
+        Assert.Equal("Beach", action.TargetLocation);
+        Assert.Equal("accepted_now", action.TravelConsent);
+    }
+
+    [Fact]
+    public void ExplicitDeferredTravelConsentBlocksAiOutingAction()
+    {
+        var actions = new[]
+        {
+            new ValleyTalkWorldActionRequest
+            {
+                Type = "companion_outing",
+                TargetLocation = "Beach",
+                TravelConsent = "accepted_later"
+            }
+        };
+
+        var filtered = ConversationActionCueRules.FilterTravelActionsContradictedByVisibleDialogue(
+            actions,
+            "那我明天再来邀请你。",
+            "今天下雨不太合适，明天如果天气好，我们再去海边吧。"
+        );
+
+        Assert.Empty(filtered);
+    }
+
+    [Fact]
+    public void LegacyAiOutingActionRequiresVisibleImmediateAcceptance()
+    {
+        var actions = new[]
+        {
+            new ValleyTalkWorldActionRequest
+            {
+                Type = "companion_outing",
+                TargetLocation = "Beach"
+            }
+        };
+
+        var filtered = ConversationActionCueRules.FilterTravelActionsContradictedByVisibleDialogue(
+            actions,
+            "潘妮，现在要不要去海滩走走？",
+            "现在就去吗？我得先把课本整理好，等我忙完也许可以在路上碰见你。"
+        );
+
+        Assert.Empty(filtered);
+    }
+
+    [Fact]
+    public void AcceptedNowTravelConsentKeepsAiOutingAction()
+    {
+        var actions = new[]
+        {
+            new ValleyTalkWorldActionRequest
+            {
+                Type = "companion_outing",
+                TargetLocation = "Beach",
+                TravelConsent = "accepted_now"
+            }
+        };
+
+        var filtered = ConversationActionCueRules.FilterTravelActionsContradictedByVisibleDialogue(
+            actions,
+            "潘妮，现在要不要去海滩走走？",
+            "好啊，那我们现在去海边走走吧。"
+        );
+
+        var action = Assert.Single(filtered);
+        Assert.Equal("companion_outing", action.Type);
+    }
+
+    [Theory]
     [InlineData(2000, 120, true)]
     [InlineData(2100, 120, true)]
     [InlineData(2110, 120, false)]

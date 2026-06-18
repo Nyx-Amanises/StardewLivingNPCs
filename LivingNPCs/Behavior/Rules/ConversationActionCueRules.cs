@@ -7,6 +7,153 @@ namespace LivingNPCs.Behavior;
 
 internal static class ConversationActionCueRules
 {
+    private static readonly string[] ImmediateTravelAcceptanceFragments =
+    [
+        "一起去吧",
+        "一起走吧",
+        "我陪你去",
+        "我跟你去",
+        "我和你去",
+        "我带你去",
+        "我们走吧",
+        "咱们走吧",
+        "那我们走",
+        "那我们去",
+        "我们现在去",
+        "咱们现在去",
+        "现在走",
+        "现在去",
+        "马上去",
+        "这就去",
+        "出发吧",
+        "走吧",
+        "let's go",
+        "let us go",
+        "let's head",
+        "i'll go with you",
+        "i can go with you",
+        "i'll come with you",
+        "i can come with you",
+        "i'll take you",
+        "i can take you",
+        "we can go now",
+        "sure, let's",
+        "sure, i'll"
+    ];
+
+    private static readonly string[] TravelMotionFragments =
+    [
+        "现在",
+        "马上",
+        "这就",
+        "去",
+        "走",
+        "出发",
+        "陪你",
+        "跟你",
+        "带你",
+        "go",
+        "come",
+        "head",
+        "walk",
+        "with you",
+        "let's"
+    ];
+
+    private static readonly string[] DirectTravelAcceptanceFragments =
+    [
+        "当然可以",
+        "可以啊",
+        "可以呀",
+        "好啊",
+        "好呀",
+        "好吧",
+        "当然",
+        "愿意",
+        "行啊",
+        "没问题",
+        "okay",
+        "ok",
+        "sure",
+        "yes"
+    ];
+
+    private static readonly string[] TravelRejectionFragments =
+    [
+        "下次",
+        "改天",
+        "晚点",
+        "以后",
+        "一会儿再",
+        "忙完",
+        "有点忙",
+        "走不开",
+        "今天不行",
+        "今天不可以",
+        "今天不太行",
+        "今天不合适",
+        "今天不适合",
+        "现在不行",
+        "现在不可以",
+        "现在不太行",
+        "现在不合适",
+        "现在不适合",
+        "不太合适",
+        "不太适合",
+        "不合适",
+        "不适合",
+        "不方便",
+        "不太方便",
+        "不行",
+        "不可以",
+        "不能",
+        "没法",
+        "抱歉",
+        "对不起",
+        "得先把",
+        "要先把",
+        "先把",
+        "课本",
+        "碰见你",
+        "later",
+        "another time",
+        "another day",
+        "not now",
+        "not today",
+        "next time",
+        "can't",
+        "cannot",
+        "too busy",
+        "busy today",
+        "after i finish"
+    ];
+
+    private static readonly string[] FutureTravelPlanFragments =
+    [
+        "明天再",
+        "明天吧",
+        "明天去",
+        "明天见",
+        "明天来",
+        "明日再",
+        "明日去",
+        "tomorrow",
+        "next time",
+        "another day",
+        "another time"
+    ];
+
+    private static readonly string[] UncertainTravelFragments =
+    [
+        "也许",
+        "或许",
+        "可能",
+        "说不定",
+        "maybe",
+        "perhaps",
+        "possibly"
+    ];
+
     public static bool LooksLikeImmediateGiftOffer(string npcResponse)
     {
         return ContainsAny(
@@ -70,6 +217,23 @@ internal static class ConversationActionCueRules
         );
     }
 
+    public static IReadOnlyList<ValleyTalkWorldActionRequest> FilterTravelActionsContradictedByVisibleDialogue(
+        IReadOnlyList<ValleyTalkWorldActionRequest> actions,
+        string playerText,
+        string npcResponse
+    )
+    {
+        if (actions.Count == 0)
+        {
+            return actions;
+        }
+
+        var filtered = actions
+            .Where(action => action.Type != "companion_outing" || ShouldKeepTravelAction(action, playerText, npcResponse))
+            .ToArray();
+        return filtered.Length == actions.Count ? actions : filtered;
+    }
+
     public static void TryCorrectTravelActionTargetFromVisibleDialogue(
         NPC npc,
         IReadOnlyList<ValleyTalkWorldActionRequest> actions,
@@ -115,10 +279,29 @@ internal static class ConversationActionCueRules
         out ValleyTalkWorldActionRequest? action
     )
     {
+        return TryBuildFallbackTravelActionCore(npc, playerText, npcResponse, out action);
+    }
+
+    internal static bool TryBuildFallbackTravelActionForTesting(
+        string playerText,
+        string npcResponse,
+        out ValleyTalkWorldActionRequest? action
+    )
+    {
+        return TryBuildFallbackTravelActionCore(null, playerText, npcResponse, out action);
+    }
+
+    private static bool TryBuildFallbackTravelActionCore(
+        NPC? npc,
+        string playerText,
+        string npcResponse,
+        out ValleyTalkWorldActionRequest? action
+    )
+    {
         action = null;
         string combinedText = $"{playerText} {npcResponse}";
         if (!LooksLikeImmediateTravelInvitation(playerText, npcResponse)
-            || LooksLikeDeferredOrRejectedTravel(npcResponse))
+            || LooksLikeDeferredRejectedOrUncertainTravel(playerText, npcResponse))
         {
             return false;
         }
@@ -133,6 +316,7 @@ internal static class ConversationActionCueRules
         {
             Type = "companion_outing",
             TargetLocation = targetLocation,
+            TravelConsent = "accepted_now",
             DurationMinutes = CompanionOutingRules.MinimumStayMinutes,
             DelayMinutes = DetectPreparationDelayMinutes(npcResponse),
             Reason = "the visible conversation ended with an immediate shared outing plan"
@@ -173,6 +357,22 @@ internal static class ConversationActionCueRules
         return fragments.Any(fragment => text.Contains(fragment, StringComparison.OrdinalIgnoreCase));
     }
 
+    private static bool ShouldKeepTravelAction(
+        ValleyTalkWorldActionRequest action,
+        string playerText,
+        string npcResponse
+    )
+    {
+        string consent = BehaviorValueNormalizer.NormalizeTravelConsent(action.TravelConsent);
+        if (!string.IsNullOrWhiteSpace(consent))
+        {
+            return consent == "accepted_now" && !LooksLikeDeferredRejectedOrUncertainTravel(playerText, npcResponse);
+        }
+
+        return LooksLikeImmediateTravelInvitation(playerText, npcResponse)
+            && !LooksLikeDeferredRejectedOrUncertainTravel(playerText, npcResponse);
+    }
+
     private static bool LooksLikeImmediateTravelInvitation(string playerText, string npcResponse)
     {
         bool farmerInvited = ContainsAny(
@@ -193,39 +393,30 @@ internal static class ConversationActionCueRules
             "visit my farm",
             "walk with me"
         );
-        bool npcAccepted = ContainsAny(
-            npcResponse,
-            "一起去",
-            "我陪你",
-            "那我们",
-            "走吧",
-            "可以",
-            "当然",
-            "好啊",
-            "好呀",
-            "愿意",
-            "let's go",
-            "i'll go",
-            "i can go",
-            "sure"
-        );
+        bool npcAccepted = ContainsAny(npcResponse, ImmediateTravelAcceptanceFragments)
+            || ContainsAny(npcResponse, DirectTravelAcceptanceFragments)
+            || (ContainsAny(npcResponse, "可以") && ContainsAny(npcResponse, TravelMotionFragments));
         // The NPC may also be the one who proposes the outing, with the farmer simply agreeing.
         bool npcProposedOuting = ContainsAny(
             npcResponse,
-            "一起去",
-            "我们去",
-            "咱们去",
             "我陪你",
-            "那我们",
-            "一起走",
-            "要不要一起",
-            "要不要去",
+            "我跟你去",
+            "我带你去",
+            "一起去吧",
+            "一起走吧",
+            "我们现在去",
+            "咱们现在去",
+            "那我们去",
+            "那我们走",
+            "要不要一起去",
+            "要不要现在去",
             "带你去",
             "let's go",
+            "let's head",
             "shall we",
-            "why don't we",
-            "want to go",
-            "wanna go"
+            "why don't we go",
+            "want to go now",
+            "wanna go now"
         );
         bool farmerAgreed = ContainsAny(
             playerText,
@@ -250,33 +441,30 @@ internal static class ConversationActionCueRules
         return (farmerInvited && npcAccepted) || (npcProposedOuting && farmerAgreed);
     }
 
-    private static bool LooksLikeDeferredOrRejectedTravel(string npcResponse)
+    public static bool LooksLikeDeferredOrRejectedTravel(string playerText, string npcResponse)
     {
+        string combinedText = $"{playerText} {npcResponse}";
+        if (ContainsAny(npcResponse, TravelRejectionFragments)
+            || ContainsAny(combinedText, FutureTravelPlanFragments))
+        {
+            return true;
+        }
+
         if (DetectPreparationDelayMinutes(npcResponse) > 0)
         {
             return false;
         }
 
-        return ContainsAny(
-            npcResponse,
-            "下次",
-            "改天",
-            "晚点",
-            "以后",
-            "今天不行",
-            "不行",
-            "不可以",
-            "不能",
-            "没法",
-            "抱歉",
-            "later",
-            "another time",
-            "not now",
-            "can't"
-        );
+        return false;
     }
 
-    private static string TryDetectTravelTargetLocation(NPC npc, string text)
+    private static bool LooksLikeDeferredRejectedOrUncertainTravel(string playerText, string npcResponse)
+    {
+        return LooksLikeDeferredOrRejectedTravel(playerText, npcResponse)
+            || ContainsAny(npcResponse, UncertainTravelFragments);
+    }
+
+    private static string TryDetectTravelTargetLocation(NPC? npc, string text)
     {
         string npcHome = ResolveNpcHomeEscortTarget(npc);
         if (!string.IsNullOrWhiteSpace(npcHome)
@@ -409,8 +597,13 @@ internal static class ConversationActionCueRules
         return string.Empty;
     }
 
-    private static string ResolveNpcHomeEscortTarget(NPC npc)
+    private static string ResolveNpcHomeEscortTarget(NPC? npc)
     {
+        if (npc == null)
+        {
+            return string.Empty;
+        }
+
         return npc.Name switch
         {
             "Penny" or "Pam" => "Trailer",

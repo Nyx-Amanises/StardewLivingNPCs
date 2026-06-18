@@ -1264,6 +1264,7 @@ public class Prompts
         instructions.AppendLine(this.GetLivingNpcInstruction("instructionsLivingNpcMetadata"));
         instructions.AppendLine(this.GetLivingNpcInstruction("instructionsLivingNpcGiftIds"));
         instructions.AppendLine(this.GetLivingNpcInstruction("instructionsLivingNpcImmediateTravel"));
+        instructions.AppendLine(this.GetLivingNpcInstruction("instructionsLivingNpcTravelConsent"));
         instructions.AppendLine(this.GetLivingNpcInstruction("instructionsLivingNpcHelpRequests"));
         instructions.AppendLine(this.GetLivingNpcInstruction("instructionsLivingNpcEmotionDepth"));
         if (!Character.Bio.ExtraPortraits.ContainsKey("!"))

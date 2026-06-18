@@ -704,8 +704,18 @@ internal sealed class BehaviorEngine
     {
         if (actions.Count > 0)
         {
-            ConversationActionCueRules.TryCorrectTravelActionTargetFromVisibleDialogue(npc, actions, playerText, npcResponse);
-            return actions;
+            var visibleSafeActions = ConversationActionCueRules.FilterTravelActionsContradictedByVisibleDialogue(
+                actions,
+                playerText,
+                npcResponse
+            );
+            ConversationActionCueRules.TryCorrectTravelActionTargetFromVisibleDialogue(
+                npc,
+                visibleSafeActions,
+                playerText,
+                npcResponse
+            );
+            return visibleSafeActions;
         }
 
         if (this.TryBuildFallbackGiftAction(npc, playerText, npcResponse, out ValleyTalkWorldActionRequest? giftAction)
