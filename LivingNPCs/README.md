@@ -512,7 +512,7 @@ LivingNPCs 当前允许的世界动作只有：
 
 如果 NPC 已经记得玩家喜欢某类物品，礼物选择会明显向该类倾斜；如果记得玩家讨厌某类物品，相关候选会被压低。ValleyTalk 也会在合适时自然提一句类似“记得你喜欢这个”，让礼物和记忆接上，而不是凭空出现。
 
-回礼与求助谢礼邮件会优先使用 NPC 性格模板。当前覆盖原版主要可社交 / 可送礼 NPC：所有原版可结婚对象，以及 Linus、Robin、Gus、Marnie、Willy、Evelyn、George、Pam、Clint、Wizard、Krobus、Pierre、Caroline、Demetrius、Jodi、Kent、Lewis、Sandy、Dwarf、Leo、Vincent、Jas；也覆盖 SVE 核心角色 Andy、Claire、Sophia、Susan、Victor、Olivia、Lance、Scarlett、Gunther、Martin、Morris（Magnus 复用 Wizard 模板）。每人每类邮件各有多个稳定变体，未覆盖 NPC 会回退到通用模板。
+回礼与求助谢礼邮件会优先使用 NPC 性格模板。当前覆盖原版主要可社交 / 可送礼 NPC：所有原版可结婚对象，以及 Linus、Robin、Gus、Marnie、Willy、Evelyn、George、Pam、Clint、Wizard、Krobus、Pierre、Caroline、Demetrius、Jodi、Kent、Lewis、Sandy、Dwarf、Leo、Vincent、Jas；也覆盖 SVE 核心角色 Andy、Claire、Sophia、Susan、Victor、Olivia、Lance、Scarlett、Gunther、Martin、Morris（Magnus 复用 Wizard 模板）。每人每类邮件各有 3 个稳定变体，未覆盖 NPC 会回退到通用模板。
 
 ### 主动求助
 

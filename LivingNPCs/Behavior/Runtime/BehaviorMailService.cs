@@ -12,7 +12,7 @@ internal sealed class BehaviorMailService
 {
     private const string HelpRequestRewardMailKeyPrefix = "LivingNPCs.HelpRequestReward.";
     private const string GiftMailKeyPrefix = "LivingNPCs.GiftMail.";
-    private const int ProfiledMailVariantCount = 2;
+    private const int ProfiledMailVariantCount = 3;
 
     private readonly IModHelper helper;
     private readonly BehaviorMemory memory;
