@@ -136,6 +136,36 @@ public sealed class CompanionOutingRulesTests
     }
 
     [Fact]
+    public void LibraryOutingsPreferReadingTableAnchors()
+    {
+        var anchors = CompanionOutingAnchorSelector.GetAuthoredAnchorPreview(
+            "Penny",
+            "ArchaeologyHouse",
+            "browse",
+            "去图书馆看书。"
+        );
+
+        var first = anchors.First();
+        Assert.Contains((first.X, first.Y), new[] { (18, 14), (20, 14) });
+        Assert.Contains("library", first.SemanticLabel);
+    }
+
+    [Fact]
+    public void MuseumOutingsPreferExhibitAnchors()
+    {
+        var anchors = CompanionOutingAnchorSelector.GetAuthoredAnchorPreview(
+            "Gunther",
+            "ArchaeologyHouse",
+            "browse",
+            "Let's look at the museum exhibits."
+        );
+
+        var first = anchors.First();
+        Assert.Contains((first.X, first.Y), new[] { (11, 9), (17, 9) });
+        Assert.Contains("museum", first.SemanticLabel);
+    }
+
+    [Fact]
     public void TimeMathTracksTwoGameHours()
     {
         Assert.Equal(1520, BehaviorTimeMath.AddMinutesToTime(1320, 120));

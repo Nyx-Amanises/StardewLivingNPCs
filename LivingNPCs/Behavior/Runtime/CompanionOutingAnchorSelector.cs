@@ -13,9 +13,24 @@ internal sealed record CompanionOutingAnchor(
     int Score
 );
 
+internal sealed record CompanionOutingAnchorPreview(
+    int X,
+    int Y,
+    int FacingDirection,
+    string SemanticLabel,
+    int Score
+);
+
 internal sealed class CompanionOutingAnchorSelector
 {
-    private sealed record AuthoredAnchor(Point Tile, int FacingDirection, string Label, string[] Styles);
+    private sealed record AuthoredAnchor(
+        Point Tile,
+        int FacingDirection,
+        string Label,
+        string[] Styles,
+        string[]? Focuses = null,
+        int Priority = 0
+    );
 
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<AuthoredAnchor>> AuthoredAnchors =
         new Dictionary<string, IReadOnlyList<AuthoredAnchor>>(StringComparer.OrdinalIgnoreCase)
@@ -58,11 +73,12 @@ internal sealed class CompanionOutingAnchorSelector
             ],
             ["ArchaeologyHouse"] =
             [
-                new(new Point(11, 9), 0, "beside a public museum display", ["browse", "quiet", "visit"]),
-                new(new Point(17, 9), 0, "along the museum's public exhibit aisle", ["browse", "visit"]),
-                new(new Point(8, 13), 1, "near the library shelves where they can quietly flip through books", ["browse", "quiet", "visit"]),
-                new(new Point(18, 14), 2, "at the library tables with the shelves just behind them", ["browse", "quiet", "visit"]),
-                new(new Point(13, 14), 0, "between the reading tables and the public book stacks", ["browse", "quiet"])
+                new(new Point(18, 14), 2, "at the library reading tables with the shelves just behind them", ["browse", "quiet", "visit"], ["library", "reading"], 36),
+                new(new Point(20, 14), 2, "beside the library reading tables where Penny often tutors the children", ["browse", "quiet", "visit"], ["library", "teaching", "reading"], 34),
+                new(new Point(19, 16), 0, "near the library table seats without blocking the book aisles", ["browse", "quiet", "visit"], ["library", "reading"], 30),
+                new(new Point(13, 14), 0, "between the reading tables and the public book stacks", ["browse", "quiet"], ["library", "reading"], 20),
+                new(new Point(11, 9), 0, "beside a public museum display", ["browse", "quiet", "visit"], ["museum", "exhibit"], 18),
+                new(new Point(17, 9), 0, "along the museum's public exhibit aisle", ["browse", "visit"], ["museum", "exhibit"], 16)
             ],
             ["Hospital"] =
             [
@@ -138,12 +154,14 @@ internal sealed class CompanionOutingAnchorSelector
         string targetLocation,
         string sourceLocation,
         string activityStyle,
+        string reason,
         int totalDays,
         IReadOnlySet<Point> reservedTiles,
         out CompanionOutingAnchor? anchor)
     {
         var candidates = new List<CompanionOutingAnchor>();
         var entryTiles = GetLikelyEntryTiles(location, sourceLocation).ToList();
+        string focus = DetermineAnchorFocus(targetLocation, activityStyle, reason, npc.Name);
 
         if (AuthoredAnchors.TryGetValue(targetLocation, out var authored))
         {
@@ -159,7 +177,10 @@ internal sealed class CompanionOutingAnchorSelector
                     candidate.Tile,
                     candidate.FacingDirection,
                     candidate.Label,
-                    200 + ScoreTile(location, candidate.Tile, activityStyle, entryTiles)
+                    200
+                        + candidate.Priority
+                        + ScoreAnchorFocus(candidate, focus)
+                        + ScoreTile(location, candidate.Tile, activityStyle, entryTiles)
                 ));
             }
         }
@@ -209,6 +230,30 @@ internal sealed class CompanionOutingAnchorSelector
         int index = CompanionOutingRules.SelectStableTopCandidateIndex(npc.Name, targetLocation, totalDays, best.Count);
         anchor = best[index];
         return true;
+    }
+
+    internal static IReadOnlyList<CompanionOutingAnchorPreview> GetAuthoredAnchorPreview(
+        string npcName,
+        string targetLocation,
+        string activityStyle,
+        string reason)
+    {
+        string focus = DetermineAnchorFocus(targetLocation, activityStyle, reason, npcName);
+        return AuthoredAnchors.TryGetValue(targetLocation, out var authored)
+            ? authored
+                .Where(candidate => candidate.Styles.Contains(activityStyle, StringComparer.OrdinalIgnoreCase))
+                .Select(candidate => new CompanionOutingAnchorPreview(
+                    candidate.Tile.X,
+                    candidate.Tile.Y,
+                    candidate.FacingDirection,
+                    candidate.Label,
+                    candidate.Priority + ScoreAnchorFocus(candidate, focus)
+                ))
+                .OrderByDescending(candidate => candidate.Score)
+                .ThenBy(candidate => candidate.X)
+                .ThenBy(candidate => candidate.Y)
+                .ToList()
+            : [];
     }
 
     private bool IsUsable(
@@ -272,6 +317,59 @@ internal sealed class CompanionOutingAnchorSelector
         };
 
         return score;
+    }
+
+    private static string DetermineAnchorFocus(
+        string targetLocation,
+        string activityStyle,
+        string reason,
+        string npcName)
+    {
+        string text = reason ?? string.Empty;
+        if (targetLocation == "ArchaeologyHouse")
+        {
+            if (ContainsAny(text, "图书馆", "书", "书架", "看书", "读书", "翻书", "学习", "教", "孩子", "library", "book", "bookshelf", "read", "reading", "study", "teach", "tutor"))
+            {
+                return "library";
+            }
+
+            if (ContainsAny(text, "博物馆", "展品", "文物", "古物", "museum", "exhibit", "display", "artifact", "archaeology"))
+            {
+                return "museum";
+            }
+
+            if (string.Equals(npcName, "Penny", StringComparison.OrdinalIgnoreCase))
+            {
+                return "library";
+            }
+        }
+
+        return activityStyle;
+    }
+
+    private static int ScoreAnchorFocus(AuthoredAnchor candidate, string focus)
+    {
+        if (candidate.Focuses == null || candidate.Focuses.Length == 0 || string.IsNullOrWhiteSpace(focus))
+        {
+            return 0;
+        }
+
+        return candidate.Focuses.Contains(focus, StringComparer.OrdinalIgnoreCase)
+            ? 80
+            : -45;
+    }
+
+    private static bool ContainsAny(string text, params string[] fragments)
+    {
+        foreach (string fragment in fragments)
+        {
+            if (text.Contains(fragment, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static int CountOpenNeighbors(GameLocation location, Point tile, NPC? ignoredNpc)

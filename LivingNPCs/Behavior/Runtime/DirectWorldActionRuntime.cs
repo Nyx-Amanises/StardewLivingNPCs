@@ -195,6 +195,7 @@ internal sealed class DirectWorldActionRuntime
                 targetLocation,
                 sourceLocation,
                 activityStyle,
+                action.Reason,
                 Game1.Date.TotalDays,
                 new HashSet<Point>(),
                 out CompanionOutingAnchor? anchor)

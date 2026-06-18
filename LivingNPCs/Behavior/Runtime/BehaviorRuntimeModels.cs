@@ -39,6 +39,7 @@ internal sealed class PendingCompanionOuting
         string targetLocation,
         string targetLocationLabel,
         string activityStyle,
+        string reason,
         Point anchorTile,
         int anchorFacingDirection,
         string anchorLabel,
@@ -51,6 +52,7 @@ internal sealed class PendingCompanionOuting
         this.TargetLocation = targetLocation;
         this.TargetLocationLabel = targetLocationLabel;
         this.ActivityStyle = activityStyle;
+        this.Reason = reason;
         this.AnchorTile = anchorTile;
         this.AnchorFacingDirection = anchorFacingDirection;
         this.AnchorLabel = anchorLabel;
@@ -63,6 +65,7 @@ internal sealed class PendingCompanionOuting
     public string TargetLocation { get; }
     public string TargetLocationLabel { get; }
     public string ActivityStyle { get; }
+    public string Reason { get; }
     public Point AnchorTile { get; set; }
     public int AnchorFacingDirection { get; set; }
     public string AnchorLabel { get; set; }

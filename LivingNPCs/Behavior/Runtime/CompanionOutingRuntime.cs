@@ -130,6 +130,7 @@ internal sealed class CompanionOutingRuntime
                 targetLocation,
                 sourceLocation,
                 activityStyle,
+                action.Reason,
                 Game1.Date.TotalDays,
                 reservedTiles,
                 out CompanionOutingAnchor? anchor)
@@ -151,6 +152,7 @@ internal sealed class CompanionOutingRuntime
             targetLocation,
             TravelLocationRules.GetChineseLabel(targetLocation),
             activityStyle,
+            action.Reason,
             anchor.Tile,
             anchor.FacingDirection,
             anchor.SemanticLabel,
@@ -176,6 +178,7 @@ internal sealed class CompanionOutingRuntime
                     targetLocation,
                     sourceLocation,
                     activityStyle,
+                    action.Reason,
                     Game1.Date.TotalDays + attempt + 1,
                     unavailableAnchorTiles,
                     out CompanionOutingAnchor? replacement)
@@ -459,6 +462,8 @@ internal sealed class CompanionOutingRuntime
             return;
         }
 
+        this.TryShowArrivalRemark(npc, outing);
+
         bool occupiedByAnotherNpc = destination.characters.Any(candidate =>
             candidate != npc && candidate.TilePoint == outing.AnchorTile);
         if (occupiedByAnotherNpc && outing.AnchorRelocationCount < 1)
@@ -719,6 +724,7 @@ internal sealed class CompanionOutingRuntime
                 outing.TargetLocation,
                 sourceLocation,
                 outing.ActivityStyle,
+                outing.Reason,
                 outing.TotalDays + outing.AnchorRelocationCount + 1,
                 reservedTiles,
                 out CompanionOutingAnchor? replacement)
