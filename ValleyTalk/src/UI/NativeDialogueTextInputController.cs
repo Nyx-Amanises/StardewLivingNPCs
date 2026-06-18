@@ -26,14 +26,9 @@ internal static class NativeDialogueTextInputController
     private static InputSubscriber subscriber;
     private static Keys? repeatingKey;
     private static double nextRepeatAtMilliseconds;
-    private static string pendingTextEcho = string.Empty;
-    private static double pendingTextEchoUntilMilliseconds;
-    private static string recentCharacterInputs = string.Empty;
-    private static double recentCharacterInputUntilMilliseconds;
 
     private const double InitialRepeatDelayMilliseconds = 320d;
     private const double RepeatDelayMilliseconds = 48d;
-    private const double TextEchoSuppressMilliseconds = 180d;
 
     public static void Start(string title, NPC npc, Action<string> callback)
     {
@@ -178,10 +173,6 @@ internal static class NativeDialogueTextInputController
         subscriber = null;
         repeatingKey = null;
         nextRepeatAtMilliseconds = 0d;
-        pendingTextEcho = string.Empty;
-        pendingTextEchoUntilMilliseconds = 0d;
-        recentCharacterInputs = string.Empty;
-        recentCharacterInputUntilMilliseconds = 0d;
     }
 
     private static void InsertText(string value)
@@ -191,41 +182,21 @@ internal static class NativeDialogueTextInputController
             return;
         }
 
-        if (ShouldTreatAsImeCommit(value) && TrySuppressRecentCharacterEcho(value))
-        {
-            return;
-        }
-
         foreach (char character in value)
         {
-            InsertCharacter(character, trackRecentInput: false);
-        }
-
-        if (ShouldTreatAsImeCommit(value))
-        {
-            BeginPendingTextEcho(value);
+            InsertCharacter(character);
         }
     }
 
-    private static void InsertCharacter(char character, bool trackRecentInput = true)
+    private static void InsertCharacter(char character)
     {
         if (char.IsControl(character) || text.Length >= CharacterLimit)
         {
             return;
         }
 
-        if (trackRecentInput && TrySuppressPendingTextEcho(character))
-        {
-            return;
-        }
-
         text = text.Insert(caretPosition, character.ToString());
         caretPosition++;
-
-        if (trackRecentInput)
-        {
-            TrackRecentCharacterInput(character);
-        }
     }
 
     private static void Backspace()
@@ -294,7 +265,7 @@ internal static class NativeDialogueTextInputController
         int wrapWidth = Math.Max(1, bounds.Width - WrapSafetyPixels);
         int lineHeight = GetLineHeight(wrapWidth);
         int maxLines = Math.Max(1, bounds.Height / lineHeight);
-        string[] lines = WrapText(value, Math.Max(1, wrapWidth - 8));
+        string[] lines = WrapText(value, wrapWidth);
         if (lines.Length > maxLines)
         {
             lines = lines.Skip(lines.Length - maxLines).ToArray();
@@ -314,7 +285,7 @@ internal static class NativeDialogueTextInputController
                 bounds.X,
                 y,
                 999999,
-                999999,
+                wrapWidth,
                 lineHeight,
                 1f,
                 0.88f,
@@ -357,74 +328,6 @@ internal static class NativeDialogueTextInputController
     private static int GetLineHeight(int width)
     {
         return Math.Max(42, SpriteText.getHeightOfString("A", Math.Max(1, width)) + 4);
-    }
-
-    private static double CurrentMilliseconds()
-    {
-        return Game1.currentGameTime?.TotalGameTime.TotalMilliseconds ?? 0d;
-    }
-
-    private static bool ShouldTreatAsImeCommit(string value)
-    {
-        return value.Length > 1 || value.Any(character => character > 127);
-    }
-
-    private static void BeginPendingTextEcho(string value)
-    {
-        pendingTextEcho = value;
-        pendingTextEchoUntilMilliseconds = CurrentMilliseconds() + TextEchoSuppressMilliseconds;
-    }
-
-    private static bool TrySuppressPendingTextEcho(char character)
-    {
-        if (string.IsNullOrEmpty(pendingTextEcho) || CurrentMilliseconds() > pendingTextEchoUntilMilliseconds)
-        {
-            pendingTextEcho = string.Empty;
-            return false;
-        }
-
-        if (pendingTextEcho[0] != character)
-        {
-            pendingTextEcho = string.Empty;
-            return false;
-        }
-
-        pendingTextEcho = pendingTextEcho.Length == 1 ? string.Empty : pendingTextEcho[1..];
-        return true;
-    }
-
-    private static void TrackRecentCharacterInput(char character)
-    {
-        double now = CurrentMilliseconds();
-        if (now > recentCharacterInputUntilMilliseconds)
-        {
-            recentCharacterInputs = string.Empty;
-        }
-
-        recentCharacterInputs += character;
-        if (recentCharacterInputs.Length > 32)
-        {
-            recentCharacterInputs = recentCharacterInputs[^32..];
-        }
-
-        recentCharacterInputUntilMilliseconds = now + TextEchoSuppressMilliseconds;
-    }
-
-    private static bool TrySuppressRecentCharacterEcho(string value)
-    {
-        if (string.IsNullOrEmpty(recentCharacterInputs) || CurrentMilliseconds() > recentCharacterInputUntilMilliseconds)
-        {
-            recentCharacterInputs = string.Empty;
-            return false;
-        }
-
-        if (!recentCharacterInputs.EndsWith(value, StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        recentCharacterInputs = string.Empty;
-        return true;
     }
 
     private static void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
