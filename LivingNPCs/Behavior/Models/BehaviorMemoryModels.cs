@@ -308,6 +308,7 @@ internal sealed class NpcHelpRequestFact
 internal sealed class NpcGiftMailFact
 {
     public string MailKey { get; set; } = string.Empty;
+    public string NpcName { get; set; } = string.Empty;
     public string NpcDisplayName { get; set; } = string.Empty;
     public string ItemId { get; set; } = string.Empty;
     public string ItemLabel { get; set; } = string.Empty;

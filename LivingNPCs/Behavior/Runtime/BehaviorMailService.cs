@@ -12,6 +12,7 @@ internal sealed class BehaviorMailService
 {
     private const string HelpRequestRewardMailKeyPrefix = "LivingNPCs.HelpRequestReward.";
     private const string GiftMailKeyPrefix = "LivingNPCs.GiftMail.";
+    private const int ProfiledMailVariantCount = 2;
 
     private readonly IModHelper helper;
     private readonly BehaviorMemory memory;
@@ -255,6 +256,7 @@ internal sealed class BehaviorMailService
         var mail = new NpcGiftMailFact
         {
             MailKey = $"{GiftMailKeyPrefix}{SanitizeFileName(npc.Name)}.{Game1.Date.TotalDays}.{Game1.timeOfDay}.{this.random.Next(100000):D5}",
+            NpcName = npc.Name,
             NpcDisplayName = npc.displayName,
             ItemId = selection.ItemId,
             ItemLabel = itemLabel,
@@ -350,7 +352,7 @@ internal sealed class BehaviorMailService
         string body = I18n.Get("help.mail.body.rewardMoney", new { npc = npcName, item = itemLabel });
         string title = I18n.Get("help.mail.title.rewardMoney");
 
-        return $"{body}^^    - LivingNPCs%money {amount} %%[#]{title}";
+        return $"{EnsureSigned(body, "LivingNPCs")}%money {amount} %%[#]{title}";
     }
 
     private IEnumerable<NpcGiftMailFact> GetGiftMailRequests()
@@ -396,15 +398,148 @@ internal sealed class BehaviorMailService
         string itemLabel = string.IsNullOrWhiteSpace(mail.ItemLabel)
             ? I18n.Get("gift.mail.fallbackItem")
             : mail.ItemLabel.Trim();
-        string sourceGift = string.IsNullOrWhiteSpace(mail.SourceGiftName)
-            ? I18n.Get("gift.mail.fallbackSourceGift")
-            : mail.SourceGiftName.Trim();
         string motive = NormalizeGiftMailMotive(mail.Motive);
+        string sourceGift = string.IsNullOrWhiteSpace(mail.SourceGiftName)
+            ? I18n.Get(motive == "help_request_reward"
+                ? "gift.mail.fallbackHelpRequestItem"
+                : "gift.mail.fallbackSourceGift")
+            : mail.SourceGiftName.Trim();
         var tokens = new { npc = npcName, item = itemLabel, sourceGift };
-        string body = I18n.Get($"gift.mail.body.{motive}", tokens);
+        string profile = ResolveNpcMailProfile(mail);
+        string body = GetGiftMailBody(motive, profile, mail, tokens);
         string title = I18n.Get($"gift.mail.title.{motive}", tokens);
         string itemId = EnsureQualifiedItemId(mail.ItemId);
-        return $"{body}^^    - {npcName}%item id {itemId} 1 %%[#]{title}";
+        return $"{EnsureSigned(body, npcName)}%item id {itemId} 1 %%[#]{title}";
+    }
+
+    private static string GetGiftMailBody(string motive, string profile, NpcGiftMailFact mail, object tokens)
+    {
+        if (UsesProfiledGiftMail(motive) && !string.IsNullOrWhiteSpace(profile))
+        {
+            int firstVariant = SelectProfiledMailVariant(mail);
+            for (int offset = 0; offset < ProfiledMailVariantCount; offset++)
+            {
+                int variant = (firstVariant + offset) % ProfiledMailVariantCount;
+                string key = $"gift.mail.body.{motive}.{profile}.{variant}";
+                string text = I18n.Get(key, tokens);
+                if (!LooksMissingTranslation(key, text))
+                {
+                    return text;
+                }
+            }
+        }
+
+        return I18n.Get($"gift.mail.body.{motive}", tokens);
+    }
+
+    private static bool UsesProfiledGiftMail(string motive)
+    {
+        return motive is "reciprocal" or "help_request_reward";
+    }
+
+    private static int SelectProfiledMailVariant(NpcGiftMailFact mail)
+    {
+        unchecked
+        {
+            string seed = $"{mail.MailKey}:{mail.NpcName}:{mail.NpcDisplayName}:{mail.Motive}:{mail.ItemId}:{mail.SourceGiftName}:{mail.CreatedTotalDays}";
+            int hash = 17;
+            foreach (char character in seed)
+            {
+                hash = (hash * 31) + character;
+            }
+
+            return Math.Abs(hash % ProfiledMailVariantCount);
+        }
+    }
+
+    private static string ResolveNpcMailProfile(NpcGiftMailFact mail)
+    {
+        string key = NormalizeNpcKey(string.IsNullOrWhiteSpace(mail.NpcName) ? mail.NpcDisplayName : mail.NpcName);
+        return key switch
+        {
+            "penny" or "潘妮" => "penny",
+            "sebastian" or "塞巴斯蒂安" => "sebastian",
+            "abigail" or "阿比盖尔" => "abigail",
+            "alex" or "亚历克斯" => "alex",
+            "leah" or "莉亚" => "leah",
+            "elliott" or "艾利欧特" => "elliott",
+            "sam" or "山姆" => "sam",
+            "harvey" or "哈维" => "harvey",
+            "haley" or "海莉" => "haley",
+            "emily" or "艾米丽" => "emily",
+            "robin" or "罗宾" => "robin",
+            "gus" or "格斯" => "gus",
+            "marnie" or "玛妮" => "marnie",
+            "willy" or "威利" => "willy",
+            "evelyn" or "艾芙琳" => "evelyn",
+            "george" or "乔治" => "george",
+            "pam" or "帕姆" or "潘姆" => "pam",
+            "clint" or "克林特" => "clint",
+            "wizard" or "法师" => "wizard",
+            "krobus" or "科罗布斯" => "krobus",
+            "pierre" or "皮埃尔" => "pierre",
+            "caroline" or "卡罗琳" => "caroline",
+            "demetrius" or "德米特里厄斯" => "demetrius",
+            "jodi" or "乔迪" => "jodi",
+            "kent" or "肯特" => "kent",
+            "lewis" or "刘易斯" => "lewis",
+            "sandy" or "桑迪" => "sandy",
+            "dwarf" or "矮人" => "dwarf",
+            "leo" or "雷欧" => "leo",
+            "vincent" or "文森特" => "vincent",
+            "jas" or "贾斯" => "jas",
+            "andy" => "andy",
+            "claire" => "claire",
+            "sophia" => "sophia",
+            "susan" => "susan",
+            "victor" => "victor",
+            "olivia" => "olivia",
+            "lance" => "lance",
+            "scarlett" => "scarlett",
+            "gunther" or "gunthersilvian" => "gunther",
+            "martin" => "martin",
+            "morris" => "morris",
+            "magnus" => "wizard",
+            "linus" or "莱纳斯" => "linus",
+            "maru" or "玛鲁" => "maru",
+            "shane" or "谢恩" => "shane",
+            _ => string.Empty
+        };
+    }
+
+    private static string NormalizeNpcKey(string value)
+    {
+        return string.IsNullOrWhiteSpace(value)
+            ? string.Empty
+            : value.Trim().ToLowerInvariant().Replace(" ", string.Empty);
+    }
+
+    private static bool LooksMissingTranslation(string key, string text)
+    {
+        return string.IsNullOrWhiteSpace(text)
+            || string.Equals(text, key, StringComparison.Ordinal);
+    }
+
+    private static string EnsureSigned(string body, string signer)
+    {
+        string trimmed = (body ?? string.Empty).TrimEnd();
+        if (HasSignature(trimmed, signer))
+        {
+            return trimmed;
+        }
+
+        return $"{trimmed}^^    - {signer}";
+    }
+
+    private static bool HasSignature(string body, string signer)
+    {
+        if (string.IsNullOrWhiteSpace(signer))
+        {
+            return false;
+        }
+
+        return body.EndsWith($"- {signer}", StringComparison.OrdinalIgnoreCase)
+            || body.EndsWith($"- {signer.Trim()}", StringComparison.OrdinalIgnoreCase);
     }
 
     private static string NormalizeGiftMailMotive(string motive)
@@ -416,6 +551,7 @@ internal sealed class BehaviorMailService
             "meaningful" => "meaningful",
             "thanks" => "thanks",
             "preference" => "preference",
+            "help_request_reward" => "help_request_reward",
             _ => "default"
         };
     }

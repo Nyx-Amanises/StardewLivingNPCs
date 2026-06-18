@@ -242,7 +242,7 @@ internal sealed class ConversationStartRecorder
 
             if (request.RewardGiftGiven)
             {
-                lines.Add("- LivingNPCs also gave the farmer a small item reward; mention it only if it feels natural.");
+                lines.Add("- LivingNPCs scheduled a small thank-you item by mail for tomorrow; mention it only if it feels natural, and do not imply the farmer already received it.");
             }
 
             if (request.SpecialFollowUpPlanned)

@@ -105,45 +105,33 @@ internal sealed class HelpRequestRewardService
 
         GiftSelection selection = this.giftSelector.Choose(npc, state, request.Summary, request.Resolution);
         SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
-        if (!Game1.player.addItemToInventoryBool(gift))
-        {
-            string giftReason = GiftActionRules.BuildGiftSelectionReason(
-                $"they tried to give the farmer {gift.DisplayName} after a fulfilled personal help request, but the farmer's inventory was full",
-                selection
-            );
-            if (!this.mailService.ScheduleGiftMail(npc, state, selection, "inventory_full", giftReason, dueInDays: 1))
-            {
-                return false;
-            }
-
-            request.RewardGiftGiven = true;
-            state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
-            GiftActionRules.ClearGiftOpportunities(state);
-            this.memory.RecordNpcWorldAction(
+        string sourceGiftName = BuildHelpRequestRewardSourceGift(request);
+        string giftReason = GiftActionRules.BuildGiftSelectionReason(
+            $"they scheduled {gift.DisplayName} by mail after the farmer completed a personal help request: {request.Summary}",
+            selection
+        );
+        if (!this.mailService.ScheduleGiftMail(
                 npc,
-                "ScheduledHelpRequestRewardGiftMail",
+                state,
+                selection,
+                "help_request_reward",
                 giftReason,
-                this.config.MaxMemoryEntriesPerNpc
-            );
-            MarkStateAfterWorldAction(state, "they mailed the farmer a help request reward gift after the farmer's inventory was full");
-            this.feedback.ShowAfterDialogue(I18n.Get("help.reward.inventoryFullMail", new { npc = npc.displayName, item = gift.DisplayName }));
-            return true;
+                dueInDays: 1,
+                sourceGiftName: sourceGiftName))
+        {
+            return false;
         }
 
         request.RewardGiftGiven = true;
         state.LastAiSmallGiftTotalDays = Game1.Date.TotalDays;
-        BehaviorMailService.RememberAiGiftItem(state, selection.ItemId);
         GiftActionRules.ClearGiftOpportunities(state);
         this.memory.RecordNpcWorldAction(
             npc,
-            "GaveHelpRequestRewardGift",
-            GiftActionRules.BuildGiftSelectionReason(
-                $"they gave the farmer {gift.DisplayName} after a fulfilled personal help request",
-                selection
-            ),
+            "ScheduledHelpRequestRewardGiftMail",
+            giftReason,
             this.config.MaxMemoryEntriesPerNpc
         );
-        MarkStateAfterWorldAction(state, "they thanked the farmer with a small gift");
+        MarkStateAfterWorldAction(state, "they mailed the farmer a help request reward gift");
         if (this.config.Debug)
         {
             this.monitor.Log(
@@ -152,8 +140,27 @@ internal sealed class HelpRequestRewardService
             );
         }
 
-        this.feedback.ShowAfterDialogue(GiftActionRules.BuildGiftHudMessage(npc, gift.DisplayName, "thanks"));
+        this.feedback.ShowAfterDialogue(I18n.Get("help.reward.giftMailScheduled", new { npc = npc.displayName, item = gift.DisplayName }));
         return true;
+    }
+
+    private static string BuildHelpRequestRewardSourceGift(NpcHelpRequestFact request)
+    {
+        if (!string.IsNullOrWhiteSpace(request.RequestedItemLabel))
+        {
+            return request.RequestedItemLabel.Trim();
+        }
+
+        var completedStep = request.Steps
+            .LastOrDefault(step => step.Status == "Fulfilled" && !string.IsNullOrWhiteSpace(step.RequestedItemLabel));
+        if (completedStep != null)
+        {
+            return completedStep.RequestedItemLabel.Trim();
+        }
+
+        return string.IsNullOrWhiteSpace(request.Summary)
+            ? string.Empty
+            : request.Summary.Trim();
     }
 
     private void GrantOrScheduleMoneyReward(NPC npc, NpcHelpRequestFact request)

@@ -833,6 +833,7 @@ internal sealed class LivingNpcState
                 mail.MailKey = string.IsNullOrWhiteSpace(mail.MailKey)
                     ? System.Guid.NewGuid().ToString("N")
                     : mail.MailKey.Trim();
+                mail.NpcName = mail.NpcName?.Trim() ?? string.Empty;
                 mail.NpcDisplayName = mail.NpcDisplayName?.Trim() ?? string.Empty;
                 mail.ItemId = mail.ItemId?.Trim() ?? string.Empty;
                 mail.ItemLabel = mail.ItemLabel?.Trim() ?? string.Empty;
@@ -843,6 +844,7 @@ internal sealed class LivingNpcState
                     "meaningful" => "meaningful",
                     "thanks" => "thanks",
                     "preference" => "preference",
+                    "help_request_reward" => "help_request_reward",
                     _ => "daily"
                 };
                 mail.Reason = mail.Reason?.Trim() ?? string.Empty;
@@ -1068,6 +1070,7 @@ internal sealed class LivingNpcState
                 .Select(mail => new NpcGiftMailFact
                 {
                     MailKey = mail.MailKey,
+                    NpcName = mail.NpcName,
                     NpcDisplayName = mail.NpcDisplayName,
                     ItemId = mail.ItemId,
                     ItemLabel = mail.ItemLabel,
