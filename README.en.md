@@ -155,7 +155,6 @@ This layer also gates help-request depth (Y1 spring: only light one-step favors;
 | `livingnpcs_prompt [near\|<NPC>]` | the full hidden context about to be injected into ValleyTalk |
 | `livingnpcs_export [near\|all\|<NPC>]` | a Markdown debug report under `Mods/LivingNPCs/debug_reports/<save>/` |
 | `livingnpcs_eval` | a light in-game runtime check that key personality rules still hold |
-| `livingnpcs_restore_gift_mail [latest\|all]` | restore unclaimed LivingNPCs gift letters that vanished from the mailbox |
 | `livingnpcs_giftmail` | diagnose LivingNPCs gift mail: status, mailbox location, whether `Data/mail` has the entry, generated text, orphaned dead letters |
 
 There is also an offline regression check (no game needed):
@@ -204,7 +203,6 @@ Current whitelist:
 | `give_small_gift` | at least a little familiar; at most one AI gift per NPC per day |
 | `give_meaningful_gift` | at least friendly, plus one of: high relationship / recent special event / important long-term memory; separate cooldown |
 | `give_money` | at least friendly; defaults to 100g, capped by config (default cap 250g) |
-| `water_nearby_crops` | at least friendly; farm only; only planted-but-unwatered nearby crops |
 | `companion_outing` | both clearly agree to go somewhere together now; the NPC uses vanilla schedule-style cross-map routing and stays at least 2 in-game hours on arrival |
 | `festival_interaction` | light special interactions in festival / event scenes only |
 | `assist_quest` | light assistance around the player's existing quests; never completes them |
@@ -342,12 +340,12 @@ dotnet build src\ValleyTalk.csproj -p:GamePath="D:\SteamLibrary\steamapps\common
 
 ## Main config
 
-LivingNPCs ships a deliberately small in-game Generic Mod Config Menu (enable mod, HUD messages, the inspect-memory hotkey, the help-request toggle, the AI world-actions master plus watering/festival/quest-assist, SVE compatibility, and the concise-prompt switch). Everything else lives in `config.json` with safe defaults, including:
+LivingNPCs ships a deliberately small in-game Generic Mod Config Menu (enable mod, HUD messages, the inspect-memory hotkey, the help-request toggle, the AI world-actions master plus festival/quest-assist toggles, SVE compatibility, and the concise-prompt switch). Everything else lives in `config.json` with safe defaults, including:
 
 - Hotkeys and manual-behavior test mode; memory sizes; whether to log conversation starts.
 - Help requests: pending cap, cooldown days, minimum relationship trust, daily offer chance, completion reward range.
 - AI-chat bonus friendship and its daily cap; ambient follow-ups; dialogue-driven behaviors and how many days they linger.
-- AI world actions: per-action toggles (small / meaningful gift, money, watering, outing, festival, quest assist); meaningful-gift cooldown; money cap; watering tiles; minimum outing stay.
+- AI world actions: per-action toggles (small / meaningful gift, money, outing, festival, quest assist); meaningful-gift cooldown; money cap; minimum outing stay.
 - State / emotion / conflict daily decay; passive-behavior chance; daily behavior cap; interaction range.
 - ValleyTalk prompt bridge; `ConcisePromptContext`; the optional AI behavior planner.
 

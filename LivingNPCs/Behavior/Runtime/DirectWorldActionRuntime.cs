@@ -3,9 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Xna.Framework;
 using StardewValley;
-using StardewValley.Locations;
 using StardewValley.Pathfinding;
-using StardewValley.TerrainFeatures;
 
 namespace LivingNPCs.Behavior;
 
@@ -28,62 +26,6 @@ internal sealed class DirectWorldActionRuntime
         this.feedback = feedback;
         this.canUseWorldAction = canUseWorldAction;
         this.festivalAnchorSelector = new CompanionOutingAnchorSelector(BehaviorActionExecutor.IsSafeDestinationTile);
-    }
-
-    public bool TryWaterNearbyCrops(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
-    {
-        reason = string.Empty;
-        if (!this.canUseWorldAction(npc, "farm_help", requireFriendly: true, out reason, allowDuringEvents: false, allowDistantWhenExplicit: false))
-        {
-            return false;
-        }
-
-        var state = this.memory.GetState(npc);
-        if (!this.config.AllowAiFarmHelp || state == null || state.LastAiFarmHelpTotalDays == Game1.Date.TotalDays)
-        {
-            reason = "farm help is disabled or already used today";
-            return false;
-        }
-
-        if (Game1.currentLocation is not Farm farm)
-        {
-            reason = "the player is not on the farm";
-            return false;
-        }
-
-        int requestedTiles = action.TileCount <= 0 ? 6 : action.TileCount;
-        int maxTiles = Math.Clamp(requestedTiles, 1, this.config.MaxAiWateredTilesPerAction);
-        var nearbyTiles = farm.terrainFeatures.Pairs
-            .Where(pair => pair.Value is HoeDirt dirt && dirt.crop != null && dirt.state.Value != 1)
-            .OrderBy(pair => Vector2.Distance(pair.Key, Game1.player.Tile))
-            .Take(maxTiles)
-            .ToList();
-
-        foreach (var pair in nearbyTiles)
-        {
-            if (pair.Value is HoeDirt dirt)
-            {
-                dirt.state.Value = 1;
-                dirt.updateNeighbors();
-            }
-        }
-
-        if (nearbyTiles.Count == 0)
-        {
-            reason = "there are no nearby unwatered crops";
-            return false;
-        }
-
-        state.LastAiFarmHelpTotalDays = Game1.Date.TotalDays;
-        this.memory.RecordNpcWorldAction(
-            npc,
-            "WateredNearbyCrops",
-            BuildWorldActionReason(action.Reason, $"they watered {nearbyTiles.Count} nearby crop tiles for the farmer"),
-            this.config.MaxMemoryEntriesPerNpc
-        );
-        MarkStateAfterWorldAction(state, "they helped the farmer with watering");
-        this.feedback.Show(I18n.Get("worldAction.wateredCrops", new { npc = npc.displayName, count = nearbyTiles.Count }));
-        return true;
     }
 
     public bool TryFestivalInteraction(NPC npc, ValleyTalkWorldActionRequest action, out string reason)

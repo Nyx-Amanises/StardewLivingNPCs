@@ -317,7 +317,6 @@ LivingNPCs 现在会把“这个存档已经走到哪里”压成一层独立的
 - `livingnpcs_prompt [near|NPC名]`：输出即将注入 ValleyTalk 的完整隐藏上下文。
 - `livingnpcs_export [near|all|NPC名]`：导出 Markdown 调试报告到 `Mods/LivingNPCs/debug_reports/<存档名>/`。
 - `livingnpcs_eval`：运行一组轻量运行时诊断，确认关键人格化规则还在。
-- `livingnpcs_restore_gift_mail [latest|all]`：恢复未领取但已从邮箱消失的 LivingNPCs 礼物信。
 - `livingnpcs_giftmail`：诊断 LivingNPCs 礼物信——状态、邮箱位置、`Data/mail` 是否有对应条目、生成文本和孤儿死信。
 
 报告里会显示：
@@ -447,7 +446,6 @@ LivingNPCs 当前允许的世界动作只有：
 - `give_small_gift`
 - `give_meaningful_gift`
 - `give_money`
-- `water_nearby_crops`
 - `companion_outing`
 - `festival_interaction`
 - `assist_quest`
@@ -475,7 +473,6 @@ LivingNPCs 当前允许的世界动作只有：
 - 小礼物：至少有一点熟悉；每天每个 NPC 最多一次 AI 礼物。
 - 有意义礼物：至少友好，并且满足高关系 / 近期事件 / 重要长期记忆之一；默认 7 天冷却。
 - 送钱：至少友好；金额默认 100g，受单次上限控制。
-- 浇水：至少友好；只能在农场；只影响附近已种植但未浇水的作物。
 - 陪伴出游：至少有一点熟悉；只接受明确目的地，需能容纳路程和抵达后至少 2 个游戏小时，不改永久日程。
 - 节日互动：只在事件 / 节日场景中允许。
 - 任务协助：只围绕已有任务做轻量协助，不直接完成任务。
@@ -617,7 +614,7 @@ Generic Mod Config Menu 中可以调：
 - 对话驱动行为开关、行为影响最长保留天数。
 - 主动求助开关、待完成上限、冷却天数、最低关系信任、每日主动开口概率、完成奖励范围。
 - 世界动作开关。
-- 礼物、送钱、浇水、陪伴出游的限制。
+- 礼物、送钱、陪伴出游的限制。
 - 每日情绪衰减、每日冲突衰减。
 - 被动行为概率。
 - ValleyTalk 桥接。

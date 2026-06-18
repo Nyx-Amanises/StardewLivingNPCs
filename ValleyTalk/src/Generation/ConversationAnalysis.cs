@@ -143,7 +143,6 @@ internal sealed class ConversationAnalysis
                     action.Type = NormalizeActionType(action.Type);
                     action.Reason = action.Reason?.Trim() ?? string.Empty;
                     action.Amount = Math.Clamp(action.Amount, 0, 250);
-                    action.TileCount = Math.Clamp(action.TileCount, 0, 12);
                     action.DurationMinutes = Math.Clamp(action.DurationMinutes, 0, 20);
                     action.DelayMinutes = Math.Clamp(action.DelayMinutes, 0, 20);
                     action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
@@ -307,7 +306,6 @@ internal sealed class ConversationAnalysis
             "give_small_gift" => "give_small_gift",
             "give_meaningful_gift" => "give_meaningful_gift",
             "give_money" => "give_money",
-            "water_nearby_crops" => "water_nearby_crops",
             "companion_outing" => "companion_outing",
             "walk_together" => "walk_together",
             "escort_to_location" => "escort_to_location",
@@ -512,9 +510,6 @@ internal sealed class ConversationWorldActionRequest
 
     [JsonProperty("amount")]
     public int Amount { get; set; }
-
-    [JsonProperty("tileCount")]
-    public int TileCount { get; set; }
 
     [JsonProperty("durationMinutes")]
     public int DurationMinutes { get; set; }

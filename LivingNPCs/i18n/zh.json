@@ -49,7 +49,6 @@
   "help.followUp.itemBigReward": "上次你带来的东西，真的解了我的急。",
   "help.followUp.question": "上次你说的那些，我后来还想了想。",
   "help.followUp.item": "上次你带来的东西，正好派上了用场。",
-  "worldAction.wateredCrops": "LivingNPCs：{{npc}} 帮你浇了 {{count}} 格作物。",
   "dialogueInfluence.location.beach": "你提到海边后，我也想来看看。",
   "dialogueInfluence.location.archaeologyHouse": "你提到这里后，我就想顺路来看看。",
   "dialogueInfluence.location.forest": "刚才聊到森林，我就想来走走。",
@@ -443,7 +442,7 @@
   "outing.return.default": "{{opening}}我们回去吧。",
 
   "gmcm.para.loaded": "LivingNPCs 已加载。能看到这个页面，就说明 Mod 正在运行。",
-  "gmcm.para.commands": "SMAPI 调试命令：livingnpcs_debug、livingnpcs_prompt、livingnpcs_export、livingnpcs_eval、livingnpcs_restore_gift_mail。",
+  "gmcm.para.commands": "SMAPI 调试命令：livingnpcs_debug、livingnpcs_prompt、livingnpcs_export、livingnpcs_eval。",
 
   "gmcm.section.basic": "基础设置",
   "gmcm.section.manualTest": "手动测试",
@@ -503,7 +502,7 @@
   "gmcm.behaviorInfluenceDays.tooltip": "对话产生的行为影响最多保留多少天。过期后不会继续影响 NPC 行为。",
 
   "gmcm.aiWorldActions.name": "允许 AI 触发世界动作",
-  "gmcm.aiWorldActions.tooltip": "允许 AI 在严格限制下触发少量实际效果，例如小礼物、少量金钱、浇水或陪伴出游。",
+  "gmcm.aiWorldActions.tooltip": "允许 AI 在严格限制下触发少量实际效果，例如小礼物、少量金钱、陪伴出游、节日互动或轻量任务协助。",
   "gmcm.smallGifts.name": "允许 NPC 送小礼物",
   "gmcm.smallGifts.tooltip": "允许原版好感至少 5 心的 NPC 偶尔给玩家一个低价值小礼物。",
   "gmcm.meaningfulGifts.name": "允许 NPC 送有意义的礼物",
@@ -518,10 +517,6 @@
   "gmcm.moneyGifts.tooltip": "只有关系较熟时，NPC 才可能偶尔给玩家少量金钱。",
   "gmcm.moneyCap.name": "单次送钱上限",
   "gmcm.moneyCap.tooltip": "每次 AI 触发送钱动作时，最多给玩家多少金币。",
-  "gmcm.farmHelp.name": "允许 NPC 帮忙浇水",
-  "gmcm.farmHelp.tooltip": "只有在农场且关系较熟时，NPC 才可能给附近已种植但未浇水的作物浇水。",
-  "gmcm.waterTiles.name": "单次最多浇水格数",
-  "gmcm.waterTiles.tooltip": "一次 AI 帮忙浇水最多影响多少格附近作物。",
   "gmcm.companionOutings.name": "允许 NPC 陪伴出游",
   "gmcm.companionOutings.tooltip": "允许 NPC 接受一起去某处逛逛、看风景或安静待一会儿的邀请，并临时偏离当天日程。",
   "gmcm.outingStay.name": "出游最短停留时间",

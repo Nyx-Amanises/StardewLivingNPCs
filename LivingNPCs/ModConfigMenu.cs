@@ -131,14 +131,6 @@ internal static class ModConfigMenu
 
         configMenu.AddBoolOption(
             mod: manifest,
-            name: () => I18n.Get("gmcm.farmHelp.name"),
-            tooltip: () => I18n.Get("gmcm.farmHelp.tooltip"),
-            getValue: () => config.AllowAiFarmHelp,
-            setValue: value => config.AllowAiFarmHelp = value
-        );
-
-        configMenu.AddBoolOption(
-            mod: manifest,
             name: () => I18n.Get("gmcm.festival.name"),
             tooltip: () => I18n.Get("gmcm.festival.tooltip"),
             getValue: () => config.AllowAiFestivalInteractions,

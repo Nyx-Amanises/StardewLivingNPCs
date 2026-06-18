@@ -397,7 +397,6 @@ internal sealed class ValleyTalkWorldActionRequest
 {
     public string Type { get; set; } = "none";
     public int Amount { get; set; }
-    public int TileCount { get; set; }
     public int DurationMinutes { get; set; }
     public int DelayMinutes { get; set; }
     public string Reason { get; set; } = string.Empty;

@@ -135,7 +135,6 @@ internal static class BehaviorValueNormalizer
             "give_small_gift" => "give_small_gift",
             "give_meaningful_gift" => "give_meaningful_gift",
             "give_money" => "give_money",
-            "water_nearby_crops" => "water_nearby_crops",
             "companion_outing" => "companion_outing",
             "escort_to_location" => "companion_outing",
             "festival_interaction" => "festival_interaction",

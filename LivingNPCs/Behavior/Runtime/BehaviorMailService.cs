@@ -117,57 +117,6 @@ internal sealed class BehaviorMailService
         return true;
     }
 
-    public int RestoreMissingGiftMailsToMailbox(bool includeReceived, bool restoreAll)
-    {
-        if (!Context.IsWorldReady || Game1.player == null)
-        {
-            return 0;
-        }
-
-        var candidates = this.GetGiftMailRequests()
-            .Where(mail => !mail.Claimed && mail.QueuedForDelivery && mail.DueTotalDays <= Game1.Date.TotalDays)
-            .Select(mail => new
-            {
-                Mail = mail,
-                Key = GetGiftMailKey(mail)
-            })
-            .Where(entry => !string.IsNullOrWhiteSpace(entry.Key)
-                && !ContainsMailKey(Game1.player.mailbox, entry.Key)
-                && !ContainsMailKey(Game1.player.mailForTomorrow, entry.Key)
-                && (includeReceived || !ContainsMailKey(Game1.player.mailReceived, entry.Key)))
-            .OrderByDescending(entry => entry.Mail.DueTotalDays)
-            .ThenByDescending(entry => entry.Mail.CreatedTotalDays)
-            .ThenByDescending(entry => entry.Mail.CreatedTimeOfDay)
-            .ToList();
-
-        if (!restoreAll)
-        {
-            candidates = candidates.Take(1).ToList();
-        }
-
-        int restored = 0;
-        foreach (var candidate in candidates)
-        {
-            if (ContainsMailKey(Game1.player.mailReceived, candidate.Key))
-            {
-                Game1.player.mailReceived.Remove(candidate.Key);
-            }
-
-            if (!ContainsMailKey(Game1.player.mailbox, candidate.Key))
-            {
-                Game1.player.mailbox.Add(candidate.Key);
-                restored++;
-            }
-        }
-
-        if (restored > 0)
-        {
-            this.helper.GameContent.InvalidateCache("Data/mail");
-        }
-
-        return restored;
-    }
-
     /// <summary>Diagnostic dump of every tracked gift mail vs. the player's actual mail lists and Data/mail.</summary>
     public List<string> DescribeGiftMails()
     {

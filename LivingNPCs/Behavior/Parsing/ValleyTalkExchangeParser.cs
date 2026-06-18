@@ -56,7 +56,6 @@ internal static class ValleyTalkExchangeParser
                     action.Type = BehaviorValueNormalizer.NormalizeWorldActionType(action.Type);
                     action.Reason = action.Reason?.Trim() ?? string.Empty;
                     action.Amount = System.Math.Clamp(action.Amount, 0, 250);
-                    action.TileCount = System.Math.Clamp(action.TileCount, 0, 12);
                     action.DurationMinutes = action.Type == "companion_outing"
                         ? System.Math.Clamp(
                             action.DurationMinutes <= 0

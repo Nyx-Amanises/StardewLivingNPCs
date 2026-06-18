@@ -55,11 +55,6 @@ internal sealed class BehaviorDebugCommandHandler
             this.OnEvalCommand
         );
         this.helper.ConsoleCommands.Add(
-            "livingnpcs_restore_gift_mail",
-            "恢复未领取但已从邮箱消失的 LivingNPCs 礼物信。用法：livingnpcs_restore_gift_mail [latest|all]",
-            this.OnRestoreGiftMailCommand
-        );
-        this.helper.ConsoleCommands.Add(
             "livingnpcs_giftmail",
             "诊断 LivingNPCs 礼物信：追踪状态、邮箱位置、Data/mail 是否有对应条目、生成文本、孤儿死信。",
             this.OnGiftMailCommand
@@ -189,25 +184,6 @@ internal sealed class BehaviorDebugCommandHandler
     private void OnEvalCommand(string command, string[] args)
     {
         this.monitor.Log(BehaviorDiagnostics.RunRuntimeEvaluationSuite(), LogLevel.Info);
-    }
-
-    private void OnRestoreGiftMailCommand(string command, string[] args)
-    {
-        if (!Context.IsWorldReady)
-        {
-            this.monitor.Log("LivingNPCs：请先载入存档后再恢复礼物信。", LogLevel.Info);
-            return;
-        }
-
-        string target = JoinCommandArgs(args);
-        bool restoreAll = target.Equals("all", StringComparison.OrdinalIgnoreCase);
-        int restored = this.mailService.RestoreMissingGiftMailsToMailbox(includeReceived: true, restoreAll);
-        string message = restored > 0
-            ? $"LivingNPCs：已恢复 {restored} 封未领取的礼物信到邮箱。"
-            : "LivingNPCs：没有找到可恢复的未领取礼物信。";
-
-        this.monitor.Log(message, LogLevel.Info);
-        this.showFeedback(message);
     }
 
     private bool TryResolveNpcArgument(string[] args, out NPC? npc, out string error)

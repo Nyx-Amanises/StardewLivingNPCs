@@ -63,7 +63,6 @@ internal sealed class LivingNpcState
     public string PendingReciprocalGiftSourceGiftName { get; set; } = string.Empty;
     public string PendingReciprocalGiftReason { get; set; } = string.Empty;
     public List<NpcGiftMailFact> GiftMails { get; set; } = new();
-    public int LastAiFarmHelpTotalDays { get; set; } = -1;
     public int LastAiWalkTogetherTotalDays { get; set; } = -1;
     public int LastHelpRequestTotalDays { get; set; } = -1;
     public int LastHelpRequestTimeOfDay { get; set; }
@@ -1135,7 +1134,6 @@ internal sealed class LivingNpcState
             PendingReciprocalGiftDueTotalDays = this.PendingReciprocalGiftDueTotalDays,
             PendingReciprocalGiftSourceGiftName = this.PendingReciprocalGiftSourceGiftName,
             PendingReciprocalGiftReason = this.PendingReciprocalGiftReason,
-            LastAiFarmHelpTotalDays = this.LastAiFarmHelpTotalDays,
             LastAiWalkTogetherTotalDays = this.LastAiWalkTogetherTotalDays,
             LastHelpRequestTotalDays = this.LastHelpRequestTotalDays,
             LastHelpRequestTimeOfDay = this.LastHelpRequestTimeOfDay,

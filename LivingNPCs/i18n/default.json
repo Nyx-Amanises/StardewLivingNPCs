@@ -49,7 +49,6 @@
   "help.followUp.itemBigReward": "What you brought last time really helped me.",
   "help.followUp.question": "I kept thinking about what you said last time.",
   "help.followUp.item": "That thing you brought came in handy.",
-  "worldAction.wateredCrops": "LivingNPCs: {{npc}} watered {{count}} crop tile(s) for you.",
   "dialogueInfluence.location.beach": "After you mentioned the beach, I wanted to come see it too.",
   "dialogueInfluence.location.archaeologyHouse": "After you mentioned this place, I wanted to stop by.",
   "dialogueInfluence.location.forest": "After we talked about the forest, I felt like taking a walk here.",
@@ -443,7 +442,7 @@
   "outing.return.default": "{{opening}}let's head back.",
 
   "gmcm.para.loaded": "LivingNPCs is loaded. If you can see this page, the mod is running.",
-  "gmcm.para.commands": "SMAPI debug commands: livingnpcs_debug, livingnpcs_prompt, livingnpcs_export, livingnpcs_eval, livingnpcs_restore_gift_mail.",
+  "gmcm.para.commands": "SMAPI debug commands: livingnpcs_debug, livingnpcs_prompt, livingnpcs_export, livingnpcs_eval.",
 
   "gmcm.section.basic": "General",
   "gmcm.section.manualTest": "Manual testing",
@@ -503,7 +502,7 @@
   "gmcm.behaviorInfluenceDays.tooltip": "How many days a dialogue-driven behavior influence lasts at most. After it expires it no longer affects the NPC.",
 
   "gmcm.aiWorldActions.name": "Allow AI world actions",
-  "gmcm.aiWorldActions.tooltip": "Allow AI, under strict limits, to trigger a few real effects such as small gifts, a little money, watering, or companion outings.",
+  "gmcm.aiWorldActions.tooltip": "Allow AI, under strict limits, to trigger a few real effects such as small gifts, a little money, companion outings, festival moments, or light quest assists.",
   "gmcm.smallGifts.name": "Allow NPC small gifts",
   "gmcm.smallGifts.tooltip": "Allow NPCs with at least 5 hearts to occasionally give the player a low-value small gift.",
   "gmcm.meaningfulGifts.name": "Allow NPC meaningful gifts",
@@ -518,10 +517,6 @@
   "gmcm.moneyGifts.tooltip": "Only when fairly close may an NPC occasionally give the player a little money.",
   "gmcm.moneyCap.name": "Max money per gift",
   "gmcm.moneyCap.tooltip": "The most gold an AI money gift gives the player at once.",
-  "gmcm.farmHelp.name": "Allow NPC watering help",
-  "gmcm.farmHelp.tooltip": "Only on the farm and when fairly close may an NPC water nearby planted-but-unwatered crops.",
-  "gmcm.waterTiles.name": "Max tiles watered per action",
-  "gmcm.waterTiles.tooltip": "How many nearby crop tiles one AI watering action affects at most.",
   "gmcm.companionOutings.name": "Allow companion outings",
   "gmcm.companionOutings.tooltip": "Allow an NPC to accept an invitation to wander somewhere, enjoy the view, or sit quietly for a while, temporarily stepping away from the day's schedule.",
   "gmcm.outingStay.name": "Minimum outing stay",

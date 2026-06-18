@@ -206,7 +206,6 @@ LivingNPCs 现在还会把“这个存档已经走到哪一步”写进隐藏上
 | `livingnpcs_prompt [near\|NPC名]` | 输出 LivingNPCs 即将注入 ValleyTalk 的完整隐藏上下文 |
 | `livingnpcs_export [near\|all\|NPC名]` | 导出 Markdown 调试报告到 `Mods/LivingNPCs/debug_reports/<存档名>/` |
 | `livingnpcs_eval` | 在游戏内跑一组轻量运行时诊断，确认关键人格化规则还在 |
-| `livingnpcs_restore_gift_mail [latest\|all]` | 恢复未领取但已从邮箱消失的 LivingNPCs 礼物信 |
 | `livingnpcs_giftmail` | 诊断 LivingNPCs 礼物信：状态、邮箱位置、`Data/mail` 是否有对应条目、生成文本和孤儿死信 |
 
 导出的报告会包含：
@@ -277,7 +276,6 @@ AI 在隐藏元数据里提出动作请求
 | `give_small_gift` | 关系至少有一点熟悉；每天每个 NPC 最多一次 AI 礼物 |
 | `give_meaningful_gift` | 至少友好；并且还要满足高关系、近期特殊事件、或重要长期记忆触发之一；有独立冷却 |
 | `give_money` | 至少友好；默认 100g，受配置上限约束 |
-| `water_nearby_crops` | 至少友好；只能在农场；只给附近已种植但未浇水的作物浇水 |
 | `companion_outing` | 双方明确约好现在去某处共同待一段时间；NPC 使用原版日程式跨地图路线，到达后在合适位置至少停留 2 个游戏小时 |
 | `festival_interaction` | 只在节日 / 事件场景中允许轻量特殊互动 |
 | `assist_quest` | 只围绕玩家已有任务做轻量协助，不直接完成任务 |
@@ -666,10 +664,10 @@ D:\SteamLibrary\steamapps\common\Stardew Valley\StardewModdingAPI.exe
 - 是否允许后续头顶气泡。
 - 是否允许对话驱动行为，以及这类影响最多保留几天。
 - 是否允许 AI 触发世界动作。
-- 是否允许小礼物 / 有意义礼物 / 送钱 / 浇水 / 陪伴出游。
+- 是否允许小礼物 / 有意义礼物 / 送钱 / 陪伴出游。
 - 是否允许节日特殊互动 / 任务协助。
 - 有意义礼物冷却天数。
-- 单次送钱上限、单次浇水格数、出游最短停留时间。
+- 单次送钱上限、出游最短停留时间。
 - NPC 状态衰减、每日情绪衰减、每日冲突衰减、被动行为概率、每日行为上限、最大互动距离。
 - 是否启用 ValleyTalk prompt bridge。
 - 是否改用精简版隐藏上下文（`ConcisePromptContext`，默认关闭；开启后 LivingNPCs 注入的隐藏上下文更短）。

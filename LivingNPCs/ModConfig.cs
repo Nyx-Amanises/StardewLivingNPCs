@@ -37,8 +37,6 @@ internal sealed class ModConfig
     public int AiDailyGiftChanceMaxPercent { get; set; } = 5;
     public bool AllowAiMoneyGifts { get; set; } = true;
     public int MaxAiMoneyGiftAmount { get; set; } = 250;
-    public bool AllowAiFarmHelp { get; set; } = true;
-    public int MaxAiWateredTilesPerAction { get; set; } = 12;
     public bool AllowAiCompanionOutings { get; set; } = true;
     public int MinimumCompanionOutingStayMinutes { get; set; } = 120;
     public bool AllowAiFestivalInteractions { get; set; } = true;
@@ -110,7 +108,6 @@ internal sealed class ModConfig
         this.AiDailyGiftChanceMinPercent = Clamp(this.AiDailyGiftChanceMinPercent, 0, MaxAiDailyGiftChancePercent);
         this.AiDailyGiftChanceMaxPercent = Clamp(this.AiDailyGiftChanceMaxPercent, 0, MaxAiDailyGiftChancePercent);
         this.MaxAiMoneyGiftAmount = Clamp(this.MaxAiMoneyGiftAmount, 0, 100000);
-        this.MaxAiWateredTilesPerAction = Clamp(this.MaxAiWateredTilesPerAction, 0, 200);
         this.MinimumCompanionOutingStayMinutes = Clamp(this.MinimumCompanionOutingStayMinutes, 0, 1200);
         this.NpcStateDailyDecay = Clamp(this.NpcStateDailyDecay, 0, 100);
         this.NpcEmotionDailyDecay = Clamp(this.NpcEmotionDailyDecay, 0, 100);
@@ -168,8 +165,6 @@ internal sealed class ModConfig
         this.AiDailyGiftChanceMaxPercent = defaults.AiDailyGiftChanceMaxPercent;
         this.AllowAiMoneyGifts = defaults.AllowAiMoneyGifts;
         this.MaxAiMoneyGiftAmount = defaults.MaxAiMoneyGiftAmount;
-        this.AllowAiFarmHelp = defaults.AllowAiFarmHelp;
-        this.MaxAiWateredTilesPerAction = defaults.MaxAiWateredTilesPerAction;
         this.AllowAiCompanionOutings = defaults.AllowAiCompanionOutings;
         this.MinimumCompanionOutingStayMinutes = defaults.MinimumCompanionOutingStayMinutes;
         this.AllowAiFestivalInteractions = defaults.AllowAiFestivalInteractions;
