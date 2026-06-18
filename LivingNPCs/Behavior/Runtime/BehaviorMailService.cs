@@ -81,7 +81,12 @@ internal sealed class BehaviorMailService
             Game1.player.mailForTomorrow.Add(mailKey);
         }
 
-        this.helper.GameContent.InvalidateCache("Data/mail");
+        this.InvalidateMailCache();
+    }
+
+    public void InvalidateMailCache()
+    {
+        this.helper.GameContent.InvalidateCache(asset => asset.NameWithoutLocale.IsEquivalentTo("Data/mail"));
     }
 
     public bool HasPendingGiftMail(LivingNpcState state, string motive)
@@ -130,7 +135,7 @@ internal sealed class BehaviorMailService
         Dictionary<string, string> mailData;
         try
         {
-            this.helper.GameContent.InvalidateCache("Data/mail");
+            this.InvalidateMailCache();
             mailData = this.helper.GameContent.Load<Dictionary<string, string>>("Data/mail");
         }
         catch (Exception ex)
@@ -220,7 +225,7 @@ internal sealed class BehaviorMailService
         state.GiftMails.Add(mail);
         RememberAiGiftItem(state, selection.ItemId);
         this.QueueDueGiftMailsForTomorrow();
-        this.helper.GameContent.InvalidateCache("Data/mail");
+        this.InvalidateMailCache();
         return true;
     }
 

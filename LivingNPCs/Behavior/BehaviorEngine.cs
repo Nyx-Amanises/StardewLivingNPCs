@@ -180,7 +180,7 @@ internal sealed class BehaviorEngine
             this.conversationStartRecorder.Clear();
             this.valleyTalkBridge.TryInitialize();
             this.mailService.QueueDueGiftMailsForTomorrow();
-            this.helper.GameContent.InvalidateCache("Data/mail");
+            this.mailService.InvalidateMailCache();
             this.helpRequestQuestLog.Sync();
 
             if (this.config.Debug)
@@ -225,17 +225,14 @@ internal sealed class BehaviorEngine
             this.delayedTravelActions.Clear();
             this.communityRipples.TryPropagate();
             this.mailService.QueueDueGiftMailsForTomorrow();
-            this.helper.GameContent.InvalidateCache("Data/mail");
+            this.mailService.InvalidateMailCache();
             this.helpRequestQuestLog.Sync();
         });
     }
 
     private void OnAssetRequested(object? sender, AssetRequestedEventArgs e)
     {
-        // Use NameWithoutLocale so the edit also applies to localized variants such as
-        // "Data/mail.zh-CN"; otherwise gift/reward mail entries are never added for non-English
-        // players and their letters open to nothing.
-        if (!e.NameWithoutLocale.IsEquivalentTo("Data/mail"))
+        if (!IsMailAsset(e))
         {
             return;
         }
@@ -253,6 +250,16 @@ internal sealed class BehaviorEngine
                 }
             });
         });
+    }
+
+    private static bool IsMailAsset(AssetRequestedEventArgs e)
+    {
+        // Use NameWithoutLocale so the edit also applies to localized variants such as
+        // "Data/mail.zh-CN"; otherwise gift/reward mail entries are never added for non-English
+        // players and their letters open to nothing.
+        return e.NameWithoutLocale.IsEquivalentTo("Data/mail")
+            || string.Equals(e.NameWithoutLocale.BaseName, "Data/mail", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(e.Name.BaseName, "Data/mail", StringComparison.OrdinalIgnoreCase);
     }
 
     private void OnReturnedToTitle(object? sender, ReturnedToTitleEventArgs e)
