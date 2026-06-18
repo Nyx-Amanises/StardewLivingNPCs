@@ -342,13 +342,15 @@ internal sealed class BehaviorMailService
     {
         int amount = Math.Clamp(request.RewardMoney <= 0 ? 200 : request.RewardMoney, 200, 10000);
         string npcName = string.IsNullOrWhiteSpace(request.NpcDisplayName)
-            ? "镇上的居民"
+            ? I18n.Get("help.mail.fallbackNpc")
             : request.NpcDisplayName.Trim();
         string itemLabel = string.IsNullOrWhiteSpace(request.RequestedItemLabel)
-            ? "那件东西"
+            ? I18n.Get("help.mail.fallbackItem")
             : request.RequestedItemLabel.Trim();
+        string body = I18n.Get("help.mail.body.rewardMoney", new { npc = npcName, item = itemLabel });
+        string title = I18n.Get("help.mail.title.rewardMoney");
 
-        return $"@，谢谢你之前帮{npcName}带来{itemLabel}。这份谢礼由镇上的互助基金代为发放，请收下。^^    - LivingNPCs%money {amount} %%[#]互助谢礼";
+        return $"{body}^^    - LivingNPCs%money {amount} %%[#]{title}";
     }
 
     private IEnumerable<NpcGiftMailFact> GetGiftMailRequests()
@@ -389,33 +391,33 @@ internal sealed class BehaviorMailService
     private static string BuildGiftMailText(NpcGiftMailFact mail)
     {
         string npcName = string.IsNullOrWhiteSpace(mail.NpcDisplayName)
-            ? "镇上的居民"
+            ? I18n.Get("gift.mail.fallbackNpc")
             : mail.NpcDisplayName.Trim();
         string itemLabel = string.IsNullOrWhiteSpace(mail.ItemLabel)
-            ? "这件小东西"
+            ? I18n.Get("gift.mail.fallbackItem")
             : mail.ItemLabel.Trim();
         string sourceGift = string.IsNullOrWhiteSpace(mail.SourceGiftName)
-            ? "你送来的礼物"
+            ? I18n.Get("gift.mail.fallbackSourceGift")
             : mail.SourceGiftName.Trim();
-        string body = mail.Motive switch
-        {
-            "reciprocal" => $"@，那天你送我的{sourceGift}，我一直记着。这个{itemLabel}算是一点回礼，希望你会喜欢。",
-            "inventory_full" => $"@，刚才想把{itemLabel}交给你，不过你的背包好像满了。我把它放进信里寄过来了，记得收下。",
-            "meaningful" => $"@，有些话当面反而不好说清楚。这个{itemLabel}想送给你，希望它能把我的心意带到。",
-            "thanks" => $"@，谢谢你之前帮的忙。这个{itemLabel}是我的一点谢意，请收下。",
-            "preference" => $"@，我记得你似乎会喜欢这样的东西，所以把{itemLabel}寄给你。希望它来得正好。",
-            _ => $"@，今天想起你，觉得这个{itemLabel}也许会派上用场。请收下吧。"
-        };
-        string title = mail.Motive switch
-        {
-            "reciprocal" => $"{npcName}的回礼",
-            "inventory_full" => $"{npcName}寄来的礼物",
-            "meaningful" => $"{npcName}的心意",
-            "thanks" => $"{npcName}的谢礼",
-            _ => $"{npcName}的礼物"
-        };
+        string motive = NormalizeGiftMailMotive(mail.Motive);
+        var tokens = new { npc = npcName, item = itemLabel, sourceGift };
+        string body = I18n.Get($"gift.mail.body.{motive}", tokens);
+        string title = I18n.Get($"gift.mail.title.{motive}", tokens);
         string itemId = EnsureQualifiedItemId(mail.ItemId);
         return $"{body}^^    - {npcName}%item id {itemId} 1 %%[#]{title}";
+    }
+
+    private static string NormalizeGiftMailMotive(string motive)
+    {
+        return motive switch
+        {
+            "reciprocal" => "reciprocal",
+            "inventory_full" => "inventory_full",
+            "meaningful" => "meaningful",
+            "thanks" => "thanks",
+            "preference" => "preference",
+            _ => "default"
+        };
     }
 
     private static string EnsureQualifiedItemId(string itemId)
