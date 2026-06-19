@@ -330,7 +330,7 @@ public class Prompts
         {
             AppendCoreSection("RecentEvents", GetRecentEvents, prompt);
         }
-        AppendCoreSection("ThirdPartyContext", _ => { }, prompt);
+        AppendCoreSection("ThirdPartyContext", AppendThirdPartyContext, prompt, useOverrides: false);
 
         if (this.contextRoutingPlan.Include(ContextModule.SpecialDates))
         {
@@ -665,58 +665,33 @@ public class Prompts
             return;
         }
 
-        prompt.AppendLine(BuildBriefLivingNpcContext(Context.LivingNpcExtraPrompt));
+        prompt.AppendLine(LivingNpcContextCompressor.BuildBriefContext(Context.LivingNpcExtraPrompt));
     }
 
-    private static string BuildBriefLivingNpcContext(string fullContext)
+    private void AppendThirdPartyContext(StringBuilder prompt)
     {
-        var lines = fullContext.Replace("\r", string.Empty).Split('\n');
-        var selected = lines
-            .Select(line => line.Trim())
-            .Where(line => !string.IsNullOrWhiteSpace(line))
-            .Where(ShouldKeepBriefLivingNpcContextLine)
-            .Take(40)
-            .ToList();
-
-        if (selected.Count == 0)
+        if (!PromptOverrides.TryGetValue("ThirdPartyContext", out var overrideTexts))
         {
-            selected = lines
-                .Select(line => line.Trim())
-                .Where(line => !string.IsNullOrWhiteSpace(line))
-                .Take(12)
-                .ToList();
+            return;
         }
 
-        return string.Join("\n", selected);
-    }
+        ContextDetail detail = this.contextRoutingPlan.Get(ContextModule.LivingNpc);
+        if (detail == ContextDetail.None)
+        {
+            return;
+        }
 
-    private static bool ShouldKeepBriefLivingNpcContextLine(string line)
-    {
-        return ContainsAny(
-            line,
-            "## LivingNPCs",
-            "## Active Companion Outing",
-            "Rules:",
-            "Conversation stance",
-            "Mood:",
-            "emotion:",
-            "Familiarity",
-            "trust",
-            "Relationship trust",
-            "Recent gift",
-            "Shared experiences",
-            "Help requests",
-            "Help-request",
-            "Gift Opportunity",
-            "Help Request Opportunity",
-            "currently reasonable item requests",
-            "Conflict",
-            "Personal memory",
-            "Last interaction",
-            "Phase:",
-            "Shared activity",
-            "farmer is",
-            "Do not announce travel");
+        foreach (string overrideText in overrideTexts)
+        {
+            if (string.IsNullOrWhiteSpace(overrideText))
+            {
+                continue;
+            }
+
+            prompt.AppendLine(detail == ContextDetail.Full
+                ? overrideText
+                : LivingNpcContextCompressor.BuildBriefContext(overrideText));
+        }
     }
 
     private void GetSpecialDatesAndBirthday(StringBuilder prompt)

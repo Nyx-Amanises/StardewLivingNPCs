@@ -139,63 +139,13 @@ internal static class LivingNpcActionDecisionPass
             return "<none>";
         }
 
-        var lines = fullContext.Replace("\r", string.Empty).Split('\n');
-        var selected = new List<string>();
-        foreach (string rawLine in lines)
-        {
-            string line = rawLine.Trim();
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-
-            if (ShouldKeepContextLine(line))
-            {
-                selected.Add(line);
-            }
-        }
-
-        string compact = string.Join("\n", selected.Count > 0 ? selected : lines.Select(line => line.Trim()).Where(line => !string.IsNullOrWhiteSpace(line)).Take(30));
-        if (compact.Length <= MaxCompactContextCharacters)
-        {
-            return compact;
-        }
-
-        return compact[..MaxCompactContextCharacters] + "\n<truncated>";
+        return LivingNpcContextCompressor.BuildBriefContext(
+            fullContext,
+            maxLines: 100,
+            fallbackLines: 30,
+            maxCharacters: MaxCompactContextCharacters);
     }
 
-    private static bool ShouldKeepContextLine(string line)
-    {
-        return ContainsAny(
-            line,
-            "## LivingNPCs",
-            "## Active Companion Outing",
-            "Gift Opportunity",
-            "Help Request Opportunity",
-            "Help-request",
-            "currently reasonable item requests",
-            "allowed help request type",
-            "request relationship tier",
-            "request depth",
-            "readiness",
-            "fit:",
-            "Shared small gift IDs",
-            "personalized small gift IDs",
-            "Conflict",
-            "trust",
-            "Familiarity",
-            "Scene:",
-            "location:",
-            "time:",
-            "schedule",
-            "World knowledge",
-            "Shared experiences",
-            "Recent gift",
-            "Active Companion",
-            "Phase:",
-            "destination",
-            "plans to remain");
-    }
 
     private static bool LooksRelevant(string playerText, string visibleNpcReply, string context)
     {

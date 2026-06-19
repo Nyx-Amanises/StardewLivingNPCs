@@ -53,6 +53,59 @@ public sealed class ContextRoutingPlanTests
     }
 
     [Fact]
+    public void BriefLivingNpcContextKeepsActionCriticalSections()
+    {
+        string noisyMemory = string.Join("\n", Enumerable.Range(1, 120).Select(i => $"- low-priority anecdote {i}: background flavor that should not survive brief routing."));
+        string fullContext = string.Join(
+            "\n",
+            "## LivingNPCs Context: Penny",
+            "- Mood: Calm; emotion: grateful; inclination: Open.",
+            noisyMemory,
+            "- Help-request fit: theme library; currently reasonable item requests: (O)388 Wood, (O)422 Purple Mushroom; allowed help request type: item_request only; request relationship tier: friendly; request depth: modest.",
+            "## LivingNPCs Gift Opportunity",
+            "- Gift cue: The relationship is warm enough that the NPC may offer a small everyday gift today.",
+            "- Shared small gift IDs: (O)194 Fried Egg, (O)216 Bread.",
+            "- Penny's personalized small gift IDs: (O)340 Honey.",
+            "## LivingNPCs Help Request Opportunity",
+            "- Today Penny is inclined to ask the farmer for one small favor during this conversation.",
+            "## Active Companion Outing",
+            "- Phase: traveling naturally toward the destination.",
+            "- destination: Town; targetLocation: Town; travelConsent: accepted_now; plans to remain 60 minutes.");
+
+        string brief = LivingNpcContextCompressor.BuildBriefContext(fullContext);
+
+        Assert.Contains("## LivingNPCs Context", brief);
+        Assert.Contains("Help-request fit", brief);
+        Assert.Contains("currently reasonable item requests", brief);
+        Assert.Contains("## LivingNPCs Gift Opportunity", brief);
+        Assert.Contains("Shared small gift IDs", brief);
+        Assert.Contains("## LivingNPCs Help Request Opportunity", brief);
+        Assert.Contains("## Active Companion Outing", brief);
+        Assert.Contains("targetLocation", brief);
+        Assert.DoesNotContain("low-priority anecdote 120", brief);
+    }
+
+    [Fact]
+    public void BriefLivingNpcContextKeepsChineseFunctionalCueLines()
+    {
+        string fullContext = string.Join(
+            "\n",
+            "## 第三方上下文",
+            "- 普通闲聊背景：这一行不重要。",
+            "- 求助：如果玩家答应帮忙，需要保留请求状态。",
+            "- 出游/带路：如果 NPC 答应一起去某处，应保留目标地点和同意状态。",
+            "- 回礼/谢礼：这是之后寄送礼物的提醒，不要误判成立刻给物品。",
+            "- 冲突/信任：关系边界会影响是否接受邀请。");
+
+        string brief = LivingNpcContextCompressor.BuildBriefContext(fullContext);
+
+        Assert.Contains("求助", brief);
+        Assert.Contains("出游/带路", brief);
+        Assert.Contains("回礼/谢礼", brief);
+        Assert.Contains("冲突/信任", brief);
+    }
+
+    [Fact]
     public void NewContextRoutingConfigKeysAreLocalizedAndInjected()
     {
         string root = FindRepositoryRoot();
