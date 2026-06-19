@@ -72,7 +72,10 @@ internal static class ContextRoutingDecisionPass
             {
                 ModEntry.SMonitor.Log($"Semantic context routing {outcome} for {character.Name} after {routeWatch.ElapsedMilliseconds}ms: {ex.Message}; using full context.", StardewModdingAPI.LogLevel.Debug);
             }
-            return ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
+
+            var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
+            ExportLog(character.Name, context, outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds, ex.GetType().Name, fallback.DebugLabel(), prompt, string.Empty, ex.Message);
+            return fallback;
         }
 
         routeWatch.Stop();
@@ -88,16 +91,23 @@ internal static class ContextRoutingDecisionPass
 
         if (!response.IsSuccess || string.IsNullOrWhiteSpace(response.Text))
         {
-            return ContextRoutingPlan.Full().WithRoutingDiagnostics("response-failed-full", routeWatch.ElapsedMilliseconds, timeoutSeconds);
+            string outcome = "response-failed-full";
+            var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
+            ExportLog(character.Name, context, outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds, "empty-or-unsuccessful-response", fallback.DebugLabel(), prompt, response.Text, response.ErrorMessage);
+            return fallback;
         }
 
-        if (!TryParsePlan(response.Text, context, out ContextRoutingPlan plan) || plan == null)
+        if (!TryParsePlan(response.Text, context, out ContextRoutingPlan plan, out string parseDetail) || plan == null)
         {
+            string outcome = "parse-failed-full";
             if (ModEntry.Config.Debug)
             {
-                ModEntry.SMonitor.Log($"Semantic context routing returned unparseable output for {character.Name}; using full context. Output: {response.Text}", StardewModdingAPI.LogLevel.Debug);
+                ModEntry.SMonitor.Log($"Semantic context routing returned unparseable output for {character.Name}; using full context. Reason: {parseDetail}. Output: {response.Text}", StardewModdingAPI.LogLevel.Debug);
             }
-            return ContextRoutingPlan.Full().WithRoutingDiagnostics("parse-failed-full", routeWatch.ElapsedMilliseconds, timeoutSeconds);
+
+            var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
+            ExportLog(character.Name, context, outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds, parseDetail, fallback.DebugLabel(), prompt, response.Text, response.ErrorMessage);
+            return fallback;
         }
 
         ApplyDeterministicBoundaries(plan, context);
@@ -107,15 +117,19 @@ internal static class ContextRoutingDecisionPass
         {
             ModEntry.SMonitor.Log($"Semantic context routing for {character.Name}: {plan.DebugLabel()}", StardewModdingAPI.LogLevel.Debug);
         }
+
+        ExportLog(character.Name, context, "success", routeWatch.ElapsedMilliseconds, timeoutSeconds, parseDetail, plan.DebugLabel(), prompt, response.Text, response.ErrorMessage);
         return plan;
     }
 
-    private static bool TryParsePlan(string text, DialogueContext context, out ContextRoutingPlan plan)
+    private static bool TryParsePlan(string text, DialogueContext context, out ContextRoutingPlan plan, out string parseDetail)
     {
         plan = null;
+        parseDetail = string.Empty;
         string jsonText = ExtractJsonObject(text);
         if (string.IsNullOrWhiteSpace(jsonText))
         {
+            parseDetail = "no-json-object";
             return false;
         }
 
@@ -125,6 +139,7 @@ internal static class ContextRoutingDecisionPass
             double confidence = json.Value<double?>("confidence") ?? 0;
             if (confidence < MinimumConfidence)
             {
+                parseDetail = $"low-confidence={confidence:0.###}";
                 return false;
             }
 
@@ -142,10 +157,12 @@ internal static class ContextRoutingDecisionPass
 
             ApplyDeterministicBoundaries(parsed, context);
             plan = parsed;
+            parseDetail = $"confidence={confidence:0.###}";
             return true;
         }
-        catch
+        catch (Exception ex)
         {
+            parseDetail = $"json-parse-error={ex.Message}";
             return false;
         }
     }
@@ -259,6 +276,31 @@ internal static class ContextRoutingDecisionPass
         }
 
         return text[start..(end + 1)];
+    }
+
+    private static void ExportLog(
+        string npcName,
+        DialogueContext context,
+        string outcome,
+        long routeMilliseconds,
+        int timeoutSeconds,
+        string parseDetail,
+        string planLabel,
+        string routerPrompt,
+        string rawOutput,
+        string errorMessage)
+    {
+        ContextRoutingLogExporter.Append(
+            npcName,
+            context,
+            outcome,
+            routeMilliseconds,
+            timeoutSeconds,
+            parseDetail,
+            planLabel,
+            routerPrompt,
+            rawOutput,
+            errorMessage);
     }
 
     private static string Clean(string value)
