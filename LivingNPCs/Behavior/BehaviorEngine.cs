@@ -772,30 +772,26 @@ internal sealed class BehaviorEngine
                 }
             }
 
+            string actionReason = string.Empty;
             bool executed = action.Type switch
             {
-                "give_small_gift" => this.giftActions.TryGiveSmallGift(npc, action, playerText, npcResponse, out _),
-                "give_meaningful_gift" => this.giftActions.TryGiveMeaningfulGift(npc, action, playerText, npcResponse, out _),
-                "give_money" => this.giftActions.TryGiveMoney(npc, action, out _),
-                "companion_outing" => this.companionOutings.TryStart(npc, action, out _),
-                "festival_interaction" => this.directWorldActions.TryFestivalInteraction(npc, action, out _),
-                "assist_quest" => this.directWorldActions.TryAssistQuest(npc, action, out _),
+                "give_small_gift" => this.giftActions.TryGiveSmallGift(npc, action, playerText, npcResponse, out actionReason),
+                "give_meaningful_gift" => this.giftActions.TryGiveMeaningfulGift(npc, action, playerText, npcResponse, out actionReason),
+                "give_money" => this.giftActions.TryGiveMoney(npc, action, out actionReason),
+                "companion_outing" => this.companionOutings.TryStart(npc, action, out actionReason),
+                "festival_interaction" => this.directWorldActions.TryFestivalInteraction(npc, action, out actionReason),
+                "assist_quest" => this.directWorldActions.TryAssistQuest(npc, action, out actionReason),
                 _ => false
             };
 
             if (!executed && this.config.Debug)
             {
-                string reason = action.Type switch
+                if (string.IsNullOrWhiteSpace(actionReason))
                 {
-                    "give_small_gift" => "gift request rejected",
-                    "give_meaningful_gift" => "meaningful gift request rejected",
-                    "give_money" => "money request rejected",
-                    "companion_outing" => "companion outing request rejected",
-                    "festival_interaction" => "festival interaction request rejected",
-                    "assist_quest" => "quest assist request rejected",
-                    _ => "unknown request rejected"
-                };
-                this.monitor.Log($"Skipped AI world action {action.Type} for {npc.Name}: {reason}.", LogLevel.Debug);
+                    actionReason = "world action request rejected";
+                }
+
+                this.monitor.Log($"Skipped AI world action {action.Type} for {npc.Name}: {actionReason}.", LogLevel.Debug);
             }
         }
     }

@@ -11,6 +11,7 @@ namespace ValleyTalk
 
         public bool EnableMod { get; set; } = true;
         public bool Debug { get; set; } = false;
+        public bool ExportAiResponseLogs { get; set; } = true;
         public string Provider { get; set; } = "Mistral";
         public string ModelName { get; set; } = "";
         public string ServerAddress { get; set; } = "https://openrouter.ai/api";

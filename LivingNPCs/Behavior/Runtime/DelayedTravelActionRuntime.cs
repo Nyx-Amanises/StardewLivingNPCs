@@ -105,7 +105,13 @@ internal sealed class DelayedTravelActionRuntime
                 DurationMinutes = pending.DurationMinutes,
                 Reason = pending.Reason
             };
-            this.tryStartCompanionOuting(npc, action, out _);
+            if (!this.tryStartCompanionOuting(npc, action, out string reason) && this.config.Debug)
+            {
+                this.monitor.Log(
+                    $"Skipped delayed travel action {action.Type} for {npc.Name}: {(string.IsNullOrWhiteSpace(reason) ? "travel action request rejected" : reason)}.",
+                    LogLevel.Debug
+                );
+            }
             this.pendingActions.Remove(pending);
         }
     }

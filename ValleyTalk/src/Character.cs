@@ -600,6 +600,17 @@ public class Character
                     {
                         resultsInternal = Array.Empty<string>();
                     }
+
+                    AiResponseLogExporter.Append(
+                        Name,
+                        context,
+                        result,
+                        this.LastConversationAnalysis,
+                        resultsInternal,
+                        retryCount,
+                        promptCharacters,
+                        result.IsSuccess && resultsInternal.Length > 0 ? "parsed" : result.IsSuccess ? "unparseable" : "failed"
+                    );
                 }
                 catch (Exception ex)
                 {
