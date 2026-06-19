@@ -99,6 +99,7 @@ namespace ValleyTalk
             var character = GetCharacter(instance);
 
             DialogueContext context = GetBasicContext(instance);
+            context.LivingNpcExtraPrompt = LivingNpcConversationBridge.GetConversationContext(instance);
             context.CanGiveGift = false;
             var fullHistory = LastContext?.ChatHistory?.ToList() ?? new List<ConversationElement>();
             fullHistory.AddRange(conversation.Where(x => !fullHistory.Any(y => y.Id == x.Id)));
@@ -178,6 +179,7 @@ namespace ValleyTalk
 
             var character = GetCharacter(instance);
             DialogueContext context = GetBasicContext(instance);
+            context.LivingNpcExtraPrompt = LivingNpcConversationBridge.GetConversationContext(instance);
             var splitKey = dialogueKey.Split('_');
             var firstElement = splitKey.Any() ? splitKey[0] : "";
             if (Enum.TryParse<RandomAction>(firstElement, true, out var randomAction))

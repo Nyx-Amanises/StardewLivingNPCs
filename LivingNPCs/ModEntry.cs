@@ -57,6 +57,11 @@ public sealed class LivingNPCsApi
         this.engine = engine;
     }
 
+    public string GetConversationContext(string npcName, string npcDisplayName)
+    {
+        return this.engine?.GetConversationContext(npcName, npcDisplayName) ?? string.Empty;
+    }
+
     public string GetGiftResponseContext(string npcName, string npcDisplayName, string giftItemId, string giftName, int taste)
     {
         return this.engine?.GetGiftResponseContext(npcName, npcDisplayName, giftItemId, giftName, taste) ?? string.Empty;

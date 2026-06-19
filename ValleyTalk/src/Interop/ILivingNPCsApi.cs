@@ -2,6 +2,11 @@ namespace ValleyTalk;
 
 public interface ILivingNPCsApi
 {
+    string GetConversationContext(
+        string npcName,
+        string npcDisplayName
+    );
+
     string GetGiftResponseContext(
         string npcName,
         string npcDisplayName,

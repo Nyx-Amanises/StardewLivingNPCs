@@ -605,6 +605,21 @@ internal sealed class BehaviorEngine
         return true;
     }
 
+    public string GetConversationContext(string npcName, string npcDisplayName)
+    {
+        if (!this.config.EnableConversationMemory || string.IsNullOrWhiteSpace(npcName))
+        {
+            return string.Empty;
+        }
+
+        if (!this.TryFindNpcInCurrentLocation(npcName, out NPC? npc) || npc == null)
+        {
+            return string.Empty;
+        }
+
+        return this.BuildValleyTalkPromptContext(npc);
+    }
+
     public string GetGiftResponseContext(string npcName, string npcDisplayName, string giftItemId, string giftName, int taste)
     {
         if (!this.config.EnableConversationMemory || !this.config.EnableNpcState)
@@ -1117,6 +1132,24 @@ internal sealed class BehaviorEngine
             return;
         }
 
+        string promptContext = this.BuildValleyTalkPromptContext(npc, immediatePromptContext);
+        bool pushedToValleyTalk = this.valleyTalkBridge.PushBehaviorContext(npc, promptContext);
+
+        if (this.config.Debug)
+        {
+            this.monitor.Log(
+                pushedToValleyTalk ? debugMessage : $"{debugMessage} ValleyTalk context was not pushed.",
+                LogLevel.Debug
+            );
+            if (pushedToValleyTalk)
+            {
+                this.monitor.Log($"Primed ValleyTalk context for {npc.Name}:\n{promptContext}", LogLevel.Trace);
+            }
+        }
+    }
+
+    private string BuildValleyTalkPromptContext(NPC npc, string immediatePromptContext = "")
+    {
         string promptContext = this.memory.BuildPromptContext(
             npc,
             this.config.PromptMemoryEntries,
@@ -1148,19 +1181,7 @@ internal sealed class BehaviorEngine
             promptContext = $"{promptContext}\n{immediatePromptContext}";
         }
 
-        bool pushedToValleyTalk = this.valleyTalkBridge.PushBehaviorContext(npc, promptContext);
-
-        if (this.config.Debug)
-        {
-            this.monitor.Log(
-                pushedToValleyTalk ? debugMessage : $"{debugMessage} ValleyTalk context was not pushed.",
-                LogLevel.Debug
-            );
-            if (pushedToValleyTalk)
-            {
-                this.monitor.Log($"Primed ValleyTalk context for {npc.Name}:\n{promptContext}", LogLevel.Trace);
-            }
-        }
+        return promptContext;
     }
 
     private string BuildGiftOpportunityPromptContext(NPC npc)
