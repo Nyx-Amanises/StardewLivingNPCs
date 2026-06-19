@@ -1009,26 +1009,7 @@ public class Prompts
         }
 
         string lastPlayerLine = Context.ChatHistory.LastOrDefault(line => line.IsPlayerLine)?.Text ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(lastPlayerLine))
-        {
-            return false;
-        }
-
-        return lastPlayerLine.Contains("去哪", StringComparison.OrdinalIgnoreCase)
-            || lastPlayerLine.Contains("去哪里", StringComparison.OrdinalIgnoreCase)
-            || lastPlayerLine.Contains("接下来", StringComparison.OrdinalIgnoreCase)
-            || lastPlayerLine.Contains("之后", StringComparison.OrdinalIgnoreCase)
-            || lastPlayerLine.Contains("等下", StringComparison.OrdinalIgnoreCase)
-            || lastPlayerLine.Contains("待会", StringComparison.OrdinalIgnoreCase)
-            || lastPlayerLine.Contains("忙什么", StringComparison.OrdinalIgnoreCase)
-            || lastPlayerLine.Contains("在做什么", StringComparison.OrdinalIgnoreCase)
-            || lastPlayerLine.Contains("计划", StringComparison.OrdinalIgnoreCase)
-            || lastPlayerLine.Contains("日程", StringComparison.OrdinalIgnoreCase)
-            || lastPlayerLine.Contains("where", StringComparison.OrdinalIgnoreCase)
-            || lastPlayerLine.Contains("going", StringComparison.OrdinalIgnoreCase)
-            || lastPlayerLine.Contains("next", StringComparison.OrdinalIgnoreCase)
-            || lastPlayerLine.Contains("plan", StringComparison.OrdinalIgnoreCase)
-            || lastPlayerLine.Contains("schedule", StringComparison.OrdinalIgnoreCase);
+        return ConversationCues.ContainsAny(lastPlayerLine, ConversationCues.FutureSchedule);
     }
 
     private int ToDayMinutes(int timeOfDay)

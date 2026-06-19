@@ -269,7 +269,7 @@ internal static class ContextRoutingDecisionPass
         }
 
         string playerText = context.ChatHistory?.LastOrDefault(line => line.IsPlayerLine)?.Text ?? string.Empty;
-        if (ContainsAny(playerText, "去哪", "去哪里", "一起去", "带我", "带你", "陪我", "陪你", "where", "go", "come with", "show me"))
+        if (ConversationCues.ContainsAny(playerText, ConversationCues.LocationPromotion))
         {
             plan.Promote(ContextModule.Location, ContextDetail.Full);
             plan.Promote(ContextModule.LivingNpc, ContextDetail.Full);

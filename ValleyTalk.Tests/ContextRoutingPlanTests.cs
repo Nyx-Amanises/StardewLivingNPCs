@@ -42,6 +42,24 @@ public sealed class ContextRoutingPlanTests
     }
 
     [Fact]
+    public void ConversationCuesMatchTravelAndScheduleLinesCaseInsensitively()
+    {
+        // Travel/companion intent drives the routing location promotion.
+        Assert.True(ConversationCues.ContainsAny("你今天要去哪？", ConversationCues.LocationPromotion));
+        Assert.True(ConversationCues.ContainsAny("Can I COME WITH you?", ConversationCues.LocationPromotion));
+        Assert.True(ConversationCues.ContainsAny("一起去镇上吧", ConversationCues.LocationPromotion));
+
+        // Schedule inquiries drive the future-schedule heuristic; "going"/"plan" are schedule-only.
+        Assert.True(ConversationCues.ContainsAny("接下来有什么计划吗", ConversationCues.FutureSchedule));
+        Assert.True(ConversationCues.ContainsAny("Where are you GOING next?", ConversationCues.FutureSchedule));
+
+        // Both sets share the whereabouts core but stay distinct otherwise, and empty input is safe.
+        Assert.True(ConversationCues.ContainsAny("where to?", ConversationCues.FutureSchedule));
+        Assert.False(ConversationCues.ContainsAny("   ", ConversationCues.LocationPromotion));
+        Assert.False(ConversationCues.ContainsAny("今天天气真好", ConversationCues.FutureSchedule));
+    }
+
+    [Fact]
     public void GiftDependencyPromotesRelationshipAndLivingNpcContext()
     {
         var plan = ContextRoutingPlan.ConservativeBrief();
