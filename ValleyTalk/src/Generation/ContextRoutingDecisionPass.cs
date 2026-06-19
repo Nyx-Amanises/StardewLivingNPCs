@@ -55,12 +55,13 @@ internal static class ContextRoutingDecisionPass
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
             var task = Llm.Instance.RunInference(
-                "You are a fast semantic router for a Stardew Valley dialogue prompt. Return only compact JSON.",
+                "You are a fast JSON router. Thinking/reasoning is disabled. Do not analyze. Output only one compact JSON object.",
                 string.Empty,
                 $"NPC: {character.Name} ({character.StardewNpc?.displayName ?? character.Name})",
                 prompt,
                 string.Empty,
                 n_predict: 384,
+                cacheContext: "context-routing",
                 allowRetry: false);
             response = await task.WaitAsync(cts.Token);
         }

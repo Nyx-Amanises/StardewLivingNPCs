@@ -31,46 +31,70 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         string gameCacheString,
         string npcCacheString,
         string promptString,
-        int n_predict)
+        int n_predict,
+        string cacheContext)
     {
         string userPrompt = gameCacheString + npcCacheString + promptString;
-        yield return JsonConvert.SerializeObject(new
-        {
-            model = modelName,
-            max_tokens = n_predict,
-            messages = new PromptElement[]
-            {
-                new()
-                {
-                    role = "system",
-                    content = systemPromptString
-                },
-                new()
-                {
-                    role = "user",
-                    content = userPrompt
-                }
-            }
-        });
+        bool disableThinking = string.Equals(cacheContext, "context-routing", StringComparison.OrdinalIgnoreCase);
+        yield return BuildChatRequestBody(systemPromptString, userPrompt, n_predict, disableThinking, useInstructionsRequest: false)
+            .ToString(Formatting.None);
 
         if (!AllowInstructionsRequestFallback)
         {
             yield break;
         }
 
-        yield return JsonConvert.SerializeObject(new
+        yield return BuildChatRequestBody(systemPromptString, userPrompt, n_predict, disableThinking, useInstructionsRequest: true)
+            .ToString(Formatting.None);
+    }
+
+    private JObject BuildChatRequestBody(
+        string systemPromptString,
+        string userPrompt,
+        int n_predict,
+        bool disableThinking,
+        bool useInstructionsRequest)
+    {
+        var body = new JObject
         {
-            model = modelName,
-            instructions = systemPromptString,
-            messages = new PromptElement[]
-            {
-                new()
-                {
-                    role = "user",
-                    content = userPrompt
-                }
-            }
-        });
+            ["model"] = modelName,
+            ["max_tokens"] = n_predict
+        };
+
+        if (disableThinking)
+        {
+            AddNoThinkingParameters(body);
+        }
+
+        if (useInstructionsRequest)
+        {
+            body["instructions"] = systemPromptString;
+            body["messages"] = new JArray(BuildMessage("user", userPrompt));
+        }
+        else
+        {
+            body["messages"] = new JArray(
+                BuildMessage("system", systemPromptString),
+                BuildMessage("user", userPrompt));
+        }
+
+        return body;
+    }
+
+    private static JObject BuildMessage(string role, string content)
+    {
+        return new JObject
+        {
+            ["role"] = role,
+            ["content"] = content
+        };
+    }
+
+    private static void AddNoThinkingParameters(JObject body)
+    {
+        body["enable_thinking"] = false;
+        body["thinking"] = new JObject { ["type"] = "disabled" };
+        body["reasoning"] = new JObject { ["enabled"] = false };
     }
 
     internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true)
@@ -86,7 +110,7 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         
         string responseString = "";
         int apiResponseCode = 500;
-        foreach (string inputString in BuildChatRequestBodies(systemPromptString, gameCacheString, npcCacheString, promptString, n_predict))
+        foreach (string inputString in BuildChatRequestBodies(systemPromptString, gameCacheString, npcCacheString, promptString, n_predict, cacheContext))
         {
             int retry = allowRetry ? 3 : 1;
             while (retry > 0)
