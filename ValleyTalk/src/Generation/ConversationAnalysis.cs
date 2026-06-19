@@ -145,6 +145,12 @@ internal sealed class ConversationAnalysis
 
             var json = JObject.Parse(jsonText);
             var analysis = json.ToObject<ConversationAnalysis>() ?? new ConversationAnalysis();
+            analysis.Memories ??= new List<ConversationMemoryCandidate>();
+            analysis.Actions ??= new List<ConversationWorldActionRequest>();
+            analysis.BehaviorInfluences ??= new List<ConversationBehaviorInfluenceCandidate>();
+            analysis.HelpRequests ??= new List<ConversationHelpRequestCandidate>();
+            analysis.HelpRequestUpdates ??= new List<ConversationHelpRequestUpdateCandidate>();
+            analysis.Conflicts ??= new List<ConversationConflictCandidate>();
             analysis.RapportDelta = Math.Clamp(analysis.RapportDelta, 0, 30);
             analysis.Memories = analysis.Memories
                 .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))

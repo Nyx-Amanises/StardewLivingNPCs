@@ -25,6 +25,12 @@ internal static class ValleyTalkExchangeParser
                 SerializerOptions
             ) ?? new ValleyTalkExchangeAnalysis();
 
+            analysis.Memories ??= new List<ValleyTalkMemoryCandidate>();
+            analysis.Actions ??= new List<ValleyTalkWorldActionRequest>();
+            analysis.BehaviorInfluences ??= new List<ValleyTalkBehaviorInfluenceCandidate>();
+            analysis.HelpRequests ??= new List<ValleyTalkHelpRequestCandidate>();
+            analysis.HelpRequestUpdates ??= new List<ValleyTalkHelpRequestUpdateCandidate>();
+            analysis.Conflicts ??= new List<ValleyTalkConflictCandidate>();
             analysis.RapportDelta = System.Math.Clamp(analysis.RapportDelta, 0, 30);
             analysis.AmbientFollowUp ??= new ValleyTalkAmbientFollowUp();
             analysis.AmbientFollowUp.Text = analysis.AmbientFollowUp.Text?.Trim() ?? string.Empty;

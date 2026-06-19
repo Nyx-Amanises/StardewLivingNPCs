@@ -62,6 +62,37 @@ public sealed class MetadataParsingTests
     }
 
     [Fact]
+    public void NullMetadataArraysAreTreatedAsEmpty()
+    {
+        const string json = """
+        {
+          "memories": null,
+          "behaviorInfluences": null,
+          "helpRequests": null,
+          "helpRequestUpdates": null,
+          "conflicts": null,
+          "actions": [
+            {
+              "type": "companion_outing",
+              "durationMinutes": 90,
+              "targetLocation": "Beach",
+              "travelConsent": "accepted_now"
+            }
+          ]
+        }
+        """;
+
+        var analysis = ValleyTalkExchangeParser.Parse(json);
+
+        Assert.Empty(analysis.Memories);
+        Assert.Empty(analysis.HelpRequests);
+        Assert.Empty(analysis.HelpRequestUpdates);
+        var action = Assert.Single(analysis.Actions);
+        Assert.Equal("companion_outing", action.Type);
+        Assert.Equal(90, action.DurationMinutes);
+        Assert.Equal("Beach", action.TargetLocation);
+    }
+    [Fact]
     public void InvalidAndOutOfRangeMetadataIsNormalizedBeforeStorage()
     {
         const string json = """
