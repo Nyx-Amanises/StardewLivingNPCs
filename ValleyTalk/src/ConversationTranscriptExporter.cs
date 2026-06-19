@@ -104,29 +104,138 @@ internal static class ConversationTranscriptExporter
 
     private static IEnumerable<TranscriptEntry> BuildTranscriptEntries(StardewEventHistory history)
     {
-        foreach (var entry in history.DialogueHistory)
+        var conversationEntries = history.ConversationHistory
+            .Select(entry => new TranscriptEntry(
+                entry.Item1,
+                BuildTranscriptLines(entry.Item2.ConversationElements
+                    .Select(line => new TranscriptLine(line.IsPlayerLine, line.Text)))))
+            .Where(entry => entry.Lines.Count > 0)
+            .OrderBy(entry => entry.Time)
+            .ToList();
+
+        if (conversationEntries.Count > 0)
         {
-            var lines = entry.Item2.Dialogues
-                .Where(line => !string.IsNullOrWhiteSpace(line.Text))
-                .Select(line => new TranscriptLine(false, line.Text))
-                .ToList();
-            if (lines.Count > 0)
+            return RemoveRedundantPrefixEntries(conversationEntries);
+        }
+
+        return history.DialogueHistory
+            .Select(entry => new TranscriptEntry(
+                entry.Item1,
+                BuildTranscriptLines(entry.Item2.Dialogues
+                    .Select(line => new TranscriptLine(false, line.Text)))))
+            .Where(entry => entry.Lines.Count > 0)
+            .ToList();
+    }
+
+    private static List<TranscriptLine> BuildTranscriptLines(IEnumerable<TranscriptLine> lines)
+    {
+        var result = new List<TranscriptLine>();
+
+        foreach (var line in lines)
+        {
+            string text = SanitizeTranscriptText(line.Text);
+            if (!IsExportableTranscriptText(text))
             {
-                yield return new TranscriptEntry(entry.Item1, lines);
+                continue;
+            }
+
+            var normalized = new TranscriptLine(line.IsPlayerLine, text);
+            if (result.Count > 0 && TranscriptLineEquals(result[result.Count - 1], normalized))
+            {
+                continue;
+            }
+
+            result.Add(normalized);
+        }
+
+        return result;
+    }
+
+    private static List<TranscriptEntry> RemoveRedundantPrefixEntries(List<TranscriptEntry> entries)
+    {
+        var result = new List<TranscriptEntry>();
+
+        for (int i = 0; i < entries.Count; i++)
+        {
+            bool isRedundant = false;
+            for (int j = i + 1; j < entries.Count; j++)
+            {
+                if (IsSameGameDay(entries[i].Time, entries[j].Time)
+                    && IsStrictPrefix(entries[i].Lines, entries[j].Lines))
+                {
+                    isRedundant = true;
+                    break;
+                }
+            }
+
+            if (!isRedundant)
+            {
+                result.Add(entries[i]);
             }
         }
 
-        foreach (var entry in history.ConversationHistory)
+        return result;
+    }
+
+    private static bool IsStrictPrefix(List<TranscriptLine> prefix, List<TranscriptLine> full)
+    {
+        if (prefix.Count == 0 || prefix.Count >= full.Count)
         {
-            var lines = entry.Item2.ConversationElements
-                .Where(line => !string.IsNullOrWhiteSpace(line.Text))
-                .Select(line => new TranscriptLine(line.IsPlayerLine, line.Text))
-                .ToList();
-            if (lines.Count > 0)
+            return false;
+        }
+
+        for (int i = 0; i < prefix.Count; i++)
+        {
+            if (!TranscriptLineEquals(prefix[i], full[i]))
             {
-                yield return new TranscriptEntry(entry.Item1, lines);
+                return false;
             }
         }
+
+        return true;
+    }
+
+    private static bool TranscriptLineEquals(TranscriptLine left, TranscriptLine right)
+    {
+        return left.IsPlayerLine == right.IsPlayerLine
+            && string.Equals(left.Text, right.Text, StringComparison.Ordinal);
+    }
+
+    private static bool IsSameGameDay(StardewTime left, StardewTime right)
+    {
+        return left.year == right.year
+            && left.season == right.season
+            && left.dayOfMonth == right.dayOfMonth;
+    }
+
+    private static bool IsExportableTranscriptText(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        if (text.Contains("正在思考", StringComparison.Ordinal)
+            || text.Contains("is thinking", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var placeholders = new[]
+        {
+            T("uiStartConversation", "What do you want to say?"),
+            T("uiYourResponse", "Your response"),
+            T("uiTypeYourResponse", "Type your response"),
+            T("outputRespond", "Respond"),
+            "你想说什么？",
+            "你的回复",
+            "自由输入",
+            "回应"
+        };
+
+        return !placeholders.Any(placeholder =>
+            !string.IsNullOrWhiteSpace(placeholder)
+            && string.Equals(text, placeholder, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string SanitizeTranscriptText(string text)
