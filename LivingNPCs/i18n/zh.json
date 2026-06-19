@@ -27,7 +27,7 @@
   "help.thanksFulfilled": "谢谢你，真的帮上忙了。",
   "help.thanksReceived": "谢谢你，我先收下这个。",
   "hud.itemDelivered": "LivingNPCs：已把 {{item}} 交给 {{npc}}。",
-  "help.reward.friendshipHud": "LivingNPCs：完成 {{npc}} 的求助，额外好感 +{{amount}}。",
+  "help.reward.friendshipHud": "LivingNPCs：完成 {{npc}} 的求助，关系更近了一些。",
   "help.reward.inventoryFullMail": "LivingNPCs：你的背包满了，{{npc}} 会把 {{item}} 明天寄给你作为谢礼。",
   "help.reward.giftMailScheduled": "LivingNPCs：{{npc}} 会在明天把 {{item}} 寄给你作为谢礼。",
   "help.reward.moneyHud": "LivingNPCs：求助奖励 +{{amount}}g。",

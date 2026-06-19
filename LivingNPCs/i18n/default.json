@@ -27,7 +27,7 @@
   "help.thanksFulfilled": "Thank you, this really helped.",
   "help.thanksReceived": "Thanks, I'll take this for now.",
   "hud.itemDelivered": "LivingNPCs: Gave {{item}} to {{npc}}.",
-  "help.reward.friendshipHud": "LivingNPCs: Completed {{npc}}'s help request, extra friendship +{{amount}}.",
+  "help.reward.friendshipHud": "LivingNPCs: Completed {{npc}}'s help request, and your relationship grew a little closer.",
   "help.reward.inventoryFullMail": "LivingNPCs: Your inventory was full, so {{npc}} will mail you {{item}} tomorrow as thanks.",
   "help.reward.giftMailScheduled": "LivingNPCs: {{npc}} will mail you {{item}} tomorrow as a thank-you.",
   "help.reward.moneyHud": "LivingNPCs: Help request reward +{{amount}}g.",

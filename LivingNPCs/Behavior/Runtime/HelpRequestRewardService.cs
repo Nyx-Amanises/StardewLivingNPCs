@@ -65,7 +65,7 @@ internal sealed class HelpRequestRewardService
                 this.feedback.QueueAmbientRemark(npc, I18n.Get("help.thanksFulfilled"), 0);
             }
 
-            this.feedback.Show(I18n.Get("help.reward.friendshipHud", new { npc = npc.displayName, amount = friendshipReward }));
+            this.feedback.Show(I18n.Get("help.reward.friendshipHud", new { npc = npc.displayName }));
             this.communityRipples.Spread(
                 npc,
                 "helped",
@@ -139,8 +139,6 @@ internal sealed class HelpRequestRewardService
                 LogLevel.Debug
             );
         }
-
-        this.feedback.ShowAfterDialogue(I18n.Get("help.reward.giftMailScheduled", new { npc = npc.displayName, item = gift.DisplayName }));
         return true;
     }
 
