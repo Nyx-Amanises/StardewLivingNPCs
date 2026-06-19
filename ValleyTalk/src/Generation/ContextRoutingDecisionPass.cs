@@ -98,7 +98,7 @@ internal static class ContextRoutingDecisionPass
             return fallback;
         }
 
-        if (!TryParsePlan(response.Text, context, out ContextRoutingPlan plan, out string parseDetail) || plan == null)
+        if (!TryParsePlan(response.Text, out ContextRoutingPlan plan, out string parseDetail) || plan == null)
         {
             string outcome = "parse-failed-full";
             if (ModEntry.Config.Debug)
@@ -111,8 +111,9 @@ internal static class ContextRoutingDecisionPass
             return fallback;
         }
 
+        // BuildPlanAsync is the single place that applies the per-turn deterministic boundaries;
+        // dependency closure is applied once on the consumer side (Prompts constructor).
         ApplyDeterministicBoundaries(plan, context);
-        plan.ApplyDependencies();
         plan.WithRoutingDiagnostics("success", routeWatch.ElapsedMilliseconds, timeoutSeconds);
         if (ModEntry.Config.Debug)
         {
@@ -123,7 +124,7 @@ internal static class ContextRoutingDecisionPass
         return plan;
     }
 
-    private static bool TryParsePlan(string text, DialogueContext context, out ContextRoutingPlan plan, out string parseDetail)
+    private static bool TryParsePlan(string text, out ContextRoutingPlan plan, out string parseDetail)
     {
         plan = null;
         parseDetail = string.Empty;
@@ -156,7 +157,6 @@ internal static class ContextRoutingDecisionPass
                 parsed.Set(pair.Value, ParseDetail(raw));
             }
 
-            ApplyDeterministicBoundaries(parsed, context);
             plan = parsed;
             parseDetail = $"confidence={confidence:0.###}";
             return true;

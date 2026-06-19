@@ -73,6 +73,8 @@ public class Prompts
         Context = context;
         Character = character;
         this.contextRoutingPlan = contextRoutingPlan ?? ContextRoutingPlan.Full();
+        // Single dependency-closure point for every plan that reaches a prompt (routed, cached, or
+        // the Full() default); BuildPlanAsync only applies the per-turn deterministic boundaries.
         this.contextRoutingPlan.ApplyDependencies();
 
         dialogueSample = character.SelectDialogueSample(context);
