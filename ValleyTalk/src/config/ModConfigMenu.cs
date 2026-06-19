@@ -174,6 +174,24 @@ namespace ValleyTalk
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
+                name: () => Util.GetString("configEnableSemanticContextRouting", returnNull: true) ?? "Semantic context routing",
+                tooltip: () => Util.GetString("configEnableSemanticContextRoutingTooltip", returnNull: true) ?? "Before building the main prompt, run one compact semantic router to choose which context modules should be brief or full.",
+                getValue: () => Config.EnableSemanticContextRouting,
+                setValue: (value) =>{ Config.EnableSemanticContextRouting = value; }
+            );
+            ConfigMenu.AddNumberOption(
+                mod: ModManifest,
+                name: () => Util.GetString("configSemanticContextRoutingTimeoutSeconds", returnNull: true) ?? "Context routing timeout",
+                tooltip: () => Util.GetString("configSemanticContextRoutingTimeoutSecondsTooltip", returnNull: true) ?? "Seconds to wait for semantic context routing before using the full conservative prompt.",
+                getValue: () => Config.SemanticContextRoutingTimeoutSeconds,
+                setValue: (value) =>{ Config.SemanticContextRoutingTimeoutSeconds = value; },
+                min: 2,
+                max: 60,
+                interval: 1,
+                fieldId: "SemanticContextRoutingTimeoutSeconds"
+            );
+            ConfigMenu.AddBoolOption(
+                mod: ModManifest,
                 name: () => Util.GetString("configEnableLivingNpcActionDecisionPass", returnNull: true) ?? "LivingNPCs action decision pass",
                 tooltip: () => Util.GetString("configEnableLivingNpcActionDecisionPassTooltip", returnNull: true) ?? "When LivingNPCs metadata omits actions or help requests, run one compact follow-up classification prompt before falling back to rules.",
                 getValue: () => Config.EnableLivingNpcActionDecisionPass,

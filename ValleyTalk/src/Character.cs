@@ -437,7 +437,8 @@ public class Character
         var totalWatch = Stopwatch.StartNew();
         var promptInitWatch = Stopwatch.StartNew();
         string[] results = Array.Empty<string>();
-        var prompts = new Prompts(context, this);
+        ContextRoutingPlan contextRoutingPlan = await ContextRoutingDecisionPass.BuildPlanAsync(this, context);
+        var prompts = new Prompts(context, this, contextRoutingPlan);
         promptInitWatch.Stop();
 
         int maxRetryAttempts = 1;
