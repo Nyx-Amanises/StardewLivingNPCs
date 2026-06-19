@@ -23,6 +23,25 @@ public sealed class ContextRoutingPlanTests
     }
 
     [Fact]
+    public void CloneCopiesDetailsAndStaysIndependent()
+    {
+        var plan = ContextRoutingPlan.ConservativeBrief();
+        plan.Set(ContextModule.World, ContextDetail.Full);
+
+        var clone = plan.Clone();
+        Assert.Equal(ContextDetail.Full, clone.Get(ContextModule.World));
+        Assert.Equal(plan.Get(ContextModule.LivingNpc), clone.Get(ContextModule.LivingNpc));
+
+        // The conversation cache stores one raw plan and hands out a clone every turn, then applies
+        // per-turn boundaries to that clone. Mutating a clone must never leak back into the cached plan.
+        clone.Set(ContextModule.World, ContextDetail.None);
+        clone.Set(ContextModule.Farm, ContextDetail.Full);
+
+        Assert.Equal(ContextDetail.Full, plan.Get(ContextModule.World));
+        Assert.NotEqual(ContextDetail.Full, plan.Get(ContextModule.Farm));
+    }
+
+    [Fact]
     public void GiftDependencyPromotesRelationshipAndLivingNpcContext()
     {
         var plan = ContextRoutingPlan.ConservativeBrief();

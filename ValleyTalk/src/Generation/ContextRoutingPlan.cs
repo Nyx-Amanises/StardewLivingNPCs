@@ -81,6 +81,21 @@ public sealed class ContextRoutingPlan
 
     public IReadOnlyDictionary<ContextModule, ContextDetail> Details => this.details;
 
+    /// <summary>
+    /// Copies the per-module detail levels into a fresh plan. Routing diagnostics are intentionally
+    /// not copied so a reused plan can be re-stamped for the current turn.
+    /// </summary>
+    public ContextRoutingPlan Clone()
+    {
+        var clone = new ContextRoutingPlan();
+        foreach (var pair in this.details)
+        {
+            clone.details[pair.Key] = pair.Value;
+        }
+
+        return clone;
+    }
+
     public ContextDetail Get(ContextModule module)
     {
         return this.details.TryGetValue(module, out ContextDetail detail)

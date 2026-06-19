@@ -14,6 +14,15 @@ internal static class ContextRoutingDecisionPass
     private const double MinimumConfidence = 0.55;
     private const int MaxRoutingTimeoutSeconds = 8;
 
+    // Single-slot cache of the most recent raw (pre-boundary) routing decision. A multi-turn
+    // conversation keeps the same key, so it only pays the router round-trip once; the per-turn
+    // deterministic boundaries are re-applied to a clone every turn, so dynamic cues
+    // (gift/travel/help) still take effect. The key changes when a new conversation starts
+    // (ClearContext resets the history), which naturally evicts the previous decision.
+    private static readonly object CacheGate = new();
+    private static string cachedConversationKey;
+    private static ContextRoutingPlan cachedRawPlan;
+
     private static readonly Dictionary<string, ContextModule> ModuleKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         ["world"] = ContextModule.World,
@@ -42,6 +51,18 @@ internal static class ContextRoutingDecisionPass
         if (ModEntry.Config?.EnableSemanticContextRouting != true || character == null || context == null)
         {
             return ContextRoutingPlan.Full().WithRoutingDiagnostics("disabled-full", 0, 0);
+        }
+
+        string conversationKey = BuildConversationKey(character, context);
+        if (conversationKey != null && TryReuseCachedPlan(conversationKey, context, out ContextRoutingPlan cachedPlan))
+        {
+            if (ModEntry.Config.Debug)
+            {
+                ModEntry.SMonitor.Log($"Semantic context routing reused cached plan for {character.Name}: {cachedPlan.DebugLabel()}", StardewModdingAPI.LogLevel.Debug);
+            }
+
+            ExportLog(character.Name, context, "cached", 0, 0, "reused-conversation-plan", cachedPlan.DebugLabel(), string.Empty, string.Empty, string.Empty);
+            return cachedPlan;
         }
 
         string prompt = BuildRouterPrompt(character, context);
@@ -111,6 +132,13 @@ internal static class ContextRoutingDecisionPass
             return fallback;
         }
 
+        // Cache the raw (pre-boundary) decision so the rest of this conversation can reuse it
+        // without another router round-trip.
+        if (conversationKey != null)
+        {
+            StoreCachedPlan(conversationKey, plan.Clone());
+        }
+
         // BuildPlanAsync is the single place that applies the per-turn deterministic boundaries;
         // dependency closure is applied once on the consumer side (Prompts constructor).
         ApplyDeterministicBoundaries(plan, context);
@@ -122,6 +150,53 @@ internal static class ContextRoutingDecisionPass
 
         ExportLog(character.Name, context, "success", routeWatch.ElapsedMilliseconds, timeoutSeconds, parseDetail, plan.DebugLabel(), prompt, response.Text, response.ErrorMessage);
         return plan;
+    }
+
+    private static string BuildConversationKey(Character character, DialogueContext context)
+    {
+        // Only cache within a real, ongoing conversation: the first visible line's id is stable for
+        // the whole exchange and changes when a new conversation starts. Without history (gifts,
+        // scheduled one-shots) there is no stable key, so we route fresh rather than risk reusing an
+        // unrelated decision.
+        var history = context.ChatHistory;
+        if (history == null || history.Count == 0)
+        {
+            return null;
+        }
+
+        return $"{character.Name}|{history[0].Id}";
+    }
+
+    private static bool TryReuseCachedPlan(string conversationKey, DialogueContext context, out ContextRoutingPlan plan)
+    {
+        ContextRoutingPlan raw = null;
+        lock (CacheGate)
+        {
+            if (string.Equals(cachedConversationKey, conversationKey, StringComparison.Ordinal) && cachedRawPlan != null)
+            {
+                raw = cachedRawPlan.Clone();
+            }
+        }
+
+        if (raw == null)
+        {
+            plan = null;
+            return false;
+        }
+
+        ApplyDeterministicBoundaries(raw, context);
+        raw.WithRoutingDiagnostics("cached", 0, 0);
+        plan = raw;
+        return true;
+    }
+
+    private static void StoreCachedPlan(string conversationKey, ContextRoutingPlan rawPlan)
+    {
+        lock (CacheGate)
+        {
+            cachedConversationKey = conversationKey;
+            cachedRawPlan = rawPlan;
+        }
     }
 
     private static bool TryParsePlan(string text, out ContextRoutingPlan plan, out string parseDetail)
