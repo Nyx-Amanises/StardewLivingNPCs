@@ -232,7 +232,8 @@ public class AsyncBuilder
 
             DialogueBuilder.Instance.AddConversation(npc, newDialogue);
             var analysis = DialogueBuilder.Instance.GetCharacter(npc).LastConversationAnalysis;
-            LivingNpcConversationBridge.RecordExchange(npc, playerText, newDialogue, analysis.ToJson());
+            string visibleNpcResponse = parsedLines.FirstOrDefault() ?? newDialogue;
+            LivingNpcConversationBridge.RecordExchange(npc, playerText, visibleNpcResponse, analysis.ToJson());
 
             bool shouldEndConversation = analysis.EndConversation
                 || ConversationTextPostProcessor.PlayerLikelyEndedConversation(playerText)
@@ -411,7 +412,9 @@ public class AsyncBuilder
         }
         DialogueBuilder.Instance.AddConversation(npc, newDialogue);
         var analysis = DialogueBuilder.Instance.GetCharacter(npc).LastConversationAnalysis;
-        LivingNpcConversationBridge.RecordExchange(npc, playerText, newDialogue, analysis.ToJson());
+        string visibleNpcResponse = generated.ParsedLines.FirstOrDefault() ?? newDialogue;
+        visibleNpcResponse = ConversationTextPostProcessor.NormalizeImmediateNicknameReply(visibleNpcResponse, playerText);
+        LivingNpcConversationBridge.RecordExchange(npc, playerText, visibleNpcResponse, analysis.ToJson());
 
         // Create a new dialogue with the response and add it to the NPC's dialogue stack
         var dialogueKey = string.IsNullOrWhiteSpace(_currentDialogueKey)

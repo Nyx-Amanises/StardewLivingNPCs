@@ -17,6 +17,10 @@ internal static class ConversationActionCueRules
         "我带你去",
         "我们走吧",
         "咱们走吧",
+        "赶紧走",
+        "赶紧去",
+        "赶紧溜",
+        "咱们赶紧溜",
         "那我们走",
         "那我们去",
         "我们现在去",
@@ -108,8 +112,6 @@ internal static class ConversationActionCueRules
         "不可以",
         "不能",
         "没法",
-        "抱歉",
-        "对不起",
         "得先把",
         "要先把",
         "先把",
@@ -500,9 +502,14 @@ internal static class ConversationActionCueRules
             "一起去",
             "要不要去",
             "陪我去",
+            "陪我去看海",
             "去我农场",
             "来我农场",
             "去农场看看",
+            "去看海",
+            "一起看海",
+            "去海边",
+            "去海滩",
             "一起走",
             "我们去",
             "咱们去",
@@ -512,7 +519,7 @@ internal static class ConversationActionCueRules
             "come to my farm",
             "visit my farm",
             "walk with me"
-        );
+        ) || LooksLikeTargetedFarmerTravelRequest(playerText);
         bool npcAccepted = ContainsAny(npcResponse, ImmediateTravelAcceptanceFragments)
             || ContainsAny(npcResponse, DirectTravelAcceptanceFragments)
             || (ContainsAny(npcResponse, "可以") && ContainsAny(npcResponse, TravelMotionFragments));
@@ -524,10 +531,14 @@ internal static class ConversationActionCueRules
             "我带你去",
             "一起去吧",
             "一起走吧",
+            "一起看海",
             "我们现在去",
             "咱们现在去",
             "那我们去",
             "那我们走",
+            "去看海",
+            "去海边",
+            "去海滩",
             "要不要一起去",
             "要不要现在去",
             "带你去",
@@ -561,6 +572,63 @@ internal static class ConversationActionCueRules
         return (farmerInvited && npcAccepted) || (npcProposedOuting && farmerAgreed);
     }
 
+    private static bool LooksLikeTargetedFarmerTravelRequest(string playerText)
+    {
+        if (string.IsNullOrWhiteSpace(TryDetectTravelTargetLocation(null, playerText)))
+        {
+            return false;
+        }
+
+        bool mentionsTravelMotion = ContainsAny(
+            playerText,
+            "去",
+            "到",
+            "逛",
+            "看看",
+            "走走",
+            "go",
+            "visit",
+            "head",
+            "walk",
+            "来"
+        );
+        if (!mentionsTravelMotion)
+        {
+            return false;
+        }
+
+        return ContainsAny(
+            playerText,
+            "一起",
+            "陪我",
+            "陪你",
+            "带我",
+            "带你",
+            "要不要",
+            "愿意",
+            "可以",
+            "能不能",
+            "想不想",
+            "现在",
+            "马上",
+            "走吧",
+            "去吗",
+            "去么",
+            "去嘛",
+            "吗",
+            "？",
+            "?",
+            "with me",
+            "together",
+            "want to",
+            "would you",
+            "could you",
+            "can you",
+            "shall we",
+            "let's"
+        );
+    }
+
     private static bool LooksLikeBriefEscortRequest(string playerText, string npcResponse)
     {
         string combinedText = $"{playerText} {npcResponse}";
@@ -584,8 +652,10 @@ internal static class ConversationActionCueRules
     public static bool LooksLikeDeferredOrRejectedTravel(string playerText, string npcResponse)
     {
         string combinedText = $"{playerText} {npcResponse}";
-        if (ContainsAny(npcResponse, TravelRejectionFragments)
-            || ContainsAny(combinedText, FutureTravelPlanFragments))
+        string rejectionNpcResponse = RemoveNonTravelFarewells(npcResponse);
+        string rejectionCombinedText = RemoveNonTravelFarewells(combinedText);
+        if (ContainsAny(rejectionNpcResponse, TravelRejectionFragments)
+            || ContainsAny(rejectionCombinedText, FutureTravelPlanFragments))
         {
             return true;
         }
@@ -596,6 +666,24 @@ internal static class ConversationActionCueRules
         }
 
         return false;
+    }
+
+    private static string RemoveNonTravelFarewells(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        return text
+            .Replace("改天再聊", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("下次再聊", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("以后再聊", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("改天聊", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("下次聊", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("talk later", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("chat later", string.Empty, StringComparison.OrdinalIgnoreCase)
+            .Replace("see you later", string.Empty, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool LooksLikeDeferredRejectedOrUncertainTravel(string playerText, string npcResponse)
@@ -639,7 +727,7 @@ internal static class ConversationActionCueRules
             return "Farm";
         }
 
-        if (ContainsAny(text, "海边", "海滩", "beach"))
+        if (ContainsAny(text, "海边", "海滩", "看海", "大海", "海浪", "浪花", "贝壳", "去海", "beach", "shore", "waves"))
         {
             return "Beach";
         }

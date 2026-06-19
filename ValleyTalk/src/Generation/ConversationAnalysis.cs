@@ -143,7 +143,7 @@ internal sealed class ConversationAnalysis
                     action.Type = NormalizeActionType(action.Type);
                     action.Reason = action.Reason?.Trim() ?? string.Empty;
                     action.Amount = Math.Clamp(action.Amount, 0, 250);
-                    action.DurationMinutes = Math.Clamp(action.DurationMinutes, 0, 20);
+                    action.DurationMinutes = NormalizeActionDurationMinutes(action.Type, action.DurationMinutes);
                     action.DelayMinutes = Math.Clamp(action.DelayMinutes, 0, 20);
                     action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
                     action.TravelConsent = NormalizeTravelConsent(action.TravelConsent);
@@ -285,6 +285,16 @@ internal sealed class ConversationAnalysis
         }
 
         return string.Empty;
+    }
+
+    private static int NormalizeActionDurationMinutes(string actionType, int durationMinutes)
+    {
+        if (string.Equals(actionType, "companion_outing", StringComparison.OrdinalIgnoreCase))
+        {
+            return Math.Clamp(durationMinutes, 0, 600);
+        }
+
+        return Math.Clamp(durationMinutes, 0, 20);
     }
 
     private static string NormalizeKind(string kind)

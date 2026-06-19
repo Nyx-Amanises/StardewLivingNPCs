@@ -102,6 +102,74 @@ public sealed class CompanionOutingRulesTests
     }
 
     [Fact]
+    public void FallbackOutingTriggersForBeachAcceptanceWithSideFarewell()
+    {
+        bool created = ConversationActionCueRules.TryBuildFallbackTravelActionForTesting(
+            "潘妮，现在要不要去海滩？",
+            "好啊……去海滩。卡门，我们先走啦，改天再聊。好了，那我们走吧，去海边。",
+            out ValleyTalkWorldActionRequest? action
+        );
+
+        Assert.True(created);
+        Assert.NotNull(action);
+        Assert.Equal("companion_outing", action.Type);
+        Assert.Equal("Beach", action.TargetLocation);
+        Assert.Equal("accepted_now", action.TravelConsent);
+    }
+
+    [Fact]
+    public void FallbackOutingTriggersForApologeticBeachAcceptance()
+    {
+        bool created = ConversationActionCueRules.TryBuildFallbackTravelActionForTesting(
+            "昨天的事，我很抱歉。现在你愿意陪我去看海吗？",
+            "既然你说抱歉，也愿意陪我去看海，那我想，我愿意再信你一次。我们走吧。",
+            out ValleyTalkWorldActionRequest? action
+        );
+
+        Assert.True(created);
+        Assert.NotNull(action);
+        Assert.Equal("companion_outing", action.Type);
+        Assert.Equal("Beach", action.TargetLocation);
+        Assert.Equal("accepted_now", action.TravelConsent);
+    }
+
+    [Theory]
+    [InlineData("潘妮，现在去图书馆吗？", "好啊，那我们现在去图书馆吧。", "ArchaeologyHouse")]
+    [InlineData("要不要去酒吧坐坐？", "可以呀，那我们现在去沙龙。", "Saloon")]
+    [InlineData("你愿意陪我去森林看看吗？", "当然可以，我们走吧。", "Forest")]
+    public void FallbackOutingTriggersForTargetedSupportedLocations(string playerText, string npcResponse, string expectedTarget)
+    {
+        bool created = ConversationActionCueRules.TryBuildFallbackTravelActionForTesting(
+            playerText,
+            npcResponse,
+            out ValleyTalkWorldActionRequest? action
+        );
+
+        Assert.True(created);
+        Assert.NotNull(action);
+        Assert.Equal("companion_outing", action.Type);
+        Assert.Equal(expectedTarget, action.TargetLocation);
+        Assert.Equal("accepted_now", action.TravelConsent);
+    }
+
+    [Fact]
+    public void FallbackOutingTriggersForFarmInvitationWithSneakingOutAcceptance()
+    {
+        bool created = ConversationActionCueRules.TryBuildFallbackTravelActionForTesting(
+            "阿比盖尔，现在想来我的农场冒险吗？",
+            "现在？一大早的就来邀请我去农场冒险，你可真是挑了个好时候。$h#$e#不过说真的，我一直挺想去看看你把那片荒地盘成什么样了。#$b#等我一下，我拿件外套，趁老爸还没叫我摆货架，咱们赶紧溜。",
+            out ValleyTalkWorldActionRequest? action
+        );
+
+        Assert.True(created);
+        Assert.NotNull(action);
+        Assert.Equal("companion_outing", action.Type);
+        Assert.Equal("Farm", action.TargetLocation);
+        Assert.Equal("accepted_now", action.TravelConsent);
+        Assert.Equal(10, action.DelayMinutes);
+    }
+
+    [Fact]
     public void FallbackOutingUsesShortDurationForEscortRequests()
     {
         bool created = ConversationActionCueRules.TryBuildFallbackTravelActionForTesting(

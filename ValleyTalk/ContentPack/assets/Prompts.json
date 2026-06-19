@@ -220,6 +220,8 @@
             "instructionsLivingNpcGiftIds": "{{i18n:instructionsLivingNpcGiftIds}}",
             "instructionsLivingNpcImmediateTravel": "{{i18n:instructionsLivingNpcImmediateTravel}}",
             "instructionsLivingNpcTravelConsent": "{{i18n:instructionsLivingNpcTravelConsent}}",
+            "instructionsLivingNpcHelpRequests": "{{i18n:instructionsLivingNpcHelpRequests}}",
+            "instructionsLivingNpcEmotionDepth": "{{i18n:instructionsLivingNpcEmotionDepth}}",
             "instructionsLivingNpcMetadataOptimized": "{{i18n:instructionsLivingNpcMetadataOptimized}}",
             "instructionsLivingNpcGiftIdsOptimized": "{{i18n:instructionsLivingNpcGiftIdsOptimized}}",
             "instructionsLivingNpcImmediateTravelOptimized": "{{i18n:instructionsLivingNpcImmediateTravelOptimized}}",

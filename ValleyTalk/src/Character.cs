@@ -747,16 +747,16 @@ public class Character
             //Log.Debug("Empty dialogue line detected in AI response.  Returning nothing.");
             return Array.Empty<string>();
         }
-        var responseLines = resultLines.Skip(1).Where(x => x.StartsWith("%"));
+        var responseLines = resultLines
+            .Skip(1)
+            .Select(NormalizePotentialResponseLine)
+            .Where(x => !string.IsNullOrWhiteSpace(x))
+            .ToList();
         if (responseLines.Any())
         {
-            responseLines = responseLines.Select(x => CommonCleanup(x));
-            responseLines = responseLines.Select(x => ResponseLineCleanup(x));
-            responseLines = responseLines.Where(x => !string.IsNullOrWhiteSpace(x));
-            if (responseLines.Count() < 2)
-            {
-                responseLines = Array.Empty<string>();
-            }
+            responseLines = responseLines.Select(x => CommonCleanup(x)).ToList();
+            responseLines = responseLines.Select(x => ResponseLineCleanup(x)).ToList();
+            responseLines = responseLines.Where(x => !string.IsNullOrWhiteSpace(x)).ToList();
         }
         resultLines = new List<string>(){dialogueLine}.Concat(responseLines);
         return resultLines;
@@ -826,6 +826,64 @@ public class Character
             || trimmed.StartsWith("helpRequestUpdates", StringComparison.OrdinalIgnoreCase)
             || trimmed.StartsWith("conflicts", StringComparison.OrdinalIgnoreCase)
             || trimmed.StartsWith("memories", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private string NormalizePotentialResponseLine(string line)
+    {
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return string.Empty;
+        }
+
+        string trimmed = line.Trim();
+        if (trimmed.StartsWith("%", StringComparison.Ordinal))
+        {
+            return trimmed;
+        }
+
+        if (trimmed.StartsWith("!", StringComparison.Ordinal)
+            || trimmed.StartsWith("{", StringComparison.Ordinal)
+            || trimmed.StartsWith("}", StringComparison.Ordinal)
+            || IsLikelyMetadataLine(trimmed))
+        {
+            return string.Empty;
+        }
+
+        string candidate = System.Text.RegularExpressions.Regex.Replace(
+            trimmed,
+            @"^\s*(?:玩家(?:回应|回复|选项)?|农夫(?:回应|回复|选项)?|回应|回复|选项|response|reply|option)\s*\d*\s*[:：\-]\s*",
+            string.Empty,
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        candidate = System.Text.RegularExpressions.Regex.Replace(
+            candidate,
+            @"^\s*(?:\(?\d{1,2}\)?[\.、:：\)]|[-*•])\s+",
+            string.Empty,
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        candidate = candidate.Trim();
+        if (!LooksLikePlayerResponseCandidate(candidate))
+        {
+            return string.Empty;
+        }
+
+        return $"% {candidate}";
+    }
+
+    private bool LooksLikePlayerResponseCandidate(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text) || text.Length > 160)
+        {
+            return false;
+        }
+
+        if (text.Contains("#$", StringComparison.Ordinal)
+            || text.Contains("!LIVINGNPCS_META", StringComparison.OrdinalIgnoreCase)
+            || text.StartsWith("-", StringComparison.Ordinal)
+            || text.StartsWith("###", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private string CommonCleanup(string line)
