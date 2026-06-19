@@ -583,6 +583,7 @@ public class Character
                     );
                     this.LastConversationAnalysis = ConversationAnalysis.Parse(result.Text);
 
+                    LivingNpcActionDecisionDiagnostics actionDecisionDiagnostics = null;
                     if (result.IsSuccess)
                     {
                         // Apply relaxed validation if this is the second retry
@@ -598,11 +599,13 @@ public class Character
                         }
                         if (resultsInternal.Length > 0)
                         {
-                            this.LastConversationAnalysis = await LivingNpcActionDecisionPass.TrySupplementAsync(
+                            var actionDecision = await LivingNpcActionDecisionPass.TrySupplementAsync(
                                 this,
                                 context,
                                 this.LastConversationAnalysis,
                                 resultsInternal);
+                            this.LastConversationAnalysis = actionDecision.Analysis;
+                            actionDecisionDiagnostics = actionDecision.Diagnostics;
                         }
                     }
                     else
@@ -618,7 +621,8 @@ public class Character
                         resultsInternal,
                         retryCount,
                         promptCharacters,
-                        result.IsSuccess && resultsInternal.Length > 0 ? "parsed" : result.IsSuccess ? "unparseable" : "failed"
+                        result.IsSuccess && resultsInternal.Length > 0 ? "parsed" : result.IsSuccess ? "unparseable" : "failed",
+                        actionDecisionDiagnostics
                     );
                 }
                 catch (Exception ex)

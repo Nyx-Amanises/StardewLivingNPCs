@@ -22,7 +22,8 @@ internal static class AiResponseLogExporter
         IReadOnlyList<string> parsedLines,
         int attempt,
         int promptCharacters,
-        string outcome)
+        string outcome,
+        LivingNpcActionDecisionDiagnostics actionDecision = null)
     {
         if (ModEntry.Config?.ExportAiResponseLogs != true || ModEntry.SHelper == null)
         {
@@ -40,7 +41,7 @@ internal static class AiResponseLogExporter
             string filePath = Path.Combine(directory, $"{GetSafeFileName(npcName)}.md");
             File.AppendAllText(
                 filePath,
-                BuildEntry(npcName, context, response, analysis, parsedLines, attempt, promptCharacters, outcome),
+                BuildEntry(npcName, context, response, analysis, parsedLines, attempt, promptCharacters, outcome, actionDecision),
                 Encoding.UTF8);
         }
         catch (Exception ex)
@@ -57,7 +58,8 @@ internal static class AiResponseLogExporter
         IReadOnlyList<string> parsedLines,
         int attempt,
         int promptCharacters,
-        string outcome)
+        string outcome,
+        LivingNpcActionDecisionDiagnostics actionDecision)
     {
         var builder = new StringBuilder();
         var time = Game1.Date;
@@ -91,6 +93,7 @@ internal static class AiResponseLogExporter
         AppendFence(builder, PrettyJson(analysis?.ToJson() ?? ConversationAnalysis.Empty.ToJson()), "json");
         builder.AppendLine();
 
+        AppendActionDecisionSection(builder, actionDecision);
         builder.AppendLine("### Raw Model Output");
         builder.AppendLine();
         AppendFence(builder, response?.Text ?? string.Empty, "text");
@@ -107,6 +110,48 @@ internal static class AiResponseLogExporter
         return builder.ToString();
     }
 
+    private static void AppendActionDecisionSection(StringBuilder builder, LivingNpcActionDecisionDiagnostics actionDecision)
+    {
+        builder.AppendLine("### LivingNPCs Action Decision Pass");
+        builder.AppendLine();
+        if (actionDecision == null)
+        {
+            builder.AppendLine("<not requested>");
+            builder.AppendLine();
+            return;
+        }
+
+        AppendFence(builder, PrettyJson(actionDecision.ToSummaryJson()), "json");
+        builder.AppendLine();
+        if (!string.IsNullOrWhiteSpace(actionDecision.SupplementalJson))
+        {
+            builder.AppendLine("#### Parsed Supplemental Metadata");
+            builder.AppendLine();
+            AppendFence(builder, PrettyJson(actionDecision.SupplementalJson), "json");
+            builder.AppendLine();
+        }
+        if (!string.IsNullOrWhiteSpace(actionDecision.MergedJson))
+        {
+            builder.AppendLine("#### Metadata After Merge");
+            builder.AppendLine();
+            AppendFence(builder, PrettyJson(actionDecision.MergedJson), "json");
+            builder.AppendLine();
+        }
+        if (!string.IsNullOrWhiteSpace(actionDecision.RawResponse))
+        {
+            builder.AppendLine("#### Raw Decision Output");
+            builder.AppendLine();
+            AppendFence(builder, actionDecision.RawResponse, "text");
+            builder.AppendLine();
+        }
+        if (!string.IsNullOrWhiteSpace(actionDecision.Prompt))
+        {
+            builder.AppendLine("#### Decision Prompt");
+            builder.AppendLine();
+            AppendFence(builder, actionDecision.Prompt, "text");
+            builder.AppendLine();
+        }
+    }
     private static void AppendFence(StringBuilder builder, string text, string language)
     {
         builder.AppendLine($"~~~{language}");
