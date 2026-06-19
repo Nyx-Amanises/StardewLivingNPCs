@@ -27,6 +27,8 @@ namespace ValleyTalk
         public bool EnableSveCompatibility { get; set; } = true;
         public bool UseOptimizedGameSummaryPrompt { get; set; } = false;
         public bool UseOptimizedLivingNpcMetadataPrompt { get; set; } = false;
+        public bool EnableLivingNpcActionDecisionPass { get; set; } = true;
+        public int LivingNpcActionDecisionTimeoutSeconds { get; set; } = 12;
         public string DisableCharacters
         {
             get => disableCharacters;

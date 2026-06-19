@@ -174,6 +174,24 @@ namespace ValleyTalk
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
+                name: () => Util.GetString("configEnableLivingNpcActionDecisionPass", returnNull: true) ?? "LivingNPCs action decision pass",
+                tooltip: () => Util.GetString("configEnableLivingNpcActionDecisionPassTooltip", returnNull: true) ?? "When LivingNPCs metadata omits actions or help requests, run one compact follow-up classification prompt before falling back to rules.",
+                getValue: () => Config.EnableLivingNpcActionDecisionPass,
+                setValue: (value) =>{ Config.EnableLivingNpcActionDecisionPass = value; }
+            );
+            ConfigMenu.AddNumberOption(
+                mod: ModManifest,
+                name: () => Util.GetString("configLivingNpcActionDecisionTimeoutSeconds", returnNull: true) ?? "Action decision timeout",
+                tooltip: () => Util.GetString("configLivingNpcActionDecisionTimeoutSecondsTooltip", returnNull: true) ?? "Seconds to wait for the compact LivingNPCs action decision pass.",
+                getValue: () => Config.LivingNpcActionDecisionTimeoutSeconds,
+                setValue: (value) =>{ Config.LivingNpcActionDecisionTimeoutSeconds = value; },
+                min: 2,
+                max: 60,
+                interval: 1,
+                fieldId: "LivingNpcActionDecisionTimeoutSeconds"
+            );
+            ConfigMenu.AddBoolOption(
+                mod: ModManifest,
                 name: () => Util.GetString("configGenerateAiForNormalRightClick", returnNull: true) ?? "Generate AI dialogue on normal right-click",
                 tooltip: () => Util.GetString("configGenerateAiForNormalRightClickTooltip", returnNull: true) ?? "When disabled, normal right-click keeps vanilla dialogue; hold the configured key while clicking an NPC to start a ValleyTalk AI chat.",
                 getValue: () => Config.GenerateAiForNormalRightClick,

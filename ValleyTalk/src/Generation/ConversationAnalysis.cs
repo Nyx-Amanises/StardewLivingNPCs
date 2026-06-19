@@ -76,6 +76,39 @@ internal sealed class ConversationAnalysis
         || this.HelpRequestUpdates.Count > 0
         || this.Conflicts.Count > 0;
 
+    public bool HasWorldActionOrHelpMetadata => this.Actions.Count > 0
+        || this.HelpRequests.Count > 0
+        || this.HelpRequestUpdates.Count > 0;
+
+    public bool MergeSupplementalActionMetadata(ConversationAnalysis supplemental)
+    {
+        if (supplemental == null)
+        {
+            return false;
+        }
+
+        bool changed = false;
+        if (this.Actions.Count == 0 && supplemental.Actions.Count > 0)
+        {
+            this.Actions = supplemental.Actions;
+            changed = true;
+        }
+
+        if (this.HelpRequests.Count == 0 && supplemental.HelpRequests.Count > 0)
+        {
+            this.HelpRequests = supplemental.HelpRequests;
+            changed = true;
+        }
+
+        if (this.HelpRequestUpdates.Count == 0 && supplemental.HelpRequestUpdates.Count > 0)
+        {
+            this.HelpRequestUpdates = supplemental.HelpRequestUpdates;
+            changed = true;
+        }
+
+        return changed;
+    }
+
     public string ToJson()
     {
         return JsonConvert.SerializeObject(this);

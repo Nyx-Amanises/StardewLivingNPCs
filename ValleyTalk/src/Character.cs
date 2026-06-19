@@ -595,6 +595,14 @@ public class Character
                             Log.Warning($"AI response for {Name} used the wrong language. Retrying with a stronger language instruction.");
                             resultsInternal = Array.Empty<string>();
                         }
+                        if (resultsInternal.Length > 0)
+                        {
+                            this.LastConversationAnalysis = await LivingNpcActionDecisionPass.TrySupplementAsync(
+                                this,
+                                context,
+                                this.LastConversationAnalysis,
+                                resultsInternal);
+                        }
                     }
                     else
                     {
