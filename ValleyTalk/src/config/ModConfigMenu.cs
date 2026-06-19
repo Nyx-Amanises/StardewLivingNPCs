@@ -236,24 +236,24 @@ namespace ValleyTalk
                 mod: ModManifest,
                 name: () => Util.GetString("configFrequencyGeneral", returnNull: true) ?? "Frequency of general lines",
                 tooltip: () => Util.GetString("configFrequencyGeneralTooltip", returnNull: true) ?? "How often the mod should generate general lines.",
-                getValue: () => GetFrequencyOptions()[Config.GeneralFrequency],
-                setValue: (value) =>{ Config.GeneralFrequency = GetFrequencyOptions().First(x => x.Value == value).Key; },
+                getValue: () => GetFrequencyLabel(Config.GeneralFrequency),
+                setValue: (value) =>{ Config.GeneralFrequency = ResolveFrequencyValue(value, Config.GeneralFrequency); },
                 allowedValues: GetFrequencyOptions().Values.ToArray()
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
                 name: () => Util.GetString("configFrequencyGift", returnNull: true) ?? "Frequency of gift lines",
                 tooltip: () => Util.GetString("configFrequencyGiftTooltip", returnNull: true) ?? "How often the mod should generate gift reactions.",
-                getValue: () => GetFrequencyOptions()[Config.GiftFrequency],
-                setValue: (value) =>{ Config.GiftFrequency = GetFrequencyOptions().First(x => x.Value == value).Key; },
+                getValue: () => GetFrequencyLabel(Config.GiftFrequency),
+                setValue: (value) =>{ Config.GiftFrequency = ResolveFrequencyValue(value, Config.GiftFrequency); },
                 allowedValues: GetFrequencyOptions().Values.ToArray()
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
                 name: () => Util.GetString("configFrequencyMarriage", returnNull: true) ?? "Frequency of marriage lines",
                 tooltip: () => Util.GetString("configFrequencyMarriageTooltip", returnNull: true) ?? "How often the mod should generate marriage lines.",
-                getValue: () => GetFrequencyOptions()[Config.MarriageFrequency],
-                setValue: (value) =>{ Config.MarriageFrequency = GetFrequencyOptions().First(x => x.Value == value).Key; },
+                getValue: () => GetFrequencyLabel(Config.MarriageFrequency),
+                setValue: (value) =>{ Config.MarriageFrequency = ResolveFrequencyValue(value, Config.MarriageFrequency); },
                 allowedValues: GetFrequencyOptions().Values.ToArray()
             );
             ConfigMenu.AddTextOption(
@@ -284,6 +284,47 @@ namespace ValleyTalk
                 { 2, Util.GetString("configOccasionally", returnNull: true) is { } occasionally ? $"{occasionally} (50%)" : "Occasionally (50%)" },
                 { 3, Util.GetString("configMostly", returnNull: true) is { } mostly ? $"{mostly} (75%)" : "Mostly (75%)" },
                 { 4, Util.GetString("configAlways", returnNull: true) is { } always ? $"{always} (100%)" : "Always (100%)" }
+            };
+        }
+
+        private static string GetFrequencyLabel(int frequency)
+        {
+            var options = GetFrequencyOptions();
+            return options.TryGetValue(frequency, out var label)
+                ? label
+                : options[4];
+        }
+
+        private static int ResolveFrequencyValue(string value, int currentValue)
+        {
+            var options = GetFrequencyOptions();
+            var match = options.FirstOrDefault(x => string.Equals(x.Value, value, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(match.Value))
+            {
+                return match.Key;
+            }
+
+            foreach (var fallback in GetInvariantFrequencyOptions())
+            {
+                if (string.Equals(fallback.Value, value, StringComparison.OrdinalIgnoreCase) || value?.Contains($"({fallback.Value})") == true)
+                {
+                    return fallback.Key;
+                }
+            }
+
+            ModEntry.SMonitor?.Log($"Unable to parse ValleyTalk frequency option '{value}'. Keeping previous value {currentValue}.", LogLevel.Warn);
+            return currentValue;
+        }
+
+        private static Dictionary<int, string> GetInvariantFrequencyOptions()
+        {
+            return new Dictionary<int, string>()
+            {
+                { 0, "0%" },
+                { 1, "25%" },
+                { 2, "50%" },
+                { 3, "75%" },
+                { 4, "100%" }
             };
         }
 
