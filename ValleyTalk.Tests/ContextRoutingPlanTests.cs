@@ -60,6 +60,28 @@ public sealed class ContextRoutingPlanTests
     }
 
     [Fact]
+    public void BriefLivingNpcContextKeepsUnenumeratedLivingNpcSectionsWhole()
+    {
+        // "Immediate Help Request Delivery" is a real LivingNPCs section that the old enumerated
+        // critical-heading list did not cover. With prefix matching its body must survive brief
+        // routing even though the lines match no individual cue fragment.
+        string fullContext = string.Join(
+            "\n",
+            "## LivingNPCs Context: Abigail",
+            "- low-priority anecdote that should be dropped in brief mode.",
+            "## LivingNPCs Immediate Help Request Delivery",
+            "- Acknowledge the item and thank them warmly.",
+            "- Do not invent a new errand.");
+
+        string brief = LivingNpcContextCompressor.BuildBriefContext(fullContext);
+
+        Assert.Contains("## LivingNPCs Immediate Help Request Delivery", brief);
+        Assert.Contains("Acknowledge the item and thank them warmly", brief);
+        Assert.Contains("Do not invent a new errand", brief);
+        Assert.DoesNotContain("low-priority anecdote", brief);
+    }
+
+    [Fact]
     public void GiftDependencyPromotesRelationshipAndLivingNpcContext()
     {
         var plan = ContextRoutingPlan.ConservativeBrief();

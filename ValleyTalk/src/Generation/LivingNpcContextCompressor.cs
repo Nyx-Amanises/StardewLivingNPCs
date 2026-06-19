@@ -140,16 +140,34 @@ public static class LivingNpcContextCompressor
             "日程");
     }
 
+    // These mirror the section headings emitted by the LivingNPCs mod (BehaviorEngine,
+    // BehaviorPromptContextBuilder, CompanionOutingRuntime). They are hardcoded English on both
+    // sides, so prefix matching keeps them in sync without a hard assembly dependency.
+    private const string LivingNpcHeadingPrefix = "## LivingNPCs";
+    private const string CompanionOutingHeadingPrefix = "## Active Companion";
+    private const string MemoryContextHeadingPrefix = "## LivingNPCs Context";
+
     private static bool IsCriticalSectionHeading(string line)
     {
-        return ContainsAny(
-            line,
-            "## LivingNPCs Gift Opportunity",
-            "## LivingNPCs Help Request Opportunity",
-            "## Active Companion Outing",
-            "## LivingNPCs Help Request Gift Response",
-            "## LivingNPCs Reciprocal Gift Mail",
-            "## LivingNPCs Birthday Gift Mail");
+        if (string.IsNullOrWhiteSpace(line))
+        {
+            return false;
+        }
+
+        string heading = line.TrimStart();
+
+        // The rolling-memory dump is the one section we deliberately compress down to cue lines;
+        // everything else under LivingNPCs / companion-outing headings is small and action-critical.
+        if (heading.StartsWith(MemoryContextHeadingPrefix, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        // Match by prefix rather than enumerating exact titles, so a newly added or renamed
+        // LivingNPCs section (e.g. "Immediate Help Request Delivery") is kept whole by default
+        // instead of being silently dropped from brief context.
+        return heading.StartsWith(LivingNpcHeadingPrefix, StringComparison.OrdinalIgnoreCase)
+            || heading.StartsWith(CompanionOutingHeadingPrefix, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool ContainsAny(string text, params string[] fragments)
