@@ -1,3 +1,6 @@
+using System.IO;
+using System.Linq;
+using System.Text.Json;
 using Xunit;
 using ValleyTalk;
 
@@ -47,5 +50,56 @@ public sealed class ContextRoutingPlanTests
         Assert.Equal(ContextDetail.Full, plan.Get(ContextModule.Location));
         Assert.Equal(ContextDetail.Brief, plan.Get(ContextModule.DateTime));
         Assert.Equal(ContextDetail.Brief, plan.Get(ContextModule.Weather));
+    }
+
+    [Fact]
+    public void NewContextRoutingConfigKeysAreLocalizedAndInjected()
+    {
+        string root = FindRepositoryRoot();
+        string promptsPath = Path.Combine(root, "ValleyTalk", "ContentPack", "assets", "Prompts.json");
+        string defaultI18nPath = Path.Combine(root, "ValleyTalk", "ContentPack", "i18n", "default.json");
+        string zhI18nPath = Path.Combine(root, "ValleyTalk", "ContentPack", "i18n", "zh.json");
+
+        using JsonDocument prompts = JsonDocument.Parse(File.ReadAllText(promptsPath));
+        using JsonDocument defaultI18n = JsonDocument.Parse(File.ReadAllText(defaultI18nPath));
+        using JsonDocument zhI18n = JsonDocument.Parse(File.ReadAllText(zhI18nPath));
+
+        JsonElement entries = prompts.RootElement.GetProperty("Changes")[0].GetProperty("Entries");
+        string[] requiredKeys =
+        {
+            "configEnableSemanticContextRouting",
+            "configEnableSemanticContextRoutingTooltip",
+            "configSemanticContextRoutingTimeoutSeconds",
+            "configSemanticContextRoutingTimeoutSecondsTooltip",
+            "configEnableLivingNpcActionDecisionPass",
+            "configEnableLivingNpcActionDecisionPassTooltip",
+            "configLivingNpcActionDecisionTimeoutSeconds",
+            "configLivingNpcActionDecisionTimeoutSecondsTooltip"
+        };
+
+        foreach (string key in requiredKeys)
+        {
+            Assert.True(defaultI18n.RootElement.TryGetProperty(key, out _), $"Missing default i18n key: {key}");
+            Assert.True(zhI18n.RootElement.TryGetProperty(key, out _), $"Missing zh i18n key: {key}");
+            Assert.True(entries.TryGetProperty(key, out JsonElement promptEntry), $"Missing Prompts.json injection key: {key}");
+            Assert.Equal($"{{{{i18n:{key}}}}}", promptEntry.GetString());
+        }
+    }
+
+    private static string FindRepositoryRoot()
+    {
+        var directory = new DirectoryInfo(Directory.GetCurrentDirectory());
+        while (directory is not null)
+        {
+            if (Directory.Exists(Path.Combine(directory.FullName, "ValleyTalk"))
+                && Directory.Exists(Path.Combine(directory.FullName, "ValleyTalk.Tests")))
+            {
+                return directory.FullName;
+            }
+
+            directory = directory.Parent;
+        }
+
+        throw new DirectoryNotFoundException("Could not locate repository root.");
     }
 }
