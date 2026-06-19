@@ -41,6 +41,7 @@ public class Prompts
     private string _instructions;
     public string Instructions { get => _instructions ??= GetInstructions(); internal set => _instructions = value; }
     private readonly Dictionary<string, int> _corePromptSections = new();
+    private readonly ContextRoutingPlan contextRoutingPlan;
     public IReadOnlyDictionary<string, int> CorePromptSections => _corePromptSections;
 
     public string Name { get; internal set; }
@@ -65,12 +66,14 @@ public class Prompts
     public string GiveGift => giveGift;
 
     Dictionary<string, IEnumerable<string>> PromptOverrides = new Dictionary<string, IEnumerable<string>>();
-    public Prompts(DialogueContext context, Character character)
+    public Prompts(DialogueContext context, Character character, ContextRoutingPlan contextRoutingPlan = null)
     {
         npcData = character.StardewNpc.GetData();
         npcIsMale = npcData.Gender == StardewValley.Gender.Male;
         Context = context;
         Character = character;
+        this.contextRoutingPlan = contextRoutingPlan ?? ContextRoutingPlan.Full();
+        this.contextRoutingPlan.ApplyDependencies();
 
         dialogueSample = character.SelectDialogueSample(context);
         exactLine = SelectExactDialogue();
@@ -165,9 +168,22 @@ public class Prompts
     {
         var gameConstantPrompt = new StringBuilder();
         gameConstantPrompt.AppendLine(Util.GetString(Character,"gameContext"));
-        gameConstantPrompt.AppendLine($"##{Util.GetString(Character,"gameSummaryHeading")}");
-        gameConstantPrompt.AppendLine(GetStardewSummary());
+        ContextDetail worldDetail = this.contextRoutingPlan.Get(ContextModule.World);
+        if (worldDetail != ContextDetail.None)
+        {
+            gameConstantPrompt.AppendLine($"##{Util.GetString(Character,"gameSummaryHeading")}");
+            gameConstantPrompt.AppendLine(worldDetail == ContextDetail.Full ? GetStardewSummary() : GetOptimizedStardewSummary());
+        }
+
         return gameConstantPrompt.ToString();
+    }
+
+    private static string GetOptimizedStardewSummary()
+    {
+        bool useSveCompatibility = ModEntry.Config?.EnableSveCompatibility != false;
+        return useSveCompatibility
+            ? _optimizedStardewSummary ??= new GameSummaryBuilder(VtConstants.OptimizedGameSummaryPath).Build()
+            : _optimizedBaseStardewSummary ??= new GameSummaryBuilder(VtConstants.OptimizedGameSummaryPath, VtConstants.OptimizedBaseGameSummaryFileName).Build();
     }
 
     private static string GetStardewSummary()
@@ -188,34 +204,44 @@ public class Prompts
     private string GetNpcConstantContext()
     {
         var npcConstantPrompt = new StringBuilder();
-
         var intro = Util.GetString(Character,"npcContextIntro", new { Name = Name });
         npcConstantPrompt.AppendLine(intro);
-        if ((Character.Bio?.Biography ?? string.Empty).Length > 10)
+
+        ContextDetail npcDetail = this.contextRoutingPlan.Get(ContextModule.NpcProfile);
+        if (npcDetail == ContextDetail.None || (Character.Bio?.Biography ?? string.Empty).Length <= 10)
         {
-            npcConstantPrompt.AppendLine($"##{Util.GetString(Character,"npcContextBiographyHeading", new { Name = Name })}");
+            return npcConstantPrompt.ToString();
+        }
+
+        npcConstantPrompt.AppendLine($"##{Util.GetString(Character,"npcContextBiographyHeading", new { Name = Name })}");
+        if (npcDetail == ContextDetail.Full)
+        {
             var bio = Character.Bio.Biography;
             while (bio.Contains("\n\n"))
             {
                 bio = bio.Replace("\n\n", "\n");
             }
             npcConstantPrompt.AppendLine(bio);
-            if (Character.Bio.Relationships.Any())
+        }
+
+        if (Character.Bio.Relationships.Any() && npcDetail == ContextDetail.Full)
+        {
+            npcConstantPrompt.AppendLine($"## {Util.GetString("biographyRelationships")}:");
+            foreach (var relationship in Character.Bio.Relationships.Values)
             {
-                npcConstantPrompt.AppendLine($"## {Util.GetString("biographyRelationships")}:");
-                foreach (var relationship in Character.Bio.Relationships.Values)
-                {
-                    npcConstantPrompt.AppendLine($"* **{relationship.Heading}**: {relationship.Description}");
-                }
+                npcConstantPrompt.AppendLine($"* **{relationship.Heading}**: {relationship.Description}");
             }
-            if (Character.Bio.Traits.Any())
+        }
+        if (Character.Bio.Traits.Any())
+        {
+            npcConstantPrompt.AppendLine($"## {Util.GetString("biographyPersonality")}:");
+            foreach (var trait in Character.Bio.Traits.Values.Take(npcDetail == ContextDetail.Full ? int.MaxValue : 4))
             {
-                npcConstantPrompt.AppendLine($"## {Util.GetString("biographyPersonality")}:");
-                foreach (var trait in Character.Bio.Traits.Values)
-                {
-                    npcConstantPrompt.AppendLine($"* **{trait.Heading}**: {trait.Description}");
-                }
+                npcConstantPrompt.AppendLine($"* **{trait.Heading}**: {trait.Description}");
             }
+        }
+        if (npcDetail == ContextDetail.Full)
+        {
             npcConstantPrompt.AppendLine(Character.Bio.BiographyEnd);
         }
         return npcConstantPrompt.ToString();
@@ -225,9 +251,18 @@ public class Prompts
     {
         _corePromptSections.Clear();
         var prompt = new StringBuilder();
-        AppendCoreSection("GameState", GetGameState, prompt);
-        AppendCoreSection("SampleDialogue", GetSampleDialogue, prompt);
-        AppendCoreSection("EventHistory", GetEventHistory, prompt);
+        if (this.contextRoutingPlan.Include(ContextModule.GameState))
+        {
+            AppendCoreSection("GameState", GetGameState, prompt);
+        }
+        if (this.contextRoutingPlan.Include(ContextModule.SampleDialogue))
+        {
+            AppendCoreSection("SampleDialogue", GetSampleDialogue, prompt);
+        }
+        if (this.contextRoutingPlan.Include(ContextModule.EventHistory))
+        {
+            AppendCoreSection("EventHistory", GetEventHistory, prompt);
+        }
 
         AppendCoreSection("CoreHeader", p =>
         {
@@ -235,51 +270,102 @@ public class Prompts
             p.AppendLine($"### {Util.GetString(Character,"coreContextHeading")}");
             p.AppendLine(Util.GetString(Character,"coreFarmerGender"));
         }, prompt, useOverrides: false);
-        AppendCoreSection("DateAndTime", GetDateAndTime, prompt);
-        AppendCoreSection("Weather", GetWeather, prompt);
-        AppendCoreSection("OtherNpcs", GetOtherNpcs, prompt);
+        if (this.contextRoutingPlan.Include(ContextModule.DateTime))
+        {
+            AppendCoreSection("DateAndTime", GetDateAndTime, prompt);
+        }
+        if (this.contextRoutingPlan.Include(ContextModule.Weather))
+        {
+            AppendCoreSection("Weather", GetWeather, prompt);
+        }
+        if (this.contextRoutingPlan.Include(ContextModule.NearbyNpcs))
+        {
+            AppendCoreSection("OtherNpcs", GetOtherNpcs, prompt);
+        }
         Game1.getPlayerOrEventFarmer().friendshipData.TryGetValue(Character.Name, out Friendship friendship);
         if (friendship.IsMarried() || friendship.IsRoommate())
         {
             if (friendship.IsRoommate())
             {
-                AppendCoreSection("coreRoommates", p => { p.AppendLine(Util.GetString(Character, "coreRoommates", new { Name = Name })); }, prompt);
+                if (this.contextRoutingPlan.Include(ContextModule.Relationship))
+                {
+                    AppendCoreSection("coreRoommates", p => { p.AppendLine(Util.GetString(Character, "coreRoommates", new { Name = Name })); }, prompt);
+                }
             }
             else
             {
-                AppendCoreSection("MarriageStatus", p =>
+                if (this.contextRoutingPlan.Include(ContextModule.Relationship))
+                {
+                    AppendCoreSection("MarriageStatus", p =>
                 {
                     p.AppendLine(Util.GetString(Character,"coreMarried", new { Name= Name, Pronoun = npcIsMale ? "his" : "her" }));
                     var dateNow = new StardewTime(Game1.Date,600);
                     var whenMarried = dateNow.AddDays(-friendship.DaysMarried);
                     p.AppendLine(Util.GetString(Character,"coreMarriedSince", new { Name= Name, RelativeDate = whenMarried.SinceDescription(dateNow) }));
                 }, prompt, useOverrides: false);
-                AppendCoreSection("Children", p => GetChildren(p, friendship), prompt);
+                    AppendCoreSection("Children", p => GetChildren(p, friendship), prompt);
+                }
             }
 
-            AppendCoreSection("Spouse", GetSpouse, prompt);
-            AppendCoreSection("FarmContents", GetFarmContents, prompt);
-            AppendCoreSection("Wealth", GetWealth, prompt);
-            AppendCoreSection("MarriageFeelings", GetMarriageFeelings, prompt);
+            if (this.contextRoutingPlan.Include(ContextModule.Relationship))
+            {
+                AppendCoreSection("Spouse", GetSpouse, prompt);
+                AppendCoreSection("MarriageFeelings", GetMarriageFeelings, prompt);
+            }
+            if (this.contextRoutingPlan.Include(ContextModule.Farm))
+            {
+                AppendCoreSection("FarmContents", GetFarmContents, prompt);
+                AppendCoreSection("Wealth", GetWealth, prompt);
+            }
         }
-        AppendCoreSection("Location", GetLocation, prompt);
-        AppendCoreSection("Trinkets", GetTrinkets, prompt);
-        AppendCoreSection("RecentEvents", GetRecentEvents, prompt);
+        if (this.contextRoutingPlan.Include(ContextModule.Location))
+        {
+            AppendCoreSection("Location", GetLocation, prompt);
+        }
+        if (this.contextRoutingPlan.Include(ContextModule.Trinkets))
+        {
+            AppendCoreSection("Trinkets", GetTrinkets, prompt);
+        }
+        if (this.contextRoutingPlan.Include(ContextModule.RecentEvents))
+        {
+            AppendCoreSection("RecentEvents", GetRecentEvents, prompt);
+        }
         AppendCoreSection("ThirdPartyContext", _ => { }, prompt);
 
-        AppendCoreSection("SpecialDatesAndBirthday", GetSpecialDatesAndBirthday, prompt);
-        AppendCoreSection("Gift", GetGift, prompt);
-        AppendCoreSection("LivingNpcExtraPrompt", GetLivingNpcExtraPrompt, prompt);
-        AppendCoreSection("SpouseAction", GetSpouseAction, prompt);
+        if (this.contextRoutingPlan.Include(ContextModule.SpecialDates))
+        {
+            AppendCoreSection("SpecialDatesAndBirthday", GetSpecialDatesAndBirthday, prompt);
+        }
+        if (this.contextRoutingPlan.Include(ContextModule.Gift))
+        {
+            AppendCoreSection("Gift", GetGift, prompt);
+        }
+        if (this.contextRoutingPlan.Include(ContextModule.LivingNpc))
+        {
+            AppendCoreSection("LivingNpcExtraPrompt", GetLivingNpcExtraPrompt, prompt);
+        }
+        if (this.contextRoutingPlan.Include(ContextModule.SpouseAction))
+        {
+            AppendCoreSection("SpouseAction", GetSpouseAction, prompt);
+        }
         if (!friendship.IsMarried())
         {
-            AppendCoreSection("NonSpouseFriendshipLevel", GetNonSpouseFriendshipLevel, prompt);
-            AppendCoreSection("Spouse", GetSpouse, prompt);
-            AppendCoreSection("SpecialRelationshipStatus", p => GetSpecialRelationshipStatus(p, friendship), prompt);
+            if (this.contextRoutingPlan.Include(ContextModule.Relationship))
+            {
+                AppendCoreSection("NonSpouseFriendshipLevel", GetNonSpouseFriendshipLevel, prompt);
+                AppendCoreSection("Spouse", GetSpouse, prompt);
+                AppendCoreSection("SpecialRelationshipStatus", p => GetSpecialRelationshipStatus(p, friendship), prompt);
+            }
         }
         AppendCoreSection("coreGenderReferences", p => p.AppendLine(Util.GetString(Character,"coreGenderReferences")), prompt);
-        AppendCoreSection("Preoccupation", GetPreoccupation, prompt);
-        AppendCoreSection("CurrentConversation", GetCurrentConversation, prompt);
+        if (this.contextRoutingPlan.Include(ContextModule.Preoccupation))
+        {
+            AppendCoreSection("Preoccupation", GetPreoccupation, prompt);
+        }
+        if (this.contextRoutingPlan.Include(ContextModule.CurrentConversation))
+        {
+            AppendCoreSection("CurrentConversation", GetCurrentConversation, prompt);
+        }
 
         return prompt.ToString();
     }
@@ -568,10 +654,69 @@ public class Prompts
 
     private void GetLivingNpcExtraPrompt(StringBuilder prompt)
     {
-        if (!string.IsNullOrWhiteSpace(Context.LivingNpcExtraPrompt))
+        if (string.IsNullOrWhiteSpace(Context.LivingNpcExtraPrompt))
+        {
+            return;
+        }
+
+        if (this.contextRoutingPlan.IsFull(ContextModule.LivingNpc))
         {
             prompt.AppendLine(Context.LivingNpcExtraPrompt);
+            return;
         }
+
+        prompt.AppendLine(BuildBriefLivingNpcContext(Context.LivingNpcExtraPrompt));
+    }
+
+    private static string BuildBriefLivingNpcContext(string fullContext)
+    {
+        var lines = fullContext.Replace("\r", string.Empty).Split('\n');
+        var selected = lines
+            .Select(line => line.Trim())
+            .Where(line => !string.IsNullOrWhiteSpace(line))
+            .Where(ShouldKeepBriefLivingNpcContextLine)
+            .Take(40)
+            .ToList();
+
+        if (selected.Count == 0)
+        {
+            selected = lines
+                .Select(line => line.Trim())
+                .Where(line => !string.IsNullOrWhiteSpace(line))
+                .Take(12)
+                .ToList();
+        }
+
+        return string.Join("\n", selected);
+    }
+
+    private static bool ShouldKeepBriefLivingNpcContextLine(string line)
+    {
+        return ContainsAny(
+            line,
+            "## LivingNPCs",
+            "## Active Companion Outing",
+            "Rules:",
+            "Conversation stance",
+            "Mood:",
+            "emotion:",
+            "Familiarity",
+            "trust",
+            "Relationship trust",
+            "Recent gift",
+            "Shared experiences",
+            "Help requests",
+            "Help-request",
+            "Gift Opportunity",
+            "Help Request Opportunity",
+            "currently reasonable item requests",
+            "Conflict",
+            "Personal memory",
+            "Last interaction",
+            "Phase:",
+            "Shared activity",
+            "farmer is",
+            "Do not announce travel");
     }
 
     private void GetSpecialDatesAndBirthday(StringBuilder prompt)
@@ -652,6 +797,11 @@ public class Prompts
     private void GetLocation(StringBuilder prompt)
     {
         if (Context.Location == null && Character.StardewNpc.DirectionsToNewLocation == null && string.IsNullOrWhiteSpace(Context.CurrentActivity)) return;
+        if (!this.contextRoutingPlan.IsFull(ContextModule.Location))
+        {
+            GetBriefLocation(prompt);
+            return;
+        }
         
         //var bedTile = npcData.Home[0].Tile;
         //if (bedTile == null || bedTile.X <= 0 || bedTile.Y <= 0)
@@ -761,6 +911,63 @@ public class Prompts
         }
     }
 
+    private void GetBriefLocation(StringBuilder prompt)
+    {
+        prompt.AppendLine($"### {Util.GetString(Character, "locationCurrentStateHeading")}");
+        string currentLocation = Character.StardewNpc.currentLocation?.Name ?? Context.Location;
+        string displayLocation = string.IsNullOrWhiteSpace(currentLocation)
+            ? Util.GetString(Character, "timeInTheFuture")
+            : GetLocationDisplayNameIfAvailable(currentLocation);
+        var tile = Character.StardewNpc.TilePoint;
+        prompt.AppendLine(Util.GetString(Character, "locationCurrentStatePlace", new
+        {
+            Name,
+            Location = displayLocation,
+            TileX = tile.X,
+            TileY = tile.Y
+        }));
+
+        if (!string.IsNullOrWhiteSpace(Context.CurrentActivity))
+        {
+            prompt.AppendLine(Util.GetString(Character, "locationCurrentStateActivity", new
+            {
+                Activity = Context.CurrentActivity
+            }));
+        }
+
+        if (!string.IsNullOrWhiteSpace(Context.CurrentScheduleLocation) && Context.CurrentScheduleTime.HasValue)
+        {
+            prompt.AppendLine(Util.GetString(Character, "locationCurrentScheduleStop", new
+            {
+                Name,
+                Time = FormatScheduleTime(Context.CurrentScheduleTime.Value),
+                Location = GetLocationDisplayNameIfAvailable(Context.CurrentScheduleLocation)
+            }));
+        }
+
+        if (Character.StardewNpc.DirectionsToNewLocation != null && Context.Location != Character.StardewNpc.DirectionsToNewLocation.targetLocationName)
+        {
+            string destinationName = GetLocationDisplayNameIfAvailable(Character.StardewNpc.DirectionsToNewLocation.targetLocationName);
+            prompt.AppendLine(Util.GetString(Character,"locationTravelling", new { Name= Name, destination= destinationName }));
+        }
+        else
+        {
+            prompt.AppendLine(Util.GetString(Character, "locationCurrentlyStationary", new { Name }));
+        }
+
+        if (!string.IsNullOrWhiteSpace(Context.NextScheduleLocation) && Context.MinutesUntilNextSchedule.HasValue)
+        {
+            string key = Context.MinutesUntilNextSchedule.Value <= 30
+                ? "locationNextScheduleSoon"
+                : "locationScheduleWindow";
+            prompt.AppendLine(Util.GetString(Character, key, new
+            {
+                Name,
+                Minutes = Context.MinutesUntilNextSchedule.Value,
+                Destination = GetLocationDisplayNameIfAvailable(Context.NextScheduleLocation)
+            }));
+        }
+    }
     private void AppendCurrentNpcState(StringBuilder prompt)
     {
         string currentLocation = Character.StardewNpc.currentLocation?.Name ?? Context.Location;
@@ -1318,6 +1525,15 @@ public class Prompts
         return Util.GetString(Character, baseKey);
     }
 
+    private static bool ContainsAny(string text, params string[] fragments)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        return fragments.Any(fragment => text.Contains(fragment, StringComparison.OrdinalIgnoreCase));
+    }
     private string GetResponseStart()
     {
         return Util.GetString(Character,"responseStart", new { Name= Name });
