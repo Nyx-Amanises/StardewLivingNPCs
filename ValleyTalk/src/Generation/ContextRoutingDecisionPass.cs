@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -11,6 +12,7 @@ namespace ValleyTalk;
 internal static class ContextRoutingDecisionPass
 {
     private const double MinimumConfidence = 0.55;
+    private const int MaxRoutingTimeoutSeconds = 8;
 
     private static readonly Dictionary<string, ContextModule> ModuleKeys = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -39,12 +41,16 @@ internal static class ContextRoutingDecisionPass
     {
         if (ModEntry.Config?.EnableSemanticContextRouting != true || character == null || context == null)
         {
-            return ContextRoutingPlan.Full();
+            return ContextRoutingPlan.Full().WithRoutingDiagnostics("disabled-full", 0, 0);
         }
 
         string prompt = BuildRouterPrompt(character, context);
         LlmResponse response;
-        int timeoutSeconds = Math.Clamp(ModEntry.Config.SemanticContextRoutingTimeoutSeconds, 2, Math.Max(2, ModEntry.Config.QueryTimeout));
+        int timeoutSeconds = Math.Clamp(
+            ModEntry.Config.SemanticContextRoutingTimeoutSeconds,
+            2,
+            Math.Min(MaxRoutingTimeoutSeconds, Math.Max(2, ModEntry.Config.QueryTimeout)));
+        var routeWatch = Stopwatch.StartNew();
         try
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
@@ -60,13 +66,16 @@ internal static class ContextRoutingDecisionPass
         }
         catch (Exception ex)
         {
+            routeWatch.Stop();
+            string outcome = ex is OperationCanceledException || ex is TimeoutException ? "timeout-full" : "failed-full";
             if (ModEntry.Config.Debug)
             {
-                ModEntry.SMonitor.Log($"Semantic context routing failed for {character.Name}: {ex.Message}; using full context.", StardewModdingAPI.LogLevel.Debug);
+                ModEntry.SMonitor.Log($"Semantic context routing {outcome} for {character.Name} after {routeWatch.ElapsedMilliseconds}ms: {ex.Message}; using full context.", StardewModdingAPI.LogLevel.Debug);
             }
-            return ContextRoutingPlan.Full();
+            return ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
         }
 
+        routeWatch.Stop();
         TokenUsage usage = response.Usage.HasAnyTokens
             ? response.Usage
             : TokenUsage.Estimate(prompt, response.Text ?? response.ErrorMessage ?? string.Empty);
@@ -79,7 +88,7 @@ internal static class ContextRoutingDecisionPass
 
         if (!response.IsSuccess || string.IsNullOrWhiteSpace(response.Text))
         {
-            return ContextRoutingPlan.Full();
+            return ContextRoutingPlan.Full().WithRoutingDiagnostics("response-failed-full", routeWatch.ElapsedMilliseconds, timeoutSeconds);
         }
 
         if (!TryParsePlan(response.Text, context, out ContextRoutingPlan plan) || plan == null)
@@ -88,11 +97,12 @@ internal static class ContextRoutingDecisionPass
             {
                 ModEntry.SMonitor.Log($"Semantic context routing returned unparseable output for {character.Name}; using full context. Output: {response.Text}", StardewModdingAPI.LogLevel.Debug);
             }
-            return ContextRoutingPlan.Full();
+            return ContextRoutingPlan.Full().WithRoutingDiagnostics("parse-failed-full", routeWatch.ElapsedMilliseconds, timeoutSeconds);
         }
 
         ApplyDeterministicBoundaries(plan, context);
         plan.ApplyDependencies();
+        plan.WithRoutingDiagnostics("success", routeWatch.ElapsedMilliseconds, timeoutSeconds);
         if (ModEntry.Config.Debug)
         {
             ModEntry.SMonitor.Log($"Semantic context routing for {character.Name}: {plan.DebugLabel()}", StardewModdingAPI.LogLevel.Debug);

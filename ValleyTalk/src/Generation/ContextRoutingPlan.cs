@@ -67,6 +67,18 @@ public sealed class ContextRoutingPlan
         return plan;
     }
 
+    public string RoutingOutcome { get; private set; } = "not-run";
+    public long RoutingMilliseconds { get; private set; }
+    public int RoutingTimeoutSeconds { get; private set; }
+
+    public ContextRoutingPlan WithRoutingDiagnostics(string outcome, long milliseconds, int timeoutSeconds)
+    {
+        this.RoutingOutcome = outcome;
+        this.RoutingMilliseconds = milliseconds;
+        this.RoutingTimeoutSeconds = timeoutSeconds;
+        return this;
+    }
+
     public IReadOnlyDictionary<ContextModule, ContextDetail> Details => this.details;
 
     public ContextDetail Get(ContextModule module)

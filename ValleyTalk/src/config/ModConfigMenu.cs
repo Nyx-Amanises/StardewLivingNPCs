@@ -172,6 +172,7 @@ namespace ValleyTalk
                 getValue: () => Config.UseOptimizedLivingNpcMetadataPrompt,
                 setValue: (value) =>{ Config.UseOptimizedLivingNpcMetadataPrompt = value; }
             );
+            Config.SemanticContextRoutingTimeoutSeconds = Math.Clamp(Config.SemanticContextRoutingTimeoutSeconds, 2, 8);
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
                 name: () => Util.GetString("configEnableSemanticContextRouting", returnNull: true) ?? "Semantic context routing",
@@ -184,9 +185,9 @@ namespace ValleyTalk
                 name: () => Util.GetString("configSemanticContextRoutingTimeoutSeconds", returnNull: true) ?? "Context routing timeout",
                 tooltip: () => Util.GetString("configSemanticContextRoutingTimeoutSecondsTooltip", returnNull: true) ?? "Seconds to wait for semantic context routing before using the full conservative prompt.",
                 getValue: () => Config.SemanticContextRoutingTimeoutSeconds,
-                setValue: (value) =>{ Config.SemanticContextRoutingTimeoutSeconds = value; },
+                setValue: (value) =>{ Config.SemanticContextRoutingTimeoutSeconds = Math.Clamp(value, 2, 8); },
                 min: 2,
-                max: 60,
+                max: 8,
                 interval: 1,
                 fieldId: "SemanticContextRoutingTimeoutSeconds"
             );

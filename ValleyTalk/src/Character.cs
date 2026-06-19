@@ -468,7 +468,7 @@ public class Character
             }
 
             ModEntry.SMonitor.Log(
-                $"[ValleyTalk timing] {Name}: {outcome}; total={totalWatch.ElapsedMilliseconds}ms, promptInit={promptInitWatch.ElapsedMilliseconds}ms, promptBuild={promptBuildMilliseconds}ms, model={inferenceMilliseconds}ms, promptChars={promptCharacters}, promptSections={{system={systemPromptCharacters}, game={gameConstantContextCharacters}, npc={npcConstantContextCharacters}, core={corePromptCharacters}, instructions={instructionsCharacters}, command={commandCharacters}, responseStart={responseStartCharacters}}}, coreSections={{{corePromptSectionCharacters}}}, responseChars={responseCharacters}, attempts={retryCount}, lines={dialogueLines}.",
+                $"[ValleyTalk timing] {Name}: {outcome}; total={totalWatch.ElapsedMilliseconds}ms, promptInit={promptInitWatch.ElapsedMilliseconds}ms, promptBuild={promptBuildMilliseconds}ms, model={inferenceMilliseconds}ms, route={contextRoutingPlan.RoutingOutcome}, routeMs={contextRoutingPlan.RoutingMilliseconds}, routeTimeout={contextRoutingPlan.RoutingTimeoutSeconds}s, promptChars={promptCharacters}, promptSections={{system={systemPromptCharacters}, game={gameConstantContextCharacters}, npc={npcConstantContextCharacters}, core={corePromptCharacters}, instructions={instructionsCharacters}, command={commandCharacters}, responseStart={responseStartCharacters}}}, coreSections={{{corePromptSectionCharacters}}}, responseChars={responseCharacters}, attempts={retryCount}, lines={dialogueLines}.",
                 StardewModdingAPI.LogLevel.Info
             );
         }
