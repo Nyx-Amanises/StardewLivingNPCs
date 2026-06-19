@@ -82,8 +82,8 @@ internal static class ContextRoutingDecisionPass
                 prompt,
                 string.Empty,
                 n_predict: 384,
-                cacheContext: "context-routing",
-                allowRetry: false);
+                allowRetry: false,
+                disableThinking: true);
             response = await task.WaitAsync(cts.Token);
         }
         catch (Exception ex)
@@ -121,10 +121,14 @@ internal static class ContextRoutingDecisionPass
 
         if (!TryParsePlan(response.Text, out ContextRoutingPlan plan, out string parseDetail) || plan == null)
         {
-            string outcome = "parse-failed-full";
+            // Separate "model wasn't confident enough" from "couldn't parse the output" — both fall
+            // back to full context, but they need different diagnostics when tuning the router.
+            string outcome = parseDetail.StartsWith("low-confidence", StringComparison.Ordinal)
+                ? "low-confidence-full"
+                : "parse-failed-full";
             if (ModEntry.Config.Debug)
             {
-                ModEntry.SMonitor.Log($"Semantic context routing returned unparseable output for {character.Name}; using full context. Reason: {parseDetail}. Output: {response.Text}", StardewModdingAPI.LogLevel.Debug);
+                ModEntry.SMonitor.Log($"Semantic context routing fell back to full context for {character.Name} ({outcome}). Reason: {parseDetail}. Output: {response.Text}", StardewModdingAPI.LogLevel.Debug);
             }
 
             var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);

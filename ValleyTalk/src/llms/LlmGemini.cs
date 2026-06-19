@@ -78,17 +78,17 @@ internal class LlmGemini : Llm, IGetModelNames
         }
     }
 
-    internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true)
+    internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true,bool disableThinking = false)
     {
         var useContext = string.Empty;
 
         promptString = gameCacheString + npcCacheString + promptString;
-        if (!string.IsNullOrEmpty(cacheContext))
+        if (!string.IsNullOrEmpty(cacheContext) && CacheContexts.TryGetValue(cacheContext, out var cachedContextValue))
         {
-            useContext = CacheContexts[cacheContext];
+            useContext = cachedContextValue;
         }
 
-        int thinkingBudget = modelName.Contains("flash", StringComparison.OrdinalIgnoreCase) ? 0 : 128;
+        int thinkingBudget = (disableThinking || modelName.Contains("flash", StringComparison.OrdinalIgnoreCase)) ? 0 : 128;
         var jsonData = JsonConvert.SerializeObject(new // Changed
             {
                 safetySettings = new[] 

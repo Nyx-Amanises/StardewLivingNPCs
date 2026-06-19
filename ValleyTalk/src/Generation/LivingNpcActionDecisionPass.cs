@@ -76,7 +76,8 @@ internal static class LivingNpcActionDecisionPass
                 compactPrompt,
                 "!LIVINGNPCS_META ",
                 n_predict: 512,
-                allowRetry: false);
+                allowRetry: false,
+                disableThinking: true);
             response = await task.WaitAsync(cts.Token);
         }
         catch (Exception ex)

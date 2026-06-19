@@ -44,7 +44,7 @@ internal class LlmVolcEngine : Llm, IGetModelNames
         return CoreGetModelNames();
     }
 
-    internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true)
+    internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true,bool disableThinking = false)
     {
         var inputString = JsonConvert.SerializeObject(new
             {

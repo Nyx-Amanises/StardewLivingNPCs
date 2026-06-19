@@ -33,7 +33,7 @@ internal class LlmLlamaCpp : Llm
             .Replace("{response_start}", responseStart);
     }
 
-    internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true)
+    internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true,bool disableThinking = false)
     {
 
         promptString = gameCacheString + npcCacheString + promptString;

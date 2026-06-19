@@ -32,10 +32,9 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         string npcCacheString,
         string promptString,
         int n_predict,
-        string cacheContext)
+        bool disableThinking)
     {
         string userPrompt = gameCacheString + npcCacheString + promptString;
-        bool disableThinking = string.Equals(cacheContext, "context-routing", StringComparison.OrdinalIgnoreCase);
         yield return BuildChatRequestBody(systemPromptString, userPrompt, n_predict, disableThinking, useInstructionsRequest: false)
             .ToString(Formatting.None);
 
@@ -97,7 +96,7 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         body["reasoning"] = new JObject { ["enabled"] = false };
     }
 
-    internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true)
+    internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true,bool disableThinking = false)
     {
         // call out to URL passing the object as the body, and return the result
         var fullUrl = $"{url}/v1/chat/completions";
@@ -110,7 +109,7 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         
         string responseString = "";
         int apiResponseCode = 500;
-        foreach (string inputString in BuildChatRequestBodies(systemPromptString, gameCacheString, npcCacheString, promptString, n_predict, cacheContext))
+        foreach (string inputString in BuildChatRequestBodies(systemPromptString, gameCacheString, npcCacheString, promptString, n_predict, disableThinking))
         {
             int retry = allowRetry ? 3 : 1;
             while (retry > 0)

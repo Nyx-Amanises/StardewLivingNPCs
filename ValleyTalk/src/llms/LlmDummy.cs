@@ -16,7 +16,7 @@ internal class LlmDummy : Llm
 
     public override bool IsHighlySensoredModel => true;
 
-    internal override Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true)
+    internal override Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true,bool disableThinking = false)
     {
         if (rand.NextDouble()<0.5)
         {

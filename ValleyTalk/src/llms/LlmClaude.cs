@@ -39,7 +39,7 @@ internal class LlmClaude : Llm, IGetModelNames
 
     public override bool IsHighlySensoredModel => true;
 
-    internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true)
+    internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true,bool disableThinking = false)
     {
         // Cache breakpoint 1: the static world summary (system). Breakpoint 2: the per-NPC
         // biography/samples, kept in the user turn but split into its own cache_control block so
