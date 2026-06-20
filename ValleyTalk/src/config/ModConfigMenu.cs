@@ -280,11 +280,11 @@ namespace ValleyTalk
         {
             return new Dictionary<int, string>()
             {
-                { 0, Util.GetString("configNever", returnNull: true) is { } never ? $"{never} (0%)" : "Never (0%)" },
-                { 1, Util.GetString("configRarely", returnNull: true) is { } rarely ? $"{rarely} (25%)" : "Rarely (25%)" },
-                { 2, Util.GetString("configOccasionally", returnNull: true) is { } occasionally ? $"{occasionally} (50%)" : "Occasionally (50%)" },
-                { 3, Util.GetString("configMostly", returnNull: true) is { } mostly ? $"{mostly} (75%)" : "Mostly (75%)" },
-                { 4, Util.GetString("configAlways", returnNull: true) is { } always ? $"{always} (100%)" : "Always (100%)" }
+                { 0, "Never (0%)" },
+                { 1, "Rarely (25%)" },
+                { 2, "Occasionally (50%)" },
+                { 3, "Mostly (75%)" },
+                { 4, "Always (100%)" }
             };
         }
 

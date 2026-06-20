@@ -118,6 +118,7 @@ namespace ValleyTalk
 
             helper.Events.GameLoop.GameLaunched += OnGameLaunched;
             helper.Events.GameLoop.SaveLoaded += OnSaveLoaded;
+            helper.Events.GameLoop.ReturnedToTitle += OnReturnedToTitle;
 
             Config = Helper.ReadConfig<ModConfig>();
 
@@ -234,7 +235,19 @@ namespace ValleyTalk
 
         private void OnSaveLoaded(object sender, SaveLoadedEventArgs e)
         {
+            ResetSaveScopedState();
             ConversationTranscriptExporter.ExportAllKnownHistories();
+        }
+
+        private void OnReturnedToTitle(object sender, ReturnedToTitleEventArgs e)
+        {
+            ResetSaveScopedState();
+        }
+
+        private static void ResetSaveScopedState()
+        {
+            DialogueBuilder.Instance.ResetForSaveChange();
+            EventHistoryReader.Instance.ClearSessionCache();
         }
     }
 }

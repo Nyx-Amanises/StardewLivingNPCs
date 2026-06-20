@@ -43,6 +43,14 @@ namespace ValleyTalk
             _random = new Random();
         }
 
+        internal void ResetForSaveChange()
+        {
+            _characters.Clear();
+            LastContext = null;
+            _patchDate = 0;
+            _patchCharacters = null;
+        }
+
         private void PopulateCharacters()
         {
             foreach (var npc in Game1.characterData.Keys)

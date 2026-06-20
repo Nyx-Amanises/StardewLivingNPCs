@@ -47,6 +47,15 @@ public class EventHistoryReader
     private Dictionary<string, StardewEventHistory> _saveCache;
     private readonly string _multiplayerFilename;
 
+    internal void ClearSessionCache()
+    {
+        _saveCache?.Clear();
+        if (!Context.IsMainPlayer)
+        {
+            _fileEventHistories.Clear();
+        }
+    }
+
     internal StardewEventHistory GetEventHistory(string name)
     {
         if (Context.IsMainPlayer)
