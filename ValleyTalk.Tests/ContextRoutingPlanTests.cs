@@ -198,6 +198,53 @@ public sealed class ContextRoutingPlanTests
         }
     }
 
+    [Fact]
+    public void CachedRoutingRefreshesWhenConversationTurnsToWorldLore()
+    {
+        var context = BuildConversationContext("社区中心为什么会变成这样？祝尼魔是真的吗？");
+        var cached = ContextRoutingPlan.ConservativeBrief();
+
+        bool refresh = ContextRoutingDecisionPass.ShouldRefreshCachedPlanForTopicShift(context, cached, out string reason);
+
+        Assert.True(refresh);
+        Assert.Contains(nameof(ContextModule.World), reason);
+        Assert.Contains(nameof(ContextModule.GameState), reason);
+    }
+
+    [Fact]
+    public void CachedRoutingDoesNotRefreshWhenTopicAlreadyHasFullCoverage()
+    {
+        var context = BuildConversationContext("社区中心为什么会变成这样？祝尼魔是真的吗？");
+        var cached = ContextRoutingPlan.Full();
+
+        bool refresh = ContextRoutingDecisionPass.ShouldRefreshCachedPlanForTopicShift(context, cached, out string reason);
+
+        Assert.False(refresh);
+        Assert.Equal(string.Empty, reason);
+    }
+
+    [Fact]
+    public void CachedRoutingLeavesTravelCuesToDeterministicBoundaries()
+    {
+        var context = BuildConversationContext("那我们一起去海边吧。");
+        var cached = ContextRoutingPlan.ConservativeBrief();
+
+        bool refresh = ContextRoutingDecisionPass.ShouldRefreshCachedPlanForTopicShift(context, cached, out _);
+
+        Assert.False(refresh);
+    }
+    private static DialogueContext BuildConversationContext(string latestPlayerText)
+    {
+        return new DialogueContext
+        {
+            ChatHistory = new()
+            {
+                new ConversationElement("早上好。", true),
+                new ConversationElement("早上好，今天很安静。", false),
+                new ConversationElement(latestPlayerText, true)
+            }
+        };
+    }
     private static string FindRepositoryRoot()
     {
         var directory = new DirectoryInfo(Directory.GetCurrentDirectory());

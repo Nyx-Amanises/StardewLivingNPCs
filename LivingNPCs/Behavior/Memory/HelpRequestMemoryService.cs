@@ -296,7 +296,7 @@ internal sealed class HelpRequestMemoryService
         }
 
         string combined = $"{playerText} {npcResponse}";
-        if (!LooksLikeItemFavorRequested(combined))
+        if (LooksLikeNpcOfferingItemToFarmer(npcResponse) || !LooksLikeItemFavorRequested(combined))
         {
             return false;
         }
@@ -358,9 +358,6 @@ internal sealed class HelpRequestMemoryService
             "帮忙带",
             "给我带",
             "给我找",
-            "带点",
-            "带些",
-            "带一些",
             "带给我",
             "找点",
             "找些",
@@ -382,6 +379,32 @@ internal sealed class HelpRequestMemoryService
             "i need some",
             "looking for some",
             "could use some");
+    }
+
+    internal static bool LooksLikeNpcOfferingItemToFarmer(string npcResponse)
+    {
+        if (string.IsNullOrWhiteSpace(npcResponse))
+        {
+            return false;
+        }
+
+        return ContainsAny(
+            npcResponse,
+            "我早上刚烤",
+            "我刚烤",
+            "我这就去拿",
+            "我这里正好有",
+            "给你",
+            "带上吧",
+            "带着吧",
+            "你要不要顺便带点",
+            "你要不要带点",
+            "边走边吃",
+            "还热着",
+            "还热乎",
+            "for you",
+            "take this",
+            "have some");
     }
 
     private static string ResolveItemDisplayName(string itemId, string fallback)

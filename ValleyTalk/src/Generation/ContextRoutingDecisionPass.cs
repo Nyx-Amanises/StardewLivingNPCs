@@ -23,6 +23,142 @@ internal static class ContextRoutingDecisionPass
     private static string cachedConversationKey;
     private static ContextRoutingPlan cachedRawPlan;
 
+    private static readonly string[] TopicShiftInquiryFragments =
+    [
+        "为什么",
+        "怎么回事",
+        "怎么会",
+        "是什么",
+        "发生了什么",
+        "跟我讲讲",
+        "告诉我",
+        "why",
+        "how",
+        "what happened",
+        "tell me about",
+        "explain"
+    ];
+
+    private static readonly string[] WorldLoreTopicFragments =
+    [
+        "这个世界",
+        "星露谷",
+        "鹈鹕镇",
+        "社区中心",
+        "joja",
+        "祝尼魔",
+        "矮人",
+        "暗影",
+        "法师",
+        "魔法",
+        "战争",
+        "传说",
+        "历史",
+        "矿洞",
+        "沙漠",
+        "姜岛",
+        "巴士",
+        "温室",
+        "world",
+        "stardew",
+        "pelican town",
+        "community center",
+        "junimo",
+        "dwarf",
+        "shadow",
+        "wizard",
+        "magic",
+        "war",
+        "lore",
+        "history",
+        "mine",
+        "desert",
+        "ginger island"
+    ];
+
+    private static readonly string[] FarmTopicFragments =
+    [
+        "我的农场",
+        "农场",
+        "作物",
+        "种子",
+        "种了",
+        "菜地",
+        "动物",
+        "鸡舍",
+        "畜棚",
+        "果树",
+        "洒水器",
+        "farm",
+        "crop",
+        "seed",
+        "animal",
+        "coop",
+        "barn",
+        "greenhouse",
+        "sprinkler"
+    ];
+
+    private static readonly string[] HistoryTopicFragments =
+    [
+        "还记得",
+        "记不记得",
+        "之前",
+        "上次",
+        "昨天",
+        "那天",
+        "我们说过",
+        "我答应",
+        "你答应",
+        "remember",
+        "before",
+        "last time",
+        "yesterday",
+        "promised"
+    ];
+
+    private static readonly string[] NpcProfileTopicFragments =
+    [
+        "你妈妈",
+        "你的妈妈",
+        "家里",
+        "童年",
+        "梦想",
+        "喜欢什么",
+        "讨厌什么",
+        "潘姆",
+        "文森特",
+        "贾斯",
+        "your mother",
+        "your family",
+        "childhood",
+        "dream",
+        "pam",
+        "vincent",
+        "jas"
+    ];
+
+    private static readonly string[] LocationTopicFragments =
+    [
+        "这里",
+        "这个地方",
+        "海边",
+        "海滩",
+        "森林",
+        "山上",
+        "镇上",
+        "图书馆",
+        "博物馆",
+        "this place",
+        "here",
+        "beach",
+        "forest",
+        "mountain",
+        "town",
+        "library",
+        "museum"
+    ];
+
     private static readonly Dictionary<string, ContextModule> ModuleKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         ["world"] = ContextModule.World,
@@ -54,7 +190,8 @@ internal static class ContextRoutingDecisionPass
         }
 
         string conversationKey = BuildConversationKey(character, context);
-        if (conversationKey != null && TryReuseCachedPlan(conversationKey, context, out ContextRoutingPlan cachedPlan))
+        string cacheBypassReason = string.Empty;
+        if (conversationKey != null && TryReuseCachedPlan(conversationKey, context, out ContextRoutingPlan cachedPlan, out cacheBypassReason))
         {
             if (ModEntry.Config.Debug)
             {
@@ -63,6 +200,11 @@ internal static class ContextRoutingDecisionPass
 
             ExportLog(character.Name, context, "cached", 0, 0, "reused-conversation-plan", cachedPlan.DebugLabel(), string.Empty, string.Empty, string.Empty);
             return cachedPlan;
+        }
+
+        if (!string.IsNullOrWhiteSpace(cacheBypassReason) && ModEntry.Config.Debug)
+        {
+            ModEntry.SMonitor.Log($"Semantic context routing refreshed cached plan for {character.Name}: {cacheBypassReason}.", StardewModdingAPI.LogLevel.Debug);
         }
 
         string prompt = BuildRouterPrompt(character, context);
@@ -171,8 +313,9 @@ internal static class ContextRoutingDecisionPass
         return $"{character.Name}|{history[0].Id}";
     }
 
-    private static bool TryReuseCachedPlan(string conversationKey, DialogueContext context, out ContextRoutingPlan plan)
+    private static bool TryReuseCachedPlan(string conversationKey, DialogueContext context, out ContextRoutingPlan plan, out string bypassReason)
     {
+        bypassReason = string.Empty;
         ContextRoutingPlan raw = null;
         lock (CacheGate)
         {
@@ -188,10 +331,90 @@ internal static class ContextRoutingDecisionPass
             return false;
         }
 
+        if (ShouldRefreshCachedPlanForTopicShift(context, raw, out bypassReason))
+        {
+            plan = null;
+            return false;
+        }
+
         ApplyDeterministicBoundaries(raw, context);
         raw.WithRoutingDiagnostics("cached", 0, 0);
         plan = raw;
         return true;
+    }
+
+    internal static bool ShouldRefreshCachedPlanForTopicShift(DialogueContext context, ContextRoutingPlan cachedRawPlan, out string reason)
+    {
+        reason = string.Empty;
+        if (context?.ChatHistory == null || context.ChatHistory.Count < 3 || cachedRawPlan == null)
+        {
+            return false;
+        }
+
+        string latestPlayerText = context.ChatHistory.LastOrDefault(line => line.IsPlayerLine)?.Text ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(latestPlayerText))
+        {
+            return false;
+        }
+
+        var requiredModules = new HashSet<ContextModule>();
+        if (LooksLikeWorldLoreShift(latestPlayerText))
+        {
+            requiredModules.Add(ContextModule.World);
+            requiredModules.Add(ContextModule.GameState);
+            requiredModules.Add(ContextModule.EventHistory);
+        }
+
+        if (ContainsAny(latestPlayerText, FarmTopicFragments))
+        {
+            requiredModules.Add(ContextModule.Farm);
+            requiredModules.Add(ContextModule.GameState);
+        }
+
+        if (ContainsAny(latestPlayerText, HistoryTopicFragments))
+        {
+            requiredModules.Add(ContextModule.EventHistory);
+            requiredModules.Add(ContextModule.RecentEvents);
+            requiredModules.Add(ContextModule.Relationship);
+        }
+
+        if (ContainsAny(latestPlayerText, NpcProfileTopicFragments))
+        {
+            requiredModules.Add(ContextModule.NpcProfile);
+            requiredModules.Add(ContextModule.Relationship);
+        }
+
+        if (LooksLikeLocationTopicShift(latestPlayerText))
+        {
+            requiredModules.Add(ContextModule.Location);
+            requiredModules.Add(ContextModule.World);
+        }
+
+        var missingFullModules = requiredModules
+            .Where(module => cachedRawPlan.Get(module) != ContextDetail.Full)
+            .OrderBy(module => module.ToString())
+            .ToArray();
+        if (missingFullModules.Length == 0)
+        {
+            return false;
+        }
+
+        reason = $"topic-shift requires fresh routing for {string.Join(", ", missingFullModules.Select(module => module.ToString()))}";
+        return true;
+    }
+
+    private static bool LooksLikeWorldLoreShift(string text)
+    {
+        return ContainsAny(text, WorldLoreTopicFragments)
+            && (ContainsAny(text, TopicShiftInquiryFragments)
+                || ContainsAny(text, "传说", "历史", "lore", "history"));
+    }
+
+    private static bool LooksLikeLocationTopicShift(string text)
+    {
+        return ContainsAny(text, LocationTopicFragments)
+            && (ContainsAny(text, TopicShiftInquiryFragments)
+                || ContainsAny(text, "这里", "这个地方", "this place", "here"));
     }
 
     private static void StoreCachedPlan(string conversationKey, ContextRoutingPlan rawPlan)

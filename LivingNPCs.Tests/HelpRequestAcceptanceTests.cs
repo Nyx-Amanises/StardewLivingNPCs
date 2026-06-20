@@ -40,9 +40,18 @@ public sealed class HelpRequestAcceptanceTests
     [Theory]
     [InlineData("今天天气真好。")]
     [InlineData("我很喜欢黄水仙。")]
+    [InlineData("你要不要顺便带点面包？我早上刚烤了一些，还热着呢。")]
     [InlineData("")]
     public void IgnoresNonFavorChatter(string text)
     {
         Assert.False(HelpRequestMemoryService.LooksLikeItemFavorRequested(text));
+    }
+
+    [Theory]
+    [InlineData("你要不要顺便带点面包？我早上刚烤了一些，还热着呢。")]
+    [InlineData("给你，还热乎乎的呢。")]
+    public void RecognizesNpcOfferingItemToFarmer(string text)
+    {
+        Assert.True(HelpRequestMemoryService.LooksLikeNpcOfferingItemToFarmer(text));
     }
 }

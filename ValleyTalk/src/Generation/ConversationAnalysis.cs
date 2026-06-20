@@ -33,7 +33,7 @@ internal sealed class ConversationAnalysis
         "night"
     };
 
-    public static readonly ConversationAnalysis Empty = new();
+    public static ConversationAnalysis Empty => new();
 
     [JsonProperty("rapportDelta")]
     public int RapportDelta { get; set; }
