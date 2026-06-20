@@ -119,17 +119,6 @@ internal sealed class HelpRequestMemoryService
         int helpRequestCooldownDays,
         int minRelationshipTrustForHelpRequests)
     {
-        if (!HelpRequestMemoryRules.CanOpen(
-                npc,
-                state,
-                maxPendingHelpRequestsPerNpc,
-                helpRequestCooldownDays,
-                minRelationshipTrustForHelpRequests,
-                out _))
-        {
-            return false;
-        }
-
         string normalizedSummary = NormalizeMemorySummary(candidate.Summary);
         if (string.IsNullOrWhiteSpace(normalizedSummary))
         {
@@ -146,13 +135,24 @@ internal sealed class HelpRequestMemoryService
         string normalizedType = firstStep.Type;
         var existing = state.HelpRequests.FirstOrDefault(request =>
             request.Status is "Offered" or "Pending"
-            && NormalizeMemorySummary(request.Summary) == normalizedSummary);
+            && IsSameOpenRequest(request, normalizedSummary, firstStep.RequestedItemId));
         if (existing != null)
         {
             existing.LastUpdatedTotalDays = Game1.Date.TotalDays;
             existing.LastUpdatedTimeOfDay = Game1.timeOfDay;
             existing.TimesReinforced += 1;
             return true;
+        }
+
+        if (!HelpRequestMemoryRules.CanOpen(
+                npc,
+                state,
+                maxPendingHelpRequestsPerNpc,
+                helpRequestCooldownDays,
+                minRelationshipTrustForHelpRequests,
+                out _))
+        {
+            return false;
         }
 
         bool requiresAcceptance = candidate.RequiresAcceptance && !IsFarmerExplicitlyOfferingHelp(playerText);
@@ -200,6 +200,7 @@ internal sealed class HelpRequestMemoryService
     public bool ApplyUpdate(
         LivingNpcState state,
         ValleyTalkHelpRequestUpdateCandidate candidate,
+        string playerText,
         out NpcHelpRequestFact? fulfilledRequest)
     {
         fulfilledRequest = null;
@@ -230,6 +231,19 @@ internal sealed class HelpRequestMemoryService
 
             case "fulfilled":
             case "advanced":
+                if (!LooksLikeFarmerDeliveredHelpRequestItem(existing, playerText, candidate.Resolution))
+                {
+                    if (existing.Status == "Offered" && LooksLikeFarmerAcceptingHelp(playerText))
+                    {
+                        this.Accept(state, existing, string.IsNullOrWhiteSpace(candidate.Resolution)
+                            ? "The farmer agreed to help."
+                            : candidate.Resolution);
+                        return true;
+                    }
+
+                    return false;
+                }
+
                 if (existing.Status == "Offered")
                 {
                     this.Accept(state, existing, "The farmer accepted and helped right away.");
@@ -249,6 +263,17 @@ internal sealed class HelpRequestMemoryService
         }
 
         return true;
+    }
+
+    private static bool IsSameOpenRequest(NpcHelpRequestFact request, string normalizedSummary, string requestedItemId)
+    {
+        if (NormalizeMemorySummary(request.Summary) == normalizedSummary)
+        {
+            return true;
+        }
+
+        return !string.IsNullOrWhiteSpace(requestedItemId)
+            && string.Equals(request.RequestedItemId, requestedItemId, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -574,6 +599,65 @@ internal sealed class HelpRequestMemoryService
             "you got it",
             "will do",
             "happy to");
+    }
+
+    internal static bool LooksLikeFarmerDeliveredHelpRequestItem(
+        NpcHelpRequestFact request,
+        string playerText,
+        string resolution)
+    {
+        if (request.Type != "item_request")
+        {
+            return false;
+        }
+
+        string text = $"{playerText} {resolution}".ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        if (ContainsAny(
+                text,
+                "之后",
+                "以后",
+                "回头",
+                "改天",
+                "待会",
+                "待会儿",
+                "等会",
+                "等会儿",
+                "到了",
+                "到农场",
+                "家里有",
+                "在家里",
+                "will bring",
+                "bring it later",
+                "later",
+                "at home"))
+        {
+            return false;
+        }
+
+        return ContainsAny(
+            text,
+            "给你",
+            "拿去",
+            "收下",
+            "带来了",
+            "我带来",
+            "我拿来",
+            "交给你",
+            "递给",
+            "就在这里",
+            "这就是",
+            "这是你要",
+            "here you go",
+            "here it is",
+            "take it",
+            "brought it",
+            "i brought",
+            "handed");
     }
 
     private void Accept(LivingNpcState state, NpcHelpRequestFact request, string resolution)

@@ -62,6 +62,29 @@ internal static class ConversationTextPostProcessor
             && NpcFarewellPattern.IsMatch(npcText);
     }
 
+    public static string NormalizeStardewDialogueCommands(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        string normalized = text
+            .Replace("#b#", "#$b#", StringComparison.OrdinalIgnoreCase)
+            .Replace("#e#", "#$e#", StringComparison.OrdinalIgnoreCase)
+            .Replace("$e", "#$e", StringComparison.Ordinal)
+            .Replace("$b", "#$b", StringComparison.Ordinal)
+            .Replace("##$e", "#$e", StringComparison.Ordinal)
+            .Replace("##$b", "#$b", StringComparison.Ordinal);
+
+        normalized = Regex.Replace(
+            normalized,
+            @"#\$(?<command>[be])(?!#)",
+            match => "#$" + match.Groups["command"].Value + "#",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        return normalized;
+    }
+
     public static string RemoveInvisibleCharacters(string text)
     {
         if (string.IsNullOrWhiteSpace(text))

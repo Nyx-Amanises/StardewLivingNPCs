@@ -173,6 +173,7 @@ internal static class LivingNpcActionDecisionPass
         prompt.AppendLine("- For gifts, include a gift action only when the NPC visibly gives something now. Do not convert later mail/return gift promises into immediate gift actions.");
         prompt.AppendLine("- For helpRequests, only item_request is allowed, and requestedItemId must come from the currently reasonable item list in context. If no listed item fits, return no help request.");
         prompt.AppendLine("- For helpRequestUpdates, use only when the farmer clearly accepts, declines, advances, or fulfills an existing request.");
+        prompt.AppendLine("- Use fulfilled only when the farmer physically gives or hands over the requested item now. Saying they have it at home, will bring it later, will get it at the destination, or promising to bring it only means accepted/advanced at most; it is not fulfilled.");
         prompt.AppendLine("- Output no markdown, no explanation, and no visible dialogue.");
         return prompt.ToString();
     }

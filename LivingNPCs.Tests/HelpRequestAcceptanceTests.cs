@@ -54,4 +54,34 @@ public sealed class HelpRequestAcceptanceTests
     {
         Assert.True(HelpRequestMemoryService.LooksLikeNpcOfferingItemToFarmer(text));
     }
+    [Theory]
+    [InlineData("我之后会带给你的，我家里有一块。", "farmer confirms having Quartz at home")]
+    [InlineData("到了农场我再拿给你。", "NPC says that is all they need")]
+    [InlineData("I'll bring it later; I have one at home.", "farmer will bring Quartz later")]
+    public void DoesNotTreatFutureItemPromiseAsDelivered(string playerText, string resolution)
+    {
+        var request = new NpcHelpRequestFact
+        {
+            Type = "item_request",
+            RequestedItemId = "(O)80",
+            RequestedItemLabel = "Quartz"
+        };
+
+        Assert.False(HelpRequestMemoryService.LooksLikeFarmerDeliveredHelpRequestItem(request, playerText, resolution));
+    }
+
+    [Theory]
+    [InlineData("给你，这就是你要的石英。")]
+    [InlineData("Here you go, I brought it.")]
+    public void RecognizesImmediateItemDelivery(string playerText)
+    {
+        var request = new NpcHelpRequestFact
+        {
+            Type = "item_request",
+            RequestedItemId = "(O)80",
+            RequestedItemLabel = "Quartz"
+        };
+
+        Assert.True(HelpRequestMemoryService.LooksLikeFarmerDeliveredHelpRequestItem(request, playerText, string.Empty));
+    }
 }

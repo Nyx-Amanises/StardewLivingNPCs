@@ -430,6 +430,14 @@ internal sealed class CompanionOutingAnchorSelector
         bool useSveAnchors,
         out IReadOnlyList<AuthoredAnchor> authored)
     {
+        // Farm maps are frequently replaced by custom farm types. Avoid vanilla fixed
+        // coordinates there and let the live map scan pick a safe reachable-looking spot.
+        if (string.Equals(targetLocation, "Farm", StringComparison.OrdinalIgnoreCase))
+        {
+            authored = [];
+            return false;
+        }
+
         if (useSveAnchors && SveAuthoredAnchors.TryGetValue(targetLocation, out IReadOnlyList<AuthoredAnchor>? sveAuthored))
         {
             authored = sveAuthored;

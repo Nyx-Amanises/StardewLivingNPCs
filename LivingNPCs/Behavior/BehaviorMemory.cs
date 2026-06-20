@@ -356,7 +356,7 @@ internal sealed class BehaviorMemory
                      .Where(update => !string.IsNullOrWhiteSpace(update.Summary))
                      .Take(2))
         {
-            if (this.HelpRequests.ApplyUpdate(state, candidate, out NpcHelpRequestFact? fulfilledRequest))
+            if (this.HelpRequests.ApplyUpdate(state, candidate, playerText, out NpcHelpRequestFact? fulfilledRequest))
             {
                 updatedHelpRequests++;
                 if (fulfilledRequest != null)

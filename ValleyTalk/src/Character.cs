@@ -920,12 +920,7 @@ public class Character
     private string DialogueLineCleanup(string line,bool relaxedValidation = false)
     {
         line = StreamingDialoguePreview.StripHiddenAndResponseTail(line);
-        // Normalize common invalid break tokens emitted by smaller models.
-        line = line.Replace("#b#", "#$b#", StringComparison.OrdinalIgnoreCase);
-        line = line.Replace("#e#", "#$e#", StringComparison.OrdinalIgnoreCase);
-        // If the string contains $e or $b without a # before them, add a #
-        line = line.Replace("$e", "#$e").Replace("$b", "#$b");
-        line = line.Replace("##$e", "#$e").Replace("##$b", "#$b");
+        line = ConversationTextPostProcessor.NormalizeStardewDialogueCommands(line);
         line = line.Replace("#$c .5#","");
         line = line.Replace("@@","@");
         // If the string contains any emotion indicators ($0, $s, $l, $a or $h) with a # before them, remove the #

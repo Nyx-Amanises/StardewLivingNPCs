@@ -428,6 +428,19 @@ public sealed class CompanionOutingRulesTests
     }
 
     [Fact]
+    public void FarmOutingsUseLiveMapScanInsteadOfVanillaAuthoredAnchors()
+    {
+        var anchors = CompanionOutingAnchorSelector.GetAuthoredAnchorPreview(
+            "Abigail",
+            "Farm",
+            "scenic",
+            "去我的农场看看。"
+        );
+
+        Assert.Empty(anchors);
+    }
+
+    [Fact]
     public void LibraryOutingsPreferReadingTableAnchors()
     {
         var anchors = CompanionOutingAnchorSelector.GetAuthoredAnchorPreview(

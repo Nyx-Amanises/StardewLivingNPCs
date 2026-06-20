@@ -170,6 +170,7 @@ internal sealed class CompanionOutingRuntime
         this.pendingOutings.Add(outing);
 
         var unavailableAnchorTiles = new HashSet<Point>(reservedTiles);
+        var routeAttempts = new List<string>();
         bool routeAssigned = false;
         for (int attempt = 0; attempt < 3; attempt++)
         {
@@ -179,6 +180,7 @@ internal sealed class CompanionOutingRuntime
                 break;
             }
 
+            routeAttempts.Add(FormatAnchorAttempt(destination, outing.AnchorTile));
             unavailableAnchorTiles.Add(outing.AnchorTile);
             if (!this.anchorSelector.TrySelect(
                     npc,
@@ -205,7 +207,15 @@ internal sealed class CompanionOutingRuntime
             this.pendingOutings.Remove(outing);
             NpcTravelRuntime.RestoreSchedule(npc, originalIgnoreScheduleToday, originalFollowSchedule);
             state.LastAiWalkTogetherTotalDays = -1;
-            reason = "the game's schedule pathfinder could not build a natural route";
+            reason = BuildRouteFailureReason(npc, destination, targetLocation, routeAttempts);
+            string naturalFailure = $"they agreed to spend time with the farmer at {TravelLocationRules.GetLocalizedLabel(targetLocation)}, but a natural walking route could not be started from {sourceLocation}";
+            this.memory.RecordNpcWorldAction(
+                npc,
+                "SkippedCompanionOuting",
+                BuildWorldActionReason(action.Reason, naturalFailure),
+                this.config.MaxMemoryEntriesPerNpc
+            );
+            MarkStateAfterWorldAction(state, naturalFailure);
             return false;
         }
 
@@ -689,6 +699,30 @@ internal sealed class CompanionOutingRuntime
     private bool ShowOutingRemark(NPC npc, string text)
     {
         return this.feedback.TryShowNpcSpeechBubble(npc, text, OutingSpeechCooldownMilliseconds);
+    }
+
+    private static string FormatAnchorAttempt(GameLocation destination, Point tile)
+    {
+        return $"{destination.Name} ({tile.X}, {tile.Y})";
+    }
+
+    private static string BuildRouteFailureReason(
+        NPC npc,
+        GameLocation destination,
+        string targetLocation,
+        IReadOnlyList<string> routeAttempts)
+    {
+        string sourceName = npc.currentLocation?.Name ?? "unknown";
+        string mapSize = destination.Map?.Layers.Count > 0
+            ? $"{destination.Map.Layers[0].LayerWidth}x{destination.Map.Layers[0].LayerHeight}"
+            : "unknown size";
+        string attempts = routeAttempts.Count == 0
+            ? "no anchor route attempts were made"
+            : $"tried anchors: {string.Join("; ", routeAttempts.Distinct())}";
+        string farmHint = targetLocation == "Farm"
+            ? $"; farm type={Game1.whichFarm}; custom farm maps or SpaceCore pathing rules may blacklist schedule paths into Farm"
+            : string.Empty;
+        return $"the game's schedule pathfinder could not build a natural route from {sourceName} to {destination.Name} ({mapSize}); {attempts}{farmHint}";
     }
 
     private bool TryAssignRoute(
