@@ -44,12 +44,43 @@ internal class LlmVolcEngine : Llm, IGetModelNames
         return CoreGetModelNames();
     }
 
+    // Only Volcengine models whose deep thinking can actually be switched off accept thinking:disabled.
+    // Sending it to a plain model (e.g. doubao-1.5-pro) is a hard "parameter not supported" error, and
+    // forced-thinking models (deepseek-r1, doubao-seed-1.6-thinking) can't turn it off. Conservative by
+    // design: unknown names get no parameter (routing still works, just without the speedup) rather than
+    // risking an error on every router call. Extend the lists below as new models ship.
+    internal static bool ModelSupportsDisablingThinking(string model)
+    {
+        if (string.IsNullOrWhiteSpace(model))
+        {
+            return false;
+        }
+
+        string m = model.ToLowerInvariant();
+
+        // Forced-thinking models: accept the concept but can't disable it — never send the parameter.
+        if (m.Contains("seed-1.6-thinking") || m.Contains("seed-1-6-thinking") || m.Contains("deepseek-r1"))
+        {
+            return false;
+        }
+
+        // Hybrid/dynamic models whose thinking can be turned off via the parameter.
+        return m.Contains("seed-1.6") || m.Contains("seed-1-6")          // doubao-seed-1.6 / -lite / -flash
+            || m.Contains("1.5-thinking") || m.Contains("1-5-thinking")  // doubao-1.5-thinking-pro (+ vision / -m)
+            || m.Contains("deepseek-v3.1") || m.Contains("deepseek-v3-1");
+    }
+
     internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true,bool disableThinking = false)
     {
         var inputString = JsonConvert.SerializeObject(new
             {
                 model = modelName,
                 max_tokens = n_predict,
+                // Volcengine Ark 官方字段：关闭深度思考。仅在快速路由调用 (disableThinking) 且当前模型
+                // 确实支持关闭思考时才传入（见 ModelSupportsDisablingThinking）——给不支持的模型传会直接
+                // 报参数错误。直接 HTTP 调用时 thinking 与 model/messages 同级；OpenAI SDK 才需 extra_body。
+                // null 会被序列化忽略，主对话请求体保持不变。
+                thinking = (disableThinking && ModelSupportsDisablingThinking(modelName)) ? (object)new { type = "disabled" } : null,
                 messages = new PromptElement[]
                 { 
                     new()
@@ -63,7 +94,8 @@ internal class LlmVolcEngine : Llm, IGetModelNames
                         content = gameCacheString + npcCacheString + promptString
                     }
                 }
-            });
+            },
+            new JsonSerializerSettings { NullValueHandling = NullValueHandling.Ignore });
         var json = new StringContent(
             inputString,
             Encoding.UTF8,

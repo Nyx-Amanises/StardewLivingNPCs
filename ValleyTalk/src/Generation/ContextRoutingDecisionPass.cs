@@ -231,13 +231,13 @@ internal static class ContextRoutingDecisionPass
         catch (Exception ex)
         {
             routeWatch.Stop();
-            string outcome = ex is OperationCanceledException || ex is TimeoutException ? "timeout-full" : "failed-full";
+            string outcome = ex is OperationCanceledException || ex is TimeoutException ? "timeout-brief" : "failed-brief";
             if (ModEntry.Config.Debug)
             {
-                ModEntry.SMonitor.Log($"Semantic context routing {outcome} for {character.Name} after {routeWatch.ElapsedMilliseconds}ms: {ex.Message}; using full context.", StardewModdingAPI.LogLevel.Debug);
+                ModEntry.SMonitor.Log($"Semantic context routing {outcome} for {character.Name} after {routeWatch.ElapsedMilliseconds}ms: {ex.Message}; using conservative brief context.", StardewModdingAPI.LogLevel.Debug);
             }
 
-            var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
+            var fallback = BuildFallbackPlan(outcome, context, routeWatch.ElapsedMilliseconds, timeoutSeconds, conservative: true);
             ExportLog(character.Name, context, outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds, ex.GetType().Name, fallback.DebugLabel(), prompt, string.Empty, ex.Message);
             return fallback;
         }
@@ -255,25 +255,27 @@ internal static class ContextRoutingDecisionPass
 
         if (!response.IsSuccess || string.IsNullOrWhiteSpace(response.Text))
         {
-            string outcome = "response-failed-full";
-            var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
+            string outcome = "response-failed-brief";
+            var fallback = BuildFallbackPlan(outcome, context, routeWatch.ElapsedMilliseconds, timeoutSeconds, conservative: true);
             ExportLog(character.Name, context, outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds, "empty-or-unsuccessful-response", fallback.DebugLabel(), prompt, response.Text, response.ErrorMessage);
             return fallback;
         }
 
         if (!TryParsePlan(response.Text, out ContextRoutingPlan plan, out string parseDetail) || plan == null)
         {
-            // Separate "model wasn't confident enough" from "couldn't parse the output" — both fall
-            // back to full context, but they need different diagnostics when tuning the router.
-            string outcome = parseDetail.StartsWith("low-confidence", StringComparison.Ordinal)
-                ? "low-confidence-full"
-                : "parse-failed-full";
+            // Two different failures land here. "Low confidence" means the model produced a usable
+            // decision but flagged itself unsure — trust that signal and fall back to full context.
+            // "Couldn't parse" means we got nothing usable (typically a weak model that can't emit
+            // valid JSON); fall back to the conservative brief plan so we still save tokens instead of
+            // paying the router round-trip and then sending the full context anyway.
+            bool isLowConfidence = parseDetail.StartsWith("low-confidence", StringComparison.Ordinal);
+            string outcome = isLowConfidence ? "low-confidence-full" : "parse-failed-brief";
             if (ModEntry.Config.Debug)
             {
-                ModEntry.SMonitor.Log($"Semantic context routing fell back to full context for {character.Name} ({outcome}). Reason: {parseDetail}. Output: {response.Text}", StardewModdingAPI.LogLevel.Debug);
+                ModEntry.SMonitor.Log($"Semantic context routing fell back for {character.Name} ({outcome}). Reason: {parseDetail}. Output: {response.Text}", StardewModdingAPI.LogLevel.Debug);
             }
 
-            var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
+            var fallback = BuildFallbackPlan(outcome, context, routeWatch.ElapsedMilliseconds, timeoutSeconds, conservative: !isLowConfidence);
             ExportLog(character.Name, context, outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds, parseDetail, fallback.DebugLabel(), prompt, response.Text, response.ErrorMessage);
             return fallback;
         }
@@ -470,6 +472,28 @@ internal static class ContextRoutingDecisionPass
         }
     }
 
+    private static ContextRoutingPlan BuildFallbackPlan(
+        string outcome,
+        DialogueContext context,
+        long routeMilliseconds,
+        int timeoutSeconds,
+        bool conservative)
+    {
+        if (!conservative)
+        {
+            return ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeMilliseconds, timeoutSeconds);
+        }
+
+        // Start from the conservative brief plan, then re-apply the same per-turn deterministic
+        // boundaries the success path uses, so dynamic cues (gift/help/outing/location) still pull in
+        // the context they need even when routing itself failed. Without this, a routing failure on a
+        // weak/slow model would pay the router round-trip and then send full context anyway — the worst
+        // of both worlds. Brief still emits trimmed versions of the core modules, not none.
+        var plan = ContextRoutingPlan.ConservativeBrief();
+        ApplyDeterministicBoundaries(plan, context);
+        return plan.WithRoutingDiagnostics(outcome, routeMilliseconds, timeoutSeconds);
+    }
+
     private static void ApplyDeterministicBoundaries(ContextRoutingPlan plan, DialogueContext context)
     {
         plan.ApplyHardBoundaries();
@@ -548,8 +572,8 @@ internal static class ContextRoutingDecisionPass
         prompt.AppendLine("- relationship/farm/gift/livingNpc: friendship, spouse/farm details, gift reaction, LivingNPCs memory/actions/help/outing/conflict.");
         prompt.AppendLine("- sampleDialogue/currentConversation: style examples and visible chat history.");
         prompt.AppendLine();
-        prompt.AppendLine("Return only JSON with keys world,npcProfile,gameState,sampleDialogue,eventHistory,dateTime,weather,nearbyNpcs,relationship,farm,location,trinkets,recentEvents,specialDates,gift,livingNpc,spouseAction,preoccupation,currentConversation,confidence,reason.");
-        prompt.AppendLine("Each module value must be none, brief, or full. confidence is 0-1. reason is short.");
+        prompt.AppendLine("Return only JSON with keys world,npcProfile,gameState,sampleDialogue,eventHistory,dateTime,weather,nearbyNpcs,relationship,farm,location,trinkets,recentEvents,specialDates,gift,livingNpc,spouseAction,preoccupation,currentConversation,confidence.");
+        prompt.AppendLine("Each module value must be none, brief, or full. confidence is 0-1.");
         prompt.AppendLine("Use full for location/livingNpc/gift when the farmer may be asking to go somewhere, asking/offering help, giving/receiving items, handling conflict, nickname, mood, outing, or concrete world action.");
         prompt.AppendLine("Use full for world only when the reply needs specific lore/progress. Use sampleDialogue none unless style is likely fragile or this is an unfamiliar/custom NPC.");
         return prompt.ToString();
