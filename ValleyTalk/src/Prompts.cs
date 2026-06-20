@@ -690,10 +690,33 @@ public class Prompts
                 continue;
             }
 
+            if (!string.IsNullOrWhiteSpace(Context.LivingNpcExtraPrompt)
+                && IsLivingNpcThirdPartyOverride(overrideText))
+            {
+                continue;
+            }
+
             prompt.AppendLine(detail == ContextDetail.Full
                 ? overrideText
                 : LivingNpcContextCompressor.BuildBriefContext(overrideText));
         }
+    }
+
+    internal static bool IsLivingNpcThirdPartyOverride(string overrideText)
+    {
+        if (string.IsNullOrWhiteSpace(overrideText))
+        {
+            return false;
+        }
+
+        return ContainsAny(
+            overrideText,
+            "## LivingNPCs",
+            "## Active Companion Outing",
+            "LivingNPCs Context",
+            "LivingNPCs Help Request",
+            "LivingNPCs Gift"
+        );
     }
 
     private void GetSpecialDatesAndBirthday(StringBuilder prompt)

@@ -82,6 +82,16 @@ public sealed class ContextRoutingPlanTests
     }
 
     [Fact]
+    public void LivingNpcThirdPartyOverrideCanBeDeduplicatedWithoutDroppingOtherMods()
+    {
+        Assert.True(Prompts.IsLivingNpcThirdPartyOverride("## LivingNPCs Context: Haley\n- mood: happy"));
+        Assert.True(Prompts.IsLivingNpcThirdPartyOverride("## Active Companion Outing\n- Phase: spending time together."));
+
+        Assert.False(Prompts.IsLivingNpcThirdPartyOverride("## Other Mod Context\n- The town is decorated for a festival."));
+        Assert.False(Prompts.IsLivingNpcThirdPartyOverride(""));
+    }
+
+    [Fact]
     public void GiftDependencyPromotesRelationshipAndLivingNpcContext()
     {
         var plan = ContextRoutingPlan.ConservativeBrief();
