@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using StardewModdingAPI;
 using StardewValley;
 using SObject = StardewValley.Object;
@@ -13,16 +14,26 @@ internal sealed class BehaviorMailService
     private const string HelpRequestRewardMailKeyPrefix = "LivingNPCs.HelpRequestReward.";
     private const string GiftMailKeyPrefix = "LivingNPCs.GiftMail.";
     private const int ProfiledMailVariantCount = 3;
+    private const int MaxGenerationAttempts = 3;
+
+    private static readonly HashSet<string> AiMailMotives = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "reciprocal", "birthday", "help_request_reward"
+    };
 
     private readonly IModHelper helper;
     private readonly BehaviorMemory memory;
     private readonly Random random;
+    private readonly ModConfig config;
+    private readonly ValleyTalkPromptBridge valleyTalkBridge;
 
-    public BehaviorMailService(IModHelper helper, BehaviorMemory memory, Random random)
+    public BehaviorMailService(IModHelper helper, BehaviorMemory memory, Random random, ModConfig config, ValleyTalkPromptBridge valleyTalkBridge)
     {
         this.helper = helper;
         this.memory = memory;
         this.random = random;
+        this.config = config;
+        this.valleyTalkBridge = valleyTalkBridge;
     }
 
     public void ApplyMailData(IDictionary<string, string> data)
@@ -224,9 +235,119 @@ internal sealed class BehaviorMailService
         };
         state.GiftMails.Add(mail);
         RememberAiGiftItem(state, selection.ItemId);
+        this.TryStartGiftMailGeneration(mail, npc);
         this.QueueDueGiftMailsForTomorrow();
         this.InvalidateMailCache();
         return true;
+    }
+
+    private void TryStartGiftMailGeneration(NpcGiftMailFact mail, NPC npc)
+    {
+        if (!this.config.EnableAiGiftMail || this.valleyTalkBridge == null || !this.valleyTalkBridge.IsConnected || npc == null)
+        {
+            return;
+        }
+
+        if (!AiMailMotives.Contains(mail.Motive))
+        {
+            return;
+        }
+
+        mail.GenerationStatus = "pending";
+        mail.GenerationAttempts = 0;
+        this.valleyTalkBridge.RequestGiftMailText(mail.MailKey, npc, this.BuildGenerationPayload(mail));
+    }
+
+    /// <summary>
+    /// Polls ValleyTalk for any pending AI gift-mail bodies and stores the result on the fact.
+    /// Called at save-load and day-start before the mail asset is rebuilt. Returns true if any mail
+    /// became ready, so the caller can invalidate the mail cache.
+    /// </summary>
+    public bool ResolvePendingGiftMailGenerations()
+    {
+        if (!this.config.EnableAiGiftMail || this.valleyTalkBridge == null || !this.valleyTalkBridge.IsConnected)
+        {
+            return false;
+        }
+
+        bool changed = false;
+        foreach (var state in this.memory.GetTrackedStates())
+        {
+            var pending = (state.GiftMails ?? new List<NpcGiftMailFact>())
+                .Where(m => string.Equals(m.GenerationStatus, "pending", StringComparison.OrdinalIgnoreCase) && !m.Claimed)
+                .ToList();
+            foreach (var mail in pending)
+            {
+                string text = this.valleyTalkBridge.TryGetGiftMailText(mail.MailKey);
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    if (IsUsableGeneratedBody(text))
+                    {
+                        mail.GeneratedBody = text;
+                        mail.GenerationStatus = "ready";
+                        changed = true;
+                    }
+                    else
+                    {
+                        mail.GenerationStatus = "failed";
+                    }
+
+                    continue;
+                }
+
+                mail.GenerationAttempts++;
+                if (mail.GenerationAttempts >= MaxGenerationAttempts)
+                {
+                    mail.GenerationStatus = "failed";
+                }
+                else
+                {
+                    // ValleyTalk may have restarted and lost its in-memory result; ask again.
+                    NPC npc = Game1.getCharacterFromName(mail.NpcName);
+                    if (npc != null)
+                    {
+                        this.valleyTalkBridge.RequestGiftMailText(mail.MailKey, npc, this.BuildGenerationPayload(mail));
+                    }
+                }
+            }
+        }
+
+        return changed;
+    }
+
+    private string BuildGenerationPayload(NpcGiftMailFact mail)
+    {
+        return JsonSerializer.Serialize(new
+        {
+            motive = mail.Motive,
+            itemLabel = mail.ItemLabel,
+            sourceGift = mail.SourceGiftName,
+            npcDisplayName = mail.NpcDisplayName,
+            tier = mail.Tier,
+            timeoutSeconds = this.config.AiGiftMailTimeoutSeconds
+        });
+    }
+
+    private static bool TryGetUsableGeneratedBody(NpcGiftMailFact mail, out string body)
+    {
+        body = string.Empty;
+        if (mail == null
+            || !string.Equals(mail.GenerationStatus, "ready", StringComparison.OrdinalIgnoreCase)
+            || !IsUsableGeneratedBody(mail.GeneratedBody))
+        {
+            return false;
+        }
+
+        body = mail.GeneratedBody.Trim();
+        return true;
+    }
+
+    private static bool IsUsableGeneratedBody(string body)
+    {
+        return !string.IsNullOrWhiteSpace(body)
+            && body.IndexOf('%') < 0
+            && body.IndexOf('[') < 0
+            && body.IndexOf(']') < 0;
     }
 
     public void QueueDueGiftMailsForTomorrow()
@@ -360,7 +481,9 @@ internal sealed class BehaviorMailService
             : mail.SourceGiftName.Trim();
         var tokens = new { npc = npcName, item = itemLabel, sourceGift };
         string profile = ResolveNpcMailProfile(mail);
-        string body = GetGiftMailBody(motive, profile, mail, tokens);
+        string body = TryGetUsableGeneratedBody(mail, out string generated)
+            ? generated
+            : GetGiftMailBody(motive, profile, mail, tokens);
         string title = I18n.Get($"gift.mail.title.{motive}", tokens);
         string itemId = EnsureQualifiedItemId(mail.ItemId);
         return $"{EnsureSigned(body, npcName)}%item id {itemId} 1 %%[#]{title}";

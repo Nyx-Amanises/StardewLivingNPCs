@@ -56,7 +56,7 @@ internal sealed class BehaviorEngine
         this.aiBehaviorClient = new AiBehaviorClient(config, monitor);
         this.feedback = new BehaviorFeedbackService(config, monitor);
         this.communityRipples = new CommunityRippleRuntime(config, monitor, this.memory, this.random);
-        this.mailService = new BehaviorMailService(helper, this.memory, this.random);
+        this.mailService = new BehaviorMailService(helper, this.memory, this.random, config, this.valleyTalkBridge);
         this.debugCommands = new BehaviorDebugCommandHandler(helper, monitor, config, this.memory, this.mailService, this.feedback.Show);
         this.giftOpportunities = new GiftOpportunityService(
             config,
@@ -179,6 +179,7 @@ internal sealed class BehaviorEngine
             this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
             this.conversationStartRecorder.Clear();
             this.valleyTalkBridge.TryInitialize();
+            this.mailService.ResolvePendingGiftMailGenerations();
             this.mailService.QueueDueGiftMailsForTomorrow();
             this.mailService.InvalidateMailCache();
             this.helpRequestQuestLog.Sync();
@@ -224,6 +225,7 @@ internal sealed class BehaviorEngine
             this.feedback.Clear();
             this.delayedTravelActions.Clear();
             this.communityRipples.TryPropagate();
+            this.mailService.ResolvePendingGiftMailGenerations();
             this.mailService.QueueDueGiftMailsForTomorrow();
             this.mailService.InvalidateMailCache();
             this.helpRequestQuestLog.Sync();

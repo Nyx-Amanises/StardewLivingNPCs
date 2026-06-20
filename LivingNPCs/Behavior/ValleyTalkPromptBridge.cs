@@ -86,6 +86,43 @@ internal sealed class ValleyTalkPromptBridge
         }
     }
 
+    public bool IsConnected => this.api != null;
+
+    public void RequestGiftMailText(string requestId, NPC npc, string payloadJson)
+    {
+        if (this.api == null || npc == null || string.IsNullOrWhiteSpace(requestId) || RsvAiPolicy.IsBlockedNpc(npc))
+        {
+            return;
+        }
+
+        try
+        {
+            this.api.RequestGiftMailText(requestId, npc.Name, payloadJson);
+        }
+        catch (System.Exception ex)
+        {
+            this.monitor.Log($"ValleyTalk RequestGiftMailText failed for {npc.Name}: {ex.Message}", LogLevel.Debug);
+        }
+    }
+
+    public string TryGetGiftMailText(string requestId)
+    {
+        if (this.api == null || string.IsNullOrWhiteSpace(requestId))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            return this.api.TryGetGiftMailText(requestId) ?? string.Empty;
+        }
+        catch (System.Exception ex)
+        {
+            this.monitor.Log($"ValleyTalk TryGetGiftMailText failed: {ex.Message}", LogLevel.Debug);
+            return string.Empty;
+        }
+    }
+
     public void ClearAll()
     {
         if (this.api == null)

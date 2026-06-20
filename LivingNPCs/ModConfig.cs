@@ -62,6 +62,12 @@ internal sealed class ModConfig
     public bool ConcisePromptContext { get; set; } = false;
     public bool ShowHudMessages { get; set; } = true;
 
+    // AI-written gift mail (reciprocal / birthday / help-request reward). Generated through ValleyTalk
+    // when the mail is triggered; the i18n templates remain the fallback. Hand-edit in config.json
+    // (intentionally not surfaced in GMCM).
+    public bool EnableAiGiftMail { get; set; } = true;
+    public int AiGiftMailTimeoutSeconds { get; set; } = 30;
+
     public bool Migrate()
     {
         if (this.BehaviorHotkey.ToString().Equals("B", StringComparison.OrdinalIgnoreCase))
@@ -116,6 +122,7 @@ internal sealed class ModConfig
         this.MaxBehaviorsPerNpcPerDay = Clamp(this.MaxBehaviorsPerNpcPerDay, 0, 100);
         this.MaxInteractionDistanceTiles = Clamp(this.MaxInteractionDistanceTiles, 1, 128);
         this.AiPlannerTimeoutSeconds = Clamp(this.AiPlannerTimeoutSeconds, 1, 120);
+        this.AiGiftMailTimeoutSeconds = Clamp(this.AiGiftMailTimeoutSeconds, 5, 120);
 
         if (this.MinHelpRequestFriendshipReward > this.MaxHelpRequestFriendshipReward)
         {
@@ -189,5 +196,7 @@ internal sealed class ModConfig
         this.EnableValleyTalkPromptBridge = defaults.EnableValleyTalkPromptBridge;
         this.ConcisePromptContext = defaults.ConcisePromptContext;
         this.ShowHudMessages = defaults.ShowHudMessages;
+        this.EnableAiGiftMail = defaults.EnableAiGiftMail;
+        this.AiGiftMailTimeoutSeconds = defaults.AiGiftMailTimeoutSeconds;
     }
 }

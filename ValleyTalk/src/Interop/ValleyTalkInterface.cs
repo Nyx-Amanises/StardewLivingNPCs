@@ -69,4 +69,19 @@ public class ValleyTalkInterface : IValleyTalkInterface
     {
         ModInteropManager.Instance.ClearPromptOverrides(_modName, characterName);
     }
+
+    public void RequestGiftMailText(string requestId, string npcName, string payloadJson)
+    {
+        if (string.IsNullOrWhiteSpace(npcName) || RsvAiPolicy.IsBlockedNpcName(npcName))
+        {
+            return;
+        }
+
+        GiftMailGenerator.Instance.Request(requestId, npcName, payloadJson);
+    }
+
+    public string TryGetGiftMailText(string requestId)
+    {
+        return GiftMailGenerator.Instance.TryGet(requestId);
+    }
 }

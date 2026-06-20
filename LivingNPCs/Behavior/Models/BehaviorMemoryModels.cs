@@ -324,6 +324,12 @@ internal sealed class NpcGiftMailFact
     public bool Claimed { get; set; }
     public int ClaimedTotalDays { get; set; } = -1;
     public int ClaimedTimeOfDay { get; set; }
+
+    // AI-generated letter body (via ValleyTalk). Status: none | pending | ready | failed.
+    // When ready, BuildGiftMailText uses GeneratedBody instead of the i18n template.
+    public string GeneratedBody { get; set; } = string.Empty;
+    public string GenerationStatus { get; set; } = "none";
+    public int GenerationAttempts { get; set; }
 }
 
 internal sealed class NpcHelpRequestStepFact
