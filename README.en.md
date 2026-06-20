@@ -240,7 +240,7 @@ Lifecycle:
 - If `followUpPotential` is `deeper_relationship`, completing it more easily deepens the relationship in later chats.
 - Failure reactions distinguish "never agreed, so didn't do it" from "agreed but didn't", expressed per character (direct, withdrawn, or gentle).
 
-A request can surface two ways: from the current chat hitting a fitting point, or from a once-per-day roll on the first chat with an eligible NPC (default `25%`) deciding whether the NPC brings up a favor unprompted. Either way it must pass the gates: no existing open request for that NPC, at least some familiarity with relationship trust over the configured threshold, no clear unresolved conflict, not currently `Angry`/`Upset`, and the per-NPC cooldown between new requests. Generation also considers job, personality, season, progress, relationship stage, and what was just discussed.
+A request can surface two ways: from the current chat hitting a fitting point, or from a once-per-day roll on the first chat with an eligible NPC (default `3%`) deciding whether the NPC brings up a favor unprompted. Either way it must pass the gates: no existing open request for that NPC, at least some familiarity with relationship trust over the configured threshold, no clear unresolved conflict, not currently `Angry`/`Upset`, and the per-NPC cooldown between new requests. Generation also considers job, personality, season, progress, relationship stage, and what was just discussed.
 
 In the quest log:
 
@@ -263,7 +263,7 @@ LivingNPCs pushes a "hidden continuity summary" to ValleyTalk rather than a few 
 
 ### 10.5. Prompt size
 
-A full SVE or custom-NPC AI prompt stacks: vanilla world summary (~13.7k chars) + expansion world summary (~5k for SVE) + the current NPC's biography + sample dialogue + game state + chat history + ValleyTalk event history + the LivingNPCs hidden context + memories/preferences/impressions/help/emotion — easily 20k+ chars. Levers to trim it: the ValleyTalk fork has `UseOptimizedGameSummaryPrompt` and `UseOptimizedLivingNpcMetadataPrompt` (both off by default), and LivingNPCs has `ConcisePromptContext` (off by default) which sends a slimmer hidden continuity context. Debug logs break prompt size down by section (`system, game, npc, core, instructions, command, responseStart`).
+A full SVE or custom-NPC AI prompt stacks: vanilla world summary (~13.7k chars) + expansion world summary (~5k for SVE) + the current NPC's biography + sample dialogue + game state + chat history + ValleyTalk event history + the LivingNPCs hidden context + memories/preferences/impressions/help/emotion - easily 20k+ chars. The main visible trim lever is `UseOptimizedPrompts` (off by default), which combines the optimized world-summary prompt and the compact LivingNPCs metadata instructions; it can reduce prompt size but may increase model hallucinations. LivingNPCs also keeps `ConcisePromptContext` (off by default) for a slimmer hidden continuity context. ValleyTalk semantic context routing is enabled by default and chooses brief/full modules before the main request; the LivingNPCs action decision pass is also enabled by default but hidden from the config UI. Debug logs break prompt size down by section (`system, game, npc, core, instructions, command, responseStart`).
 
 ### 11. Conversation logs & observability
 
@@ -311,6 +311,16 @@ Player interacts with an NPC
 
 ## Install & build
 
+### Player install
+
+Download the release package from Nexus, unzip it, and put the extracted `LivingNPCs` and `ValleyTalk` folders into the game's `Mods` folder. Then launch the game through SMAPI.
+
+In game, open Generic Mod Config Menu and edit the ValleyTalk settings:
+
+1. Choose your model provider, then fill in the API key and model name.
+2. If your provider is OpenAI-compatible, click Save once, reopen the ValleyTalk settings, then fill the newly shown `Base URL` / server address and save again.
+3. Watch the SMAPI console for a ValleyTalk connection success message or successful model-list load.
+
 ### Dependencies
 
 - Stardew Valley 1.6.x
@@ -347,9 +357,9 @@ LivingNPCs ships a deliberately small in-game Generic Mod Config Menu (enable mo
 - AI-chat bonus friendship and its daily cap; ambient follow-ups; dialogue-driven behaviors and how many days they linger.
 - AI world actions: per-action toggles (small / meaningful gift, money, outing, festival, quest assist); meaningful-gift cooldown; money cap; minimum outing stay.
 - State / emotion / conflict daily decay; passive-behavior chance; daily behavior cap; interaction range.
-- ValleyTalk prompt bridge; `ConcisePromptContext`; the optional AI behavior planner.
+- ValleyTalk prompt bridge; `ConcisePromptContext`; the optional AI behavior planner; and the hidden, default-on LivingNPCs action decision pass.
 
-The ValleyTalk fork adds: provider config (OpenAI-compatible / others), the optimized world-summary and LivingNPCs-metadata prompt switches, custom prompt/language/entry config, and the free-input hotkey (which now also works in festival / event scenes).
+The ValleyTalk fork adds: provider config (OpenAI-compatible / others), request timeout (default `85` seconds), `UseOptimizedPrompts` (off by default), semantic context routing (on by default), custom prompt/language/entry config, and the free-input hotkey (which now also works in festival / event scenes).
 
 ## Not done yet
 
