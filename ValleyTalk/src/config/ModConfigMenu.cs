@@ -160,17 +160,10 @@ namespace ValleyTalk
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
-                name: () => Util.GetString("configUseOptimizedGameSummaryPrompt", returnNull: true) ?? "Use optimized world-summary prompt",
-                tooltip: () => Util.GetString("configUseOptimizedGameSummaryPromptTooltip", returnNull: true) ?? "Use the compact optimized world summary instead of the current full GameSummary. Leave disabled to preserve existing prompt behavior.",
-                getValue: () => Config.UseOptimizedGameSummaryPrompt,
-                setValue: (value) =>{ Config.UseOptimizedGameSummaryPrompt = value; }
-            );
-            ConfigMenu.AddBoolOption(
-                mod: ModManifest,
-                name: () => Util.GetString("configUseOptimizedLivingNpcMetadataPrompt", returnNull: true) ?? "Use optimized LivingNPCs metadata instructions",
-                tooltip: () => Util.GetString("configUseOptimizedLivingNpcMetadataPromptTooltip", returnNull: true) ?? "Use compact LivingNPCs hidden-metadata instructions instead of the current full version. Leave disabled to preserve existing prompt behavior.",
-                getValue: () => Config.UseOptimizedLivingNpcMetadataPrompt,
-                setValue: (value) =>{ Config.UseOptimizedLivingNpcMetadataPrompt = value; }
+                name: () => Util.GetString("configUseOptimizedPrompts", returnNull: true) ?? "Use optimized prompts",
+                tooltip: () => Util.GetString("configUseOptimizedPromptsTooltip", returnNull: true) ?? "Warning: enabling this may increase the chance of model hallucinations.",
+                getValue: () => Config.UseOptimizedPrompts,
+                setValue: (value) =>{ Config.UseOptimizedPrompts = value; }
             );
             Config.SemanticContextRoutingTimeoutSeconds = Math.Clamp(Config.SemanticContextRoutingTimeoutSeconds, 2, 8);
             ConfigMenu.AddBoolOption(
@@ -190,24 +183,6 @@ namespace ValleyTalk
                 max: 8,
                 interval: 1,
                 fieldId: "SemanticContextRoutingTimeoutSeconds"
-            );
-            ConfigMenu.AddBoolOption(
-                mod: ModManifest,
-                name: () => Util.GetString("configEnableLivingNpcActionDecisionPass", returnNull: true) ?? "LivingNPCs action decision pass",
-                tooltip: () => Util.GetString("configEnableLivingNpcActionDecisionPassTooltip", returnNull: true) ?? "When LivingNPCs metadata omits actions or help requests, run one compact follow-up classification prompt before falling back to rules.",
-                getValue: () => Config.EnableLivingNpcActionDecisionPass,
-                setValue: (value) =>{ Config.EnableLivingNpcActionDecisionPass = value; }
-            );
-            ConfigMenu.AddNumberOption(
-                mod: ModManifest,
-                name: () => Util.GetString("configLivingNpcActionDecisionTimeoutSeconds", returnNull: true) ?? "Action decision timeout",
-                tooltip: () => Util.GetString("configLivingNpcActionDecisionTimeoutSecondsTooltip", returnNull: true) ?? "Seconds to wait for the compact LivingNPCs action decision pass.",
-                getValue: () => Config.LivingNpcActionDecisionTimeoutSeconds,
-                setValue: (value) =>{ Config.LivingNpcActionDecisionTimeoutSeconds = value; },
-                min: 2,
-                max: 60,
-                interval: 1,
-                fieldId: "LivingNpcActionDecisionTimeoutSeconds"
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,

@@ -21,7 +21,7 @@ internal sealed class ModConfig
     public int MaxPendingHelpRequestsPerNpc { get; set; } = 1;
     public int HelpRequestCooldownDays { get; set; } = 3;
     public int MinRelationshipTrustForHelpRequests { get; set; } = 35;
-    public int HelpRequestDailyOfferChancePercent { get; set; } = 25;
+    public int HelpRequestDailyOfferChancePercent { get; set; } = 3;
     public int MinHelpRequestFriendshipReward { get; set; } = 50;
     public int MaxHelpRequestFriendshipReward { get; set; } = 100;
     public bool EnableAiDialogueFriendship { get; set; } = true;

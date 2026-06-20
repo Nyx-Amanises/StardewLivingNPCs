@@ -175,7 +175,7 @@ public sealed class ContextRoutingPlanTests
     }
 
     [Fact]
-    public void NewContextRoutingConfigKeysAreLocalizedAndInjected()
+    public void PromptOptimizationAndRoutingConfigKeysAreLocalizedAndInjected()
     {
         string root = FindRepositoryRoot();
         string promptsPath = Path.Combine(root, "ValleyTalk", "ContentPack", "assets", "Prompts.json");
@@ -189,14 +189,12 @@ public sealed class ContextRoutingPlanTests
         JsonElement entries = prompts.RootElement.GetProperty("Changes")[0].GetProperty("Entries");
         string[] requiredKeys =
         {
+            "configUseOptimizedPrompts",
+            "configUseOptimizedPromptsTooltip",
             "configEnableSemanticContextRouting",
             "configEnableSemanticContextRoutingTooltip",
             "configSemanticContextRoutingTimeoutSeconds",
-            "configSemanticContextRoutingTimeoutSecondsTooltip",
-            "configEnableLivingNpcActionDecisionPass",
-            "configEnableLivingNpcActionDecisionPassTooltip",
-            "configLivingNpcActionDecisionTimeoutSeconds",
-            "configLivingNpcActionDecisionTimeoutSecondsTooltip"
+            "configSemanticContextRoutingTimeoutSecondsTooltip"
         };
 
         foreach (string key in requiredKeys)

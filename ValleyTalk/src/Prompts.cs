@@ -191,7 +191,7 @@ public class Prompts
     private static string GetStardewSummary()
     {
         bool useSveCompatibility = ModEntry.Config?.EnableSveCompatibility != false;
-        if (ModEntry.Config?.UseOptimizedGameSummaryPrompt == true)
+        if (ModEntry.Config?.UseOptimizedPrompts == true)
         {
             return useSveCompatibility
                 ? _optimizedStardewSummary ??= new GameSummaryBuilder(VtConstants.OptimizedGameSummaryPath).Build()
@@ -1490,7 +1490,7 @@ public class Prompts
 
     private string GetLivingNpcInstruction(string baseKey)
     {
-        if (ModEntry.Config?.UseOptimizedLivingNpcMetadataPrompt == true)
+        if (ModEntry.Config?.UseOptimizedPrompts == true)
         {
             string optimized = Util.GetString(Character, $"{baseKey}Optimized");
             if (!string.IsNullOrWhiteSpace(optimized))

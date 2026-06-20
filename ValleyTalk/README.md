@@ -22,7 +22,7 @@ This repository uses a local ValleyTalk fork for LivingNPCs integration and Chin
 - Native free-text dialogue entry by holding the configured key and clicking an NPC, including festival and event scenes.
 - Optional use of loaded local content-pack dialogue as AI context only when the content pack explicitly permits AI use.
 - A LivingNPCs bridge that can pass hidden continuity context into the prompt and return hidden metadata for memories, emotions, help requests, and controlled world actions.
-- Optional compact prompt modes: `UseOptimizedGameSummaryPrompt` and `UseOptimizedLivingNpcMetadataPrompt`.
+- Optional compact prompt mode: `UseOptimizedPrompts`.
 - Debug timing logs that break prompt size into sections: system, game summary, NPC context, core prompt, instructions, command, and response start.
 - Filtering for hidden `!LIVINGNPCS_META` output so metadata does not leak into visible dialogue.
 

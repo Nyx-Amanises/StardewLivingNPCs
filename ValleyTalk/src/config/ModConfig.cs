@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using System;
 using System.Linq;
+using Newtonsoft.Json;
 using StardewModdingAPI;
+using SystemJsonIgnoreAttribute = System.Text.Json.Serialization.JsonIgnoreAttribute;
 
 namespace ValleyTalk
 {
@@ -16,7 +18,7 @@ namespace ValleyTalk
         public string ModelName { get; set; } = "";
         public string ServerAddress { get; set; } = "https://openrouter.ai/api";
         public string PromptFormat { get; set; } = "[INST] {system}\n{prompt}[/INST]\n{response_start}";
-        public int QueryTimeout { get; set; } = 60;
+        public int QueryTimeout { get; set; } = 85;
         public string ApiKey { get; set; } = string.Empty;
         public bool ApplyTranslation { get; set; } = true;
         public int GeneralFrequency { get; set; } = 4;
@@ -25,11 +27,14 @@ namespace ValleyTalk
         public bool GenerateAiForNormalRightClick { get; set; } = false;
         public string TypedResponses { get; set; } = "With Generated";
         public bool EnableSveCompatibility { get; set; } = true;
-        public bool UseOptimizedGameSummaryPrompt { get; set; } = false;
-        public bool UseOptimizedLivingNpcMetadataPrompt { get; set; } = false;
+        public bool UseOptimizedPrompts { get; set; } = false;
         public bool EnableSemanticContextRouting { get; set; } = true;
         public int SemanticContextRoutingTimeoutSeconds { get; set; } = 8;
+        [JsonIgnore]
+        [SystemJsonIgnore]
         public bool EnableLivingNpcActionDecisionPass { get; set; } = true;
+        [JsonIgnore]
+        [SystemJsonIgnore]
         public int LivingNpcActionDecisionTimeoutSeconds { get; set; } = 12;
         public string DisableCharacters
         {
