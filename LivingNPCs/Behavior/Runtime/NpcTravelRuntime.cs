@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using Microsoft.Xna.Framework;
 using StardewValley;
 using StardewValley.Pathfinding;
@@ -97,46 +96,158 @@ internal static class NpcTravelRuntime
         }
     }
 
-    public static void PlaceInLocation(NPC npc, GameLocation location, Point targetTile, int facingDirection)
+    public static bool TryGetWarpBoundary(
+        GameLocation source,
+        string targetLocationName,
+        NPC npc,
+        out Point sourceTile,
+        out Point targetTile)
     {
+        sourceTile = source.getWarpPointTo(targetLocationName);
+        if (sourceTile == Point.Zero
+            && !TryFindWarpTileTo(source, targetLocationName, out sourceTile))
+        {
+            targetTile = Point.Zero;
+            return false;
+        }
+
+        targetTile = source.getWarpPointTarget(sourceTile, npc);
+        if (targetTile == Point.Zero
+            && !TryFindWarpTargetTile(source, sourceTile, targetLocationName, out targetTile))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    public static bool TryWarpAcrossBoundary(
+        NPC npc,
+        GameLocation source,
+        Point sourceTile,
+        string expectedTargetLocationName,
+        out GameLocation? targetLocation,
+        out Point targetTile)
+    {
+        targetLocation = null;
+        targetTile = source.getWarpPointTarget(sourceTile, npc);
+        if (targetTile == Point.Zero
+            && !TryFindWarpTargetTile(source, sourceTile, expectedTargetLocationName, out targetTile))
+        {
+            return false;
+        }
+
+        string targetName = TryFindWarpTargetName(source, sourceTile, expectedTargetLocationName);
+        string normalizedTarget = TravelLocationRules.Normalize(targetName, targetName);
+        string normalizedExpected = TravelLocationRules.Normalize(expectedTargetLocationName, expectedTargetLocationName);
+        if (!string.Equals(normalizedTarget, normalizedExpected, StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        targetLocation = ResolveLocation(normalizedTarget);
+        if (targetLocation == null)
+        {
+            targetLocation = ResolveLocation(targetName);
+        }
+
+        if (targetLocation == null)
+        {
+            return false;
+        }
+
+        npc.controller = null;
         npc.DirectionsToNewLocation = null;
-        RemoveFromKnownLocations(npc);
-        if (!location.characters.Contains(npc))
-        {
-            location.characters.Add(npc);
-        }
-
-        npc.currentLocation = location;
-        npc.Position = new Vector2(targetTile.X * Game1.tileSize, targetTile.Y * Game1.tileSize);
-        if (facingDirection is >= 0 and <= 3)
-        {
-            npc.faceDirection(facingDirection);
-        }
+        npc.Halt();
+        Game1.warpCharacter(npc, targetLocation, new Vector2(targetTile.X, targetTile.Y));
+        return true;
     }
 
-    private static void RemoveFromKnownLocations(NPC npc)
+    private static bool TryFindWarpTileTo(GameLocation source, string targetLocationName, out Point tile)
     {
-        RemoveFromLocation(npc.currentLocation, npc);
-        RemoveFromLocation(Game1.currentLocation, npc);
-        foreach (var location in Game1.locations)
+        string normalizedTarget = TravelLocationRules.Normalize(targetLocationName, targetLocationName);
+        foreach (var warp in source.warps)
         {
-            RemoveFromLocation(location, npc);
+            string warpTarget = ScheduleReflectionReader.GetWarpTargetName(warp);
+            if (string.Equals(
+                    TravelLocationRules.Normalize(warpTarget, warpTarget),
+                    normalizedTarget,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                tile = new Point(warp.X, warp.Y);
+                return true;
+            }
         }
+
+        tile = Point.Zero;
+        return false;
     }
 
-    private static void RemoveFromLocation(GameLocation? location, NPC npc)
+    private static bool TryFindWarpTargetTile(
+        GameLocation source,
+        Point sourceTile,
+        string targetLocationName,
+        out Point targetTile)
     {
-        if (location == null)
+        string normalizedTarget = TravelLocationRules.Normalize(targetLocationName, targetLocationName);
+        foreach (var warp in source.warps)
         {
-            return;
+            if (warp.X != sourceTile.X || warp.Y != sourceTile.Y)
+            {
+                continue;
+            }
+
+            string warpTarget = ScheduleReflectionReader.GetWarpTargetName(warp);
+            if (!string.Equals(
+                    TravelLocationRules.Normalize(warpTarget, warpTarget),
+                    normalizedTarget,
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            return ScheduleReflectionReader.TryReadWarpTargetTile(warp, out targetTile);
         }
 
-        foreach (var candidate in location.characters
-            .Where(candidate => ReferenceEquals(candidate, npc)
-                || string.Equals(candidate.Name, npc.Name, StringComparison.OrdinalIgnoreCase))
-            .ToList())
+        targetTile = Point.Zero;
+        return false;
+    }
+
+    private static string TryFindWarpTargetName(
+        GameLocation source,
+        Point sourceTile,
+        string fallback)
+    {
+        foreach (var warp in source.warps)
         {
-            location.characters.Remove(candidate);
+            if (warp.X == sourceTile.X && warp.Y == sourceTile.Y)
+            {
+                string targetName = ScheduleReflectionReader.GetWarpTargetName(warp);
+                if (!string.IsNullOrWhiteSpace(targetName))
+                {
+                    return targetName;
+                }
+            }
+        }
+
+        return fallback;
+    }
+
+    private static GameLocation? ResolveLocation(string locationName)
+    {
+        string normalized = TravelLocationRules.Normalize(locationName, locationName);
+        if (string.Equals(normalized, "Farm", StringComparison.OrdinalIgnoreCase))
+        {
+            return Game1.getFarm();
+        }
+
+        try
+        {
+            return Game1.getLocationFromName(locationName) ?? Game1.getLocationFromName(normalized);
+        }
+        catch
+        {
+            return null;
         }
     }
 }

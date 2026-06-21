@@ -27,8 +27,12 @@ internal sealed record PendingDelayedTravelAction(
 internal enum CompanionOutingPhase
 {
     Traveling,
+    TravelingToFarmBoundary,
+    TravelingFromFarmBoundary,
     AtDestination,
-    Returning
+    Returning,
+    ReturningToFarmBoundary,
+    ReturningFromFarmBoundary
 }
 
 internal sealed class PendingCompanionOuting
@@ -92,4 +96,7 @@ internal sealed class PendingCompanionOuting
     public string ReturnLocationName { get; set; } = string.Empty;
     public Point ReturnTile { get; set; } = Point.Zero;
     public int ReturnFacingDirection { get; set; } = 2;
+    public string FarmBoundaryLocationName { get; set; } = string.Empty;
+    public Point FarmBoundarySourceTile { get; set; } = Point.Zero;
+    public Point FarmBoundaryTargetTile { get; set; } = Point.Zero;
 }
