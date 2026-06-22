@@ -271,8 +271,37 @@ internal static class ConversationActionCueRules
         string npcResponse
     )
     {
+        TryCorrectTravelActionTargetFromVisibleDialogueCore(npc, actions, playerText, npcResponse);
+    }
+
+    internal static void TryCorrectTravelActionTargetFromVisibleDialogueForTesting(
+        IReadOnlyList<ValleyTalkWorldActionRequest> actions,
+        string playerText,
+        string npcResponse
+    )
+    {
+        TryCorrectTravelActionTargetFromVisibleDialogueCore(null, actions, playerText, npcResponse);
+    }
+
+    private static void TryCorrectTravelActionTargetFromVisibleDialogueCore(
+        NPC? npc,
+        IReadOnlyList<ValleyTalkWorldActionRequest> actions,
+        string playerText,
+        string npcResponse
+    )
+    {
         var action = actions.FirstOrDefault(candidate => candidate.Type == "companion_outing");
         if (action == null)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(action.TargetLocation))
+        {
+            return;
+        }
+
+        if (!LooksLikeImmediateTravelInvitation(playerText, npcResponse))
         {
             return;
         }
@@ -283,23 +312,12 @@ internal static class ConversationActionCueRules
             return;
         }
 
-        string currentTarget = BehaviorMemory.NormalizeTravelLocation(action.TargetLocation, string.Empty);
-        bool currentTargetIsGeneric = string.IsNullOrWhiteSpace(currentTarget)
-            || currentTarget is "Town" or "BusStop";
-        if (!currentTargetIsGeneric && string.Equals(currentTarget, visibleTarget, StringComparison.OrdinalIgnoreCase))
-        {
-            return;
-        }
-
-        if (currentTargetIsGeneric || visibleTarget == ResolveNpcHomeEscortTarget(npc))
-        {
-            action.Type = "companion_outing";
-            action.TargetLocation = visibleTarget;
-            action.Reason = BuildWorldActionReason(
-                action.Reason,
-                $"visible dialogue clarified the destination as {visibleTarget}"
-            );
-        }
+        action.Type = "companion_outing";
+        action.TargetLocation = visibleTarget;
+        action.Reason = BuildWorldActionReason(
+            action.Reason,
+            $"visible dialogue supplied missing destination as {visibleTarget}"
+        );
     }
 
     public static bool TryBuildFallbackTravelAction(
@@ -395,6 +413,16 @@ internal static class ConversationActionCueRules
         string npcResponse
     )
     {
+        if (LooksLikeLocalCompanyWithoutTravel(playerText, npcResponse))
+        {
+            return false;
+        }
+
+        if (LooksLikeTravelExperienceQuestionWithoutInvitation(playerText))
+        {
+            return false;
+        }
+
         string consent = BehaviorValueNormalizer.NormalizeTravelConsent(action.TravelConsent);
         if (!string.IsNullOrWhiteSpace(consent))
         {
@@ -495,6 +523,95 @@ internal static class ConversationActionCueRules
         return label.Length > 0 && npcResponse.Contains(label, StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool LooksLikeLocalCompanyWithoutTravel(string playerText, string npcResponse)
+    {
+        if (!ContainsAny(
+                playerText,
+                "在这待一会",
+                "在这里待一会",
+                "在这儿待一会",
+                "在这坐一会",
+                "在这里坐一会",
+                "在这儿坐一会",
+                "在这聊一会",
+                "在这里聊一会",
+                "在这儿聊一会",
+                "一起在这",
+                "一起在这里",
+                "一起在这儿",
+                "stay here",
+                "sit here",
+                "hang out here",
+                "talk here"
+            ))
+        {
+            return false;
+        }
+
+        return !ContainsAny(
+                playerText,
+                "一起去",
+                "要不要去",
+                "陪我去",
+                "带我去",
+                "带你去",
+                "我们去",
+                "咱们去",
+                "去我农场",
+                "来我农场",
+                "去农场",
+                "去海",
+                "go to",
+                "come to",
+                "visit",
+                "head to",
+                "walk to"
+            )
+            && !ContainsAny(npcResponse, ImmediateTravelAcceptanceFragments);
+    }
+
+    private static bool LooksLikeTravelExperienceQuestionWithoutInvitation(string playerText)
+    {
+        if (!ContainsAny(
+                playerText,
+                "去过",
+                "来过",
+                "到过",
+                "有没有去",
+                "有没有来",
+                "have you been",
+                "ever been",
+                "been to"
+            ))
+        {
+            return false;
+        }
+
+        return !ContainsAny(
+            playerText,
+            "一起去",
+            "要不要去",
+            "陪我去",
+            "带我去",
+            "带你去",
+            "我们去",
+            "咱们去",
+            "现在去",
+            "马上去",
+            "来我农场",
+            "来我的农场",
+            "去我农场",
+            "去农场看看",
+            "go with me",
+            "come with me",
+            "visit my farm",
+            "come to my farm",
+            "want to go",
+            "let's go",
+            "shall we go"
+        );
+    }
+
     private static bool LooksLikeImmediateTravelInvitation(string playerText, string npcResponse)
     {
         bool farmerInvited = ContainsAny(
@@ -505,6 +622,7 @@ internal static class ConversationActionCueRules
             "陪我去看海",
             "去我农场",
             "来我农场",
+            "来我的农场",
             "去农场看看",
             "去看海",
             "一起看海",

@@ -253,6 +253,102 @@ public sealed class CompanionOutingRulesTests
     }
 
     [Fact]
+    public void VisibleTargetCorrectionIgnoresFarmSourceAside()
+    {
+        var actions = new[]
+        {
+            new ValleyTalkWorldActionRequest
+            {
+                Type = "companion_outing",
+                TargetLocation = "Town",
+                TravelConsent = "accepted_now",
+                Reason = "同意在当前公共地点一起停留"
+            }
+        };
+
+        ConversationActionCueRules.TryCorrectTravelActionTargetFromVisibleDialogueForTesting(
+            actions,
+            "哈，随便你怎么说了，不过，我能和你一起在这待一会吗？",
+            "嗯……可以。这里是公共长椅，又不是我家的客厅。#$b#不过你要是刚从农场过来，最好别把泥蹭到我鞋边。今天这双颜色很难配的。"
+        );
+
+        var action = Assert.Single(actions);
+        Assert.Equal("Town", action.TargetLocation);
+        Assert.DoesNotContain("Farm", action.Reason);
+    }
+
+    [Fact]
+    public void VisibleTargetCorrectionFillsMissingTargetFromExplicitFarmInvitation()
+    {
+        var actions = new[]
+        {
+            new ValleyTalkWorldActionRequest
+            {
+                Type = "companion_outing",
+                TargetLocation = "",
+                TravelConsent = "accepted_now",
+                Reason = "同意一起离开当前地点"
+            }
+        };
+
+        ConversationActionCueRules.TryCorrectTravelActionTargetFromVisibleDialogueForTesting(
+            actions,
+            "阿比盖尔，现在想来我的农场冒险吗？",
+            "好啊，去你的农场冒险听起来比站在店里有意思多了。我们走吧。"
+        );
+
+        var action = Assert.Single(actions);
+        Assert.Equal("Farm", action.TargetLocation);
+        Assert.Contains("visible dialogue supplied missing destination as Farm", action.Reason);
+    }
+
+    [Fact]
+    public void AcceptedNowTravelConsentDoesNotKeepLocalCompanyAsOuting()
+    {
+        var actions = new[]
+        {
+            new ValleyTalkWorldActionRequest
+            {
+                Type = "companion_outing",
+                TargetLocation = "Town",
+                TravelConsent = "accepted_now",
+                Reason = "同意一起在公共地点停留"
+            }
+        };
+
+        var filtered = ConversationActionCueRules.FilterTravelActionsContradictedByVisibleDialogue(
+            actions,
+            "哈，随便你怎么说了，不过，我能和你一起在这待一会吗？",
+            "嗯……可以。这里是公共长椅，又不是我家的客厅。#$b#不过你要是刚从农场过来，最好别把泥蹭到我鞋边。今天这双颜色很难配的。"
+        );
+
+        Assert.Empty(filtered);
+    }
+
+    [Fact]
+    public void AcceptedNowTravelConsentDoesNotKeepTravelExperienceQuestionAsOuting()
+    {
+        var actions = new[]
+        {
+            new ValleyTalkWorldActionRequest
+            {
+                Type = "companion_outing",
+                TargetLocation = "Farm",
+                TravelConsent = "accepted_now",
+                Reason = "误把去过农场的问题当成出游"
+            }
+        };
+
+        var filtered = ConversationActionCueRules.FilterTravelActionsContradictedByVisibleDialogue(
+            actions,
+            "海莉，你以前去过我的农场吗？",
+            "去过一次，不过那边的泥巴真的不太适合这双鞋。"
+        );
+
+        Assert.Empty(filtered);
+    }
+
+    [Fact]
     public void HiddenGiftActionRequiresVisibleGiftOffer()
     {
         var actions = new[]

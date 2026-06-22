@@ -122,7 +122,12 @@ internal static class LivingNpcActionDecisionPass
             playerText,
             visibleNpcReply,
             out string travelDecisionDetail);
-        diagnostics.TravelDecisionDetail = travelDecisionDetail;
+        bool filteredNonInvitationOuting = FilterNonInvitationOutingActions(
+            supplemental,
+            playerText,
+            visibleNpcReply,
+            out string nonInvitationFilterDetail);
+        diagnostics.TravelDecisionDetail = CombineDetails(travelDecisionDetail, nonInvitationFilterDetail);
         diagnostics.SupplementalJson = supplemental.ToJson();
 
         bool changed = analysis.MergeSupplementalActionMetadata(supplemental);
@@ -130,7 +135,7 @@ internal static class LivingNpcActionDecisionPass
         diagnostics.MergedJson = analysis.ToJson();
         diagnostics.Outcome = changed
             ? addedTravelDecisionAction ? "merged-travel-decision" : "merged-actions"
-            : supplemental.HasWorldActionOrHelpMetadata ? "parsed-but-filtered" : "parsed-empty";
+            : supplemental.HasWorldActionOrHelpMetadata ? "parsed-but-filtered" : filteredNonInvitationOuting ? "filtered-non-invitation-outing" : "parsed-empty";
 
         LogDiagnostics(character, diagnostics);
         return new LivingNpcActionDecisionResult(analysis, diagnostics);
@@ -167,7 +172,10 @@ internal static class LivingNpcActionDecisionPass
         prompt.AppendLine("Rules:");
         prompt.AppendLine("- Always fill travelDecision, even when actions is empty. This is a classifier, not dialogue.");
         prompt.AppendLine("- For travelDecision, accepted_now means the NPC agrees to go now. Short preparation still counts as accepted_now: wait five minutes, let me change clothes, get my coat, grab an umbrella, I will be right out.");
-        prompt.AppendLine("- For travel, include companion_outing in actions when consent=accepted_now and targetLocation is supported. Use the farmer's invitation to infer targetLocation if the NPC reply says yes/now but omits the destination.");
+        prompt.AppendLine("- Travel means leaving the current spot for a destination. Staying, sitting, chatting, or spending time here/at this bench/in the current location is not travel; return no companion_outing for that.");
+        prompt.AppendLine("- Asking whether the NPC has ever been to a place is only a question about experience, not travel consent. Return no companion_outing unless the farmer also invites them to go now.");
+        prompt.AppendLine("- Mentioning a location as background or origin is not a destination. Example: 'just came from the farm', 'farm mud on your shoes', or 'your farm looks muddy' does not target Farm.");
+        prompt.AppendLine("- For travel, include companion_outing in actions only when consent=accepted_now and targetLocation is supported. Use the farmer's invitation to infer targetLocation if the NPC reply says yes/now but omits the destination.");
         prompt.AppendLine("- Later/maybe/refusal means no action and travelDecision consent accepted_later/tentative/declined.");
         prompt.AppendLine("- For brief escort/show-the-way use durationMinutes 20; for a real stay together use 60 or more. Use delayMinutes 1-10 for short preparation.");
         prompt.AppendLine("- For gifts, include a gift action only when the NPC visibly gives something now. Do not convert later mail/return gift promises into immediate gift actions.");
@@ -263,6 +271,168 @@ internal static class LivingNpcActionDecisionPass
         });
         detail = $"converted travelDecision to companion_outing target={targetLocation}, delay={delayMinutes}, duration={durationMinutes}";
         return true;
+    }
+
+    internal static bool FilterNonInvitationOutingActionsForTesting(
+        ConversationAnalysis supplemental,
+        string playerText,
+        string visibleNpcReply,
+        out string detail)
+    {
+        return FilterNonInvitationOutingActions(supplemental, playerText, visibleNpcReply, out detail);
+    }
+
+    private static bool FilterNonInvitationOutingActions(
+        ConversationAnalysis supplemental,
+        string playerText,
+        string visibleNpcReply,
+        out string detail)
+    {
+        detail = string.Empty;
+        if (supplemental?.Actions == null || supplemental.Actions.Count == 0)
+        {
+            return false;
+        }
+
+        int originalCount = supplemental.Actions.Count;
+        supplemental.Actions = supplemental.Actions
+            .Where(action => !IsNonInvitationOuting(action, playerText, visibleNpcReply))
+            .ToList();
+
+        int removed = originalCount - supplemental.Actions.Count;
+        if (removed <= 0)
+        {
+            return false;
+        }
+
+        detail = $"filtered {removed} companion_outing action(s): visible turn did not ask to leave for a destination";
+        return true;
+    }
+
+    private static bool IsNonInvitationOuting(
+        ConversationWorldActionRequest action,
+        string playerText,
+        string visibleNpcReply)
+    {
+        if (action == null || !string.Equals(action.Type, "companion_outing", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return LooksLikeLocalCompanyWithoutTravel(playerText, visibleNpcReply)
+            || LooksLikeTravelExperienceQuestionWithoutInvitation(playerText);
+    }
+
+    private static bool LooksLikeLocalCompanyWithoutTravel(string playerText, string visibleNpcReply)
+    {
+        if (!ContainsAny(
+                playerText,
+                "在这待一会",
+                "在这里待一会",
+                "在这儿待一会",
+                "在这坐一会",
+                "在这里坐一会",
+                "在这儿坐一会",
+                "在这聊一会",
+                "在这里聊一会",
+                "在这儿聊一会",
+                "一起在这",
+                "一起在这里",
+                "一起在这儿",
+                "stay here",
+                "sit here",
+                "hang out here",
+                "talk here"
+            ))
+        {
+            return false;
+        }
+
+        return !ContainsAny(
+                playerText,
+                "一起去",
+                "要不要去",
+                "陪我去",
+                "带我去",
+                "带你去",
+                "我们去",
+                "咱们去",
+                "去我农场",
+                "来我农场",
+                "去农场",
+                "去海",
+                "go to",
+                "come to",
+                "visit",
+                "head to",
+                "walk to"
+            )
+            && !ContainsAny(
+                visibleNpcReply,
+                "一起去吧",
+                "一起走吧",
+                "我陪你去",
+                "我跟你去",
+                "我带你去",
+                "我们走吧",
+                "咱们走吧",
+                "那我们走",
+                "那我们去",
+                "我们现在去",
+                "咱们现在去",
+                "出发吧",
+                "let's go",
+                "let's head",
+                "i'll go with you",
+                "i'll come with you"
+            );
+    }
+
+    private static bool LooksLikeTravelExperienceQuestionWithoutInvitation(string playerText)
+    {
+        if (!ContainsAny(
+                playerText,
+                "去过",
+                "来过",
+                "到过",
+                "有没有去",
+                "有没有来",
+                "have you been",
+                "ever been",
+                "been to"
+            ))
+        {
+            return false;
+        }
+
+        return !ContainsAny(
+            playerText,
+            "一起去",
+            "要不要去",
+            "陪我去",
+            "带我去",
+            "带你去",
+            "我们去",
+            "咱们去",
+            "现在去",
+            "马上去",
+            "来我农场",
+            "来我的农场",
+            "去我农场",
+            "去农场看看",
+            "go with me",
+            "come with me",
+            "visit my farm",
+            "come to my farm",
+            "want to go",
+            "let's go",
+            "shall we go"
+        );
+    }
+
+    private static string CombineDetails(params string[] details)
+    {
+        return string.Join("; ", details.Where(detail => !string.IsNullOrWhiteSpace(detail)));
     }
 
     private static string BuildCompactLivingNpcContext(string fullContext)
