@@ -477,6 +477,37 @@ public class Character
         Exception lastException = null;
         LlmResponse result;
 
+        string LocalizeTimingOutcome(string outcome)
+        {
+            if (!Util.IsChineseLocale())
+            {
+                return outcome;
+            }
+
+            return outcome switch
+            {
+                "success" => "成功",
+                "empty response" => "空回复",
+                "failed" => "失败",
+                "not-run" => "未运行",
+                "disabled-full" => "已禁用，使用完整上下文",
+                "cached" => "使用缓存",
+                "timeout-brief" => "超时，使用精简上下文",
+                "failed-brief" => "失败，使用精简上下文",
+                "response-failed-brief" => "回复失败，使用精简上下文",
+                "low-confidence-full" => "低置信度，使用完整上下文",
+                "parse-failed-brief" => "解析失败，使用精简上下文",
+                _ => outcome
+            };
+        }
+
+        string BuildPromptSectionCharacters()
+        {
+            return Util.IsChineseLocale()
+                ? $"系统={systemPromptCharacters}, 游戏={gameConstantContextCharacters}, NPC={npcConstantContextCharacters}, 核心={corePromptCharacters}, 指令={instructionsCharacters}, 命令={commandCharacters}, 回复开头={responseStartCharacters}"
+                : $"system={systemPromptCharacters}, game={gameConstantContextCharacters}, npc={npcConstantContextCharacters}, core={corePromptCharacters}, instructions={instructionsCharacters}, command={commandCharacters}, responseStart={responseStartCharacters}";
+        }
+
         void LogTiming(string outcome, int dialogueLines = 0)
         {
             if (!ModEntry.Config.Debug)
@@ -485,7 +516,28 @@ public class Character
             }
 
             ModEntry.SMonitor.Log(
-                $"[ValleyTalk timing] {Name}: {outcome}; total={totalWatch.ElapsedMilliseconds}ms, promptInit={promptInitWatch.ElapsedMilliseconds}ms, promptBuild={promptBuildMilliseconds}ms, model={inferenceMilliseconds}ms, route={contextRoutingPlan.RoutingOutcome}, routeMs={contextRoutingPlan.RoutingMilliseconds}, routeTimeout={contextRoutingPlan.RoutingTimeoutSeconds}s, promptChars={promptCharacters}, promptSections={{system={systemPromptCharacters}, game={gameConstantContextCharacters}, npc={npcConstantContextCharacters}, core={corePromptCharacters}, instructions={instructionsCharacters}, command={commandCharacters}, responseStart={responseStartCharacters}}}, coreSections={{{corePromptSectionCharacters}}}, responseChars={responseCharacters}, attempts={retryCount}, lines={dialogueLines}.",
+                Util.GetConsoleString(
+                    "logValleyTalkTiming",
+                    new
+                    {
+                        Name,
+                        Outcome = LocalizeTimingOutcome(outcome),
+                        TotalMs = totalWatch.ElapsedMilliseconds,
+                        PromptInitMs = promptInitWatch.ElapsedMilliseconds,
+                        PromptBuildMs = promptBuildMilliseconds,
+                        ModelMs = inferenceMilliseconds,
+                        RouteOutcome = LocalizeTimingOutcome(contextRoutingPlan.RoutingOutcome),
+                        RouteMs = contextRoutingPlan.RoutingMilliseconds,
+                        RouteTimeoutSeconds = contextRoutingPlan.RoutingTimeoutSeconds,
+                        PromptChars = promptCharacters,
+                        PromptSections = BuildPromptSectionCharacters(),
+                        CoreSections = corePromptSectionCharacters,
+                        ResponseChars = responseCharacters,
+                        Attempts = retryCount,
+                        Lines = dialogueLines
+                    },
+                    "[ValleyTalk timing] {{Name}}: {{Outcome}}; total={{TotalMs}}ms, promptInit={{PromptInitMs}}ms, promptBuild={{PromptBuildMs}}ms, model={{ModelMs}}ms, route={{RouteOutcome}}, routeMs={{RouteMs}}, routeTimeout={{RouteTimeoutSeconds}}s, promptChars={{PromptChars}}, promptSections={{{PromptSections}}}, coreSections={{{CoreSections}}}, responseChars={{ResponseChars}}, attempts={{Attempts}}, lines={{Lines}}."
+                ),
                 StardewModdingAPI.LogLevel.Info
             );
         }

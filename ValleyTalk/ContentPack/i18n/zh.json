@@ -154,5 +154,6 @@
   "transcriptSeasonSpring": "春",
   "transcriptSeasonSummer": "夏",
   "transcriptSeasonFall": "秋",
-  "transcriptSeasonWinter": "冬"
+  "transcriptSeasonWinter": "冬",
+  "logValleyTalkTiming": "[ValleyTalk 耗时] {{Name}}：{{Outcome}}；总计={{TotalMs}}ms，提示初始化={{PromptInitMs}}ms，提示构建={{PromptBuildMs}}ms，模型={{ModelMs}}ms，路由={{RouteOutcome}}，路由耗时={{RouteMs}}ms，路由超时={{RouteTimeoutSeconds}}s，提示字符数={{PromptChars}}，提示分段={{{PromptSections}}}，核心分段={{{CoreSections}}}，回复字符数={{ResponseChars}}，尝试次数={{Attempts}}，行数={{Lines}}。"
 }

@@ -918,7 +918,8 @@
             "transcriptSeasonSpring": "{{i18n:transcriptSeasonSpring}}",
             "transcriptSeasonSummer": "{{i18n:transcriptSeasonSummer}}",
             "transcriptSeasonFall": "{{i18n:transcriptSeasonFall}}",
-            "transcriptSeasonWinter": "{{i18n:transcriptSeasonWinter}}"
+            "transcriptSeasonWinter": "{{i18n:transcriptSeasonWinter}}",
+            "logValleyTalkTiming": "{{i18n:logValleyTalkTiming}}"
             }
         }
     ]

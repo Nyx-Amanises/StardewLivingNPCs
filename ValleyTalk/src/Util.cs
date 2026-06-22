@@ -112,17 +112,42 @@ namespace ValleyTalk
                 return null;
             }
             
-            // Replace tokens
-            if (tokens != null && result != null)
+            return ApplyTokens(result, tokens);
+        }
+
+        internal static string GetConsoleString(string key, object tokens, string englishFallback)
+        {
+            string result = IsChineseLocale()
+                ? GetString(key, returnNull: true)
+                : null;
+
+            if (string.IsNullOrWhiteSpace(result))
             {
-                foreach (var token in tokens.GetType().GetProperties())
-                {
-                    var tokenName = "{{" + token.Name + "}}";
-                    result = result.Replace(tokenName, token.GetValue(tokens).ToString());
-                }
+                result = englishFallback;
             }
 
-            return result;
+            return ApplyTokens(result, tokens);
+        }
+
+        internal static bool IsChineseLocale()
+        {
+            return ModEntry.SHelper?.Translation.Locale?.StartsWith("zh", StringComparison.OrdinalIgnoreCase) == true;
+        }
+
+        private static string ApplyTokens(string text, object tokens)
+        {
+            if (tokens == null || text == null)
+            {
+                return text;
+            }
+
+            foreach (var token in tokens.GetType().GetProperties())
+            {
+                var tokenName = "{{" + token.Name + "}}";
+                text = text.Replace(tokenName, Convert.ToString(token.GetValue(tokens)) ?? string.Empty);
+            }
+
+            return text;
         }
 
         internal static T ReadLocalisedJson<T>(string basePath, string extension = "json") where T : class

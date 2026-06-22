@@ -360,5 +360,6 @@
   "transcriptSeasonSpring": "Spring",
   "transcriptSeasonSummer": "Summer",
   "transcriptSeasonFall": "Fall",
-  "transcriptSeasonWinter": "Winter"
+  "transcriptSeasonWinter": "Winter",
+  "logValleyTalkTiming": "[ValleyTalk timing] {{Name}}: {{Outcome}}; total={{TotalMs}}ms, promptInit={{PromptInitMs}}ms, promptBuild={{PromptBuildMs}}ms, model={{ModelMs}}ms, route={{RouteOutcome}}, routeMs={{RouteMs}}, routeTimeout={{RouteTimeoutSeconds}}s, promptChars={{PromptChars}}, promptSections={{{PromptSections}}}, coreSections={{{CoreSections}}}, responseChars={{ResponseChars}}, attempts={{Attempts}}, lines={{Lines}}."
 }
