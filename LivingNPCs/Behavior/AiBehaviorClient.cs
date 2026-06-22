@@ -74,7 +74,7 @@ internal sealed class AiBehaviorClient
             string body = await response.Content.ReadAsStringAsync(linked.Token).ConfigureAwait(false);
             if (!response.IsSuccessStatusCode)
             {
-                this.monitor.Log($"AI planner request failed: {(int)response.StatusCode} {response.ReasonPhrase}", LogLevel.Warn);
+                this.monitor.Log(I18n.Get("log.aiPlanner.requestFailed", new { status = (int)response.StatusCode, reason = response.ReasonPhrase }), LogLevel.Warn);
                 return null;
             }
 
@@ -83,12 +83,12 @@ internal sealed class AiBehaviorClient
         }
         catch (OperationCanceledException)
         {
-            this.monitor.Log("AI planner timed out. Falling back to rule-based behavior.", LogLevel.Trace);
+            this.monitor.Log(I18n.Get("log.aiPlanner.timeout"), LogLevel.Trace);
             return null;
         }
         catch (Exception ex)
         {
-            this.monitor.Log($"AI planner failed: {ex.Message}", LogLevel.Warn);
+            this.monitor.Log(I18n.Get("log.aiPlanner.failed", new { error = ex.Message }), LogLevel.Warn);
             return null;
         }
     }

@@ -61,7 +61,7 @@ internal sealed class DelayedTravelActionRuntime
         if (this.config.Debug)
         {
             this.monitor.Log(
-                $"Queued delayed travel action {action.Type} for {npc.Name} in {delayMinutes} minutes toward {action.TargetLocation}.",
+                I18n.Get("log.travel.delayedQueued", new { type = action.Type, npc = npc.Name, minutes = delayMinutes, target = action.TargetLocation }),
                 LogLevel.Debug
             );
         }
@@ -108,7 +108,14 @@ internal sealed class DelayedTravelActionRuntime
             if (!this.tryStartCompanionOuting(npc, action, out string reason) && this.config.Debug)
             {
                 this.monitor.Log(
-                    $"Skipped delayed travel action {action.Type} for {npc.Name}: {(string.IsNullOrWhiteSpace(reason) ? "travel action request rejected" : reason)}.",
+                    I18n.Get(
+                        "log.travel.delayedSkipped",
+                        new
+                        {
+                            type = action.Type,
+                            npc = npc.Name,
+                            reason = string.IsNullOrWhiteSpace(reason) ? I18n.Get("log.travel.rejected") : reason
+                        }),
                     LogLevel.Debug
                 );
             }

@@ -226,7 +226,14 @@ internal static class BehaviorPromptContextBuilder
     {
         if (entries.Count == 0 && state == null)
         {
-            return $"{npc.displayName} 还没有 LivingNPCs 行为/互动记忆或状态。\n- 行为倾向：{disposition.DebugLabel}\n- 情绪表达风格：{emotionalStyle.DebugSummaryLabel}\n- 当前场景：{world.DebugLabel}\n- 世界进度（客观）：{world.Progression.DebugLabel}\n- NPC 可知进度：{world.ProgressionKnowledge.DebugLabel}";
+            var emptySummary = new StringBuilder();
+            emptySummary.AppendLine(I18n.Get("debug.summary.noState", new { npc = npc.displayName }));
+            AppendDebugBullet(emptySummary, "debug.label.behaviorDisposition", disposition.DebugLabel);
+            AppendDebugBullet(emptySummary, "debug.label.emotionStyle", emotionalStyle.DebugSummaryLabel);
+            AppendDebugBullet(emptySummary, "debug.label.currentScene", world.DebugLabel);
+            AppendDebugBullet(emptySummary, "debug.label.worldProgression", world.Progression.DebugLabel);
+            AppendDebugBullet(emptySummary, "debug.label.npcKnowledge", world.ProgressionKnowledge.DebugLabel);
+            return emptySummary.ToString().TrimEnd();
         }
 
         var summary = new StringBuilder();
@@ -234,51 +241,51 @@ internal static class BehaviorPromptContextBuilder
         {
             var latestBehavior = entries
                 .LastOrDefault(entry => string.Equals(entry.Kind, "Behavior", System.StringComparison.OrdinalIgnoreCase));
-            summary.AppendLine($"{npc.displayName} 当前 LivingNPCs 状态：");
-            summary.AppendLine($"- 心情：{state.MoodLabel}");
-            summary.AppendLine($"- 人际情绪：{state.EmotionLabel}");
-            summary.AppendLine($"- 对玩家注意度：{state.AttentionLabel} ({state.Attention})");
-            summary.AppendLine($"- 对玩家熟悉度：{state.FamiliarityLabel} ({state.Familiarity})");
-            summary.AppendLine($"- 关系信任：{state.RelationshipTrustDebugLabel}");
-            summary.AppendLine($"- 互动节奏：{state.InteractionRhythmLabel}");
-            summary.AppendLine($"- 互动舒适度：{state.InteractionComfortTierLabel}");
-            summary.AppendLine($"- 最近礼物：{state.LastGiftLabel}");
-            summary.AppendLine($"- 最近事件：{state.LastEventLabel}");
-            summary.AppendLine($"- 长期记忆：{state.LongTermMemoryDebugLabel}");
-            summary.AppendLine($"- 当前检索长期记忆：{MemoryRecallService.FormatLongTermMemoryDebugLabel(recallPlan.LongTermMemories)}");
-            summary.AppendLine($"- 玩家偏好记忆：{state.PlayerPreferenceDebugLabel}");
-            summary.AppendLine($"- 当前检索玩家偏好：{MemoryRecallService.FormatPlayerPreferenceDebugLabel(recallPlan.PlayerPreferences)}");
-            summary.AppendLine($"- 社区消息口吻：{CommunityReactionStyle.For(npc).DebugLabel}");
-            summary.AppendLine($"- 情绪表达风格：{emotionalStyle.DebugSummaryLabel}");
-            summary.AppendLine($"- 社区圈层：{FormatSocialCircleDebugLabel(npc)}");
-            summary.AppendLine($"- 社区印象：{state.CommunityImpressionDebugLabel}");
-            summary.AppendLine($"- 当前检索社区印象：{MemoryRecallService.FormatCommunityImpressionDebugLabel(communityImpressions)}");
-            summary.AppendLine($"- 对话驱动行为：{state.DialogueBehaviorInfluenceDebugLabel}");
-            summary.AppendLine($"- 最近行为选择：{FormatLatestBehaviorChoiceDebugLabel(latestBehavior)}");
-            summary.AppendLine($"- 共同经历：{state.SharedExperienceDebugLabel}");
-            summary.AppendLine($"- 主动求助：{state.HelpRequestDebugLabel}");
-            summary.AppendLine($"- 求助生成适配：{HelpRequestAdvisor.BuildDebugLabel(npc, world.Progression)}");
-            summary.AppendLine($"- 冲突记忆：{state.ConflictDebugLabel}");
-            summary.AppendLine($"- 长期称呼记忆：{state.FarmerNicknameLabel}");
-            summary.AppendLine($"- 今日 AI 对话额外好感：{state.AiFriendshipGainedToday}");
-            summary.AppendLine($"- 角色资料：{disposition.SourceDebugLabel}");
-            summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
-            summary.AppendLine($"- 情绪表达风格：{emotionalStyle.DebugSummaryLabel}");
-            summary.AppendLine($"- 当前场景：{world.DebugLabel}");
-            summary.AppendLine($"- 世界进度（客观）：{world.Progression.DebugLabel}");
-            summary.AppendLine($"- NPC 可知进度：{world.ProgressionKnowledge.DebugLabel}");
-            summary.AppendLine($"- 情境影响：{state.LastSceneInfluenceLabel}");
-            summary.AppendLine($"- 回应倾向：{state.InclinationLabel}");
-            summary.AppendLine($"- 最近互动：{state.LastInteractionLabel}");
+            summary.AppendLine(I18n.Get("debug.summary.currentState", new { npc = npc.displayName }));
+            AppendDebugBullet(summary, "debug.label.mood", state.MoodLabel);
+            AppendDebugBullet(summary, "debug.label.interpersonalEmotion", state.EmotionLabel);
+            AppendDebugBullet(summary, "debug.label.attention", $"{state.AttentionLabel} ({state.Attention})");
+            AppendDebugBullet(summary, "debug.label.familiarity", $"{state.FamiliarityLabel} ({state.Familiarity})");
+            AppendDebugBullet(summary, "debug.label.relationshipTrust", state.RelationshipTrustDebugLabel);
+            AppendDebugBullet(summary, "debug.label.interactionRhythm", state.InteractionRhythmLabel);
+            AppendDebugBullet(summary, "debug.label.interactionComfort", state.InteractionComfortTierLabel);
+            AppendDebugBullet(summary, "debug.label.lastGift", state.LastGiftLabel);
+            AppendDebugBullet(summary, "debug.label.lastEvent", state.LastEventLabel);
+            AppendDebugBullet(summary, "debug.label.longTermMemory", state.LongTermMemoryDebugLabel);
+            AppendDebugBullet(summary, "debug.label.currentLongTermRecall", MemoryRecallService.FormatLongTermMemoryDebugLabel(recallPlan.LongTermMemories));
+            AppendDebugBullet(summary, "debug.label.playerPreferenceMemory", state.PlayerPreferenceDebugLabel);
+            AppendDebugBullet(summary, "debug.label.currentPreferenceRecall", MemoryRecallService.FormatPlayerPreferenceDebugLabel(recallPlan.PlayerPreferences));
+            AppendDebugBullet(summary, "debug.label.communityTone", CommunityReactionStyle.For(npc).DebugLabel);
+            AppendDebugBullet(summary, "debug.label.emotionStyle", emotionalStyle.DebugSummaryLabel);
+            AppendDebugBullet(summary, "debug.label.socialCircles", FormatSocialCircleDebugLabel(npc));
+            AppendDebugBullet(summary, "debug.label.communityImpression", state.CommunityImpressionDebugLabel);
+            AppendDebugBullet(summary, "debug.label.currentCommunityRecall", MemoryRecallService.FormatCommunityImpressionDebugLabel(communityImpressions));
+            AppendDebugBullet(summary, "debug.label.dialogueBehavior", state.DialogueBehaviorInfluenceDebugLabel);
+            AppendDebugBullet(summary, "debug.label.latestBehaviorChoice", FormatLatestBehaviorChoiceDebugLabel(latestBehavior));
+            AppendDebugBullet(summary, "debug.label.sharedExperience", state.SharedExperienceDebugLabel);
+            AppendDebugBullet(summary, "debug.label.helpRequests", state.HelpRequestDebugLabel);
+            AppendDebugBullet(summary, "debug.label.helpRequestFit", HelpRequestAdvisor.BuildDebugLabel(npc, world.Progression));
+            AppendDebugBullet(summary, "debug.label.conflictMemory", state.ConflictDebugLabel);
+            AppendDebugBullet(summary, "debug.label.nicknameMemory", state.FarmerNicknameLabel);
+            AppendDebugBullet(summary, "debug.label.aiFriendshipToday", state.AiFriendshipGainedToday.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            AppendDebugBullet(summary, "debug.label.profileSource", disposition.SourceDebugLabel);
+            AppendDebugBullet(summary, "debug.label.behaviorDisposition", disposition.DebugLabel);
+            AppendDebugBullet(summary, "debug.label.emotionStyle", emotionalStyle.DebugSummaryLabel);
+            AppendDebugBullet(summary, "debug.label.currentScene", world.DebugLabel);
+            AppendDebugBullet(summary, "debug.label.worldProgression", world.Progression.DebugLabel);
+            AppendDebugBullet(summary, "debug.label.npcKnowledge", world.ProgressionKnowledge.DebugLabel);
+            AppendDebugBullet(summary, "debug.label.sceneInfluence", state.LastSceneInfluenceLabel);
+            AppendDebugBullet(summary, "debug.label.responseInclination", state.InclinationLabel);
+            AppendDebugBullet(summary, "debug.label.lastInteraction", state.LastInteractionLabel);
         }
         else
         {
-            summary.AppendLine($"{npc.displayName} 当前 LivingNPCs 倾向：");
-            summary.AppendLine($"- 角色资料：{disposition.SourceDebugLabel}");
-            summary.AppendLine($"- 行为倾向：{disposition.DebugLabel}");
-            summary.AppendLine($"- 当前场景：{world.DebugLabel}");
-            summary.AppendLine($"- 世界进度（客观）：{world.Progression.DebugLabel}");
-            summary.AppendLine($"- NPC 可知进度：{world.ProgressionKnowledge.DebugLabel}");
+            summary.AppendLine(I18n.Get("debug.summary.currentDisposition", new { npc = npc.displayName }));
+            AppendDebugBullet(summary, "debug.label.profileSource", disposition.SourceDebugLabel);
+            AppendDebugBullet(summary, "debug.label.behaviorDisposition", disposition.DebugLabel);
+            AppendDebugBullet(summary, "debug.label.currentScene", world.DebugLabel);
+            AppendDebugBullet(summary, "debug.label.worldProgression", world.Progression.DebugLabel);
+            AppendDebugBullet(summary, "debug.label.npcKnowledge", world.ProgressionKnowledge.DebugLabel);
         }
 
         if (entries.Count > 0)
@@ -288,12 +295,24 @@ internal static class BehaviorPromptContextBuilder
                 summary.AppendLine();
             }
 
-            summary.AppendLine($"{npc.displayName} 最近 {System.Math.Min(entries.Count, maxEntries)} 条 LivingNPCs 行为/互动记忆：");
+            summary.AppendLine(I18n.Get("debug.summary.recentEntries", new { npc = npc.displayName, count = System.Math.Min(entries.Count, maxEntries) }));
             foreach (var entry in entries.TakeLast(maxEntries))
             {
                 string location = string.IsNullOrWhiteSpace(entry.LocationDisplayName) ? entry.LocationName : entry.LocationDisplayName;
-                string locationSuffix = string.IsNullOrWhiteSpace(location) ? string.Empty : $" @ {location}";
-                summary.AppendLine($"- 第 {entry.TotalDays} 天 {entry.TimeOfDay}{locationSuffix}: {FormatDebugKind(entry)} {entry.Action}; {entry.Reason}");
+                string locationSuffix = string.IsNullOrWhiteSpace(location)
+                    ? string.Empty
+                    : I18n.Get("debug.summary.entryLocationSuffix", new { location });
+                summary.AppendLine(I18n.Get(
+                    "debug.summary.entry",
+                    new
+                    {
+                        day = entry.TotalDays,
+                        time = entry.TimeOfDay,
+                        location = locationSuffix,
+                        kind = FormatDebugKind(entry),
+                        action = entry.Action,
+                        reason = entry.Reason
+                    }));
             }
         }
 
@@ -659,12 +678,14 @@ internal static class BehaviorPromptContextBuilder
     {
         if (entry == null)
         {
-            return "暂无行为选择记录";
+            return I18n.Get("debug.latestBehavior.none");
         }
 
         string location = string.IsNullOrWhiteSpace(entry.LocationDisplayName) ? entry.LocationName : entry.LocationDisplayName;
-        string locationPart = string.IsNullOrWhiteSpace(location) ? string.Empty : $"，地点 {location}";
-        return $"{entry.Action}（第 {entry.TotalDays} 天 {entry.TimeOfDay}{locationPart}；原因：{entry.Reason}）";
+        string locationPart = string.IsNullOrWhiteSpace(location)
+            ? string.Empty
+            : I18n.Get("debug.latestBehavior.location", new { location });
+        return I18n.Get("debug.latestBehavior.value", new { action = entry.Action, day = entry.TotalDays, time = entry.TimeOfDay, location = locationPart, reason = entry.Reason });
     }
 
     private static string FormatPromptEntry(BehaviorMemoryEntry entry)
@@ -690,8 +711,8 @@ internal static class BehaviorPromptContextBuilder
     {
         var labels = NpcSocialGraph.GetStableCircleLabels(npc.Name);
         return labels.Count == 0
-            ? "暂无稳定圈层"
-            : string.Join("、", labels);
+            ? I18n.Get("debug.socialCircles.none")
+            : string.Join(I18n.Get("debug.listSeparator"), labels);
     }
 
     private static string FormatSocialCirclePromptLabel(NPC npc)
@@ -706,16 +727,21 @@ internal static class BehaviorPromptContextBuilder
     {
         return entry.Kind.ToLowerInvariant() switch
         {
-            "conversation" => "[对话]",
-            "gift" => "[礼物]",
-            "event" => "[事件]",
-            "longtermmemory" => "[长期记忆]",
-            "helprequest" => "[求助]",
-            "helprequestupdate" => "[求助更新]",
-            "conflict" => "[冲突]",
-            "npcaction" => "[NPC动作]",
-            "socialmemory" => "[社区印象]",
-            _ => "[行为]"
+            "conversation" => I18n.Get("debug.kind.conversation"),
+            "gift" => I18n.Get("debug.kind.gift"),
+            "event" => I18n.Get("debug.kind.event"),
+            "longtermmemory" => I18n.Get("debug.kind.longTermMemory"),
+            "helprequest" => I18n.Get("debug.kind.helpRequest"),
+            "helprequestupdate" => I18n.Get("debug.kind.helpRequestUpdate"),
+            "conflict" => I18n.Get("debug.kind.conflict"),
+            "npcaction" => I18n.Get("debug.kind.npcAction"),
+            "socialmemory" => I18n.Get("debug.kind.socialMemory"),
+            _ => I18n.Get("debug.kind.behavior")
         };
+    }
+
+    private static void AppendDebugBullet(StringBuilder summary, string labelKey, string value)
+    {
+        summary.AppendLine(I18n.Get("debug.summary.bullet", new { label = I18n.Get(labelKey), value }));
     }
 }

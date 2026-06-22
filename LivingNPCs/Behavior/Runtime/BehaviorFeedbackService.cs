@@ -107,7 +107,7 @@ internal sealed class BehaviorFeedbackService
 
             if (this.config.Debug)
             {
-                this.monitor.Log($"Displayed ambient dialogue follow-up for {npc.Name}: {remark.Text}", LogLevel.Debug);
+                this.monitor.Log(I18n.Get("log.feedback.ambientFollowUp", new { npc = npc.Name, text = remark.Text }), LogLevel.Debug);
             }
         }
     }

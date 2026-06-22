@@ -170,7 +170,7 @@ internal sealed class BehaviorEngine
             catch (Exception ex)
             {
                 this.monitor.Log(
-                    $"Could not read LivingNPCs save data; continuing with fresh memory for this save. ({ex.Message})",
+                    I18n.Get("log.save.readFailed", new { error = ex.Message }),
                     LogLevel.Warn
                 );
                 saveData = null;
@@ -186,7 +186,7 @@ internal sealed class BehaviorEngine
 
             if (this.config.Debug)
             {
-                this.monitor.Log("Loaded LivingNPCs behavior memory from the current save.", LogLevel.Debug);
+                this.monitor.Log(I18n.Get("log.save.memoryLoaded"), LogLevel.Debug);
             }
         });
     }
@@ -198,7 +198,7 @@ internal sealed class BehaviorEngine
             this.helper.Data.WriteSaveData(SaveDataKey, this.memory.ToSaveData());
             if (this.config.Debug)
             {
-                this.monitor.Log("Saved LivingNPCs behavior memory to the current save.", LogLevel.Debug);
+                this.monitor.Log(I18n.Get("log.save.memorySaved"), LogLevel.Debug);
             }
         });
     }
@@ -248,7 +248,7 @@ internal sealed class BehaviorEngine
                 this.mailService.ApplyMailData(data);
                 if (this.config.Debug)
                 {
-                    this.monitor.Log($"Data/mail edit applied: +{data.Count - before} LivingNPCs entries (total {data.Count}).", LogLevel.Debug);
+                    this.monitor.Log(I18n.Get("log.mail.assetEditApplied", new { added = data.Count - before, total = data.Count }), LogLevel.Debug);
                 }
             });
         });
@@ -314,7 +314,7 @@ internal sealed class BehaviorEngine
                 this.feedback.Show(I18n.Get("hud.noNearbyNpc"));
                 if (this.config.Debug)
                 {
-                    this.monitor.Log("No nearby NPC found for LivingNPCs behavior hotkey.", LogLevel.Debug);
+                    this.monitor.Log(I18n.Get("log.behavior.noNearbyNpcHotkey"), LogLevel.Debug);
                 }
             }
         });
@@ -444,11 +444,11 @@ internal sealed class BehaviorEngine
             string signature = $"{context}|{ex.GetType().FullName}|{ex.Message}";
             if (this.loggedHandlerExceptions.Add(signature))
             {
-                this.monitor.Log($"LivingNPCs recovered from an error during {context}: {ex}", LogLevel.Error);
+                this.monitor.Log(I18n.Get("log.error.recovered", new { context, error = ex }), LogLevel.Error);
             }
             else if (this.config.Debug)
             {
-                this.monitor.Log($"LivingNPCs error during {context} recurred: {ex.Message}", LogLevel.Trace);
+                this.monitor.Log(I18n.Get("log.error.recurred", new { context, error = ex.Message }), LogLevel.Trace);
             }
         }
     }
@@ -511,7 +511,7 @@ internal sealed class BehaviorEngine
 
         if (this.config.Debug)
         {
-            this.monitor.Log($"Queued AI behavior intent request for {npc.Name}.", LogLevel.Debug);
+            this.monitor.Log(I18n.Get("log.aiPlanner.behaviorQueued", new { npc = npc.Name }), LogLevel.Debug);
         }
 
         if (trigger == BehaviorTrigger.Manual)
@@ -602,7 +602,20 @@ internal sealed class BehaviorEngine
 
         this.PushInteractionContext(
             npc,
-            $"Recorded ValleyTalk exchange for {npc.Name}: {result.LongTermMemoriesStored} long-term memories, {result.PlayerPreferencesStored} player preferences, {result.HelpRequestsStored} help requests, {result.HelpRequestsUpdated} help request updates, {result.ConflictsStored} conflicts, {result.BehaviorInfluencesStored} dialogue behavior influences, {result.ConflictsResolved} resolved conflicts, +{result.AppliedFriendshipDelta} extra friendship."
+            I18n.Get(
+                "log.context.exchangeRecorded",
+                new
+                {
+                    npc = npc.Name,
+                    longTerm = result.LongTermMemoriesStored,
+                    preferences = result.PlayerPreferencesStored,
+                    helpRequests = result.HelpRequestsStored,
+                    helpUpdates = result.HelpRequestsUpdated,
+                    conflicts = result.ConflictsStored,
+                    influences = result.BehaviorInfluencesStored,
+                    resolved = result.ConflictsResolved,
+                    friendship = result.AppliedFriendshipDelta
+                })
         );
         return true;
     }
@@ -805,10 +818,10 @@ internal sealed class BehaviorEngine
             {
                 if (string.IsNullOrWhiteSpace(actionReason))
                 {
-                    actionReason = "world action request rejected";
+                    actionReason = I18n.Get("log.worldAction.rejected");
                 }
 
-                this.monitor.Log($"Skipped AI world action {action.Type} for {npc.Name}: {actionReason}.", LogLevel.Debug);
+                this.monitor.Log(I18n.Get("log.worldAction.skipped", new { type = action.Type, npc = npc.Name, reason = actionReason }), LogLevel.Debug);
             }
         }
     }
@@ -842,7 +855,7 @@ internal sealed class BehaviorEngine
             if (this.config.Debug)
             {
                 this.monitor.Log(
-                    $"Synthesized fallback AI gift action {giftAction.Type} from visible dialogue.",
+                    I18n.Get("log.worldAction.fallbackGiftSynthesized", new { type = giftAction.Type }),
                     LogLevel.Debug
                 );
             }
@@ -859,7 +872,7 @@ internal sealed class BehaviorEngine
         if (this.config.Debug)
         {
             this.monitor.Log(
-                $"Synthesized fallback AI travel action {action.Type} toward {action.TargetLocation} from visible dialogue.",
+                I18n.Get("log.worldAction.fallbackTravelSynthesized", new { type = action.Type, target = action.TargetLocation }),
                 LogLevel.Debug
             );
         }
@@ -963,7 +976,7 @@ internal sealed class BehaviorEngine
 
                 if (this.config.Debug)
                 {
-                    this.monitor.Log($"Resumed {npc.Name}'s schedule from current position after {context}.", LogLevel.Debug);
+                    this.monitor.Log(I18n.Get("log.schedule.resumedCurrent", new { npc = npc.Name, context }), LogLevel.Debug);
                 }
 
                 return true;
@@ -974,7 +987,7 @@ internal sealed class BehaviorEngine
                 if (this.config.Debug)
                 {
                     this.monitor.Log(
-                        $"Left {npc.Name} at the current escort location after {context}; current schedule target is in {location.Name}.",
+                        I18n.Get("log.schedule.leftAtEscort", new { npc = npc.Name, context, location = location.Name }),
                         LogLevel.Debug
                     );
                 }
@@ -997,14 +1010,14 @@ internal sealed class BehaviorEngine
 
             if (this.config.Debug)
             {
-                this.monitor.Log($"Returned {npc.Name} to schedule location after {context}.", LogLevel.Debug);
+                this.monitor.Log(I18n.Get("log.schedule.returned", new { npc = npc.Name, context }), LogLevel.Debug);
             }
 
             return true;
         }
         catch (Exception ex)
         {
-            this.monitor.Log($"Could not resume {npc.Name}'s schedule after {context}: {ex.Message}", LogLevel.Warn);
+            this.monitor.Log(I18n.Get("log.schedule.resumeFailed", new { npc = npc.Name, context, error = ex.Message }), LogLevel.Warn);
             return false;
         }
     }
@@ -1140,12 +1153,14 @@ internal sealed class BehaviorEngine
         if (this.config.Debug)
         {
             this.monitor.Log(
-                pushedToValleyTalk ? debugMessage : $"{debugMessage} ValleyTalk context was not pushed.",
+                pushedToValleyTalk
+                    ? debugMessage
+                    : I18n.Get("log.context.debugNotPushed", new { message = debugMessage }),
                 LogLevel.Debug
             );
             if (pushedToValleyTalk)
             {
-                this.monitor.Log($"Primed ValleyTalk context for {npc.Name}:\n{promptContext}", LogLevel.Trace);
+                this.monitor.Log(I18n.Get("log.context.primed", new { npc = npc.Name, context = promptContext }), LogLevel.Trace);
             }
         }
     }
@@ -1354,7 +1369,7 @@ internal sealed class BehaviorEngine
 
             if (this.config.Debug)
             {
-                this.monitor.Log($"Skipped {intent.Type} for {npc.Name}: {reason}", LogLevel.Debug);
+                this.monitor.Log(I18n.Get("log.behavior.skipped", new { type = intent.Type, npc = npc.Name, reason }), LogLevel.Debug);
             }
 
             return false;
@@ -1399,14 +1414,14 @@ internal sealed class BehaviorEngine
 
         if (this.config.Debug)
         {
-            this.monitor.Log($"Executed {intent.Type} for {npc.Name} from {source}.", LogLevel.Debug);
+            this.monitor.Log(I18n.Get("log.behavior.executed", new { type = intent.Type, npc = npc.Name, source }), LogLevel.Debug);
             if (pushedToValleyTalk)
             {
-                this.monitor.Log($"Pushed behavior context to ValleyTalk for {npc.Name}:\n{promptContext}", LogLevel.Trace);
+                this.monitor.Log(I18n.Get("log.behavior.contextPushed", new { npc = npc.Name, context = promptContext }), LogLevel.Trace);
             }
             else
             {
-                this.monitor.Log($"ValleyTalk context was not pushed for {npc.Name}. ValleyTalk may be missing or bridge disabled.", LogLevel.Debug);
+                this.monitor.Log(I18n.Get("log.behavior.contextNotPushed", new { npc = npc.Name }), LogLevel.Debug);
             }
         }
 

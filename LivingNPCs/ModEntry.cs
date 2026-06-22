@@ -31,7 +31,7 @@ public sealed class ModEntry : Mod
 
         if (!this.config.EnableMod)
         {
-            Monitor.Log("LivingNPCs is disabled in config.json.", LogLevel.Info);
+            Monitor.Log(I18n.Get("log.mod.disabled"), LogLevel.Info);
             return;
         }
 
@@ -39,7 +39,7 @@ public sealed class ModEntry : Mod
         this.engine = new BehaviorEngine(helper, Monitor, this.config);
         this.engine.RegisterEvents();
 
-        Monitor.Log("LivingNPCs loaded.", LogLevel.Info);
+        Monitor.Log(I18n.Get("log.mod.loaded"), LogLevel.Info);
     }
 
     private void OnGameLaunched(object? sender, StardewModdingAPI.Events.GameLaunchedEventArgs e)

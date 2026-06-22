@@ -176,7 +176,7 @@ internal sealed class ConversationStartRecorder
             if (this.config.Debug)
             {
                 this.monitor.Log(
-                    $"Suppressed gift interaction for {npc.Name}, but no matching help request was completed for {gift.ItemId}.",
+                    I18n.Get("log.help.suppressedGiftNoMatch", new { npc = npc.Name, item = gift.ItemId }),
                     LogLevel.Debug
                 );
             }

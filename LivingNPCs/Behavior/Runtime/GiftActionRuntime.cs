@@ -124,7 +124,7 @@ internal sealed class GiftActionRuntime
         if (this.config.Debug)
         {
             this.monitor.Log(
-                $"Selected AI gift for {npc.Name}: {selection.DebugName} ({selection.ItemId}); {selection.Reason}.",
+                I18n.Get("log.gift.selectedSmall", new { npc = npc.Name, gift = selection.DebugName, item = selection.ItemId, reason = selection.Reason }),
                 LogLevel.Debug
             );
         }
@@ -267,7 +267,7 @@ internal sealed class GiftActionRuntime
         if (this.config.Debug)
         {
             this.monitor.Log(
-                $"Selected meaningful AI gift for {npc.Name}: {selection.DebugName} ({selection.ItemId}); {selection.Reason}.",
+                I18n.Get("log.gift.selectedMeaningful", new { npc = npc.Name, gift = selection.DebugName, item = selection.ItemId, reason = selection.Reason }),
                 LogLevel.Debug
             );
         }

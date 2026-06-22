@@ -285,7 +285,7 @@ internal sealed class CompanionOutingRuntime
             {
                 this.pendingOutings.Remove(outing);
                 this.monitor.Log(
-                    $"Companion outing for {outing.NpcName} hit an error and was cancelled to keep the NPC safe: {ex.Message}",
+                    I18n.Get("log.outing.cancelledByError", new { npc = outing.NpcName, error = ex.Message }),
                     LogLevel.Warn
                 );
                 this.TryRecoverNpcAfterOutingFailure(outing);
@@ -1098,7 +1098,16 @@ internal sealed class CompanionOutingRuntime
         if (!assigned && this.config.Debug)
         {
             this.monitor.Log(
-                $"Could not build vanilla-style companion outing route for {npc.Name}: {npc.currentLocation?.Name} -> {destination.Name} ({targetTile.X}, {targetTile.Y}).",
+                I18n.Get(
+                    "log.outing.routeFailed",
+                    new
+                    {
+                        npc = npc.Name,
+                        from = npc.currentLocation?.Name,
+                        to = destination.Name,
+                        x = targetTile.X,
+                        y = targetTile.Y
+                    }),
                 LogLevel.Debug
             );
         }

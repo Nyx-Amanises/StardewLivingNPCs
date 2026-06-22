@@ -158,7 +158,7 @@ internal static class NpcDisposition
                 {
                     if (!TryCreateCommunityProfile(definition, out var profile, out string validationError))
                     {
-                        monitor.Log($"Skipped NPC profile in '{fileName}': {validationError}", LogLevel.Warn);
+                        monitor.Log(I18n.Get("log.profile.skipped", new { file = fileName, reason = validationError }), LogLevel.Warn);
                         continue;
                     }
 
@@ -178,13 +178,13 @@ internal static class NpcDisposition
             }
             catch (Exception ex)
             {
-                monitor.Log($"Failed loading NPC profile file '{fileName}': {ex.Message}", LogLevel.Warn);
+                monitor.Log(I18n.Get("log.profile.loadFailed", new { file = fileName, error = ex.Message }), LogLevel.Warn);
             }
         }
 
         if (loadedProfiles > 0)
         {
-            monitor.Log($"Loaded {loadedProfiles} community NPC profile(s) covering {loadedNames} name key(s).", LogLevel.Info);
+            monitor.Log(I18n.Get("log.profile.loaded", new { profiles = loadedProfiles, names = loadedNames }), LogLevel.Info);
         }
     }
 

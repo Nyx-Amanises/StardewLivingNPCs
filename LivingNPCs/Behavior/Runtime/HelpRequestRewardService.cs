@@ -135,7 +135,7 @@ internal sealed class HelpRequestRewardService
         if (this.config.Debug)
         {
             this.monitor.Log(
-                $"Selected help request reward gift for {npc.Name}: {selection.DebugName} ({selection.ItemId}); {selection.Reason}.",
+                I18n.Get("log.help.selectedRewardGift", new { npc = npc.Name, gift = selection.DebugName, item = selection.ItemId, reason = selection.Reason }),
                 LogLevel.Debug
             );
         }

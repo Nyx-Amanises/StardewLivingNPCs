@@ -161,7 +161,7 @@ internal sealed class CommunityRippleRuntime
 
         if (stored > 0 && this.config.Debug)
         {
-            this.monitor.Log($"Spread community ripple for {subject.Name}: {summary} -> {stored} observer memory record(s).", LogLevel.Debug);
+            this.monitor.Log(I18n.Get("log.community.rippleSpread", new { npc = subject.Name, summary, stored }), LogLevel.Debug);
         }
     }
 
@@ -242,7 +242,16 @@ internal sealed class CommunityRippleRuntime
                 if (this.config.Debug)
                 {
                     this.monitor.Log(
-                        $"Propagated community impression from {speaker.Name} through {string.Join(", ", targets.Select(target => target.CircleKey).Distinct())}: depth {retelling.TransmissionDepth}, distortion {retelling.DistortionLevel}, recipients {stored}.",
+                        I18n.Get(
+                            "log.community.impressionPropagated",
+                            new
+                            {
+                                npc = speaker.Name,
+                                circles = string.Join(", ", targets.Select(target => target.CircleKey).Distinct()),
+                                depth = retelling.TransmissionDepth,
+                                distortion = retelling.DistortionLevel,
+                                recipients = stored
+                            }),
                         LogLevel.Debug
                     );
                 }

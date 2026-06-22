@@ -31,12 +31,12 @@ internal sealed class ValleyTalkPromptBridge
         this.api = this.helper.ModRegistry.GetApi<ValleyTalk.IValleyTalkInterface>(ValleyTalkUniqueId);
         if (this.api == null)
         {
-            this.monitor.Log("ValleyTalk was not found. LivingNPCs will run behavior hooks without prompt integration.", LogLevel.Info);
+            this.monitor.Log(I18n.Get("log.bridge.valleyTalkMissing"), LogLevel.Info);
             return;
         }
 
         this.api.SetModName("LivingNPCs");
-        this.monitor.Log("Connected to ValleyTalk prompt API.", LogLevel.Info);
+        this.monitor.Log(I18n.Get("log.bridge.connected"), LogLevel.Info);
     }
 
     public bool PushBehaviorContext(NPC npc, string promptText)
@@ -53,7 +53,7 @@ internal sealed class ValleyTalkPromptBridge
         }
         catch (System.Exception ex)
         {
-            this.monitor.Log($"ValleyTalk RegisterPromptOverride failed for {npc.Name}: {ex.Message}", LogLevel.Debug);
+            this.monitor.Log(I18n.Get("log.bridge.registerPromptFailed", new { npc = npc.Name, error = ex.Message }), LogLevel.Debug);
             return false;
         }
     }
@@ -81,7 +81,7 @@ internal sealed class ValleyTalkPromptBridge
         }
         catch (System.Exception ex)
         {
-            this.monitor.Log($"ValleyTalk forced gift dialogue failed for {npc.Name}: {ex.Message}", LogLevel.Debug);
+            this.monitor.Log(I18n.Get("log.bridge.giftDialogueFailed", new { npc = npc.Name, error = ex.Message }), LogLevel.Debug);
             return false;
         }
     }
@@ -101,7 +101,7 @@ internal sealed class ValleyTalkPromptBridge
         }
         catch (System.Exception ex)
         {
-            this.monitor.Log($"ValleyTalk RequestGiftMailText failed for {npc.Name}: {ex.Message}", LogLevel.Debug);
+            this.monitor.Log(I18n.Get("log.bridge.requestGiftMailFailed", new { npc = npc.Name, error = ex.Message }), LogLevel.Debug);
         }
     }
 
@@ -118,7 +118,7 @@ internal sealed class ValleyTalkPromptBridge
         }
         catch (System.Exception ex)
         {
-            this.monitor.Log($"ValleyTalk TryGetGiftMailText failed: {ex.Message}", LogLevel.Debug);
+            this.monitor.Log(I18n.Get("log.bridge.getGiftMailFailed", new { error = ex.Message }), LogLevel.Debug);
             return string.Empty;
         }
     }
@@ -136,7 +136,7 @@ internal sealed class ValleyTalkPromptBridge
         }
         catch (System.Exception ex)
         {
-            this.monitor.Log($"ValleyTalk ClearPromptOverrides failed: {ex.Message}", LogLevel.Debug);
+            this.monitor.Log(I18n.Get("log.bridge.clearPromptsFailed", new { error = ex.Message }), LogLevel.Debug);
         }
     }
 }

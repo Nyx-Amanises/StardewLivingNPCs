@@ -36,27 +36,27 @@ internal sealed class BehaviorDebugCommandHandler
     {
         this.helper.ConsoleCommands.Add(
             "livingnpcs_debug",
-            "输出 NPC 当前状态、最近行为选择原因、求助生成适配和记忆召回摘要。用法：livingnpcs_debug [near|NPC名字]",
+            I18n.Get("command.livingnpcs_debug.description"),
             this.OnDebugCommand
         );
         this.helper.ConsoleCommands.Add(
             "livingnpcs_prompt",
-            "输出 LivingNPCs 即将注入 ValleyTalk 的完整隐藏上下文。用法：livingnpcs_prompt [near|NPC名字]",
+            I18n.Get("command.livingnpcs_prompt.description"),
             this.OnPromptCommand
         );
         this.helper.ConsoleCommands.Add(
             "livingnpcs_export",
-            "导出 Markdown 调试报告。用法：livingnpcs_export [near|all|NPC名字]",
+            I18n.Get("command.livingnpcs_export.description"),
             this.OnExportCommand
         );
         this.helper.ConsoleCommands.Add(
             "livingnpcs_eval",
-            "运行一组轻量运行时诊断，检查关键人格化规则是否还在。",
+            I18n.Get("command.livingnpcs_eval.description"),
             this.OnEvalCommand
         );
         this.helper.ConsoleCommands.Add(
             "livingnpcs_giftmail",
-            "诊断 LivingNPCs 礼物信：追踪状态、邮箱位置、Data/mail 是否有对应条目、生成文本、孤儿死信。",
+            I18n.Get("command.livingnpcs_giftmail.description"),
             this.OnGiftMailCommand
         );
     }
@@ -65,7 +65,7 @@ internal sealed class BehaviorDebugCommandHandler
     {
         if (!Context.IsWorldReady)
         {
-            this.monitor.Log("需要先进入存档再运行。", LogLevel.Info);
+            this.monitor.Log(I18n.Get("debug.needSaveLoaded"), LogLevel.Info);
             return;
         }
 
@@ -79,20 +79,20 @@ internal sealed class BehaviorDebugCommandHandler
     {
         if (!this.TryFindNearestNpcIgnoringDailyBudget(out NPC? npc) || npc == null)
         {
-            this.showFeedback("LivingNPCs：附近没有可查看记忆的 NPC。");
+            this.showFeedback(I18n.Get("debug.noNearbyMemoryNpc"));
             return;
         }
 
         string summary = this.memory.BuildDebugSummary(npc, this.config.PromptMemoryEntries, this.config.EnableNpcState);
         this.monitor.Log(summary, LogLevel.Info);
-        this.showFeedback($"LivingNPCs：已在 SMAPI 控制台输出 {npc.displayName} 的状态和记忆。");
+        this.showFeedback(I18n.Get("debug.memoryPrintedHud", new { npc = npc.displayName }));
     }
 
     private void OnDebugCommand(string command, string[] args)
     {
         if (!Context.IsWorldReady)
         {
-            this.monitor.Log("LivingNPCs：请先载入存档后再使用调试命令。", LogLevel.Info);
+            this.monitor.Log(I18n.Get("debug.needSaveLoadedDebug"), LogLevel.Info);
             return;
         }
 
@@ -109,7 +109,7 @@ internal sealed class BehaviorDebugCommandHandler
     {
         if (!Context.IsWorldReady)
         {
-            this.monitor.Log("LivingNPCs：请先载入存档后再使用 prompt 调试命令。", LogLevel.Info);
+            this.monitor.Log(I18n.Get("debug.needSaveLoadedPrompt"), LogLevel.Info);
             return;
         }
 
@@ -127,14 +127,14 @@ internal sealed class BehaviorDebugCommandHandler
             this.config.HelpRequestCooldownDays,
             this.config.MinRelationshipTrustForHelpRequests
         );
-        this.monitor.Log($"LivingNPCs：{npc.displayName} 的 ValleyTalk 上下文预览：\n{promptContext}", LogLevel.Info);
+        this.monitor.Log(I18n.Get("debug.promptPreview", new { npc = npc.displayName, context = promptContext }), LogLevel.Info);
     }
 
     private void OnExportCommand(string command, string[] args)
     {
         if (!Context.IsWorldReady)
         {
-            this.monitor.Log("LivingNPCs：请先载入存档后再导出调试报告。", LogLevel.Info);
+            this.monitor.Log(I18n.Get("debug.needSaveLoadedExport"), LogLevel.Info);
             return;
         }
 
@@ -164,8 +164,8 @@ internal sealed class BehaviorDebugCommandHandler
                 File.WriteAllText(npcPath, BehaviorDiagnostics.BuildNpcMarkdownReport(currentNpc, this.memory, this.config));
             }
 
-            this.monitor.Log($"LivingNPCs：已导出全局调试报告到 {directory}", LogLevel.Info);
-            this.showFeedback("LivingNPCs：已导出全局调试报告。");
+            this.monitor.Log(I18n.Get("debug.exportedAll", new { path = directory }), LogLevel.Info);
+            this.showFeedback(I18n.Get("debug.exportedAllHud"));
             return;
         }
 
@@ -177,8 +177,8 @@ internal sealed class BehaviorDebugCommandHandler
 
         string filePath = Path.Combine(directory, $"{SanitizeFileName(npc.Name)}.md");
         File.WriteAllText(filePath, BehaviorDiagnostics.BuildNpcMarkdownReport(npc, this.memory, this.config));
-        this.monitor.Log($"LivingNPCs：已导出 {npc.displayName} 的调试报告到 {filePath}", LogLevel.Info);
-        this.showFeedback($"LivingNPCs：已导出 {npc.displayName} 的调试报告。");
+        this.monitor.Log(I18n.Get("debug.exportedNpc", new { npc = npc.displayName, path = filePath }), LogLevel.Info);
+        this.showFeedback(I18n.Get("debug.exportedNpcHud", new { npc = npc.displayName }));
     }
 
     private void OnEvalCommand(string command, string[] args)
@@ -198,7 +198,7 @@ internal sealed class BehaviorDebugCommandHandler
                 return true;
             }
 
-            error = "LivingNPCs：附近没有可调试的 NPC。";
+            error = I18n.Get("debug.noNearbyDebugNpc");
             return false;
         }
 
@@ -211,7 +211,7 @@ internal sealed class BehaviorDebugCommandHandler
             return true;
         }
 
-        error = $"LivingNPCs：当前地点没有找到 NPC“{query}”。可以靠近 NPC 后用 near，或使用当前地图上的 NPC 名字。";
+        error = I18n.Get("debug.npcNotFound", new { query });
         return false;
     }
 

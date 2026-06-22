@@ -10,7 +10,7 @@ internal static class ModConfigMenu
         var configMenu = modEntry.Helper.ModRegistry.GetApi<IGenericModConfigMenuApi>("spacechase0.GenericModConfigMenu");
         if (configMenu == null)
         {
-            modEntry.Monitor.Log("Generic Mod Config Menu not installed. LivingNPCs will still work, but no in-game config menu will be shown.", LogLevel.Info);
+            modEntry.Monitor.Log(I18n.Get("log.gmcm.missing"), LogLevel.Info);
             return;
         }
 
