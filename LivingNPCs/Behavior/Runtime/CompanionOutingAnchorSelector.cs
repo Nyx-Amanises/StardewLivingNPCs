@@ -293,8 +293,17 @@ internal sealed class CompanionOutingAnchorSelector
         IReadOnlySet<Point> reservedTiles,
         out CompanionOutingAnchor? anchor)
     {
+        bool isFarmTarget = IsFarmTarget(targetLocation);
         var candidates = new List<CompanionOutingAnchor>();
-        var entryTiles = GetLikelyEntryTiles(location, sourceLocation).ToList();
+        var entryTiles = isFarmTarget
+            ? GetLikelyFarmEntryTiles(location, sourceLocation).ToList()
+            : GetLikelyEntryTiles(location, sourceLocation).ToList();
+        var farmReachableTiles = isFarmTarget
+            ? BuildReachableTileSet(location, entryTiles, npc)
+            : null;
+        var farmHomeTiles = isFarmTarget
+            ? GetFarmhouseDoorTiles(location).ToList()
+            : [];
         string focus = DetermineAnchorFocus(targetLocation, activityStyle, reason, npc.Name);
 
         if (TryGetAuthoredAnchors(targetLocation, location, out var authored))
@@ -307,14 +316,20 @@ internal sealed class CompanionOutingAnchorSelector
                     continue;
                 }
 
+                int score = 200
+                    + candidate.Priority
+                    + ScoreAnchorFocus(candidate, focus)
+                    + ScoreTile(location, candidate.Tile, activityStyle, entryTiles);
+                if (isFarmTarget)
+                {
+                    score += ScoreFarmTile(location, candidate.Tile, activityStyle, reason, entryTiles, farmHomeTiles);
+                }
+
                 candidates.Add(new CompanionOutingAnchor(
                     candidate.Tile,
                     candidate.FacingDirection,
                     candidate.Label,
-                    200
-                        + candidate.Priority
-                        + ScoreAnchorFocus(candidate, focus)
-                        + ScoreTile(location, candidate.Tile, activityStyle, entryTiles)
+                    score
                 ));
             }
         }
@@ -331,17 +346,29 @@ internal sealed class CompanionOutingAnchorSelector
                     continue;
                 }
 
+                if (farmReachableTiles is { Count: > 0 } && !farmReachableTiles.Contains(tile))
+                {
+                    continue;
+                }
+
                 int score = ScoreTile(location, tile, activityStyle, entryTiles);
                 if (score < 0)
                 {
                     continue;
                 }
 
+                if (isFarmTarget)
+                {
+                    score += ScoreFarmTile(location, tile, activityStyle, reason, entryTiles, farmHomeTiles);
+                }
+
                 int facingDirection = FindInterestingFacingDirection(location, tile, activityStyle);
                 candidates.Add(new CompanionOutingAnchor(
                     tile,
                     facingDirection,
-                    BuildFallbackLabel(targetLocation, activityStyle),
+                    isFarmTarget
+                        ? BuildFarmFallbackLabel(tile, farmHomeTiles)
+                        : BuildFallbackLabel(targetLocation, activityStyle),
                     score
                 ));
             }
@@ -537,6 +564,70 @@ internal sealed class CompanionOutingAnchorSelector
         return score;
     }
 
+    private static int ScoreFarmTile(
+        GameLocation location,
+        Point tile,
+        string activityStyle,
+        string reason,
+        IReadOnlyList<Point> entryTiles,
+        IReadOnlyList<Point> farmhouseDoorTiles)
+    {
+        int score = 0;
+        if (farmhouseDoorTiles.Count > 0)
+        {
+            Point nearestHome = farmhouseDoorTiles
+                .OrderBy(home => ManhattanDistance(home, tile))
+                .First();
+            int homeDistance = ManhattanDistance(nearestHome, tile);
+            score += homeDistance switch
+            {
+                <= 3 => -120,
+                <= 6 => 120,
+                <= 10 => 105,
+                <= 16 => 70,
+                <= 24 => 35,
+                <= 34 => 5,
+                _ => -35
+            };
+
+            if (tile.Y >= nearestHome.Y - 1 && tile.Y <= nearestHome.Y + 14)
+            {
+                score += 18;
+            }
+
+            if (Math.Abs(tile.X - nearestHome.X) <= 14)
+            {
+                score += 10;
+            }
+
+            if (ContainsAny(reason, "家门", "门口", "庭院", "院子", "农舍", "porch", "patio", "yard", "farmhouse"))
+            {
+                score += homeDistance <= 16 ? 40 : -20;
+            }
+
+            if (ContainsAny(reason, "相机", "拿", "取", "camera", "pick up", "grab", "get"))
+            {
+                score += homeDistance <= 16 ? 30 : -15;
+            }
+        }
+
+        if (entryTiles.Count > 0)
+        {
+            int entryDistance = entryTiles.Min(entry => ManhattanDistance(entry, tile));
+            if (entryDistance <= 6)
+            {
+                score -= 30;
+            }
+        }
+
+        if (activityStyle == "scenic")
+        {
+            score += Math.Min(24, CountNearbyWaterTiles(location, tile, 6) * 2);
+        }
+
+        return score;
+    }
+
     private static string DetermineAnchorFocus(
         string targetLocation,
         string activityStyle,
@@ -670,6 +761,11 @@ internal sealed class CompanionOutingAnchorSelector
         return false;
     }
 
+    private static bool IsFarmTarget(string targetLocation)
+    {
+        return string.Equals(targetLocation, "Farm", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static int CountOpenNeighbors(GameLocation location, Point tile, NPC? ignoredNpc)
     {
         int count = 0;
@@ -708,6 +804,117 @@ internal sealed class CompanionOutingAnchorSelector
         return matching.Count > 0
             ? matching
             : location.warps.Select(warp => new Point(warp.X, warp.Y));
+    }
+
+    private static IEnumerable<Point> GetLikelyFarmEntryTiles(GameLocation location, string sourceLocation)
+    {
+        var matching = location.warps
+            .Where(warp =>
+            {
+                string targetName = ScheduleReflectionReader.GetWarpTargetName(warp);
+                return IsFarmOutdoorBoundaryTarget(targetName)
+                    && string.Equals(
+                        TravelLocationRules.Normalize(targetName, targetName),
+                        sourceLocation,
+                        StringComparison.OrdinalIgnoreCase);
+            })
+            .Select(warp => new Point(warp.X, warp.Y))
+            .ToList();
+        if (matching.Count > 0)
+        {
+            return matching;
+        }
+
+        var outdoorEntries = location.warps
+            .Where(warp => IsFarmOutdoorBoundaryTarget(ScheduleReflectionReader.GetWarpTargetName(warp)))
+            .Select(warp => new Point(warp.X, warp.Y))
+            .ToList();
+        return outdoorEntries.Count > 0
+            ? outdoorEntries
+            : GetLikelyEntryTiles(location, sourceLocation);
+    }
+
+    private static IEnumerable<Point> GetFarmhouseDoorTiles(GameLocation location)
+    {
+        return location.warps
+            .Where(warp => IsFarmhouseWarpTarget(ScheduleReflectionReader.GetWarpTargetName(warp)))
+            .Select(warp => new Point(warp.X, warp.Y));
+    }
+
+    private static HashSet<Point> BuildReachableTileSet(
+        GameLocation location,
+        IReadOnlyList<Point> entryTiles,
+        NPC npc)
+    {
+        var reachable = new HashSet<Point>();
+        if (entryTiles.Count == 0)
+        {
+            return reachable;
+        }
+
+        var queue = new Queue<Point>();
+        foreach (Point entry in entryTiles)
+        {
+            foreach (Point start in GetCardinalNeighbors(entry).Append(entry))
+            {
+                if (IsTraversableForAnchorRouteScan(location, start, npc) && reachable.Add(start))
+                {
+                    queue.Enqueue(start);
+                }
+            }
+        }
+
+        while (queue.Count > 0)
+        {
+            Point current = queue.Dequeue();
+            foreach (Point neighbor in GetCardinalNeighbors(current))
+            {
+                if (IsTraversableForAnchorRouteScan(location, neighbor, npc) && reachable.Add(neighbor))
+                {
+                    queue.Enqueue(neighbor);
+                }
+            }
+        }
+
+        return reachable;
+    }
+
+    private static bool IsTraversableForAnchorRouteScan(GameLocation location, Point tile, NPC? ignoredNpc)
+    {
+        if (!IsInBounds(location, tile.X, tile.Y))
+        {
+            return false;
+        }
+
+        var vector = new Vector2(tile.X, tile.Y);
+        return location.isTileLocationOpen(vector)
+            && location.isTilePassable(vector)
+            && !location.characters.Any(candidate => candidate != ignoredNpc && candidate.TilePoint == tile);
+    }
+
+    private static bool IsFarmOutdoorBoundaryTarget(string targetName)
+    {
+        if (string.IsNullOrWhiteSpace(targetName))
+        {
+            return false;
+        }
+
+        string normalized = TravelLocationRules.Normalize(targetName, targetName);
+        return normalized is "BusStop" or "Forest" or "Town" or "Mountain" or "Custom_ForestWest"
+            || targetName.Contains("Backwoods", StringComparison.OrdinalIgnoreCase)
+            || targetName.Contains("BackWoods", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsFarmhouseWarpTarget(string targetName)
+    {
+        if (string.IsNullOrWhiteSpace(targetName)
+            || targetName.Contains("Greenhouse", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        return targetName.Contains("FarmHouse", StringComparison.OrdinalIgnoreCase)
+            || targetName.Contains("Farm House", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsWarpOrDoorLikeTile(GameLocation location, Point tile)
@@ -817,6 +1024,22 @@ internal sealed class CompanionOutingAnchorSelector
         return activityStyle == "quiet"
             ? "in a quiet public corner"
             : "in an open public area";
+    }
+
+    private static string BuildFarmFallbackLabel(Point tile, IReadOnlyList<Point> farmhouseDoorTiles)
+    {
+        if (farmhouseDoorTiles.Count == 0)
+        {
+            return "at a calm open spot on the farm";
+        }
+
+        int homeDistance = farmhouseDoorTiles.Min(home => ManhattanDistance(home, tile));
+        return homeDistance switch
+        {
+            <= 10 => "near the farmhouse yard",
+            <= 18 => "along the path by the farmhouse",
+            _ => "at a calm open spot on the farm"
+        };
     }
 
     private static IEnumerable<Point> GetCardinalNeighbors(Point tile)

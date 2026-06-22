@@ -126,6 +126,14 @@ internal sealed class CompanionOutingRuntime
         }
 
         string sourceLocation = BehaviorMemory.NormalizeTravelLocation(npc.currentLocation?.Name ?? string.Empty, string.Empty);
+        if (IsFarmTarget(targetLocation)
+            && npc.currentLocation != destination
+            && TryPrepareFarmEntryBoundary(npc, out GameLocation? farmBoundary, out _, out _)
+            && farmBoundary != null)
+        {
+            sourceLocation = farmBoundary.Name;
+        }
+
         string activityStyle = CompanionOutingRules.DetermineActivityStyle(targetLocation, action.Reason);
         var reservedTiles = this.pendingOutings
             .Where(outing => string.Equals(outing.TargetLocation, targetLocation, StringComparison.OrdinalIgnoreCase))
