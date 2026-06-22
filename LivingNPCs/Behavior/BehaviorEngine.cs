@@ -840,6 +840,21 @@ internal sealed class BehaviorEngine
                 playerText,
                 npcResponse
             );
+            if (this.config.Debug && visibleSafeActions.Count < actions.Count)
+            {
+                string removedTypes = string.Join(
+                    ", ",
+                    actions.Except(visibleSafeActions).Select(action => action.Type)
+                );
+                this.monitor.Log(
+                    I18n.Get(
+                        "log.worldAction.filteredByVisibleDialogue",
+                        new { npc = npc.Name, count = actions.Count - visibleSafeActions.Count, types = removedTypes }
+                    ),
+                    LogLevel.Debug
+                );
+            }
+
             ConversationActionCueRules.TryCorrectTravelActionTargetFromVisibleDialogue(
                 npc,
                 visibleSafeActions,

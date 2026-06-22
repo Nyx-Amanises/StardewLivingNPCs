@@ -513,6 +513,7 @@
   "log.context.primed": "Primed ValleyTalk context for {{npc}}:\n{{context}}",
   "log.worldAction.rejected": "world action request rejected",
   "log.worldAction.skipped": "Skipped AI world action {{type}} for {{npc}}: {{reason}}.",
+  "log.worldAction.filteredByVisibleDialogue": "Filtered {{count}} AI world action(s) for {{npc}} because the visible dialogue did not support them: {{types}}.",
   "log.worldAction.fallbackGiftSynthesized": "Synthesized fallback AI gift action {{type}} from visible dialogue.",
   "log.worldAction.fallbackTravelSynthesized": "Synthesized fallback AI travel action {{type}} toward {{target}} from visible dialogue.",
   "log.schedule.resumedCurrent": "Resumed {{npc}}'s schedule from current position after {{context}}.",

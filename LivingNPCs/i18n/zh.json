@@ -513,6 +513,7 @@
   "log.context.primed": "已为 {{npc}} 预置 ValleyTalk 上下文：\n{{context}}",
   "log.worldAction.rejected": "世界动作请求被拒绝",
   "log.worldAction.skipped": "已跳过 {{npc}} 的 AI 世界动作 {{type}}：{{reason}}。",
+  "log.worldAction.filteredByVisibleDialogue": "已过滤 {{npc}} 的 {{count}} 个 AI 世界动作：可见对白未支持这些动作（{{types}}）。",
   "log.worldAction.fallbackGiftSynthesized": "已根据可见对话合成后备 AI 礼物动作 {{type}}。",
   "log.worldAction.fallbackTravelSynthesized": "已根据可见对话合成后备 AI 出行动作 {{type}}，目标 {{target}}。",
   "log.schedule.resumedCurrent": "{{npc}} 在 {{context}} 后已从当前位置恢复日程。",
