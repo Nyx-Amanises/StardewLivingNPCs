@@ -4,6 +4,7 @@
     "Version": "0.1.0",
     "Description": "SVE content pack for ValleyTalk - Infinite dialogue",
     "UniqueID": "dandm1.ValleyTalkSVE",
+    "PermitAiUse": true,
     "MinimumApiVersion": "4.1.0",
     "UpdateKeys": [ 34341 ],
     "ContentPackFor": {

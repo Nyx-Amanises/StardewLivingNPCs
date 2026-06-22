@@ -4,6 +4,7 @@
     "Version": "1.4.0",
     "Description": "CP Infinite dialogue for Stardew Valley",
     "UniqueID": "dandm1.CPValleyTalk",
+    "PermitAiUse": true,
     "MinimumApiVersion": "4.1.0",
     "UpdateKeys": [],
     "ContentPackFor": {

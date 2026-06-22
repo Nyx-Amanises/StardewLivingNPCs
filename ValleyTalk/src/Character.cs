@@ -282,7 +282,24 @@ public class Character
         }
         else
         {
-            bioData.Missing = false;
+            if (string.IsNullOrWhiteSpace(bioData.Biography))
+            {
+                var fallbackBio = BuildFallbackBioData();
+                if (fallbackBio != null)
+                {
+                    bioData = fallbackBio;
+                    ModEntry.SMonitor.Log($"Generated fallback bio for custom NPC {Name} from Data/Characters because no ValleyTalk bio content was provided.", StardewModdingAPI.LogLevel.Debug);
+                }
+                else
+                {
+                    bioData.Missing = true;
+                    ModEntry.SMonitor.Log($"No bio content found for {Name}.", StardewModdingAPI.LogLevel.Warn);
+                }
+            }
+            else
+            {
+                bioData.Missing = false;
+            }
         }
 
         _bioData = bioData;
