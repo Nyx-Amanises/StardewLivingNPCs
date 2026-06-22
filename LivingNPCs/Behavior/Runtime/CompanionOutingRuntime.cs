@@ -307,7 +307,7 @@ internal sealed class CompanionOutingRuntime
             npc.DirectionsToNewLocation = null;
             npc.Halt();
             NpcTravelRuntime.RestoreSchedule(npc, outing.OriginalIgnoreScheduleToday, outing.OriginalFollowSchedule);
-            this.returnNpcToSchedule(npc, npc.currentLocation != Game1.currentLocation);
+            this.returnNpcToSchedule(npc, this.AllowScheduleFallbackTeleport(outing, npc));
         }
         catch
         {
@@ -486,7 +486,30 @@ internal sealed class CompanionOutingRuntime
             return;
         }
 
+        if (this.TryBeginFarmEntryStay(npc, outing, farm))
+        {
+            return;
+        }
+
         this.Stop(outing, npc, returnToSchedule: true);
+    }
+
+    private bool TryBeginFarmEntryStay(NPC npc, PendingCompanionOuting outing, GameLocation farm)
+    {
+        if (!IsFarmTarget(outing.TargetLocation) || npc.currentLocation != farm)
+        {
+            return false;
+        }
+
+        outing.AnchorTile = npc.TilePoint;
+        outing.AnchorFacingDirection = npc.FacingDirection is >= 0 and <= 3 ? npc.FacingDirection : 2;
+        outing.AnchorLabel = "near the farm entrance";
+        this.monitor.Log(
+            $"Farm outing for {npc.Name} could not reach the selected farm anchor; staying near the farm entrance instead.",
+            LogLevel.Debug
+        );
+        this.BeginStay(npc, outing);
+        return true;
     }
 
     private void BeginStay(NPC npc, PendingCompanionOuting outing)
@@ -538,6 +561,11 @@ internal sealed class CompanionOutingRuntime
         {
             if (!this.TryAssignRoute(npc, outing, destination, outing.AnchorTile, outing.AnchorFacingDirection))
             {
+                if (destination == Game1.getFarm() && this.TryBeginFarmEntryStay(npc, outing, destination))
+                {
+                    return;
+                }
+
                 this.Stop(outing, npc, returnToSchedule: true);
             }
 
@@ -1247,7 +1275,7 @@ internal sealed class CompanionOutingRuntime
         );
         if (useFallback)
         {
-            this.returnNpcToSchedule(npc, npc.currentLocation != Game1.currentLocation);
+            this.returnNpcToSchedule(npc, this.AllowScheduleFallbackTeleport(outing, npc));
         }
 
         this.pendingOutings.Remove(outing);
@@ -1266,11 +1294,16 @@ internal sealed class CompanionOutingRuntime
         );
         if (returnToSchedule)
         {
-            this.returnNpcToSchedule(npc, npc.currentLocation != Game1.currentLocation);
+            this.returnNpcToSchedule(npc, this.AllowScheduleFallbackTeleport(outing, npc));
         }
 
         this.pendingOutings.Remove(outing);
         this.refreshPromptContext(npc, $"Stopped companion outing for {npc.Name}.");
+    }
+
+    private bool AllowScheduleFallbackTeleport(PendingCompanionOuting outing, NPC npc)
+    {
+        return !IsFarmTarget(outing.TargetLocation) && npc.currentLocation != Game1.currentLocation;
     }
 
     private static bool IsAtTile(NPC npc, GameLocation destination, Point tile)
