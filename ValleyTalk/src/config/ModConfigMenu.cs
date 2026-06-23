@@ -233,25 +233,31 @@ namespace ValleyTalk
                 mod: ModManifest,
                 name: () => Util.GetString("configFrequencyGeneral", returnNull: true) ?? "Frequency of general lines",
                 tooltip: () => Util.GetString("configFrequencyGeneralTooltip", returnNull: true) ?? "How often the mod should generate general lines.",
-                getValue: () => GetFrequencyLabel(Config.GeneralFrequency),
-                setValue: (value) =>{ Config.GeneralFrequency = ResolveFrequencyValue(value, Config.GeneralFrequency); },
-                allowedValues: GetFrequencyOptions().Values.ToArray()
+                getValue: () => GetFrequencyValue(Config.GeneralFrequency),
+                setValue: (value) => { Config.GeneralFrequency = ResolveFrequencyValue(value, Config.GeneralFrequency); },
+                allowedValues: GetFrequencyValues(),
+                formatAllowedValue: FormatFrequencyValue,
+                fieldId: "GeneralFrequency"
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
                 name: () => Util.GetString("configFrequencyGift", returnNull: true) ?? "Frequency of gift lines",
                 tooltip: () => Util.GetString("configFrequencyGiftTooltip", returnNull: true) ?? "How often the mod should generate gift reactions.",
-                getValue: () => GetFrequencyLabel(Config.GiftFrequency),
-                setValue: (value) =>{ Config.GiftFrequency = ResolveFrequencyValue(value, Config.GiftFrequency); },
-                allowedValues: GetFrequencyOptions().Values.ToArray()
+                getValue: () => GetFrequencyValue(Config.GiftFrequency),
+                setValue: (value) => { Config.GiftFrequency = ResolveFrequencyValue(value, Config.GiftFrequency); },
+                allowedValues: GetFrequencyValues(),
+                formatAllowedValue: FormatFrequencyValue,
+                fieldId: "GiftFrequency"
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
                 name: () => Util.GetString("configFrequencyMarriage", returnNull: true) ?? "Frequency of marriage lines",
                 tooltip: () => Util.GetString("configFrequencyMarriageTooltip", returnNull: true) ?? "How often the mod should generate marriage lines.",
-                getValue: () => GetFrequencyLabel(Config.MarriageFrequency),
-                setValue: (value) =>{ Config.MarriageFrequency = ResolveFrequencyValue(value, Config.MarriageFrequency); },
-                allowedValues: GetFrequencyOptions().Values.ToArray()
+                getValue: () => GetFrequencyValue(Config.MarriageFrequency),
+                setValue: (value) => { Config.MarriageFrequency = ResolveFrequencyValue(value, Config.MarriageFrequency); },
+                allowedValues: GetFrequencyValues(),
+                formatAllowedValue: FormatFrequencyValue,
+                fieldId: "MarriageFrequency"
             );
             ConfigMenu.AddTextOption(
                 mod: ModManifest,
@@ -298,8 +304,31 @@ namespace ValleyTalk
                 : options[4];
         }
 
+        private static string[] GetFrequencyValues()
+        {
+            return GetFrequencyOptions().Keys
+                .Select(key => key.ToString())
+                .ToArray();
+        }
+
+        private static string GetFrequencyValue(int frequency)
+        {
+            int normalized = Math.Clamp(frequency, 0, 4);
+            return normalized.ToString();
+        }
+
+        private static string FormatFrequencyValue(string value)
+        {
+            return GetFrequencyLabel(ResolveFrequencyValue(value, 4));
+        }
+
         private static int ResolveFrequencyValue(string value, int currentValue)
         {
+            if (int.TryParse(value, out int rawValue))
+            {
+                return Math.Clamp(rawValue, 0, 4);
+            }
+
             var options = GetFrequencyOptions();
             var match = options.FirstOrDefault(x => string.Equals(x.Value, value, StringComparison.OrdinalIgnoreCase));
             if (!string.IsNullOrWhiteSpace(match.Value))
