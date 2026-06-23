@@ -93,7 +93,7 @@ internal static class LlmThinking
             Low => "low",
             Medium => "medium",
             High => "high",
-            XHigh => "xhigh",
+            XHigh => "high",
             _ => null
         };
     }

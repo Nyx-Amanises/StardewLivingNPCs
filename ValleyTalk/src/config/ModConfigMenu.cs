@@ -16,8 +16,6 @@ namespace ValleyTalk
         private static bool _refreshQueued;
 
         private static readonly string[] TypedResponseOptions = { "Always", "With Generated", "Never" };
-        private static readonly string[] ThinkingLevelOptions = LlmThinking.Options;
-
         internal static void Register(ModEntry modEntry)
         {
             _modEntry = modEntry;
@@ -193,7 +191,7 @@ namespace ValleyTalk
                 tooltip: () => Util.GetString("configRoutingThinkingLevelTooltip", returnNull: true) ?? "Thinking level for compact routing/classifier passes. Off is fastest and recommended.",
                 getValue: () => Config.RoutingThinkingLevel,
                 setValue: (value) => { Config.RoutingThinkingLevel = LlmThinking.Normalize(value, LlmThinking.Off); },
-                allowedValues: ThinkingLevelOptions,
+                allowedValues: GetThinkingLevelOptions(Config),
                 formatAllowedValue: FormatThinkingLevelOption,
                 fieldId: "RoutingThinkingLevel"
             );
@@ -203,7 +201,7 @@ namespace ValleyTalk
                 tooltip: () => Util.GetString("configChatThinkingLevelTooltip", returnNull: true) ?? "Thinking level for normal NPC replies when the selected model supports it. Auto leaves provider defaults unchanged.",
                 getValue: () => Config.ChatThinkingLevel,
                 setValue: (value) => { Config.ChatThinkingLevel = LlmThinking.Normalize(value, LlmThinking.Auto); },
-                allowedValues: ThinkingLevelOptions,
+                allowedValues: GetThinkingLevelOptions(Config),
                 formatAllowedValue: FormatThinkingLevelOption,
                 fieldId: "ChatThinkingLevel"
             );
@@ -351,6 +349,29 @@ namespace ValleyTalk
                 LlmThinking.XHigh => Util.GetString("configThinkingXHigh", returnNull: true) ?? "Extra high",
                 _ => value
             };
+        }
+
+        private static string[] GetThinkingLevelOptions(ModConfig config)
+        {
+            if (IsGeminiThinkingProvider(config))
+            {
+                return LlmThinking.Options
+                    .Where(option => option != LlmThinking.XHigh)
+                    .ToArray();
+            }
+
+            return LlmThinking.Options;
+        }
+
+        private static bool IsGeminiThinkingProvider(ModConfig config)
+        {
+            if (string.Equals(config.Provider, "Google", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return string.Equals(config.Provider, "OpenAiCompatible", StringComparison.OrdinalIgnoreCase)
+                && LlmThinking.IsGeminiThinkingModel(config.ModelName);
         }
 
         private static string FormatProviderOption(string value)

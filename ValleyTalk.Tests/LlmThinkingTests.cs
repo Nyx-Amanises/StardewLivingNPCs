@@ -74,7 +74,7 @@ public sealed class LlmThinkingTests
     [InlineData(LlmThinking.Off, "gemini-3.1-pro", "low")]
     [InlineData(LlmThinking.Off, "gemini-2.5-flash", "none")]
     [InlineData(LlmThinking.High, "gemini-3.1-pro", "high")]
-    [InlineData(LlmThinking.XHigh, "gemini-3.5-flash", "xhigh")]
+    [InlineData(LlmThinking.XHigh, "gemini-3.5-flash", "high")]
     public void OpenAiCompatibleGeminiModelsUseReasoningEffort(string level, string model, string expected)
     {
         var body = new JObject();
