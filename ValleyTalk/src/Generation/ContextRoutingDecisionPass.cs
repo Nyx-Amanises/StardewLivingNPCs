@@ -189,6 +189,22 @@ internal static class ContextRoutingDecisionPass
             return ContextRoutingPlan.Full().WithRoutingDiagnostics("disabled-full", 0, 0);
         }
 
+        string modelLower = ModEntry.Config.ModelName?.ToLowerInvariant() ?? string.Empty;
+        bool modelForcesThinking = modelLower.Contains("deepseek-r1")
+            || modelLower.Contains("thinking")
+            || (modelLower.Contains("gemini") && modelLower.Contains("pro") && !modelLower.Contains("flash"));
+        if (modelForcesThinking)
+        {
+            var forced = ContextRoutingPlan.Full().WithRoutingDiagnostics("forced-thinking-skip-full", 0, 0);
+            if (ModEntry.Config.Debug)
+            {
+                ModEntry.SMonitor.Log($"Semantic context routing skipped for {character.Name}: model {ModEntry.Config.ModelName} forces thinking; using full context.", StardewModdingAPI.LogLevel.Debug);
+            }
+
+            ExportLog(character.Name, context, "forced-thinking-skip-full", 0, 0, "model-forces-thinking", forced.DebugLabel(), string.Empty, string.Empty, string.Empty);
+            return forced;
+        }
+
         string conversationKey = BuildConversationKey(character, context);
         string cacheBypassReason = string.Empty;
         if (conversationKey != null && TryReuseCachedPlan(conversationKey, context, out ContextRoutingPlan cachedPlan, out cacheBypassReason))
@@ -231,13 +247,13 @@ internal static class ContextRoutingDecisionPass
         catch (Exception ex)
         {
             routeWatch.Stop();
-            string outcome = ex is OperationCanceledException || ex is TimeoutException ? "timeout-brief" : "failed-brief";
+            string outcome = ex is OperationCanceledException || ex is TimeoutException ? "timeout-full" : "failed-full";
             if (ModEntry.Config.Debug)
             {
-                ModEntry.SMonitor.Log($"Semantic context routing {outcome} for {character.Name} after {routeWatch.ElapsedMilliseconds}ms: {ex.Message}; using conservative brief context.", StardewModdingAPI.LogLevel.Debug);
+                ModEntry.SMonitor.Log($"Semantic context routing {outcome} for {character.Name} after {routeWatch.ElapsedMilliseconds}ms: {ex.Message}; using full context.", StardewModdingAPI.LogLevel.Debug);
             }
 
-            var fallback = BuildFallbackPlan(outcome, context, routeWatch.ElapsedMilliseconds, timeoutSeconds, conservative: true);
+            var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
             ExportLog(character.Name, context, outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds, ex.GetType().Name, fallback.DebugLabel(), prompt, string.Empty, ex.Message);
             return fallback;
         }
@@ -255,27 +271,25 @@ internal static class ContextRoutingDecisionPass
 
         if (!response.IsSuccess || string.IsNullOrWhiteSpace(response.Text))
         {
-            string outcome = "response-failed-brief";
-            var fallback = BuildFallbackPlan(outcome, context, routeWatch.ElapsedMilliseconds, timeoutSeconds, conservative: true);
+            string outcome = "response-failed-full";
+            var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
             ExportLog(character.Name, context, outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds, "empty-or-unsuccessful-response", fallback.DebugLabel(), prompt, response.Text, response.ErrorMessage);
             return fallback;
         }
 
         if (!TryParsePlan(response.Text, out ContextRoutingPlan plan, out string parseDetail) || plan == null)
         {
-            // Two different failures land here. "Low confidence" means the model produced a usable
-            // decision but flagged itself unsure — trust that signal and fall back to full context.
-            // "Couldn't parse" means we got nothing usable (typically a weak model that can't emit
-            // valid JSON); fall back to the conservative brief plan so we still save tokens instead of
-            // paying the router round-trip and then sending the full context anyway.
-            bool isLowConfidence = parseDetail.StartsWith("low-confidence", StringComparison.Ordinal);
-            string outcome = isLowConfidence ? "low-confidence-full" : "parse-failed-brief";
+            // Separate "model wasn't confident enough" from "couldn't parse the output" — both fall
+            // back to full context, but they need different diagnostics when tuning the router.
+            string outcome = parseDetail.StartsWith("low-confidence", StringComparison.Ordinal)
+                ? "low-confidence-full"
+                : "parse-failed-full";
             if (ModEntry.Config.Debug)
             {
-                ModEntry.SMonitor.Log($"Semantic context routing fell back for {character.Name} ({outcome}). Reason: {parseDetail}. Output: {response.Text}", StardewModdingAPI.LogLevel.Debug);
+                ModEntry.SMonitor.Log($"Semantic context routing fell back to full context for {character.Name} ({outcome}). Reason: {parseDetail}. Output: {response.Text}", StardewModdingAPI.LogLevel.Debug);
             }
 
-            var fallback = BuildFallbackPlan(outcome, context, routeWatch.ElapsedMilliseconds, timeoutSeconds, conservative: !isLowConfidence);
+            var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
             ExportLog(character.Name, context, outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds, parseDetail, fallback.DebugLabel(), prompt, response.Text, response.ErrorMessage);
             return fallback;
         }
@@ -470,28 +484,6 @@ internal static class ContextRoutingDecisionPass
             parseDetail = $"json-parse-error={ex.Message}";
             return false;
         }
-    }
-
-    private static ContextRoutingPlan BuildFallbackPlan(
-        string outcome,
-        DialogueContext context,
-        long routeMilliseconds,
-        int timeoutSeconds,
-        bool conservative)
-    {
-        if (!conservative)
-        {
-            return ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeMilliseconds, timeoutSeconds);
-        }
-
-        // Start from the conservative brief plan, then re-apply the same per-turn deterministic
-        // boundaries the success path uses, so dynamic cues (gift/help/outing/location) still pull in
-        // the context they need even when routing itself failed. Without this, a routing failure on a
-        // weak/slow model would pay the router round-trip and then send full context anyway — the worst
-        // of both worlds. Brief still emits trimmed versions of the core modules, not none.
-        var plan = ContextRoutingPlan.ConservativeBrief();
-        ApplyDeterministicBoundaries(plan, context);
-        return plan.WithRoutingDiagnostics(outcome, routeMilliseconds, timeoutSeconds);
     }
 
     private static void ApplyDeterministicBoundaries(ContextRoutingPlan plan, DialogueContext context)
