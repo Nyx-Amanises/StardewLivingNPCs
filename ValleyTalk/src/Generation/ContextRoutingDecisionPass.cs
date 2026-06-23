@@ -159,6 +159,12 @@ internal static class ContextRoutingDecisionPass
         "museum"
     ];
 
+    // Only the high-impact modules are routed by the LLM. Small/cheap modules (dateTime, weather,
+    // nearbyNpcs, relationship, trinkets, specialDates, spouseAction, preoccupation,
+    // currentConversation, farm) keep their ConservativeBrief defaults and are handled by
+    // ApplyHardBoundaries / ApplyDependencies / ApplyDeterministicBoundaries instead. This halves
+    // the JSON the router must produce, making it faster, cheaper, and much harder for weak models
+    // to get wrong.
     private static readonly Dictionary<string, ContextModule> ModuleKeys = new(StringComparer.OrdinalIgnoreCase)
     {
         ["world"] = ContextModule.World,
@@ -166,21 +172,18 @@ internal static class ContextRoutingDecisionPass
         ["gameState"] = ContextModule.GameState,
         ["sampleDialogue"] = ContextModule.SampleDialogue,
         ["eventHistory"] = ContextModule.EventHistory,
-        ["dateTime"] = ContextModule.DateTime,
-        ["weather"] = ContextModule.Weather,
-        ["nearbyNpcs"] = ContextModule.NearbyNpcs,
-        ["relationship"] = ContextModule.Relationship,
-        ["farm"] = ContextModule.Farm,
-        ["location"] = ContextModule.Location,
-        ["trinkets"] = ContextModule.Trinkets,
         ["recentEvents"] = ContextModule.RecentEvents,
-        ["specialDates"] = ContextModule.SpecialDates,
-        ["gift"] = ContextModule.Gift,
+        ["location"] = ContextModule.Location,
         ["livingNpc"] = ContextModule.LivingNpc,
-        ["spouseAction"] = ContextModule.SpouseAction,
-        ["preoccupation"] = ContextModule.Preoccupation,
-        ["currentConversation"] = ContextModule.CurrentConversation
+        ["gift"] = ContextModule.Gift
     };
+
+    private static readonly ContextModule[] ActionGroupModules =
+    [
+        ContextModule.Location,
+        ContextModule.LivingNpc,
+        ContextModule.Gift
+    ];
 
     public static async Task<ContextRoutingPlan> BuildPlanAsync(Character character, DialogueContext context)
     {
@@ -475,6 +478,16 @@ internal static class ContextRoutingDecisionPass
                 parsed.Set(pair.Value, ParseDetail(raw));
             }
 
+            string actionRaw = json.Value<string>("action");
+            if (!string.IsNullOrWhiteSpace(actionRaw))
+            {
+                ContextDetail actionDetail = ParseDetail(actionRaw);
+                foreach (ContextModule module in ActionGroupModules)
+                {
+                    parsed.Promote(module, actionDetail);
+                }
+            }
+
             plan = parsed;
             parseDetail = $"confidence={confidence:0.###}";
             return true;
@@ -560,13 +573,12 @@ internal static class ContextRoutingDecisionPass
         prompt.AppendLine("- world: Stardew/world/SVE lore and world progress.");
         prompt.AppendLine("- npcProfile: biography, personality, relationships.");
         prompt.AppendLine("- gameState/recentEvents/eventHistory: farm/world achievements and older conversation/event memory.");
-        prompt.AppendLine("- location/weather/dateTime/nearbyNpcs: current scene, schedule, nearby people.");
-        prompt.AppendLine("- relationship/farm/gift/livingNpc: friendship, spouse/farm details, gift reaction, LivingNPCs memory/actions/help/outing/conflict.");
-        prompt.AppendLine("- sampleDialogue/currentConversation: style examples and visible chat history.");
+        prompt.AppendLine("- sampleDialogue: style reference lines for tone consistency.");
+        prompt.AppendLine("- location/livingNpc/gift: current scene, LivingNPCs memory/actions/help/outing/conflict, gift reaction.");
+        prompt.AppendLine("- action: set to full when the farmer is asking to go somewhere, offering/requesting help, giving/receiving items, handling conflict, or any concrete world action. Controls location+livingNpc+gift together.");
         prompt.AppendLine();
-        prompt.AppendLine("Return only JSON with keys world,npcProfile,gameState,sampleDialogue,eventHistory,dateTime,weather,nearbyNpcs,relationship,farm,location,trinkets,recentEvents,specialDates,gift,livingNpc,spouseAction,preoccupation,currentConversation,confidence.");
+        prompt.AppendLine("Return only JSON with keys world,npcProfile,gameState,sampleDialogue,eventHistory,recentEvents,location,livingNpc,gift,action,confidence.");
         prompt.AppendLine("Each module value must be none, brief, or full. confidence is 0-1.");
-        prompt.AppendLine("Use full for location/livingNpc/gift when the farmer may be asking to go somewhere, asking/offering help, giving/receiving items, handling conflict, nickname, mood, outing, or concrete world action.");
         prompt.AppendLine("Use full for world only when the reply needs specific lore/progress. Use sampleDialogue none unless style is likely fragile or this is an unfamiliar/custom NPC.");
         return prompt.ToString();
     }
