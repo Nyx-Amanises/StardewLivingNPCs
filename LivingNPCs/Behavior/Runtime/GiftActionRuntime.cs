@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using StardewModdingAPI;
 using StardewValley;
 using SObject = StardewValley.Object;
@@ -298,7 +299,14 @@ internal sealed class GiftActionRuntime
                 return true;
             }
 
-            reason = $"requested gift item {action.ItemId} is not in the allowed {tier.ToString().ToLowerInvariant()} gift pool";
+            if (TryChooseExplicitRequestableGift(npc, action, tier, npcResponse, out selection, out reason))
+            {
+                return true;
+            }
+
+            reason = string.IsNullOrWhiteSpace(reason)
+                ? $"requested gift item {action.ItemId} is not in the allowed {tier.ToString().ToLowerInvariant()} gift pool"
+                : reason;
             return false;
         }
 
@@ -318,6 +326,132 @@ internal sealed class GiftActionRuntime
             ? this.giftSelector.ChooseMeaningful(npc, state, playerText, npcResponse)
             : this.giftSelector.Choose(npc, state, playerText, npcResponse);
         return true;
+    }
+
+    private static bool TryChooseExplicitRequestableGift(
+        NPC npc,
+        ValleyTalkWorldActionRequest action,
+        GiftTier tier,
+        string npcResponse,
+        out GiftSelection selection,
+        out string reason)
+    {
+        selection = null!;
+        reason = string.Empty;
+        if (tier != GiftTier.Small)
+        {
+            reason = $"requested gift item {action.ItemId} is not in the allowed {tier.ToString().ToLowerInvariant()} gift pool";
+            return false;
+        }
+
+        string normalizedItemId = NormalizeObjectItemId(action.ItemId);
+        if (string.IsNullOrWhiteSpace(normalizedItemId))
+        {
+            reason = "gift action provided an invalid itemId";
+            return false;
+        }
+
+        string requestableLabel = string.Empty;
+        foreach ((string itemId, string label) in HelpRequestAdvisor.GetRequestableItems(npc))
+        {
+            if (string.Equals(itemId, normalizedItemId, StringComparison.OrdinalIgnoreCase))
+            {
+                requestableLabel = label;
+                break;
+            }
+        }
+
+        if (string.IsNullOrWhiteSpace(requestableLabel))
+        {
+            reason = $"requested gift item {action.ItemId} is not in the allowed small gift pool or current low-risk item list";
+            return false;
+        }
+
+        SObject gift;
+        try
+        {
+            gift = ItemRegistry.Create<SObject>(normalizedItemId);
+        }
+        catch
+        {
+            reason = $"requested gift item {action.ItemId} could not be created";
+            return false;
+        }
+
+        string displayName = string.IsNullOrWhiteSpace(gift.DisplayName)
+            ? requestableLabel
+            : gift.DisplayName;
+        string name = string.IsNullOrWhiteSpace(gift.Name)
+            ? requestableLabel
+            : gift.Name;
+        string[] labels =
+        [
+            action.ItemLabel,
+            requestableLabel,
+            displayName,
+            name
+        ];
+        if (!VisibleDialogueMentionsAnyLabel(npcResponse, labels))
+        {
+            reason = $"requested gift item {action.ItemId} is not visibly named in the NPC reply";
+            return false;
+        }
+
+        selection = new GiftSelection(
+            normalizedItemId,
+            displayName,
+            tier,
+            "the AI named a concrete low-risk item that the visible dialogue offered",
+            string.Empty
+        );
+        return true;
+    }
+
+    private static bool VisibleDialogueMentionsAnyLabel(string npcResponse, IEnumerable<string> labels)
+    {
+        if (string.IsNullOrWhiteSpace(npcResponse))
+        {
+            return false;
+        }
+
+        foreach (string label in labels)
+        {
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                continue;
+            }
+
+            string trimmed = label.Trim();
+            if (trimmed.Length < 2)
+            {
+                continue;
+            }
+
+            if (npcResponse.Contains(trimmed, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static string NormalizeObjectItemId(string itemId)
+    {
+        string trimmed = itemId.Trim();
+        if (string.IsNullOrWhiteSpace(trimmed))
+        {
+            return string.Empty;
+        }
+
+        if (trimmed.StartsWith("(O)", StringComparison.OrdinalIgnoreCase))
+        {
+            return $"(O){trimmed.Substring(3)}";
+        }
+
+        return int.TryParse(trimmed, out int rawId)
+            ? $"(O){rawId}"
+            : trimmed;
     }
 
     private static string BuildWorldActionReason(string requestedReason, string fallback)

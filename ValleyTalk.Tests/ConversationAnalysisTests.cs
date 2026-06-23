@@ -74,4 +74,61 @@ public sealed class ConversationAnalysisTests
         Assert.Empty(supplemental.Actions);
         Assert.Contains("did not ask to leave", detail);
     }
+
+    [Fact]
+    public void ActionDecisionGiftDecisionAddsImmediateGiftAction()
+    {
+        var supplemental = ConversationAnalysis.Parse("""
+        !LIVINGNPCS_META {"travelDecision":{"isTravelReply":false,"consent":"none"},"giftDecision":{"isGiftReply":true,"timing":"now","tier":"small","itemId":"(O)20","itemLabel":"韭葱","reason":"NPC visibly offers a leek now"},"actions":[]}
+        """);
+
+        bool added = LivingNpcActionDecisionPass.TryAddActionFromGiftDecisionForTesting(
+            supplemental,
+            """{"giftDecision":{"isGiftReply":true,"timing":"now","tier":"small","itemId":"(O)20","itemLabel":"韭葱","reason":"NPC visibly offers a leek now"}}""",
+            "我这里还有一些多出来的韭葱。你要是正好需要的话，我可以先送给你。",
+            out string detail);
+
+        Assert.True(added);
+        var action = Assert.Single(supplemental.Actions);
+        Assert.Equal("give_small_gift", action.Type);
+        Assert.Equal("(O)20", action.ItemId);
+        Assert.Equal("韭葱", action.ItemLabel);
+        Assert.Contains("converted giftDecision", detail);
+    }
+
+    [Fact]
+    public void ActionDecisionGiftDecisionDoesNotAddLaterMailGift()
+    {
+        var supplemental = ConversationAnalysis.Parse("""
+        !LIVINGNPCS_META {"travelDecision":{"isTravelReply":false,"consent":"none"},"giftDecision":{"isGiftReply":true,"timing":"mail","tier":"meaningful","itemId":"","itemLabel":"","reason":"NPC promises to mail a return gift later"},"actions":[]}
+        """);
+
+        bool added = LivingNpcActionDecisionPass.TryAddActionFromGiftDecisionForTesting(
+            supplemental,
+            """{"giftDecision":{"isGiftReply":true,"timing":"mail","tier":"meaningful","reason":"NPC promises to mail a return gift later"}}""",
+            "作为回礼，我想晚点寄给你一些我自己做的东西，希望你会喜欢。",
+            out string detail);
+
+        Assert.False(added);
+        Assert.Empty(supplemental.Actions);
+        Assert.Contains("not immediate", detail);
+    }
+
+    [Fact]
+    public void ActionDecisionGiftDecisionRequiresNamedItemInVisibleReply()
+    {
+        var supplemental = ConversationAnalysis.Parse("""
+        !LIVINGNPCS_META {"giftDecision":{"isGiftReply":true,"timing":"now","tier":"small","itemId":"(O)20","itemLabel":"韭葱"},"actions":[]}
+        """);
+
+        bool added = LivingNpcActionDecisionPass.TryAddActionFromGiftDecisionForTesting(
+            supplemental,
+            """{"giftDecision":{"isGiftReply":true,"timing":"now","tier":"small","itemId":"(O)20","itemLabel":"韭葱"}}""",
+            "这个小东西给你，希望你会喜欢。",
+            out string detail);
+
+        Assert.False(added);
+        Assert.Empty(supplemental.Actions);
+        Assert.Contains("visible reply did not", detail);
+    }
 }

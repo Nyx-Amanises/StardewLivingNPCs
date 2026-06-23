@@ -868,20 +868,6 @@ internal sealed class BehaviorEngine
             return visibleSafeActions;
         }
 
-        if (this.TryBuildFallbackGiftAction(npc, playerText, npcResponse, out ValleyTalkWorldActionRequest? giftAction)
-            && giftAction != null)
-        {
-            if (this.config.Debug)
-            {
-                this.monitor.Log(
-                    I18n.Get("log.worldAction.fallbackGiftSynthesized", new { type = giftAction.Type }),
-                    LogLevel.Debug
-                );
-            }
-
-            return new[] { giftAction };
-        }
-
         if (!ConversationActionCueRules.TryBuildFallbackTravelAction(npc, playerText, npcResponse, out ValleyTalkWorldActionRequest? action)
             || action == null)
         {
@@ -897,58 +883,6 @@ internal sealed class BehaviorEngine
         }
 
         return new[] { action };
-    }
-
-    private bool TryBuildFallbackGiftAction(
-        NPC npc,
-        string playerText,
-        string npcResponse,
-        out ValleyTalkWorldActionRequest? action
-    )
-    {
-        action = null;
-        if (!ConversationActionCueRules.LooksLikeImmediateGiftOffer(npcResponse)
-            || ConversationActionCueRules.LooksLikeGiftOfferRejection(npcResponse))
-        {
-            return false;
-        }
-
-        var state = this.memory.GetState(npc);
-        if (state == null)
-        {
-            return false;
-        }
-
-        bool meaningfulCue = ConversationActionCueRules.LooksLikeMeaningfulGiftOffer(playerText, npcResponse);
-        string type = meaningfulCue && GiftActionRules.IsEligibleForMeaningfulGift(npc, out _)
-            ? "give_meaningful_gift"
-            : "give_small_gift";
-        if (type == "give_small_gift" && !GiftActionRules.IsEligibleForSmallGift(npc, state))
-        {
-            return false;
-        }
-
-        action = new ValleyTalkWorldActionRequest
-        {
-            Type = type,
-            Reason = "the visible dialogue naturally offered the farmer a gift"
-        };
-
-        GiftTier tier = type == "give_meaningful_gift"
-            ? GiftTier.Meaningful
-            : GiftTier.Small;
-        if (this.giftSelector.TryChooseMentioned(npc, npcResponse, tier, out GiftSelection? mentioned)
-            && mentioned != null)
-        {
-            action.ItemId = mentioned.ItemId;
-            action.ItemLabel = mentioned.DebugName;
-            action.Reason = this.BuildWorldActionReason(
-                action.Reason,
-                $"visible dialogue named {mentioned.DebugName}"
-            );
-        }
-
-        return true;
     }
 
     private bool TryReturnNpcToCurrentSchedule(NPC npc, bool allowCrossLocationTeleport = true)

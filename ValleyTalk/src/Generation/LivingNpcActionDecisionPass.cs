@@ -116,6 +116,11 @@ internal static class LivingNpcActionDecisionPass
         diagnostics.ParseText = parseText;
 
         ConversationAnalysis supplemental = ConversationAnalysis.Parse(parseText);
+        bool addedGiftDecisionAction = TryAddActionFromGiftDecision(
+            supplemental,
+            response.Text,
+            visibleNpcReply,
+            out string giftDecisionDetail);
         bool addedTravelDecisionAction = TryAddActionFromTravelDecision(
             supplemental,
             response.Text,
@@ -127,14 +132,14 @@ internal static class LivingNpcActionDecisionPass
             playerText,
             visibleNpcReply,
             out string nonInvitationFilterDetail);
-        diagnostics.TravelDecisionDetail = CombineDetails(travelDecisionDetail, nonInvitationFilterDetail);
+        diagnostics.DecisionDetail = CombineDetails(giftDecisionDetail, travelDecisionDetail, nonInvitationFilterDetail);
         diagnostics.SupplementalJson = supplemental.ToJson();
 
         bool changed = analysis.MergeSupplementalActionMetadata(supplemental);
         diagnostics.Merged = changed;
         diagnostics.MergedJson = analysis.ToJson();
         diagnostics.Outcome = changed
-            ? addedTravelDecisionAction ? "merged-travel-decision" : "merged-actions"
+            ? addedGiftDecisionAction ? "merged-gift-decision" : addedTravelDecisionAction ? "merged-travel-decision" : "merged-actions"
             : supplemental.HasWorldActionOrHelpMetadata ? "parsed-but-filtered" : filteredNonInvitationOuting ? "filtered-non-invitation-outing" : "parsed-empty";
 
         LogDiagnostics(character, diagnostics);
@@ -168,9 +173,9 @@ internal static class LivingNpcActionDecisionPass
         prompt.AppendLine($"- NPC visible reply: {CleanForPrompt(visibleNpcReply)}");
         prompt.AppendLine();
         prompt.AppendLine("Return exactly one line beginning with !LIVINGNPCS_META followed by compact JSON using this schema:");
-        prompt.AppendLine("{\"travelDecision\":{\"isTravelReply\":false,\"consent\":\"accepted_now|accepted_later|declined|tentative|none\",\"targetLocation\":\"Farm|Town|Mountain|Beach|Forest|BusStop|Saloon|SeedShop|ArchaeologyHouse|Hospital\",\"delayMinutes\":0,\"durationMinutes\":0,\"reason\":\"short evidence from visible reply\"},\"actions\":[{\"type\":\"give_small_gift|give_meaningful_gift|give_money|companion_outing|festival_interaction|assist_quest\",\"amount\":0,\"durationMinutes\":0,\"delayMinutes\":0,\"targetLocation\":\"\",\"travelConsent\":\"accepted_now|accepted_later|declined|tentative|none\",\"questHint\":\"\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"short evidence from visible reply\"}],\"helpRequests\":[{\"type\":\"item_request\",\"summary\":\"short concrete ask\",\"requiresAcceptance\":true,\"requestedItemId\":\"\",\"requestedItemLabel\":\"\",\"questionTopic\":\"\",\"dueInDays\":1,\"reason\":\"short evidence\",\"followUpPotential\":\"none|deeper_relationship\"}],\"helpRequestUpdates\":[{\"summary\":\"matching existing request\",\"status\":\"accepted|declined|advanced|fulfilled\",\"resolution\":\"short result\"}]}");
+        prompt.AppendLine("{\"travelDecision\":{\"isTravelReply\":false,\"consent\":\"accepted_now|accepted_later|declined|tentative|none\",\"targetLocation\":\"Farm|Town|Mountain|Beach|Forest|BusStop|Saloon|SeedShop|ArchaeologyHouse|Hospital\",\"delayMinutes\":0,\"durationMinutes\":0,\"reason\":\"short evidence from visible reply\"},\"giftDecision\":{\"isGiftReply\":false,\"timing\":\"now|later|mail|promise|none\",\"tier\":\"small|meaningful\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"short evidence from visible reply\"},\"actions\":[{\"type\":\"give_small_gift|give_meaningful_gift|give_money|companion_outing|festival_interaction|assist_quest\",\"amount\":0,\"durationMinutes\":0,\"delayMinutes\":0,\"targetLocation\":\"\",\"travelConsent\":\"accepted_now|accepted_later|declined|tentative|none\",\"questHint\":\"\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"short evidence from visible reply\"}],\"helpRequests\":[{\"type\":\"item_request\",\"summary\":\"short concrete ask\",\"requiresAcceptance\":true,\"requestedItemId\":\"\",\"requestedItemLabel\":\"\",\"questionTopic\":\"\",\"dueInDays\":1,\"reason\":\"short evidence\",\"followUpPotential\":\"none|deeper_relationship\"}],\"helpRequestUpdates\":[{\"summary\":\"matching existing request\",\"status\":\"accepted|declined|advanced|fulfilled\",\"resolution\":\"short result\"}]}");
         prompt.AppendLine("Rules:");
-        prompt.AppendLine("- Always fill travelDecision, even when actions is empty. This is a classifier, not dialogue.");
+        prompt.AppendLine("- Always fill travelDecision and giftDecision, even when actions is empty. This is a classifier, not dialogue.");
         prompt.AppendLine("- For travelDecision, accepted_now means the NPC agrees to go now. Short preparation still counts as accepted_now: wait five minutes, let me change clothes, get my coat, grab an umbrella, I will be right out.");
         prompt.AppendLine("- Travel means leaving the current spot for a destination. Staying, sitting, chatting, or spending time here/at this bench/in the current location is not travel; return no companion_outing for that.");
         prompt.AppendLine("- Asking whether the NPC has ever been to a place is only a question about experience, not travel consent. Return no companion_outing unless the farmer also invites them to go now.");
@@ -178,12 +183,110 @@ internal static class LivingNpcActionDecisionPass
         prompt.AppendLine("- For travel, include companion_outing in actions only when consent=accepted_now and targetLocation is supported. Use the farmer's invitation to infer targetLocation if the NPC reply says yes/now but omits the destination.");
         prompt.AppendLine("- Later/maybe/refusal means no action and travelDecision consent accepted_later/tentative/declined.");
         prompt.AppendLine("- For brief escort/show-the-way use durationMinutes 20; for a real stay together use 60 or more. Use delayMinutes 1-10 for short preparation.");
-        prompt.AppendLine("- For gifts, include a gift action only when the NPC visibly gives something now. Do not convert later mail/return gift promises into immediate gift actions.");
+        prompt.AppendLine("- For giftDecision, set isGiftReply=true only when the NPC visibly gives or offers the farmer an item now. timing=now means the player should receive the item immediately.");
+        prompt.AppendLine("- If the NPC promises to mail, send, bring later, give tomorrow, or return the favor some other time, set timing=mail/later/promise and include no gift action.");
+        prompt.AppendLine("- For gifts, include a gift action only when giftDecision isGiftReply=true and timing=now. If a specific in-game item is named, fill itemId and itemLabel when known; otherwise leave them empty so LivingNPCs can choose safely.");
         prompt.AppendLine("- For helpRequests, only item_request is allowed, and requestedItemId must come from the currently reasonable item list in context. If no listed item fits, return no help request.");
         prompt.AppendLine("- For helpRequestUpdates, use only when the farmer clearly accepts, declines, advances, or fulfills an existing request.");
         prompt.AppendLine("- Use fulfilled only when the farmer physically gives or hands over the requested item now. Saying they have it at home, will bring it later, will get it at the destination, or promising to bring it only means accepted/advanced at most; it is not fulfilled.");
         prompt.AppendLine("- Output no markdown, no explanation, and no visible dialogue.");
         return prompt.ToString();
+    }
+
+    internal static bool TryAddActionFromGiftDecisionForTesting(
+        ConversationAnalysis supplemental,
+        string responseText,
+        string visibleNpcReply,
+        out string detail)
+    {
+        return TryAddActionFromGiftDecision(supplemental, responseText, visibleNpcReply, out detail);
+    }
+
+    private static bool TryAddActionFromGiftDecision(
+        ConversationAnalysis supplemental,
+        string responseText,
+        string visibleNpcReply,
+        out string detail)
+    {
+        detail = string.Empty;
+        if (supplemental == null)
+        {
+            detail = "no supplemental analysis";
+            return false;
+        }
+
+        if (supplemental.Actions.Count > 0)
+        {
+            detail = "actions already contained a world action";
+            return false;
+        }
+
+        JObject json;
+        try
+        {
+            string jsonText = ExtractFirstJsonObject(responseText);
+            if (string.IsNullOrWhiteSpace(jsonText))
+            {
+                detail = "no JSON object in decision response";
+                return false;
+            }
+
+            json = JObject.Parse(jsonText);
+        }
+        catch (Exception ex)
+        {
+            detail = $"giftDecision parse failed: {ex.Message}";
+            return false;
+        }
+
+        var decision = json["giftDecision"] as JObject
+            ?? json["gift"] as JObject
+            ?? json["gift_reply"] as JObject;
+        if (decision == null)
+        {
+            detail = "no giftDecision object";
+            return false;
+        }
+
+        bool isGiftReply = ReadBoolean(decision, "isGiftReply", "isGift", "shouldGiveGift");
+        string timing = NormalizeGiftTiming(
+            decision.Value<string>("timing")
+            ?? decision.Value<string>("giftTiming")
+            ?? decision.Value<string>("when"));
+        if (!isGiftReply || timing != "now")
+        {
+            detail = $"giftDecision not immediate (isGiftReply={isGiftReply}, timing={timing})";
+            return false;
+        }
+
+        string tier = NormalizeGiftTier(decision.Value<string>("tier") ?? decision.Value<string>("giftTier"));
+        string itemId = (decision.Value<string>("itemId")
+            ?? decision.Value<string>("specificItemId")
+            ?? decision.Value<string>("requestedItemId")
+            ?? string.Empty).Trim();
+        string itemLabel = (decision.Value<string>("itemLabel")
+            ?? decision.Value<string>("specificItemLabel")
+            ?? decision.Value<string>("requestedItemLabel")
+            ?? string.Empty).Trim();
+        if (!string.IsNullOrWhiteSpace(itemLabel)
+            && !visibleNpcReply.Contains(itemLabel, StringComparison.OrdinalIgnoreCase))
+        {
+            detail = $"giftDecision named {itemLabel}, but visible reply did not";
+            return false;
+        }
+
+        string reason = decision.Value<string>("reason")?.Trim();
+        supplemental.Actions.Add(new ConversationWorldActionRequest
+        {
+            Type = tier == "meaningful" ? "give_meaningful_gift" : "give_small_gift",
+            ItemId = itemId,
+            ItemLabel = itemLabel,
+            Reason = string.IsNullOrWhiteSpace(reason)
+                ? "action decision pass judged visible reply as an immediate gift"
+                : reason
+        });
+        detail = $"converted giftDecision to {supplemental.Actions[0].Type}, itemId={itemId}, itemLabel={itemLabel}";
+        return true;
     }
 
     private static bool TryAddActionFromTravelDecision(
@@ -515,7 +618,7 @@ internal static class LivingNpcActionDecisionPass
         }
 
         ModEntry.SMonitor.Log(
-            $"LivingNPCs action decision pass for {character?.Name ?? "unknown"}: outcome={diagnostics.Outcome}, success={diagnostics.ResponseSuccess}, merged={diagnostics.Merged}, detail={diagnostics.TravelDecisionDetail}, error={diagnostics.ErrorMessage}",
+            $"LivingNPCs action decision pass for {character?.Name ?? "unknown"}: outcome={diagnostics.Outcome}, success={diagnostics.ResponseSuccess}, merged={diagnostics.Merged}, detail={diagnostics.DecisionDetail}, error={diagnostics.ErrorMessage}",
             StardewModdingAPI.LogLevel.Debug);
     }
 
@@ -620,6 +723,72 @@ internal static class LivingNpcActionDecisionPass
         };
     }
 
+    private static string NormalizeGiftTiming(string value)
+    {
+        return value?.Trim().ToLowerInvariant() switch
+        {
+            "now" => "now",
+            "immediate" => "now",
+            "immediately" => "now",
+            "accepted_now" => "now",
+            "give_now" => "now",
+            "given_now" => "now",
+            "later" => "later",
+            "accepted_later" => "later",
+            "deferred" => "later",
+            "future" => "later",
+            "tomorrow" => "later",
+            "mail" => "mail",
+            "mailbox" => "mail",
+            "send" => "mail",
+            "promise" => "promise",
+            "promised" => "promise",
+            "none" => "none",
+            _ => string.Empty
+        };
+    }
+
+    private static string NormalizeGiftTier(string value)
+    {
+        return value?.Trim().ToLowerInvariant() switch
+        {
+            "meaningful" => "meaningful",
+            "large" => "meaningful",
+            "special" => "meaningful",
+            _ => "small"
+        };
+    }
+
+    private static bool ReadBoolean(JObject obj, params string[] names)
+    {
+        foreach (string name in names)
+        {
+            JToken token = obj[name];
+            if (token == null)
+            {
+                continue;
+            }
+
+            if (token.Type == JTokenType.Boolean)
+            {
+                return token.Value<bool>();
+            }
+
+            string value = token.Value<string>()?.Trim().ToLowerInvariant();
+            if (value is "true" or "yes" or "y" or "1")
+            {
+                return true;
+            }
+
+            if (value is "false" or "no" or "n" or "0")
+            {
+                return false;
+            }
+        }
+
+        return false;
+    }
+
     private static string NormalizeTravelTarget(string value)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -702,7 +871,7 @@ internal sealed class LivingNpcActionDecisionDiagnostics
     public int ResponseCharacters { get; set; }
     public int TimeoutSeconds { get; set; }
     public string ErrorMessage { get; set; } = string.Empty;
-    public string TravelDecisionDetail { get; set; } = string.Empty;
+    public string DecisionDetail { get; set; } = string.Empty;
     public string Prompt { get; set; } = string.Empty;
     public string RawResponse { get; set; } = string.Empty;
     public string ParseText { get; set; } = string.Empty;
@@ -722,7 +891,7 @@ internal sealed class LivingNpcActionDecisionDiagnostics
             this.ResponseCharacters,
             this.TimeoutSeconds,
             this.ErrorMessage,
-            this.TravelDecisionDetail
+            this.DecisionDetail
         });
     }
 }
