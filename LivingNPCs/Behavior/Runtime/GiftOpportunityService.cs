@@ -90,7 +90,6 @@ internal sealed class GiftOpportunityService
             WorldContext.For(npc).FriendshipHearts,
             this.config.MaxPendingHelpRequestsPerNpc,
             this.config.HelpRequestCooldownDays,
-            this.config.MinRelationshipTrustForHelpRequests,
             Game1.Date.TotalDays
         );
         if (!readiness.Allowed)

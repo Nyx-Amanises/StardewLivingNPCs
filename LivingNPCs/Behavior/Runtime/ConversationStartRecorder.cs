@@ -235,9 +235,7 @@ internal sealed class ConversationStartRecorder
 
             if (request.Status == "Fulfilled" && request.RewardMoneyGranted)
             {
-                lines.Add(request.RewardMoneyByMail
-                    ? $"- LivingNPCs scheduled a system mail reward of {request.RewardMoney}g for tomorrow."
-                    : $"- LivingNPCs already granted a system money reward of {request.RewardMoney}g.");
+                lines.Add($"- LivingNPCs already granted a system money reward of {request.RewardMoney}g.");
             }
             else if (request.Status == "Fulfilled" && request.RewardMoneyClaimQueued)
             {

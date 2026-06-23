@@ -18,14 +18,13 @@ internal static class BehaviorPromptContextBuilder
         IReadOnlyList<CommunityImpressionSelection> communityImpressions,
         int maxPendingHelpRequestsPerNpc,
         int helpRequestCooldownDays,
-        int minRelationshipTrustForHelpRequests,
         int currentTotalDays)
     {
         if (ModEntry.ActiveConfig.ConcisePromptContext)
         {
             return BuildConcisePromptContext(
                 npc, recentEntries, state, world, disposition, emotionalStyle, recallPlan,
-                maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, minRelationshipTrustForHelpRequests, currentTotalDays);
+                maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, currentTotalDays);
         }
 
         var prompt = new StringBuilder();
@@ -79,7 +78,7 @@ internal static class BehaviorPromptContextBuilder
             prompt.AppendLine($"- Community impressions about the farmer's ties with other NPCs: {MemoryRecallService.FormatCommunityImpressionPromptLabel(npc, communityImpressions)}.");
             prompt.AppendLine($"- Stable community circles this NPC belongs to: {FormatSocialCirclePromptLabel(npc)}.");
             prompt.AppendLine("- Help-request lifecycle: Offered means the NPC has asked but the farmer has not accepted; Pending means accepted and active; only Pending requests should be treated like tasks.");
-            prompt.AppendLine($"- Help-request readiness: {BuildHelpRequestReadinessLabel(state, world, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, minRelationshipTrustForHelpRequests, currentTotalDays)}.");
+            prompt.AppendLine($"- Help-request readiness: {BuildHelpRequestReadinessLabel(state, world, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, currentTotalDays)}.");
             prompt.AppendLine($"- Help-request fit: {HelpRequestAdvisor.BuildPromptLabel(npc, world.Progression)}");
             prompt.AppendLine($"- Conflict memory: {state.ConflictPromptLabel}.");
             prompt.AppendLine($"- Personal memory context: {state.FarmerNicknamePromptLabel}.");
@@ -132,7 +131,6 @@ internal static class BehaviorPromptContextBuilder
         MemoryRecallPlan recallPlan,
         int maxPendingHelpRequestsPerNpc,
         int helpRequestCooldownDays,
-        int minRelationshipTrustForHelpRequests,
         int currentTotalDays)
     {
         var prompt = new StringBuilder();
@@ -168,13 +166,12 @@ internal static class BehaviorPromptContextBuilder
                 world.FriendshipHearts,
                 maxPendingHelpRequestsPerNpc,
                 helpRequestCooldownDays,
-                minRelationshipTrustForHelpRequests,
                 currentTotalDays).Allowed;
         if (helpRelevant)
         {
             AppendIfMeaningful(prompt, "Help requests", state.HelpRequestPromptLabel);
             prompt.AppendLine("- Help-request lifecycle: Offered = asked but not accepted; Pending = accepted/active; only Pending is a task.");
-            prompt.AppendLine($"- Help-request readiness: {BuildHelpRequestReadinessLabel(state, world, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, minRelationshipTrustForHelpRequests, currentTotalDays)}.");
+            prompt.AppendLine($"- Help-request readiness: {BuildHelpRequestReadinessLabel(state, world, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, currentTotalDays)}.");
             prompt.AppendLine($"- Help-request fit: {HelpRequestAdvisor.BuildPromptLabel(npc, world.Progression)}");
         }
 
@@ -574,7 +571,6 @@ internal static class BehaviorPromptContextBuilder
         WorldContextSnapshot world,
         int maxPendingHelpRequestsPerNpc,
         int helpRequestCooldownDays,
-        int minRelationshipTrustForHelpRequests,
         int currentTotalDays)
     {
         var result = HelpRequestReadinessRules.Evaluate(
@@ -582,7 +578,6 @@ internal static class BehaviorPromptContextBuilder
             world.FriendshipHearts,
             maxPendingHelpRequestsPerNpc,
             helpRequestCooldownDays,
-            minRelationshipTrustForHelpRequests,
             currentTotalDays
         );
         return result.Allowed

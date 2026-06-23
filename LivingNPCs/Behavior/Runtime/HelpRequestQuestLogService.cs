@@ -134,8 +134,7 @@ internal sealed class HelpRequestQuestLogService
         return request.Status == "Fulfilled"
             && request.RewardMoneyClaimQueued
             && request.RewardMoney > 0
-            && !request.RewardMoneyGranted
-            && !request.RewardMoneyByMail;
+            && !request.RewardMoneyGranted;
     }
 
     private static bool IsClaimedMoneyReward(
@@ -153,9 +152,6 @@ internal sealed class HelpRequestQuestLogService
         request.RewardMoneyGranted = true;
         request.RewardMoneyClaimQueued = false;
         request.RewardMoneyQuestPosted = false;
-        request.RewardMoneyByMail = false;
-        request.RewardMoneyMailKey = string.Empty;
-        request.RewardMoneyMailTotalDays = -1;
         request.LastUpdatedTotalDays = Game1.Date.TotalDays;
         request.LastUpdatedTimeOfDay = Game1.timeOfDay;
     }

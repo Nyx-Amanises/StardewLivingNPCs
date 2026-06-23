@@ -76,7 +76,6 @@ internal static class HelpRequestMemoryRules
         LivingNpcState state,
         int maxPendingHelpRequestsPerNpc,
         int helpRequestCooldownDays,
-        int minRelationshipTrustForHelpRequests,
         out string reason)
     {
         var world = WorldContext.For(npc);
@@ -85,7 +84,6 @@ internal static class HelpRequestMemoryRules
             world.FriendshipHearts,
             maxPendingHelpRequestsPerNpc,
             helpRequestCooldownDays,
-            minRelationshipTrustForHelpRequests,
             Game1.Date.TotalDays
         );
         reason = result.Reason;
@@ -97,7 +95,6 @@ internal static class HelpRequestMemoryRules
         int friendshipHearts,
         int maxPendingHelpRequestsPerNpc,
         int helpRequestCooldownDays,
-        int minRelationshipTrustForHelpRequests,
         int currentTotalDays)
     {
         return HelpRequestReadinessRules.Evaluate(
@@ -105,7 +102,6 @@ internal static class HelpRequestMemoryRules
             friendshipHearts,
             maxPendingHelpRequestsPerNpc,
             helpRequestCooldownDays,
-            minRelationshipTrustForHelpRequests,
             currentTotalDays
         );
     }

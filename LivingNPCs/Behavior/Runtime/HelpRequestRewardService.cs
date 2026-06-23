@@ -166,9 +166,6 @@ internal sealed class HelpRequestRewardService
     {
         int amount = Math.Clamp(request.RewardMoney <= 0 ? 200 : request.RewardMoney, 200, 10000);
         request.RewardMoney = amount;
-        request.RewardMoneyByMail = false;
-        request.RewardMoneyMailKey = string.Empty;
-        request.RewardMoneyMailTotalDays = -1;
         request.RewardMoneyGranted = false;
         request.RewardMoneyClaimQueued = true;
         request.RewardMoneyQuestPosted = false;

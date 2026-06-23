@@ -276,9 +276,6 @@ internal sealed class NpcHelpRequestFact
     public bool RewardMoneyGranted { get; set; }
     public bool RewardMoneyClaimQueued { get; set; }
     public bool RewardMoneyQuestPosted { get; set; }
-    public bool RewardMoneyByMail { get; set; }
-    public string RewardMoneyMailKey { get; set; } = string.Empty;
-    public int RewardMoneyMailTotalDays { get; set; } = -1;
     public bool RewardGiftGiven { get; set; }
     public bool SpecialFollowUpPlanned { get; set; }
     public int TimesReinforced { get; set; }

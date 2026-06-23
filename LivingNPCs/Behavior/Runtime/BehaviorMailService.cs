@@ -11,7 +11,6 @@ namespace LivingNPCs.Behavior;
 
 internal sealed class BehaviorMailService
 {
-    private const string HelpRequestRewardMailKeyPrefix = "LivingNPCs.HelpRequestReward.";
     private const string GiftMailKeyPrefix = "LivingNPCs.GiftMail.";
     private const int ProfiledMailVariantCount = 3;
     private const int MaxGenerationAttempts = 3;
@@ -38,15 +37,6 @@ internal sealed class BehaviorMailService
 
     public void ApplyMailData(IDictionary<string, string> data)
     {
-        foreach (var request in this.GetHelpRequestRewardMailRequests())
-        {
-            string key = this.GetHelpRequestRewardMailKey(request);
-            if (!string.IsNullOrWhiteSpace(key))
-            {
-                data[key] = BuildHelpRequestRewardMailText(request);
-            }
-        }
-
         foreach (var mail in this.GetGiftMailRequests())
         {
             string key = GetGiftMailKey(mail);
@@ -55,46 +45,6 @@ internal sealed class BehaviorMailService
                 data[key] = BuildGiftMailText(mail);
             }
         }
-    }
-
-    public bool ShouldSendHelpRequestMoneyByMail(NpcHelpRequestFact request)
-    {
-        int chance = request.RewardMoney switch
-        {
-            >= 5000 => 60,
-            >= 1000 => 45,
-            _ => 25
-        };
-
-        unchecked
-        {
-            string seed = $"{request.QuestLogId}:{request.Summary}:{request.RequestedItemId}:{request.RewardMoney}";
-            int hash = 17;
-            foreach (char character in seed)
-            {
-                hash = (hash * 31) + character;
-            }
-
-            return Math.Abs(hash % 100) < chance;
-        }
-    }
-
-    public void ScheduleHelpRequestMoneyRewardMail(NpcHelpRequestFact request)
-    {
-        string mailKey = this.GetHelpRequestRewardMailKey(request);
-        request.RewardMoneyByMail = true;
-        request.RewardMoneyMailKey = mailKey;
-        request.RewardMoneyMailTotalDays = Game1.Date.TotalDays + 1;
-        request.RewardMoneyGranted = true;
-        request.RewardMoneyClaimQueued = false;
-        request.RewardMoneyQuestPosted = false;
-
-        if (!Game1.player.mailForTomorrow.Contains(mailKey) && !Game1.player.mailReceived.Contains(mailKey))
-        {
-            Game1.player.mailForTomorrow.Add(mailKey);
-        }
-
-        this.InvalidateMailCache();
     }
 
     public void InvalidateMailCache()
@@ -158,8 +108,7 @@ internal sealed class BehaviorMailService
         }
 
         int livingEntries = mailData.Keys.Count(k =>
-            k.StartsWith(GiftMailKeyPrefix, StringComparison.OrdinalIgnoreCase)
-            || k.StartsWith(HelpRequestRewardMailKeyPrefix, StringComparison.OrdinalIgnoreCase));
+            k.StartsWith(GiftMailKeyPrefix, StringComparison.OrdinalIgnoreCase));
         var mails = this.GetGiftMailRequests().ToList();
         lines.Add($"已追踪礼物信 {mails.Count} 封；邮箱 {Game1.player.mailbox.Count} 封，明日 {Game1.player.mailForTomorrow.Count} 封。当前是第 {Game1.Date.TotalDays} 天。");
         lines.Add($"强制重载后 Data/mail 共 {mailData.Count} 条，其中 LivingNPCs 条目 {livingEntries} 条（正常应≈已追踪数；若为 0 则说明 Data/mail 编辑根本没生效）。");
@@ -393,43 +342,6 @@ internal sealed class BehaviorMailService
         {
             state.RecentAiGiftItemIds.RemoveRange(3, state.RecentAiGiftItemIds.Count - 3);
         }
-    }
-
-    private IEnumerable<NpcHelpRequestFact> GetHelpRequestRewardMailRequests()
-    {
-        return this.memory.GetTrackedStates()
-            .SelectMany(state => state.HelpRequests)
-            .Where(request => request.RewardMoneyByMail
-                && request.RewardMoney > 0
-                && !string.IsNullOrWhiteSpace(request.RewardMoneyMailKey));
-    }
-
-    private string GetHelpRequestRewardMailKey(NpcHelpRequestFact request)
-    {
-        if (!string.IsNullOrWhiteSpace(request.RewardMoneyMailKey))
-        {
-            return request.RewardMoneyMailKey.Trim();
-        }
-
-        string id = string.IsNullOrWhiteSpace(request.QuestLogId)
-            ? SanitizeFileName($"{request.NpcDisplayName}-{request.Summary}")
-            : request.QuestLogId.Trim();
-        return $"{HelpRequestRewardMailKeyPrefix}{id}";
-    }
-
-    private static string BuildHelpRequestRewardMailText(NpcHelpRequestFact request)
-    {
-        int amount = Math.Clamp(request.RewardMoney <= 0 ? 200 : request.RewardMoney, 200, 10000);
-        string npcName = string.IsNullOrWhiteSpace(request.NpcDisplayName)
-            ? I18n.Get("help.mail.fallbackNpc")
-            : request.NpcDisplayName.Trim();
-        string itemLabel = string.IsNullOrWhiteSpace(request.RequestedItemLabel)
-            ? I18n.Get("help.mail.fallbackItem")
-            : request.RequestedItemLabel.Trim();
-        string body = I18n.Get("help.mail.body.rewardMoney", new { npc = npcName, item = itemLabel });
-        string title = I18n.Get("help.mail.title.rewardMoney");
-
-        return $"{EnsureSigned(body, "LivingNPCs")}%money {amount} %%[#]{title}";
     }
 
     private IEnumerable<NpcGiftMailFact> GetGiftMailRequests()

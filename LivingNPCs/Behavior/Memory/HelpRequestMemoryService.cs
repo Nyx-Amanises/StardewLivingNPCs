@@ -116,8 +116,7 @@ internal sealed class HelpRequestMemoryService
         ValleyTalkHelpRequestCandidate candidate,
         string playerText,
         int maxPendingHelpRequestsPerNpc,
-        int helpRequestCooldownDays,
-        int minRelationshipTrustForHelpRequests)
+        int helpRequestCooldownDays)
     {
         string normalizedSummary = NormalizeMemorySummary(candidate.Summary);
         if (string.IsNullOrWhiteSpace(normalizedSummary))
@@ -149,7 +148,6 @@ internal sealed class HelpRequestMemoryService
                 state,
                 maxPendingHelpRequestsPerNpc,
                 helpRequestCooldownDays,
-                minRelationshipTrustForHelpRequests,
                 out _))
         {
             return false;
@@ -312,8 +310,7 @@ internal sealed class HelpRequestMemoryService
         string playerText,
         string npcResponse,
         int maxPendingHelpRequestsPerNpc,
-        int helpRequestCooldownDays,
-        int minRelationshipTrustForHelpRequests)
+        int helpRequestCooldownDays)
     {
         if (string.IsNullOrWhiteSpace(npcResponse))
         {
@@ -355,8 +352,7 @@ internal sealed class HelpRequestMemoryService
                 candidate,
                 playerText,
                 maxPendingHelpRequestsPerNpc,
-                helpRequestCooldownDays,
-                minRelationshipTrustForHelpRequests);
+                helpRequestCooldownDays);
         }
 
         return false;

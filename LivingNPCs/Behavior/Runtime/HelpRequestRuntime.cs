@@ -119,13 +119,6 @@ internal sealed class HelpRequestRuntime
 
     private static string BuildHelpRequestFollowUp(NpcHelpRequestFact request)
     {
-        if (request.RewardMoneyByMail)
-        {
-            return request.Type == "question_request"
-                ? I18n.Get("help.followUp.questionMail")
-                : I18n.Get("help.followUp.itemMail");
-        }
-
         if (request.RewardMoney >= 1000)
         {
             return request.Type == "question_request"

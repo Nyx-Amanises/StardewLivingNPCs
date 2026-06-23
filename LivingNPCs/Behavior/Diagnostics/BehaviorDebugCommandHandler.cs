@@ -124,8 +124,7 @@ internal sealed class BehaviorDebugCommandHandler
             this.config.PromptMemoryEntries,
             this.config.EnableNpcState,
             this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
-            this.config.HelpRequestCooldownDays,
-            this.config.MinRelationshipTrustForHelpRequests
+            this.config.HelpRequestCooldownDays
         );
         this.monitor.Log(I18n.Get("debug.promptPreview", new { npc = npc.displayName, context = promptContext }), LogLevel.Info);
     }

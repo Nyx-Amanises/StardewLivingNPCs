@@ -78,7 +78,6 @@ public sealed class HelpRequestGateTests
         LivingNpcState state,
         int maxPendingRequests = 1,
         int cooldownDays = 3,
-        int minTrust = 60,
         int friendshipHearts = 6)
     {
         return BehaviorMemory.EvaluateHelpRequestReadiness(
@@ -86,7 +85,6 @@ public sealed class HelpRequestGateTests
             friendshipHearts,
             maxPendingRequests,
             cooldownDays,
-            minTrust,
             TestScenarios.Today
         );
     }

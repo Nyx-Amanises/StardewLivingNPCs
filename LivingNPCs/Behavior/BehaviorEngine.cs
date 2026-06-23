@@ -560,7 +560,6 @@ internal sealed class BehaviorEngine
             this.config.MaxMemoryEntriesPerNpc,
             this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
             this.config.HelpRequestCooldownDays,
-            this.config.MinRelationshipTrustForHelpRequests,
             this.config.EnableAiDialogueFriendship ? this.config.MaxAiDialogueFriendshipPerNpcPerDay : 0,
             this.config.MaxDialogueBehaviorInfluenceDays
         );
@@ -1125,8 +1124,7 @@ internal sealed class BehaviorEngine
             this.config.PromptMemoryEntries,
             this.config.EnableNpcState,
             this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
-            this.config.HelpRequestCooldownDays,
-            this.config.MinRelationshipTrustForHelpRequests
+            this.config.HelpRequestCooldownDays
         );
         string giftOpportunityContext = this.BuildGiftOpportunityPromptContext(npc);
         if (!string.IsNullOrWhiteSpace(giftOpportunityContext))
@@ -1360,8 +1358,7 @@ internal sealed class BehaviorEngine
             this.config.PromptMemoryEntries,
             this.config.EnableNpcState,
             this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
-            this.config.HelpRequestCooldownDays,
-            this.config.MinRelationshipTrustForHelpRequests
+            this.config.HelpRequestCooldownDays
         );
         bool pushedToValleyTalk = this.valleyTalkBridge.PushBehaviorContext(npc, promptContext);
 

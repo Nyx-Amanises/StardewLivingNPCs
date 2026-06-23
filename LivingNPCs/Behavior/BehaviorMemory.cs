@@ -259,7 +259,6 @@ internal sealed class BehaviorMemory
         int maxEntriesPerNpc,
         int maxPendingHelpRequestsPerNpc,
         int helpRequestCooldownDays,
-        int minRelationshipTrustForHelpRequests,
         int maxExtraFriendshipPerDay,
         int maxDialogueBehaviorInfluenceDays)
     {
@@ -319,8 +318,7 @@ internal sealed class BehaviorMemory
                     candidate,
                     playerText,
                     maxPendingHelpRequestsPerNpc,
-                    helpRequestCooldownDays,
-                    minRelationshipTrustForHelpRequests))
+                    helpRequestCooldownDays))
             {
                 storedHelpRequests++;
                 var entry = this.CreateEntry(
@@ -342,8 +340,7 @@ internal sealed class BehaviorMemory
                 playerText,
                 npcResponse,
                 maxPendingHelpRequestsPerNpc,
-                helpRequestCooldownDays,
-                minRelationshipTrustForHelpRequests))
+                helpRequestCooldownDays))
         {
             storedHelpRequests++;
             this.AddEntry(
@@ -866,8 +863,7 @@ internal sealed class BehaviorMemory
         int maxEntries,
         bool includeState,
         int maxPendingHelpRequestsPerNpc,
-        int helpRequestCooldownDays,
-        int minRelationshipTrustForHelpRequests)
+        int helpRequestCooldownDays)
     {
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
         var disposition = NpcDisposition.For(npc);
@@ -901,7 +897,6 @@ internal sealed class BehaviorMemory
             communityImpressions,
             maxPendingHelpRequestsPerNpc,
             helpRequestCooldownDays,
-            minRelationshipTrustForHelpRequests,
             Game1.Date.TotalDays
         );
         this.MarkMemoriesRecalled(recallPlan);
@@ -1301,7 +1296,6 @@ internal sealed class BehaviorMemory
         int friendshipHearts,
         int maxPendingHelpRequestsPerNpc,
         int helpRequestCooldownDays,
-        int minRelationshipTrustForHelpRequests,
         int currentTotalDays)
     {
         return HelpRequestMemoryRules.EvaluateReadiness(
@@ -1309,7 +1303,6 @@ internal sealed class BehaviorMemory
             friendshipHearts,
             maxPendingHelpRequestsPerNpc,
             helpRequestCooldownDays,
-            minRelationshipTrustForHelpRequests,
             currentTotalDays
         );
     }

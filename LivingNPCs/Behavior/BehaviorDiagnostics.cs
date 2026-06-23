@@ -19,8 +19,7 @@ internal static class BehaviorDiagnostics
             config.PromptMemoryEntries,
             config.EnableNpcState,
             config.EnableHelpRequests ? config.MaxPendingHelpRequestsPerNpc : 0,
-            config.HelpRequestCooldownDays,
-            config.MinRelationshipTrustForHelpRequests
+            config.HelpRequestCooldownDays
         );
         var world = WorldContext.For(npc, memory.GetState(npc));
 

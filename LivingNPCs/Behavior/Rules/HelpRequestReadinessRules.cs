@@ -14,7 +14,6 @@ internal static class HelpRequestReadinessRules
         int friendshipHearts,
         int maxPendingHelpRequestsPerNpc,
         int helpRequestCooldownDays,
-        int minRelationshipTrustForHelpRequests,
         int currentTotalDays)
     {
         if (maxPendingHelpRequestsPerNpc <= 0)
