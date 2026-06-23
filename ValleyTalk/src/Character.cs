@@ -26,7 +26,17 @@ public class Character
     {
         "Alesia", "Andy", "Apples", "Bear", "Camilla", "Charlie", "CharlieChicken", "Claire", "Dusty", "Gunther", "GuntherSilvian", "Isaac", "Jadu", "Jolyne",
         "Lance", "Magnus", "Martin", "Morgan", "Morris", "Olivia", "Scarlett", "Sophia", "Susan", "Victor", "Gil",
-        "MarlonFay", "MrQi", "Qi"
+        "MarlonFay", "MorrisTod", "HankSVE", "MrQi", "Qi"
+    };
+    // SVE ships some characters under suffixed internal IDs (e.g. "GuntherSilvian"), but their curated
+    // ValleyTalk bios are registered under the vanilla short name ("Gunther"). Map the internal ID to the
+    // bio name so the curated bio actually applies instead of falling back to a generated Data/Characters one.
+    private static readonly Dictionary<string,string> SveBioNameAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["GuntherSilvian"] = "Gunther",
+        ["MarlonFay"] = "Marlon",
+        ["MorrisTod"] = "Morris",
+        ["HankSVE"] = "Hank",
     };
     private StardewEventHistory eventHistory = new();
     private DialogueFile dialogueData;
@@ -58,7 +68,7 @@ public class Character
     public Character(string name, NPC stardewNpc)
     {
         Name = name;
-        BioFilePath = $"{VtConstants.BiosPath}/{RemoveDotSuffixes(Name)}";
+        BioFilePath = $"{VtConstants.BiosPath}/{ResolveBioName(Name)}";
         StardewNpc = stardewNpc;
 
         ModEntry.SHelper.Events.Content.AssetRequested += (sender, e) =>
@@ -84,6 +94,14 @@ public class Character
         var suffixCharacters = new char[] {'·', '•' ,'-' };
         var result = name.TrimEnd(suffixCharacters);
         return result;
+    }
+
+    // Resolve the bio asset base name: strip trailing separators, then remap known SVE internal IDs
+    // to the short name their curated bio is registered under.
+    private string ResolveBioName(string name)
+    {
+        string baseName = RemoveDotSuffixes(name);
+        return SveBioNameAliases.TryGetValue(baseName, out string alias) ? alias : baseName;
     }
 
     private bool IsExpansionCompatibilityEnabledForCharacter()
