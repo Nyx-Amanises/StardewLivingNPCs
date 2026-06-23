@@ -83,6 +83,11 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
 
         LlmThinking.AddOpenAiCompatibleThinkingParameters(body, modelName, thinkingLevel);
 
+        if (LlmThinking.IsOff(thinkingLevel))
+        {
+            body["response_format"] = new JObject { ["type"] = "json_object" };
+        }
+
         if (useInstructionsRequest)
         {
             body["instructions"] = systemPromptString;

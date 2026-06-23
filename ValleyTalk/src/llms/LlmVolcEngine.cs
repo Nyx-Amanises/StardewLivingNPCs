@@ -81,6 +81,9 @@ internal class LlmVolcEngine : Llm, IGetModelNames
                 // 报参数错误。直接 HTTP 调用时 thinking 与 model/messages 同级；OpenAI SDK 才需 extra_body。
                 // null 会被序列化忽略，主对话请求体保持不变。
                 thinking = (disableThinking && ModelSupportsDisablingThinking(modelName)) ? (object)new { type = "disabled" } : null,
+                // Fast JSON passes (routing/gift-mail/action) request strict JSON to stop weak models
+                // wrapping the object in prose. Only on the disableThinking path so chat replies are untouched.
+                response_format = disableThinking ? (object)new { type = "json_object" } : null,
                 messages = new PromptElement[]
                 { 
                     new()

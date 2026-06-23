@@ -231,11 +231,12 @@ internal class LlmGemini : Llm, IGetModelNames
         bool disableThinking)
     {
         string thinkingLevel = LlmThinking.ForCall(disableThinking);
+        bool forceJson = LlmThinking.IsOff(thinkingLevel);
         JObject thinkingConfig = LlmThinking.BuildGeminiThinkingConfig(thinkingLevel, modelName);
         if (thinkingConfig != null)
         {
             yield return new GeminiRequestBody(
-                BuildRequestBody(systemPromptString, promptString, n_predict, thinkingConfig),
+                BuildRequestBody(systemPromptString, promptString, n_predict, thinkingConfig, forceJson),
                 true,
                 thinkingLevel,
                 $"thinkingConfig={thinkingConfig.ToString(Formatting.None)}"
@@ -245,7 +246,7 @@ internal class LlmGemini : Llm, IGetModelNames
         if (thinkingConfig == null || !LlmThinking.IsAuto(thinkingLevel))
         {
             yield return new GeminiRequestBody(
-                BuildRequestBody(systemPromptString, promptString, n_predict, thinkingConfig: null),
+                BuildRequestBody(systemPromptString, promptString, n_predict, thinkingConfig: null, forceJson),
                 false,
                 LlmThinking.Auto,
                 string.Empty
@@ -257,7 +258,8 @@ internal class LlmGemini : Llm, IGetModelNames
         string systemPromptString,
         string promptString,
         int n_predict,
-        JObject thinkingConfig)
+        JObject thinkingConfig,
+        bool forceJson = false)
     {
         var generationConfig = new JObject
         {
@@ -268,6 +270,11 @@ internal class LlmGemini : Llm, IGetModelNames
         if (thinkingConfig != null)
         {
             generationConfig["thinkingConfig"] = thinkingConfig;
+        }
+
+        if (forceJson)
+        {
+            generationConfig["responseMimeType"] = "application/json";
         }
 
         var body = new JObject

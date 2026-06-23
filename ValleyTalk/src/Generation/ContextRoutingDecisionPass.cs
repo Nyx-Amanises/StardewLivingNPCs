@@ -208,6 +208,22 @@ internal static class ContextRoutingDecisionPass
             return forced;
         }
 
+        bool isGiftResponse = context.Accept != null;
+        bool hasPlayerText = context.ChatHistory?.Any(line => line.IsPlayerLine) == true;
+        if (isGiftResponse || !hasPlayerText)
+        {
+            var deterministic = ContextRoutingPlan.ConservativeBrief();
+            ApplyDeterministicBoundaries(deterministic, context);
+            deterministic.WithRoutingDiagnostics(isGiftResponse ? "gift-deterministic" : "no-player-text-deterministic", 0, 0);
+            if (ModEntry.Config.Debug)
+            {
+                ModEntry.SMonitor.Log($"Semantic context routing skipped for {character.Name}: {(isGiftResponse ? "gift response" : "no player text")}; using deterministic plan.", StardewModdingAPI.LogLevel.Debug);
+            }
+
+            ExportLog(character.Name, context, deterministic.RoutingOutcome, 0, 0, isGiftResponse ? "gift" : "no-player-text", deterministic.DebugLabel(), string.Empty, string.Empty, string.Empty);
+            return deterministic;
+        }
+
         string conversationKey = BuildConversationKey(character, context);
         string cacheBypassReason = string.Empty;
         if (conversationKey != null && TryReuseCachedPlan(conversationKey, context, out ContextRoutingPlan cachedPlan, out cacheBypassReason))
