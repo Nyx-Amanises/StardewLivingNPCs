@@ -825,6 +825,25 @@ internal sealed class BehaviorMemory
         state.FamiliarityGainedToday += gained;
     }
 
+    private BehaviorMemoryEntry CreateEntry(string npcName, string kind, string action, string reason)
+    {
+        NPC? npc = Game1.getCharacterFromName(npcName);
+        return npc != null
+            ? this.CreateEntry(npc, kind, action, reason)
+            : new BehaviorMemoryEntry
+            {
+                NpcName = npcName,
+                Kind = kind,
+                Action = action,
+                Reason = reason,
+                Year = Game1.year,
+                Season = Game1.season.ToString(),
+                Day = Game1.dayOfMonth,
+                TimeOfDay = Game1.timeOfDay,
+                TotalDays = Game1.Date.TotalDays
+            };
+    }
+
     private BehaviorMemoryEntry CreateEntry(NPC npc, string kind, string action, string reason)
     {
         return new BehaviorMemoryEntry

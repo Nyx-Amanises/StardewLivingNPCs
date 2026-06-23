@@ -34,14 +34,14 @@ internal sealed class HelpRequestMemoryService
     private readonly Action<LivingNpcState, int, int> addFamiliarity;
     private readonly Action<LivingNpcState, int> applyRelationshipTrustDelta;
     private readonly Action<LivingNpcState, string, int, string> applyEmotion;
-    private readonly Func<NPC, string, string, string, BehaviorMemoryEntry> createEntry;
+    private readonly Func<string, string, string, string, BehaviorMemoryEntry> createEntry;
     private readonly Action<BehaviorMemoryEntry, int> addEntry;
 
     public HelpRequestMemoryService(
         Action<LivingNpcState, int, int> addFamiliarity,
         Action<LivingNpcState, int> applyRelationshipTrustDelta,
         Action<LivingNpcState, string, int, string> applyEmotion,
-        Func<NPC, string, string, string, BehaviorMemoryEntry> createEntry,
+        Func<string, string, string, string, BehaviorMemoryEntry> createEntry,
         Action<BehaviorMemoryEntry, int> addEntry)
     {
         this.addFamiliarity = addFamiliarity;
@@ -73,7 +73,7 @@ internal sealed class HelpRequestMemoryService
             );
 
             var entry = this.createEntry(
-                npc,
+                npc.Name,
                 "HelpRequest",
                 fullyFulfilled ? "Fulfilled" : "Advanced",
                 request.Resolution
