@@ -1,5 +1,6 @@
 using HarmonyLib;
 using StardewValley;
+using System.Linq;
 
 namespace ValleyTalk
 {
@@ -9,25 +10,64 @@ namespace ValleyTalk
         public static bool Prefix(ref NPC __instance, ref bool __result, int heartLevel, bool noPreface)
         {
             ModEntry.SMonitor.Log($"NPC {__instance.Name} checking for new dialogue at heart level {heartLevel}", StardewModdingAPI.LogLevel.Trace);
-            if (!DialogueBuilder.Instance.PatchPassiveNpc(__instance, ModEntry.Config.GeneralFrequency, true))
+            return true;
+        }
+
+        public static void Postfix(ref NPC __instance, ref bool __result, int heartLevel, bool noPreface)
+        {
+            if (!__result || !DialogueBuilder.Instance.PatchPassiveNpc(__instance, ModEntry.Config.GeneralFrequency, true))
             {
-                return true;
+                return;
             }
 
-            // Check network availability early (Android only)
             if (!NetworkAvailabilityChecker.IsNetworkAvailableWithRetry())
             {
                 ModEntry.SMonitor.Log($"Network not available, skipping AI new dialogue check for {__instance.Name}", StardewModdingAPI.LogLevel.Trace);
-                return true; // Use default behavior
+                return;
             }
 
-            if (Game1.player.currentLocation.Name == "Saloon" || Game1.player.currentLocation.Name == "IslandSouth")
+            if (AsyncBuilder.Instance.AwaitingGeneration && AsyncBuilder.Instance.SpeakingNpc == __instance)
             {
-                var newDialogue = new Dialogue(__instance, Game1.player.currentLocation.Name, SldConstants.DialogueGenerationTag);
-                __instance.CurrentDialogue.Push(newDialogue);
-                __result = true;
+                return;
             }
-            return true;
+
+            var currentDialogue = __instance.CurrentDialogue;
+            if (currentDialogue == null || currentDialogue.Count == 0)
+            {
+                return;
+            }
+
+            var vanillaDialogue = currentDialogue.Peek();
+            if (vanillaDialogue?.dialogues == null || vanillaDialogue.dialogues.Count == 0)
+            {
+                return;
+            }
+
+            if (vanillaDialogue.dialogues.First().Text == SldConstants.DialogueGenerationTag)
+            {
+                return;
+            }
+
+            string originalLine = string.Join(
+                " ",
+                vanillaDialogue.dialogues
+                    .Select(line => line.Text)
+                    .Where(text => !string.IsNullOrWhiteSpace(text))
+            );
+            string generatedDialogueText = string.IsNullOrWhiteSpace(originalLine)
+                ? SldConstants.DialogueGenerationTag
+                : $"{SldConstants.DialogueGenerationTag}#{originalLine}";
+            string dialogueKey = !string.IsNullOrWhiteSpace(vanillaDialogue.temporaryDialogueKey)
+                ? vanillaDialogue.temporaryDialogueKey
+                : $"{(noPreface ? "default" : "heart")}_{heartLevel}";
+
+            currentDialogue.Pop();
+            currentDialogue.Push(new Dialogue(__instance, dialogueKey, generatedDialogueText)
+            {
+                removeOnNextMove = vanillaDialogue.removeOnNextMove,
+                temporaryDialogueKey = vanillaDialogue.temporaryDialogueKey
+            });
+            ModEntry.SMonitor.Log($"NPC {__instance.Name} replaced normal right-click dialogue with AI generation placeholder.", StardewModdingAPI.LogLevel.Trace);
         }
     }
 }
