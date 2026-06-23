@@ -693,6 +693,21 @@ public class Character
                         result.IsSuccess && resultsInternal.Length > 0 ? "parsed" : result.IsSuccess ? "unparseable" : "failed",
                         actionDecisionDiagnostics
                     );
+                    PromptLogExporter.Append(
+                        Name,
+                        context,
+                        systemPrompt,
+                        gameConstantContext,
+                        npcConstantContext,
+                        corePrompt,
+                        instructions,
+                        command,
+                        responseStart,
+                        result,
+                        resultsInternal,
+                        retryCount,
+                        result.IsSuccess && resultsInternal.Length > 0 ? "parsed" : result.IsSuccess ? "unparseable" : "failed"
+                    );
                 }
                 catch (Exception ex)
                 {
