@@ -16,6 +16,7 @@ namespace ValleyTalk
         private static bool _refreshQueued;
 
         private static readonly string[] TypedResponseOptions = { "Always", "With Generated", "Never" };
+        private static readonly string[] ThinkingLevelOptions = LlmThinking.Options;
 
         internal static void Register(ModEntry modEntry)
         {
@@ -165,7 +166,9 @@ namespace ValleyTalk
                 getValue: () => Config.UseOptimizedPrompts,
                 setValue: (value) =>{ Config.UseOptimizedPrompts = value; }
             );
-            Config.SemanticContextRoutingTimeoutSeconds = Math.Clamp(Config.SemanticContextRoutingTimeoutSeconds, 2, 8);
+            Config.SemanticContextRoutingTimeoutSeconds = Math.Clamp(Config.SemanticContextRoutingTimeoutSeconds, 2, 30);
+            Config.RoutingThinkingLevel = LlmThinking.Normalize(Config.RoutingThinkingLevel, LlmThinking.Off);
+            Config.ChatThinkingLevel = LlmThinking.Normalize(Config.ChatThinkingLevel, LlmThinking.Auto);
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
                 name: () => Util.GetString("configEnableSemanticContextRouting", returnNull: true) ?? "Semantic context routing",
@@ -178,11 +181,31 @@ namespace ValleyTalk
                 name: () => Util.GetString("configSemanticContextRoutingTimeoutSeconds", returnNull: true) ?? "Context routing timeout",
                 tooltip: () => Util.GetString("configSemanticContextRoutingTimeoutSecondsTooltip", returnNull: true) ?? "Seconds to wait for semantic context routing before using the full conservative prompt.",
                 getValue: () => Config.SemanticContextRoutingTimeoutSeconds,
-                setValue: (value) =>{ Config.SemanticContextRoutingTimeoutSeconds = Math.Clamp(value, 2, 8); },
+                setValue: (value) =>{ Config.SemanticContextRoutingTimeoutSeconds = Math.Clamp(value, 2, 30); },
                 min: 2,
-                max: 8,
+                max: 30,
                 interval: 1,
                 fieldId: "SemanticContextRoutingTimeoutSeconds"
+            );
+            ConfigMenu.AddTextOption(
+                mod: ModManifest,
+                name: () => Util.GetString("configRoutingThinkingLevel", returnNull: true) ?? "Routing thinking",
+                tooltip: () => Util.GetString("configRoutingThinkingLevelTooltip", returnNull: true) ?? "Thinking level for compact routing/classifier passes. Off is fastest and recommended.",
+                getValue: () => Config.RoutingThinkingLevel,
+                setValue: (value) => { Config.RoutingThinkingLevel = LlmThinking.Normalize(value, LlmThinking.Off); },
+                allowedValues: ThinkingLevelOptions,
+                formatAllowedValue: FormatThinkingLevelOption,
+                fieldId: "RoutingThinkingLevel"
+            );
+            ConfigMenu.AddTextOption(
+                mod: ModManifest,
+                name: () => Util.GetString("configChatThinkingLevel", returnNull: true) ?? "Chat thinking",
+                tooltip: () => Util.GetString("configChatThinkingLevelTooltip", returnNull: true) ?? "Thinking level for normal NPC replies when the selected model supports it. Auto leaves provider defaults unchanged.",
+                getValue: () => Config.ChatThinkingLevel,
+                setValue: (value) => { Config.ChatThinkingLevel = LlmThinking.Normalize(value, LlmThinking.Auto); },
+                allowedValues: ThinkingLevelOptions,
+                formatAllowedValue: FormatThinkingLevelOption,
+                fieldId: "ChatThinkingLevel"
             );
             ConfigMenu.AddBoolOption(
                 mod: ModManifest,
@@ -311,6 +334,19 @@ namespace ValleyTalk
                 "Always" => Util.GetString("configTypedResponsesAlways", returnNull: true) ?? "Always",
                 "With Generated" => Util.GetString("configTypedResponsesWithGenerated", returnNull: true) ?? "With generated choices",
                 "Never" => Util.GetString("configTypedResponsesNever", returnNull: true) ?? "Never",
+                _ => value
+            };
+        }
+
+        private static string FormatThinkingLevelOption(string value)
+        {
+            return LlmThinking.Normalize(value) switch
+            {
+                LlmThinking.Auto => Util.GetString("configThinkingAuto", returnNull: true) ?? "Auto",
+                LlmThinking.Off => Util.GetString("configThinkingOff", returnNull: true) ?? "Off",
+                LlmThinking.Low => Util.GetString("configThinkingLow", returnNull: true) ?? "Low",
+                LlmThinking.Medium => Util.GetString("configThinkingMedium", returnNull: true) ?? "Medium",
+                LlmThinking.High => Util.GetString("configThinkingHigh", returnNull: true) ?? "High",
                 _ => value
             };
         }

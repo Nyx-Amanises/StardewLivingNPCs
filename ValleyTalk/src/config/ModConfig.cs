@@ -30,6 +30,8 @@ namespace ValleyTalk
         public bool UseOptimizedPrompts { get; set; } = false;
         public bool EnableSemanticContextRouting { get; set; } = true;
         public int SemanticContextRoutingTimeoutSeconds { get; set; } = 8;
+        public string RoutingThinkingLevel { get; set; } = "Off";
+        public string ChatThinkingLevel { get; set; } = "Auto";
         [JsonIgnore]
         [SystemJsonIgnore]
         public bool EnableLivingNpcActionDecisionPass { get; set; } = true;

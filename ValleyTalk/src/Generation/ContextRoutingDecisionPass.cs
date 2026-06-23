@@ -12,7 +12,7 @@ namespace ValleyTalk;
 internal static class ContextRoutingDecisionPass
 {
     private const double MinimumConfidence = 0.55;
-    private const int MaxRoutingTimeoutSeconds = 8;
+    private const int MaxRoutingTimeoutSeconds = 30;
 
     // Single-slot cache of the most recent raw (pre-boundary) routing decision. A multi-turn
     // conversation keeps the same key, so it only pays the router round-trip once; the per-turn
@@ -218,7 +218,7 @@ internal static class ContextRoutingDecisionPass
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
             var task = Llm.Instance.RunInference(
-                "You are a fast JSON router. Thinking/reasoning is disabled. Do not analyze. Output only one compact JSON object.",
+                LlmThinking.RoutingSystemPrompt(),
                 string.Empty,
                 $"NPC: {character.Name} ({character.StardewNpc?.displayName ?? character.Name})",
                 prompt,

@@ -88,27 +88,7 @@ internal class LlmGemini : Llm, IGetModelNames
             useContext = cachedContextValue;
         }
 
-        int thinkingBudget = (disableThinking || modelName.Contains("flash", StringComparison.OrdinalIgnoreCase)) ? 0 : 128;
-        var jsonData = JsonConvert.SerializeObject(new // Changed
-            {
-                safetySettings = new[] 
-                { 
-                    new {category = "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold = "BLOCK_NONE"},
-                    new {category = "HARM_CATEGORY_HARASSMENT", threshold = "BLOCK_MEDIUM_AND_ABOVE"}
-                },
-                system_instruction = new { parts = new { text = systemPromptString } },
-                contents = new { parts = new { text = promptString } },
-                generationConfig = new { maxOutputTokens = n_predict, temperature = 1.5, topP = 0.9, thinkingConfig = new { thinkingBudget  } }
-            });
-
-        var json = new StringContent(
-            jsonData,
-            Encoding.UTF8,
-            "application/json"
-        );
-
         // call out to URL passing the object as the body, and return the result
-        int retry = allowRetry ? 3 : 1;
         var fullUrl = url + apiKey;
         
         // Check network availability on Android
@@ -119,69 +99,166 @@ internal class LlmGemini : Llm, IGetModelNames
 
         string responseString = "";
         HttpResponseMessage response = new HttpResponseMessage();
-        while (retry > 0)
+        foreach (string jsonData in BuildRequestBodies(systemPromptString, promptString, n_predict, disableThinking))
         {
-            try
+            var json = new StringContent(
+                jsonData,
+                Encoding.UTF8,
+                "application/json"
+            );
+
+            int retry = allowRetry ? 3 : 1;
+            while (retry > 0)
             {
-                if (AndroidHelper.IsAndroid)
+                try
                 {
-                    responseString = await NetworkHelper.MakeRequestAsync(fullUrl, jsonData);
-                }
-                else
-                {
-                    var client = new HttpClient
+                    if (AndroidHelper.IsAndroid)
                     {
-                        Timeout = TimeSpan.FromSeconds(ModEntry.Config.QueryTimeout)
-                    };
-                    response = await client.PostAsync(fullUrl, json);
-                    responseString = await response.Content.ReadAsStringAsync();
-                }
-                
-                var responseJson = JObject.Parse(responseString); // Changed
-                
-                if (responseJson == null)
-                {
-                    throw new Exception("Failed to parse response");
-                }
-                else
-                {
-                    
-                    if (!responseJson.TryGetValue("candidates", out var candidatesToken) || !(candidatesToken is JArray candidatesArray) || !candidatesArray.HasValues) { retry--; continue; } // Changed
-                    
-                    var firstCandidate = candidatesArray.FirstOrDefault();
-                    if (firstCandidate == null) { retry--; continue; } 
-
-                    var finishReasonToken = firstCandidate["finishReason"];
-                    if (finishReasonToken == null || finishReasonToken.ToString() != "STOP") { retry--; continue; } 
-                    var contentToken = firstCandidate["content"];
-                    if (contentToken == null) { retry--; continue; } 
-
-                    var partsToken = contentToken["parts"];
-                    if (!(partsToken is JArray partsArray) || !partsArray.HasValues) { retry--; continue; } 
-
-                    var firstPart = partsArray.FirstOrDefault();
-                    if (firstPart == null) { retry--; continue; } 
-
-                    var textToken = firstPart["text"];
-                    if (textToken == null) { retry--; continue; } 
-                    
-                    var text = textToken.ToString(); 
-                    if (!string.IsNullOrWhiteSpace(text))
-                    {
-                        return new LlmResponse(text, usage: TokenUsage.FromGeminiUsage(responseJson["usageMetadata"] as JObject));
+                        responseString = await NetworkHelper.MakeRequestAsync(fullUrl, jsonData);
                     }
-                    return new LlmResponse("Empty response", (int)response.StatusCode);
+                    else
+                    {
+                        var client = new HttpClient
+                        {
+                            Timeout = TimeSpan.FromSeconds(ModEntry.Config.QueryTimeout)
+                        };
+                        response = await client.PostAsync(fullUrl, json);
+                        responseString = await response.Content.ReadAsStringAsync();
+                    }
+                    var responseJson = JObject.Parse(responseString); // Changed
+
+                    if (responseJson == null)
+                    {
+                        throw new Exception("Failed to parse response");
+                    }
+                    else
+                    {
+                        if (!responseJson.TryGetValue("candidates", out var candidatesToken)
+                            || !(candidatesToken is JArray candidatesArray)
+                            || !candidatesArray.HasValues)
+                        {
+                            retry--;
+                            continue;
+                        }
+
+                        var firstCandidate = candidatesArray.FirstOrDefault();
+                        if (firstCandidate == null)
+                        {
+                            retry--;
+                            continue;
+                        }
+
+                        var finishReasonToken = firstCandidate["finishReason"];
+                        if (finishReasonToken == null || finishReasonToken.ToString() != "STOP")
+                        {
+                            retry--;
+                            continue;
+                        }
+
+                        var contentToken = firstCandidate["content"];
+                        if (contentToken == null)
+                        {
+                            retry--;
+                            continue;
+                        }
+
+                        var partsToken = contentToken["parts"];
+                        if (!(partsToken is JArray partsArray) || !partsArray.HasValues)
+                        {
+                            retry--;
+                            continue;
+                        }
+
+                        var firstPart = partsArray.FirstOrDefault();
+                        if (firstPart == null)
+                        {
+                            retry--;
+                            continue;
+                        }
+
+                        var textToken = firstPart["text"];
+                        if (textToken == null)
+                        {
+                            retry--;
+                            continue;
+                        }
+
+                        var text = textToken.ToString();
+                        if (!string.IsNullOrWhiteSpace(text))
+                        {
+                            return new LlmResponse(text, usage: TokenUsage.FromGeminiUsage(responseJson["usageMetadata"] as JObject));
+                        }
+                        return new LlmResponse("Empty response", (int)response.StatusCode);
+                    }
                 }
-            }
-            catch(Exception ex)
-            {
-                Log.Debug(ex.Message);
-                Log.Debug("Retrying...");
-                retry--;
-                Thread.Sleep(100);
+                catch(Exception ex)
+                {
+                    Log.Debug(ex.Message);
+                    Log.Debug("Retrying...");
+                    retry--;
+                    Thread.Sleep(100);
+                }
             }
         }
         return new LlmResponse(responseString, (int)response.StatusCode);
+    }
+
+    private IEnumerable<string> BuildRequestBodies(
+        string systemPromptString,
+        string promptString,
+        int n_predict,
+        bool disableThinking)
+    {
+        string thinkingLevel = LlmThinking.ForCall(disableThinking);
+        int? thinkingBudget = LlmThinking.ToGeminiThinkingBudget(thinkingLevel, modelName);
+        if (thinkingBudget.HasValue)
+        {
+            yield return BuildRequestBody(systemPromptString, promptString, n_predict, thinkingBudget.Value);
+        }
+
+        if (!LlmThinking.IsAuto(thinkingLevel))
+        {
+            yield return BuildRequestBody(systemPromptString, promptString, n_predict, thinkingBudget: null);
+        }
+    }
+
+    private static string BuildRequestBody(
+        string systemPromptString,
+        string promptString,
+        int n_predict,
+        int? thinkingBudget)
+    {
+        var generationConfig = new JObject
+        {
+            ["maxOutputTokens"] = n_predict,
+            ["temperature"] = 1.5,
+            ["topP"] = 0.9
+        };
+        if (thinkingBudget.HasValue)
+        {
+            generationConfig["thinkingConfig"] = new JObject
+            {
+                ["thinkingBudget"] = thinkingBudget.Value
+            };
+        }
+
+        var body = new JObject
+        {
+            ["safetySettings"] = new JArray(
+                new JObject { ["category"] = "HARM_CATEGORY_SEXUALLY_EXPLICIT", ["threshold"] = "BLOCK_NONE" },
+                new JObject { ["category"] = "HARM_CATEGORY_HARASSMENT", ["threshold"] = "BLOCK_MEDIUM_AND_ABOVE" }),
+            ["system_instruction"] = new JObject
+            {
+                ["parts"] = new JObject { ["text"] = systemPromptString }
+            },
+            ["contents"] = new JObject
+            {
+                ["parts"] = new JObject { ["text"] = promptString }
+            },
+            ["generationConfig"] = generationConfig
+        };
+
+        return body.ToString(Formatting.None);
     }
 
     internal override Dictionary<string, double>[] RunInferenceProbabilities(string fullPrompt, int n_predict = 1)

@@ -35,23 +35,26 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         bool disableThinking)
     {
         string userPrompt = gameCacheString + npcCacheString + promptString;
-        yield return BuildChatRequestBody(systemPromptString, userPrompt, n_predict, disableThinking, useInstructionsRequest: false)
-            .ToString(Formatting.None);
+        string thinkingLevel = LlmThinking.ForCall(disableThinking);
 
-        if (!AllowInstructionsRequestFallback)
+        foreach (bool useInstructionsRequest in AllowInstructionsRequestFallback ? new[] { false, true } : new[] { false })
         {
-            yield break;
-        }
+            if (!LlmThinking.IsAuto(thinkingLevel))
+            {
+                yield return BuildChatRequestBody(systemPromptString, userPrompt, n_predict, thinkingLevel, useInstructionsRequest)
+                    .ToString(Formatting.None);
+            }
 
-        yield return BuildChatRequestBody(systemPromptString, userPrompt, n_predict, disableThinking, useInstructionsRequest: true)
-            .ToString(Formatting.None);
+            yield return BuildChatRequestBody(systemPromptString, userPrompt, n_predict, LlmThinking.Auto, useInstructionsRequest)
+                .ToString(Formatting.None);
+        }
     }
 
     private JObject BuildChatRequestBody(
         string systemPromptString,
         string userPrompt,
         int n_predict,
-        bool disableThinking,
+        string thinkingLevel,
         bool useInstructionsRequest)
     {
         var body = new JObject
@@ -60,10 +63,7 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
             ["max_tokens"] = n_predict
         };
 
-        if (disableThinking)
-        {
-            AddNoThinkingParameters(body);
-        }
+        LlmThinking.AddOpenAiCompatibleThinkingParameters(body, modelName, thinkingLevel);
 
         if (useInstructionsRequest)
         {
@@ -87,13 +87,6 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
             ["role"] = role,
             ["content"] = content
         };
-    }
-
-    private static void AddNoThinkingParameters(JObject body)
-    {
-        body["enable_thinking"] = false;
-        body["thinking"] = new JObject { ["type"] = "disabled" };
-        body["reasoning"] = new JObject { ["enabled"] = false };
     }
 
     internal override async Task<LlmResponse> RunInference(string systemPromptString, string gameCacheString, string npcCacheString, string promptString, string responseStart = "",int n_predict = 2048,string cacheContext="",bool allowRetry = true,bool disableThinking = false)
@@ -197,25 +190,20 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         string cacheContext = "",
         bool allowRetry = true)
     {
-        var inputString = JsonConvert.SerializeObject(new
+        var requestBody = new JObject
         {
-            model = modelName,
-            max_tokens = n_predict,
-            stream = true,
-            messages = new PromptElement[]
-            {
-                new()
-                {
-                    role = "system",
-                    content = systemPromptString
-                },
-                new()
-                {
-                    role = "user",
-                    content = gameCacheString + npcCacheString + promptString
-                }
-            }
-        });
+            ["model"] = modelName,
+            ["max_tokens"] = n_predict,
+            ["stream"] = true,
+            ["messages"] = new JArray(
+                BuildMessage("system", systemPromptString),
+                BuildMessage("user", gameCacheString + npcCacheString + promptString))
+        };
+        LlmThinking.AddOpenAiCompatibleThinkingParameters(
+            requestBody,
+            modelName,
+            LlmThinking.ForCall(fastPass: false));
+        var inputString = requestBody.ToString(Formatting.None);
 
         int retry = allowRetry ? 3 : 1;
         var fullUrl = $"{url}/v1/chat/completions";

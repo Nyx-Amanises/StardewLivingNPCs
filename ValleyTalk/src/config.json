@@ -18,6 +18,8 @@
   "UseOptimizedPrompts": false,
   "EnableSemanticContextRouting": true,
   "SemanticContextRoutingTimeoutSeconds": 8,
+  "RoutingThinkingLevel": "Off",
+  "ChatThinkingLevel": "Auto",
   "DisableCharacters": "",
   "InitiateTypedDialogueKey": "LeftAlt",
   "SuppressConnectionCheck": false
