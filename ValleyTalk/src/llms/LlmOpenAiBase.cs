@@ -24,9 +24,16 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         public string content { get; set; }
     }
 
+    private sealed record ChatRequestBody(
+        string Json,
+        bool HasThinkingParameters,
+        string ThinkingLevel,
+        string ThinkingParameters
+    );
+
     protected virtual bool AllowInstructionsRequestFallback => false;
 
-    private IEnumerable<string> BuildChatRequestBodies(
+    private IEnumerable<ChatRequestBody> BuildChatRequestBodies(
         string systemPromptString,
         string gameCacheString,
         string npcCacheString,
@@ -41,12 +48,23 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         {
             if (!LlmThinking.IsAuto(thinkingLevel))
             {
-                yield return BuildChatRequestBody(systemPromptString, userPrompt, n_predict, thinkingLevel, useInstructionsRequest)
-                    .ToString(Formatting.None);
+                JObject body = BuildChatRequestBody(systemPromptString, userPrompt, n_predict, thinkingLevel, useInstructionsRequest);
+                string thinkingParameters = LlmThinking.DescribeThinkingParameters(body);
+                yield return new ChatRequestBody(
+                    body.ToString(Formatting.None),
+                    !string.IsNullOrWhiteSpace(thinkingParameters),
+                    thinkingLevel,
+                    thinkingParameters
+                );
             }
 
-            yield return BuildChatRequestBody(systemPromptString, userPrompt, n_predict, LlmThinking.Auto, useInstructionsRequest)
-                .ToString(Formatting.None);
+            JObject fallbackBody = BuildChatRequestBody(systemPromptString, userPrompt, n_predict, LlmThinking.Auto, useInstructionsRequest);
+            yield return new ChatRequestBody(
+                fallbackBody.ToString(Formatting.None),
+                false,
+                LlmThinking.Auto,
+                string.Empty
+            );
         }
     }
 
@@ -102,9 +120,11 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         
         string responseString = "";
         int apiResponseCode = 500;
-        foreach (string inputString in BuildChatRequestBodies(systemPromptString, gameCacheString, npcCacheString, promptString, n_predict, disableThinking))
+        foreach (ChatRequestBody requestBody in BuildChatRequestBodies(systemPromptString, gameCacheString, npcCacheString, promptString, n_predict, disableThinking))
         {
+            string inputString = requestBody.Json;
             int retry = allowRetry ? 3 : 1;
+            string lastFailure = string.Empty;
             while (retry > 0)
             {
                 try
@@ -115,6 +135,7 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
                     {
                         return new LlmResponse(parsedText, usage: parsedUsage);
                     }
+                    lastFailure = responseString;
                     if (LooksLikeServerSentEvents(responseString))
                     {
                         retry--;
@@ -166,6 +187,7 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
                         apiResponseCode = (int)directHttpException.StatusCode.Value;
                     }
                     Log.Debug(ex.Message);
+                    lastFailure = ex.Message;
                     retry--;
                     if (retry > 0)
                     {
@@ -173,6 +195,16 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
                         await Task.Delay(100);
                     }
                 }
+            }
+
+            if (requestBody.HasThinkingParameters)
+            {
+                LlmThinking.LogThinkingFallbackWarning(
+                    modelName,
+                    requestBody.ThinkingLevel,
+                    requestBody.ThinkingParameters,
+                    lastFailure
+                );
             }
         }
         return new LlmResponse(responseString, apiResponseCode);

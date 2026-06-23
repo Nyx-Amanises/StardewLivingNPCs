@@ -330,6 +330,7 @@
   "configThinkingMedium": "Medium",
   "configThinkingHigh": "High",
   "configThinkingXHigh": "Extra high",
+  "warningThinkingParametersRejected": "The request with thinking parameters failed for model {{Model}} ({{Parameters}}, level {{Level}}); retrying without thinking controls. Provider response: {{Error}}",
   "configGenerateAiForNormalRightClick": "AI on normal right-click",
   "configGenerateAiForNormalRightClickTooltip": "When disabled, normal right-click keeps vanilla dialogue. Hold the configured key while clicking an NPC to start an AI chat.",
   "configFrequencyGeneral": "General line frequency",

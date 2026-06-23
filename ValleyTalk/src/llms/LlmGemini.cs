@@ -18,6 +18,13 @@ internal class LlmGemini : Llm, IGetModelNames
     private string apiKey;
     private string modelName;
 
+    private sealed record GeminiRequestBody(
+        string Json,
+        bool HasThinkingParameters,
+        string ThinkingLevel,
+        string ThinkingParameters
+    );
+
     public LlmGemini(string apiKey, string modelName = null)
     {
         this.apiKey = apiKey;
@@ -99,19 +106,21 @@ internal class LlmGemini : Llm, IGetModelNames
 
         string responseString = "";
         HttpResponseMessage response = new HttpResponseMessage();
-        foreach (string jsonData in BuildRequestBodies(systemPromptString, promptString, n_predict, disableThinking))
+        foreach (GeminiRequestBody requestBody in BuildRequestBodies(systemPromptString, promptString, n_predict, disableThinking))
         {
-            var json = new StringContent(
-                jsonData,
-                Encoding.UTF8,
-                "application/json"
-            );
-
+            string jsonData = requestBody.Json;
             int retry = allowRetry ? 3 : 1;
+            string lastFailure = string.Empty;
             while (retry > 0)
             {
                 try
                 {
+                    var json = new StringContent(
+                        jsonData,
+                        Encoding.UTF8,
+                        "application/json"
+                    );
+
                     if (AndroidHelper.IsAndroid)
                     {
                         responseString = await NetworkHelper.MakeRequestAsync(fullUrl, jsonData);
@@ -125,6 +134,7 @@ internal class LlmGemini : Llm, IGetModelNames
                         response = await client.PostAsync(fullUrl, json);
                         responseString = await response.Content.ReadAsStringAsync();
                     }
+                    lastFailure = responseString;
                     var responseJson = JObject.Parse(responseString); // Changed
 
                     if (responseJson == null)
@@ -195,15 +205,26 @@ internal class LlmGemini : Llm, IGetModelNames
                 {
                     Log.Debug(ex.Message);
                     Log.Debug("Retrying...");
+                    lastFailure = ex.Message;
                     retry--;
                     Thread.Sleep(100);
                 }
+            }
+
+            if (requestBody.HasThinkingParameters)
+            {
+                LlmThinking.LogThinkingFallbackWarning(
+                    modelName,
+                    requestBody.ThinkingLevel,
+                    requestBody.ThinkingParameters,
+                    lastFailure
+                );
             }
         }
         return new LlmResponse(responseString, (int)response.StatusCode);
     }
 
-    private IEnumerable<string> BuildRequestBodies(
+    private IEnumerable<GeminiRequestBody> BuildRequestBodies(
         string systemPromptString,
         string promptString,
         int n_predict,
@@ -213,12 +234,22 @@ internal class LlmGemini : Llm, IGetModelNames
         JObject thinkingConfig = LlmThinking.BuildGeminiThinkingConfig(thinkingLevel, modelName);
         if (thinkingConfig != null)
         {
-            yield return BuildRequestBody(systemPromptString, promptString, n_predict, thinkingConfig);
+            yield return new GeminiRequestBody(
+                BuildRequestBody(systemPromptString, promptString, n_predict, thinkingConfig),
+                true,
+                thinkingLevel,
+                $"thinkingConfig={thinkingConfig.ToString(Formatting.None)}"
+            );
         }
 
         if (thinkingConfig == null || !LlmThinking.IsAuto(thinkingLevel))
         {
-            yield return BuildRequestBody(systemPromptString, promptString, n_predict, thinkingConfig: null);
+            yield return new GeminiRequestBody(
+                BuildRequestBody(systemPromptString, promptString, n_predict, thinkingConfig: null),
+                false,
+                LlmThinking.Auto,
+                string.Empty
+            );
         }
     }
 

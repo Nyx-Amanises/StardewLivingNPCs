@@ -109,6 +109,7 @@
   "configThinkingMedium": "中",
   "configThinkingHigh": "高",
   "configThinkingXHigh": "极高",
+  "warningThinkingParametersRejected": "模型 {{Model}} 使用思考参数的请求失败（{{Parameters}}，档位 {{Level}}）；正在不带思考控制重试。供应商返回：{{Error}}",
   "configTranslation": "翻译模型输出",
   "configTranslationTooltip": "把模型输出翻译成游戏语言。中文模型或中文提示词下通常建议关闭。",
   "configFrequencyGeneral": "普通对白生成频率",

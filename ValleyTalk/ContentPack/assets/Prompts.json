@@ -316,6 +316,7 @@
             "configThinkingMedium": "{{i18n:configThinkingMedium}}",
             "configThinkingHigh": "{{i18n:configThinkingHigh}}",
             "configThinkingXHigh": "{{i18n:configThinkingXHigh}}",
+            "warningThinkingParametersRejected": "{{i18n:warningThinkingParametersRejected}}",
             "configGenerateAiForNormalRightClick": "{{i18n:configGenerateAiForNormalRightClick}}",
             "configGenerateAiForNormalRightClickTooltip": "{{i18n:configGenerateAiForNormalRightClickTooltip}}",
             "configKeybind": "{{i18n:configKeybind}}",

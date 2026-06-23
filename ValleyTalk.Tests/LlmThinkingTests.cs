@@ -108,6 +108,33 @@ public sealed class LlmThinkingTests
     }
 
     [Fact]
+    public void DescribeThinkingParametersIncludesSupportedShapes()
+    {
+        var body = new JObject
+        {
+            ["reasoning_effort"] = "high",
+            ["thinking"] = new JObject { ["type"] = "enabled" }
+        };
+
+        string description = LlmThinking.DescribeThinkingParameters(body);
+
+        Assert.Contains("reasoning_effort=high", description);
+        Assert.Contains("thinking={\"type\":\"enabled\"}", description);
+    }
+
+    [Fact]
+    public void SummarizeProviderErrorExtractsErrorMessage()
+    {
+        string error = "{\"error\":{\"message\":\"Unsupported parameter: reasoning_effort\",\"code\":\"bad_request\",\"type\":\"invalid_request_error\"}}";
+
+        string summary = LlmThinking.SummarizeProviderError(error);
+
+        Assert.Contains("Unsupported parameter: reasoning_effort", summary);
+        Assert.Contains("code=bad_request", summary);
+        Assert.Contains("type=invalid_request_error", summary);
+    }
+
+    [Fact]
     public void AutoDoesNotBuildGeminiThinkingConfig()
     {
         Assert.Null(LlmThinking.BuildGeminiThinkingConfig(LlmThinking.Auto, "gemini-3.5-flash"));

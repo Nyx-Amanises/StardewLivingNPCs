@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Newtonsoft.Json.Linq;
 
 namespace ValleyTalk;
@@ -248,6 +249,88 @@ internal static class LlmThinking
         }
     }
 
+    public static string DescribeThinkingParameters(JObject body)
+    {
+        if (body == null)
+        {
+            return string.Empty;
+        }
+
+        var parts = new List<string>();
+        if (body.TryGetValue("reasoning_effort", out JToken reasoningEffort) && reasoningEffort.Type != JTokenType.Null)
+        {
+            parts.Add($"reasoning_effort={reasoningEffort}");
+        }
+        if (body.TryGetValue("thinking", out JToken thinking) && thinking.Type != JTokenType.Null)
+        {
+            parts.Add($"thinking={thinking.ToString(Newtonsoft.Json.Formatting.None)}");
+        }
+        if (body["generationConfig"]?["thinkingConfig"] is JToken thinkingConfig)
+        {
+            parts.Add($"thinkingConfig={thinkingConfig.ToString(Newtonsoft.Json.Formatting.None)}");
+        }
+
+        return string.Join(", ", parts);
+    }
+
+    public static string SummarizeProviderError(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return "no provider error body";
+        }
+
+        try
+        {
+            var json = JObject.Parse(text);
+            string message = json["error"]?["message"]?.ToString()
+                ?? json["message"]?.ToString()
+                ?? json["error"]?.ToString()
+                ?? string.Empty;
+            string code = json["error"]?["code"]?.ToString() ?? json["code"]?.ToString() ?? string.Empty;
+            string type = json["error"]?["type"]?.ToString() ?? json["type"]?.ToString() ?? string.Empty;
+
+            var parts = new List<string>();
+            if (!string.IsNullOrWhiteSpace(message))
+            {
+                parts.Add(message);
+            }
+            if (!string.IsNullOrWhiteSpace(code))
+            {
+                parts.Add($"code={code}");
+            }
+            if (!string.IsNullOrWhiteSpace(type))
+            {
+                parts.Add($"type={type}");
+            }
+
+            if (parts.Count > 0)
+            {
+                return Truncate(string.Join("; ", parts), 300);
+            }
+        }
+        catch
+        {
+        }
+
+        return Truncate(text.Trim(), 300);
+    }
+
+    public static void LogThinkingFallbackWarning(string modelName, string level, string parameters, string providerError)
+    {
+        Log.Warning(Util.GetConsoleString(
+            "warningThinkingParametersRejected",
+            new
+            {
+                Model = modelName,
+                Level = level,
+                Parameters = parameters,
+                Error = SummarizeProviderError(providerError)
+            },
+            $"The request with thinking parameters failed for model {modelName} ({parameters}, level {level}); retrying without thinking controls. Provider response: {SummarizeProviderError(providerError)}"
+        ));
+    }
+
     public static string RoutingSystemPrompt()
     {
         string level = ForCall(fastPass: true);
@@ -264,5 +347,15 @@ internal static class LlmThinking
             .Replace(".", "-", StringComparison.Ordinal)
             .Replace(" ", string.Empty, StringComparison.Ordinal)
             .Trim();
+    }
+
+    private static string Truncate(string text, int maxLength)
+    {
+        if (string.IsNullOrEmpty(text) || text.Length <= maxLength)
+        {
+            return text;
+        }
+
+        return text[..maxLength] + "...";
     }
 }
