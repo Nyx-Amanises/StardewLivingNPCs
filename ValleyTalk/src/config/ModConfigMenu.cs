@@ -276,12 +276,18 @@ namespace ValleyTalk
         {
             return new Dictionary<int, string>()
             {
-                { 0, "Never (0%)" },
-                { 1, "Rarely (25%)" },
-                { 2, "Occasionally (50%)" },
-                { 3, "Mostly (75%)" },
-                { 4, "Always (100%)" }
+                { 0, FormatFrequencyOption("configNever", "Never", "0%") },
+                { 1, FormatFrequencyOption("configRarely", "Rarely", "25%") },
+                { 2, FormatFrequencyOption("configOccasionally", "Occasionally", "50%") },
+                { 3, FormatFrequencyOption("configMostly", "Mostly", "75%") },
+                { 4, FormatFrequencyOption("configAlways", "Always", "100%") }
             };
+        }
+
+        private static string FormatFrequencyOption(string translationKey, string fallback, string percent)
+        {
+            var label = Util.GetString(translationKey, returnNull: true) ?? fallback;
+            return $"{label} ({percent})";
         }
 
         private static string GetFrequencyLabel(int frequency)
