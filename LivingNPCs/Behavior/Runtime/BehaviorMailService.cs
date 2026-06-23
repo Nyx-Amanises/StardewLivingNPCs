@@ -55,7 +55,8 @@ internal sealed class BehaviorMailService
     public bool HasPendingGiftMail(LivingNpcState state, string motive)
     {
         return state.GiftMails.Any(mail =>
-            mail.DueTotalDays >= Game1.Date.TotalDays
+            !mail.Claimed
+            && mail.DueTotalDays >= Game1.Date.TotalDays
             && string.Equals(mail.Motive, motive, StringComparison.OrdinalIgnoreCase));
     }
 

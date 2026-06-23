@@ -229,31 +229,20 @@ internal sealed class HelpRequestMemoryService
 
             case "fulfilled":
             case "advanced":
-                if (!LooksLikeFarmerDeliveredHelpRequestItem(existing, playerText, candidate.Resolution))
+                // Item requests are completed only when the farmer actually hands the item over
+                // (TryCompleteItemHelpRequests consumes it on delivery); an AI "fulfilled" claim in
+                // the dialogue must never complete the request or grant rewards on its own — that was
+                // exploitable, since the model could "deliver" an item in text alone. At most, treat
+                // it as acceptance when the request is still only offered and the farmer agrees here.
+                if (existing.Status == "Offered" && LooksLikeFarmerAcceptingHelp(playerText))
                 {
-                    if (existing.Status == "Offered" && LooksLikeFarmerAcceptingHelp(playerText))
-                    {
-                        this.Accept(state, existing, string.IsNullOrWhiteSpace(candidate.Resolution)
-                            ? "The farmer agreed to help."
-                            : candidate.Resolution);
-                        return true;
-                    }
-
-                    return false;
+                    this.Accept(state, existing, string.IsNullOrWhiteSpace(candidate.Resolution)
+                        ? "The farmer agreed to help."
+                        : candidate.Resolution);
+                    return true;
                 }
 
-                if (existing.Status == "Offered")
-                {
-                    this.Accept(state, existing, "The farmer accepted and helped right away.");
-                }
-
-                if (this.CompleteCurrentStep(state, existing, candidate.Resolution, out bool fullyFulfilled)
-                    && fullyFulfilled)
-                {
-                    fulfilledRequest = existing;
-                }
-
-                break;
+                return false;
 
             case "declined":
                 this.Decline(state, existing, candidate.Resolution);

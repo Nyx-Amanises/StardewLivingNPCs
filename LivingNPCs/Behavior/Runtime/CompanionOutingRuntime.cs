@@ -256,6 +256,18 @@ internal sealed class CompanionOutingRuntime
                 NPC? npc = Game1.getCharacterFromName(outing.NpcName);
                 if (outing.TotalDays != Game1.Date.TotalDays || npc == null)
                 {
+                    // A new day started (or the NPC vanished) while the outing was still active.
+                    // Undo the schedule suppression so the NPC resumes its fresh daily schedule;
+                    // otherwise followSchedule could stay false and strand the NPC the next day.
+                    if (npc != null)
+                    {
+                        NpcTravelRuntime.RestoreSchedule(
+                            npc,
+                            outing.OriginalIgnoreScheduleToday,
+                            outing.OriginalFollowSchedule
+                        );
+                    }
+
                     this.pendingOutings.Remove(outing);
                     continue;
                 }
