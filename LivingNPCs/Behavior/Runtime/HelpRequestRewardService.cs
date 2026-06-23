@@ -74,9 +74,10 @@ internal sealed class HelpRequestRewardService
             );
         }
 
-        if (!request.RewardMoneyGranted)
+        if (!request.RewardMoneyGranted
+            && !request.RewardMoneyClaimQueued)
         {
-            this.GrantOrScheduleMoneyReward(npc, request);
+            this.QueueMoneyRewardClaim(npc, request);
         }
 
         if (!request.RewardGiftGiven)
@@ -161,29 +162,22 @@ internal sealed class HelpRequestRewardService
             : request.Summary.Trim();
     }
 
-    private void GrantOrScheduleMoneyReward(NPC npc, NpcHelpRequestFact request)
+    private void QueueMoneyRewardClaim(NPC npc, NpcHelpRequestFact request)
     {
-        if (Game1.player == null)
-        {
-            return;
-        }
-
-        // Vanilla item-delivery quests pay out immediately on hand-in, so grant the gold directly
-        // rather than mailing it later.
         int amount = Math.Clamp(request.RewardMoney <= 0 ? 200 : request.RewardMoney, 200, 10000);
         request.RewardMoney = amount;
-        Game1.player.Money += amount;
         request.RewardMoneyByMail = false;
         request.RewardMoneyMailKey = string.Empty;
         request.RewardMoneyMailTotalDays = -1;
-        request.RewardMoneyGranted = true;
+        request.RewardMoneyGranted = false;
+        request.RewardMoneyClaimQueued = true;
+        request.RewardMoneyQuestPosted = false;
         this.memory.RecordNpcWorldAction(
             npc,
-            "GrantedHelpRequestMoneyReward",
-            $"the help request system granted a {amount}g reward: {request.Summary}",
+            "QueuedHelpRequestMoneyReward",
+            $"the help request system added a {amount}g claimable quest reward: {request.Summary}",
             this.config.MaxMemoryEntriesPerNpc
         );
-        this.feedback.ShowAfterDialogue(I18n.Get("help.reward.moneyHud", new { amount }));
     }
 
     private static void MarkStateAfterWorldAction(LivingNpcState state, string lastInteraction)

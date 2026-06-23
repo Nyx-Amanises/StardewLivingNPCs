@@ -239,6 +239,10 @@ internal sealed class ConversationStartRecorder
                     ? $"- LivingNPCs scheduled a system mail reward of {request.RewardMoney}g for tomorrow."
                     : $"- LivingNPCs already granted a system money reward of {request.RewardMoney}g.");
             }
+            else if (request.Status == "Fulfilled" && request.RewardMoneyClaimQueued)
+            {
+                lines.Add($"- LivingNPCs added a system money reward of {request.RewardMoney}g to the quest journal for the farmer to claim.");
+            }
 
             if (request.RewardGiftGiven)
             {

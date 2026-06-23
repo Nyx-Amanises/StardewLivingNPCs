@@ -48,7 +48,10 @@ public sealed class SaveDataSerializationTests
                             Type = "item_request",
                             Summary = "Bring quartz.",
                             RequestedItemId = "(O)80",
-                            Status = "Pending"
+                            Status = "Fulfilled",
+                            RewardMoney = 240,
+                            RewardMoneyClaimQueued = true,
+                            RewardMoneyQuestPosted = true
                         }
                     ]
                 }
@@ -66,6 +69,10 @@ public sealed class SaveDataSerializationTests
         Assert.Equal(72, state.RelationshipTrust);
         Assert.Equal("(O)395", Assert.Single(state.RecentAiGiftItemIds));
         Assert.Equal("promise", Assert.Single(state.LongTermMemories).Kind);
-        Assert.Equal("(O)80", Assert.Single(state.HelpRequests).RequestedItemId);
+        var helpRequest = Assert.Single(state.HelpRequests);
+        Assert.Equal("(O)80", helpRequest.RequestedItemId);
+        Assert.Equal(240, helpRequest.RewardMoney);
+        Assert.True(helpRequest.RewardMoneyClaimQueued);
+        Assert.True(helpRequest.RewardMoneyQuestPosted);
     }
 }

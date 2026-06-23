@@ -752,6 +752,10 @@ internal sealed class BehaviorEngine
             {
                 lines.Add($"- LivingNPCs already granted the configured money reward ({request.RewardMoney}g); do not promise extra payment beyond the system reward.");
             }
+            else if (request.RewardMoneyClaimQueued)
+            {
+                lines.Add($"- LivingNPCs added the configured money reward ({request.RewardMoney}g) to the quest journal for the farmer to claim; do not promise extra payment beyond the system reward.");
+            }
 
             if (request.RewardGiftGiven)
             {

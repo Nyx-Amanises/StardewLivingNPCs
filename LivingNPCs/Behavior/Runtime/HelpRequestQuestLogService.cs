@@ -29,36 +29,51 @@ internal sealed class HelpRequestQuestLogService
             return;
         }
 
-        var pendingRequests = this.memory.GetTrackedStates()
+        var trackedRequests = this.memory.GetTrackedStates()
             .SelectMany(state => state.HelpRequests
-                .Where(request => request.Status == "Pending")
+                .Where(request => request.Status == "Pending" || IsClaimableMoneyRequest(request))
                 .Select(request => new
                 {
                     State = state,
                     Request = request
                 }))
             .ToList();
-        var pendingQuestIds = pendingRequests
-            .Select(pair => pair.Request.QuestLogId)
-            .Where(id => !string.IsNullOrWhiteSpace(id))
-            .ToHashSet(StringComparer.Ordinal);
         var proxyQuests = Game1.player.questLog
             .OfType<Quest>()
             .Where(quest => quest.modData.TryGetValue(HelpRequestQuestMarkerKey, out string? marker)
                 && marker == "true")
             .ToList();
+        var existingProxyQuestIds = proxyQuests
+            .Select(quest => quest.modData.TryGetValue(HelpRequestQuestIdKey, out string? questId)
+                ? questId
+                : string.Empty)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.Ordinal);
+
+        foreach (var pair in trackedRequests.Where(pair => IsClaimedMoneyReward(pair.Request, existingProxyQuestIds)))
+        {
+            MarkMoneyRewardClaimed(pair.Request);
+        }
+
+        trackedRequests = trackedRequests
+            .Where(pair => pair.Request.Status == "Pending" || IsClaimableMoneyRequest(pair.Request))
+            .ToList();
+        var activeQuestIds = trackedRequests
+            .Select(pair => pair.Request.QuestLogId)
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .ToHashSet(StringComparer.Ordinal);
 
         foreach (var quest in proxyQuests)
         {
             if (!quest.modData.TryGetValue(HelpRequestQuestIdKey, out string? questId)
                 || string.IsNullOrWhiteSpace(questId)
-                || !pendingQuestIds.Contains(questId))
+                || !activeQuestIds.Contains(questId))
             {
                 Game1.player.questLog.Remove(quest);
             }
         }
 
-        foreach (var pair in pendingRequests)
+        foreach (var pair in trackedRequests)
         {
             Quest? quest = Game1.player.questLog
                 .OfType<Quest>()
@@ -101,10 +116,48 @@ internal sealed class HelpRequestQuestLogService
         quest.currentObjective = request.Type == "item_request"
             ? I18n.Get("help.quest.objective.item", tokens)
             : I18n.Get("help.quest.objective.question", tokens);
-        // Rewards are granted directly on hand-in (vanilla item-delivery style), so the quest entry
-        // shows no reward hint or claimable reward box.
-        quest.moneyReward.Value = 0;
+        bool claimable = IsClaimableMoneyRequest(request);
+        quest.completed.Value = claimable;
+        quest.moneyReward.Value = claimable
+            ? Math.Clamp(request.RewardMoney <= 0 ? 200 : request.RewardMoney, 200, 10000)
+            : 0;
         quest.rewardDescription.Value = "-1";
+        if (claimable)
+        {
+            request.RewardMoney = quest.moneyReward.Value;
+            request.RewardMoneyQuestPosted = true;
+        }
+    }
+
+    private static bool IsClaimableMoneyRequest(NpcHelpRequestFact request)
+    {
+        return request.Status == "Fulfilled"
+            && request.RewardMoneyClaimQueued
+            && request.RewardMoney > 0
+            && !request.RewardMoneyGranted
+            && !request.RewardMoneyByMail;
+    }
+
+    private static bool IsClaimedMoneyReward(
+        NpcHelpRequestFact request,
+        System.Collections.Generic.IReadOnlySet<string> existingProxyQuestIds)
+    {
+        return IsClaimableMoneyRequest(request)
+            && request.RewardMoneyQuestPosted
+            && !string.IsNullOrWhiteSpace(request.QuestLogId)
+            && !existingProxyQuestIds.Contains(request.QuestLogId);
+    }
+
+    private static void MarkMoneyRewardClaimed(NpcHelpRequestFact request)
+    {
+        request.RewardMoneyGranted = true;
+        request.RewardMoneyClaimQueued = false;
+        request.RewardMoneyQuestPosted = false;
+        request.RewardMoneyByMail = false;
+        request.RewardMoneyMailKey = string.Empty;
+        request.RewardMoneyMailTotalDays = -1;
+        request.LastUpdatedTotalDays = Game1.Date.TotalDays;
+        request.LastUpdatedTimeOfDay = Game1.timeOfDay;
     }
 
     private static string BuildStepProgressText(NpcHelpRequestFact request)

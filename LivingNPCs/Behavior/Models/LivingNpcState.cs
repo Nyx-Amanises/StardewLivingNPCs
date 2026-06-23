@@ -646,6 +646,18 @@ internal sealed class LivingNpcState
                     ? HelpRequestMemoryRules.DetermineMoneyReward(request.Steps)
                     : System.Math.Clamp(request.RewardMoney, 200, 10000);
                 request.RewardMoneyMailKey = request.RewardMoneyMailKey?.Trim() ?? string.Empty;
+                if (request.RewardMoneyGranted
+                    || request.RewardMoneyByMail
+                    || request.Status != "Fulfilled")
+                {
+                    request.RewardMoneyClaimQueued = false;
+                    request.RewardMoneyQuestPosted = false;
+                }
+                else if (request.RewardMoneyQuestPosted)
+                {
+                    request.RewardMoneyClaimQueued = true;
+                }
+
                 if (!request.RewardMoneyByMail)
                 {
                     request.RewardMoneyMailTotalDays = -1;
@@ -1058,6 +1070,8 @@ internal sealed class LivingNpcState
                     RewardGranted = request.RewardGranted,
                     RewardMoney = request.RewardMoney,
                     RewardMoneyGranted = request.RewardMoneyGranted,
+                    RewardMoneyClaimQueued = request.RewardMoneyClaimQueued,
+                    RewardMoneyQuestPosted = request.RewardMoneyQuestPosted,
                     RewardMoneyByMail = request.RewardMoneyByMail,
                     RewardMoneyMailKey = request.RewardMoneyMailKey,
                     RewardMoneyMailTotalDays = request.RewardMoneyMailTotalDays,

@@ -86,6 +86,8 @@ internal sealed class BehaviorMailService
         request.RewardMoneyMailKey = mailKey;
         request.RewardMoneyMailTotalDays = Game1.Date.TotalDays + 1;
         request.RewardMoneyGranted = true;
+        request.RewardMoneyClaimQueued = false;
+        request.RewardMoneyQuestPosted = false;
 
         if (!Game1.player.mailForTomorrow.Contains(mailKey) && !Game1.player.mailReceived.Contains(mailKey))
         {
