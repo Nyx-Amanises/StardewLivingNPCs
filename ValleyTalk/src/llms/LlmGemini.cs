@@ -210,15 +210,15 @@ internal class LlmGemini : Llm, IGetModelNames
         bool disableThinking)
     {
         string thinkingLevel = LlmThinking.ForCall(disableThinking);
-        int? thinkingBudget = LlmThinking.ToGeminiThinkingBudget(thinkingLevel, modelName);
-        if (thinkingBudget.HasValue)
+        JObject thinkingConfig = LlmThinking.BuildGeminiThinkingConfig(thinkingLevel, modelName);
+        if (thinkingConfig != null)
         {
-            yield return BuildRequestBody(systemPromptString, promptString, n_predict, thinkingBudget.Value);
+            yield return BuildRequestBody(systemPromptString, promptString, n_predict, thinkingConfig);
         }
 
-        if (!LlmThinking.IsAuto(thinkingLevel))
+        if (thinkingConfig == null || !LlmThinking.IsAuto(thinkingLevel))
         {
-            yield return BuildRequestBody(systemPromptString, promptString, n_predict, thinkingBudget: null);
+            yield return BuildRequestBody(systemPromptString, promptString, n_predict, thinkingConfig: null);
         }
     }
 
@@ -226,7 +226,7 @@ internal class LlmGemini : Llm, IGetModelNames
         string systemPromptString,
         string promptString,
         int n_predict,
-        int? thinkingBudget)
+        JObject thinkingConfig)
     {
         var generationConfig = new JObject
         {
@@ -234,12 +234,9 @@ internal class LlmGemini : Llm, IGetModelNames
             ["temperature"] = 1.5,
             ["topP"] = 0.9
         };
-        if (thinkingBudget.HasValue)
+        if (thinkingConfig != null)
         {
-            generationConfig["thinkingConfig"] = new JObject
-            {
-                ["thinkingBudget"] = thinkingBudget.Value
-            };
+            generationConfig["thinkingConfig"] = thinkingConfig;
         }
 
         var body = new JObject

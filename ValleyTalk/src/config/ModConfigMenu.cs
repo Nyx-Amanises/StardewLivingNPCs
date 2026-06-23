@@ -344,9 +344,11 @@ namespace ValleyTalk
             {
                 LlmThinking.Auto => Util.GetString("configThinkingAuto", returnNull: true) ?? "Auto",
                 LlmThinking.Off => Util.GetString("configThinkingOff", returnNull: true) ?? "Off",
+                LlmThinking.Minimal => Util.GetString("configThinkingMinimal", returnNull: true) ?? "Minimal",
                 LlmThinking.Low => Util.GetString("configThinkingLow", returnNull: true) ?? "Low",
                 LlmThinking.Medium => Util.GetString("configThinkingMedium", returnNull: true) ?? "Medium",
                 LlmThinking.High => Util.GetString("configThinkingHigh", returnNull: true) ?? "High",
+                LlmThinking.XHigh => Util.GetString("configThinkingXHigh", returnNull: true) ?? "Extra high",
                 _ => value
             };
         }

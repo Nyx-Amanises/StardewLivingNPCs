@@ -7,11 +7,13 @@ internal static class LlmThinking
 {
     public const string Auto = "Auto";
     public const string Off = "Off";
+    public const string Minimal = "Minimal";
     public const string Low = "Low";
     public const string Medium = "Medium";
     public const string High = "High";
+    public const string XHigh = "XHigh";
 
-    public static readonly string[] Options = [Auto, Off, Low, Medium, High];
+    public static readonly string[] Options = [Auto, Off, Minimal, Low, Medium, High, XHigh];
 
     public static string Normalize(string value, string fallback = Auto)
     {
@@ -53,31 +55,104 @@ internal static class LlmThinking
         return Normalize(level) switch
         {
             Off => "none",
+            Minimal => "minimal",
             Low => "low",
             Medium => "medium",
             High => "high",
+            XHigh => "xhigh",
             _ => null
         };
     }
 
-    public static int ToGeminiThinkingBudget(string level, string modelName)
+    public static string ToDeepSeekReasoningEffort(string level)
     {
         return Normalize(level) switch
         {
-            Off => 0,
-            Low => 128,
-            Medium => 512,
-            High => 1024,
-            _ => modelName.Contains("flash", StringComparison.OrdinalIgnoreCase) ? 0 : 128
+            Minimal or Low or Medium or High => "high",
+            XHigh => "max",
+            _ => null
         };
     }
 
-    public static bool? ToDeepSeekThinkingEnabled(string level)
+    public static string ToGeminiOpenAiReasoningEffort(string level, string modelName)
+    {
+        string normalizedLevel = Normalize(level);
+        if (normalizedLevel == Off)
+        {
+            if (IsGemini3Model(modelName))
+            {
+                return IsGeminiFlashModel(modelName) ? "minimal" : "low";
+            }
+
+            return IsGeminiProModel(modelName) ? "low" : "none";
+        }
+
+        return normalizedLevel switch
+        {
+            Minimal => IsGeminiProModel(modelName) ? "low" : "minimal",
+            Low => "low",
+            Medium => "medium",
+            High => "high",
+            XHigh => "xhigh",
+            _ => null
+        };
+    }
+
+    public static JObject BuildGeminiThinkingConfig(string level, string modelName)
+    {
+        string normalizedLevel = Normalize(level);
+        if (IsAuto(normalizedLevel))
+        {
+            return null;
+        }
+
+        if (IsGemini3Model(modelName))
+        {
+            string thinkingLevel = ToGeminiThinkingLevel(normalizedLevel, modelName);
+            return string.IsNullOrWhiteSpace(thinkingLevel)
+                ? null
+                : new JObject { ["thinkingLevel"] = thinkingLevel };
+        }
+
+        int? thinkingBudget = ToGeminiThinkingBudget(normalizedLevel, modelName);
+        return thinkingBudget.HasValue
+            ? new JObject { ["thinkingBudget"] = thinkingBudget.Value }
+            : null;
+    }
+
+    public static string ToGeminiThinkingLevel(string level, string modelName)
+    {
+        string normalizedLevel = Normalize(level);
+        return normalizedLevel switch
+        {
+            Off => IsGeminiFlashModel(modelName) ? "minimal" : "low",
+            Minimal => IsGeminiFlashModel(modelName) ? "minimal" : "low",
+            Low => "low",
+            Medium => "medium",
+            High or XHigh => "high",
+            _ => null
+        };
+    }
+
+    public static int? ToGeminiThinkingBudget(string level, string modelName)
     {
         return Normalize(level) switch
         {
-            Off => false,
-            Low or Medium or High => true,
+            Off => IsGeminiProModel(modelName) ? 128 : 0,
+            Minimal => 128,
+            Low => 128,
+            Medium => 512,
+            High or XHigh => 1024,
+            _ => null
+        };
+    }
+
+    public static string ToDeepSeekThinkingType(string level)
+    {
+        return Normalize(level) switch
+        {
+            Off => "disabled",
+            Minimal or Low or Medium or High or XHigh => "enabled",
             _ => null
         };
     }
@@ -87,6 +162,31 @@ internal static class LlmThinking
         string normalized = NormalizeModelName(modelName);
         return normalized.Contains("gpt5", StringComparison.OrdinalIgnoreCase)
             || normalized.Contains("gpt-5", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsGeminiThinkingModel(string modelName)
+    {
+        string normalized = NormalizeModelName(modelName);
+        return normalized.Contains("gemini", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsGemini3Model(string modelName)
+    {
+        string normalized = NormalizeModelName(modelName);
+        return normalized.Contains("gemini-3", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("gemini3", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsGeminiFlashModel(string modelName)
+    {
+        string normalized = NormalizeModelName(modelName);
+        return normalized.Contains("flash", StringComparison.OrdinalIgnoreCase);
+    }
+
+    public static bool IsGeminiProModel(string modelName)
+    {
+        string normalized = NormalizeModelName(modelName);
+        return normalized.Contains("pro", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool IsDeepSeekThinkingModel(string modelName)
@@ -118,12 +218,32 @@ internal static class LlmThinking
             return;
         }
 
+        if (IsGeminiThinkingModel(modelName))
+        {
+            string effort = ToGeminiOpenAiReasoningEffort(normalizedLevel, modelName);
+            if (!string.IsNullOrWhiteSpace(effort))
+            {
+                body["reasoning_effort"] = effort;
+            }
+
+            return;
+        }
+
         if (IsDeepSeekThinkingModel(modelName))
         {
-            bool? enabled = ToDeepSeekThinkingEnabled(normalizedLevel);
-            if (enabled.HasValue)
+            string thinkingType = ToDeepSeekThinkingType(normalizedLevel);
+            if (!string.IsNullOrWhiteSpace(thinkingType))
             {
-                body["enable_thinking"] = enabled.Value;
+                body["thinking"] = new JObject
+                {
+                    ["type"] = thinkingType
+                };
+            }
+
+            string effort = ToDeepSeekReasoningEffort(normalizedLevel);
+            if (!string.IsNullOrWhiteSpace(effort))
+            {
+                body["reasoning_effort"] = effort;
             }
         }
     }
