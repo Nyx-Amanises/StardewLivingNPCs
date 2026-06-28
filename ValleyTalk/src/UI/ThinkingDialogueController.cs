@@ -40,7 +40,6 @@ internal static class ThinkingDialogueController
         };
         npc.CurrentDialogue.Push(dialogue);
         Game1.DrawDialogue(dialogue);
-        Remove(npc, dialogue);
         activeBox = Game1.activeClickableMenu as DialogueBox;
     }
 
@@ -159,7 +158,7 @@ internal static class ThinkingDialogueController
         }
     }
 
-    private static bool IsThinkingDialogue(Dialogue dialogue)
+    internal static bool IsThinkingDialogue(Dialogue dialogue)
     {
         if (dialogue == null)
         {

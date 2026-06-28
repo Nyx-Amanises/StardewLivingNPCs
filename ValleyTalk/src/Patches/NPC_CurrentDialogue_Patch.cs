@@ -30,6 +30,11 @@ namespace ValleyTalk
                     return;
                 }
 
+                if (ThinkingDialogueController.IsThinkingDialogue(__result.Peek()))
+                {
+                    return;
+                }
+
                 var nextLine = allLines.First();
 
                 string originalLine = string.Empty;
