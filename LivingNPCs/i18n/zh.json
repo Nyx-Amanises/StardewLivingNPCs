@@ -532,6 +532,7 @@
   "command.livingnpcs_export.description": "导出 Markdown 调试报告。用法：livingnpcs_export [near|all|NPC名字]",
   "command.livingnpcs_eval.description": "运行一组轻量运行时诊断，检查关键人格化规则是否还在。",
   "command.livingnpcs_giftmail.description": "诊断 LivingNPCs 礼物信：追踪状态、邮箱位置、Data/mail 条目、生成文本和孤儿死信。",
+  "command.livingnpcs_forget.description": "清除 LivingNPCs 行为记忆/状态。用法：livingnpcs_forget [near|NPC名字|all confirm]",
 
   "debug.needSaveLoaded": "需要先进入存档再运行。",
   "debug.needSaveLoadedDebug": "LivingNPCs：请先载入存档后再使用调试命令。",
@@ -546,6 +547,14 @@
   "debug.exportedNpcHud": "LivingNPCs：已导出 {{npc}} 的调试报告。",
   "debug.noNearbyDebugNpc": "LivingNPCs：附近没有可调试的 NPC。",
   "debug.npcNotFound": "LivingNPCs：当前地点没有找到 NPC“{{query}}”。可以靠近 NPC 后用 near，或使用当前地图上的 NPC 名字。",
+  "debug.noNearbyForgetNpc": "LivingNPCs：附近没有可清除记忆的 NPC。",
+  "debug.npcNotFoundForget": "LivingNPCs：没有找到名为“{{query}}”的 NPC 或已保存的 LivingNPCs 记忆。",
+  "debug.forgetConfirmAll": "LivingNPCs：这会清除当前存档里的全部 LivingNPCs 行为记忆。请运行：livingnpcs_forget all confirm",
+  "debug.forgetAllDone": "LivingNPCs：已清除 {{count}} 个 NPC 的行为记忆。",
+  "debug.forgetAllHud": "LivingNPCs：已清除 {{count}} 个 NPC 的行为记忆。",
+  "debug.forgetNpcDone": "LivingNPCs：已清除 {{npc}} 的行为记忆。",
+  "debug.forgetNpcHud": "LivingNPCs：已清除 {{npc}} 的行为记忆。",
+  "debug.forgetNpcNoMemory": "LivingNPCs：{{npc}} 没有已保存的 LivingNPCs 行为记忆。",
   "debug.none": "无",
   "debug.listSeparator": "，",
   "debug.summary.noState": "{{npc}} 还没有 LivingNPCs 行为/互动记忆或状态。",
@@ -627,7 +636,7 @@
   "debug.pending.conflicts": "冲突 {{count}}",
 
   "gmcm.para.loaded": "LivingNPCs 已加载。能看到这个页面，就说明 Mod 正在运行。",
-  "gmcm.para.commands": "SMAPI 调试命令：livingnpcs_debug、livingnpcs_prompt、livingnpcs_export、livingnpcs_eval。",
+  "gmcm.para.commands": "SMAPI 调试命令：livingnpcs_debug、livingnpcs_prompt、livingnpcs_export、livingnpcs_eval、livingnpcs_forget。",
 
   "gmcm.section.basic": "基础设置",
   "gmcm.section.manualTest": "手动测试",

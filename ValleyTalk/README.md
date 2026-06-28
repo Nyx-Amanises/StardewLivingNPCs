@@ -41,6 +41,13 @@ ValleyTalk requires configuration of an AI language model provider. The mod supp
 
 Configure your preferred provider through the mod's config file or using Generic Mod Config Menu.
 
+## Console Commands
+
+- `valleytalk_tokens`: Show token usage for this session and the current save.
+- `valleytalk_tokens export`: Export the current save's token usage report.
+- `valleytalk_tokens reset`: Reset token usage for the current save.
+- `valleytalk_forget [near|NPC name|all confirm]`: Clear saved ValleyTalk conversation history. `all` requires `all confirm`.
+
 ## Architecture
 
 The mod uses Harmony patches to intercept dialogue requests and generates contextually appropriate responses based on:

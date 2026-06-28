@@ -57,7 +57,7 @@ internal sealed class BehaviorEngine
         this.feedback = new BehaviorFeedbackService(config, monitor);
         this.communityRipples = new CommunityRippleRuntime(config, monitor, this.memory, this.random);
         this.mailService = new BehaviorMailService(helper, this.memory, this.random, config, this.valleyTalkBridge);
-        this.debugCommands = new BehaviorDebugCommandHandler(helper, monitor, config, this.memory, this.mailService, this.feedback.Show);
+        this.debugCommands = new BehaviorDebugCommandHandler(helper, monitor, config, this.memory, this.mailService, this.feedback.Show, this.AfterManualMemoryClear);
         this.giftOpportunities = new GiftOpportunityService(
             config,
             this.memory,
@@ -203,6 +203,16 @@ internal sealed class BehaviorEngine
         });
     }
 
+
+    private void AfterManualMemoryClear()
+    {
+        this.helper.Data.WriteSaveData(SaveDataKey, this.memory.ToSaveData());
+        this.valleyTalkBridge.ClearAll();
+        this.helpRequestQuestLog.Sync();
+        this.mailService.InvalidateMailCache();
+        this.pendingRequests.Clear();
+        this.ClearGiftMailTracking();
+    }
     private void OnDayStarted(object? sender, DayStartedEventArgs e)
     {
         this.SafeRun("day started", () =>

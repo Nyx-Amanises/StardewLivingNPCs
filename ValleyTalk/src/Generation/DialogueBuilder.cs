@@ -660,6 +660,47 @@ namespace ValleyTalk
                 && PatchNpc(n, probability, retainResult);
         }
 
+        internal bool ClearConversationHistory(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                return false;
+            }
+
+            string key = _characters.Keys.FirstOrDefault(candidate => string.Equals(candidate, name, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(key) && _characters.TryGetValue(key, out var character))
+            {
+                bool hadHistory = character.EventHistory.Any();
+                character.ClearConversationHistory();
+                EventHistoryReader.Instance.ClearEventHistory(key);
+                ClearContext();
+                return hadHistory;
+            }
+
+            bool cleared = EventHistoryReader.Instance.ClearEventHistory(name);
+            ClearContext();
+            return cleared;
+        }
+
+        internal int ClearAllConversationHistory()
+        {
+            var names = Game1.characterData.Keys
+                .Concat(_characters.Keys)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            int count = 0;
+            foreach (string name in names)
+            {
+                if (this.ClearConversationHistory(name))
+                {
+                    count++;
+                }
+            }
+
+            ClearContext();
+            return count;
+        }
+
         internal void ClearContext()
         {
             LastContext = null;

@@ -113,6 +113,34 @@ public class EventHistoryReader
         ConversationTranscriptExporter.Export(name, eventHistory);
     }
 
+    internal bool ClearEventHistory(string name)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return false;
+        }
+
+        var emptyHistory = new StardewEventHistory();
+        bool hadHistory;
+        if (Context.IsMainPlayer)
+        {
+            var saveName = GetSaveName(name);
+            var eventKey = $"EventHistory_{saveName}";
+            hadHistory = (_saveCache.TryGetValue(eventKey, out var cachedHistory) && cachedHistory.Any())
+                || LoadFromSaveFile(name).Any();
+            _saveCache[eventKey] = emptyHistory;
+            ModEntry.SHelper.Data.WriteSaveData(eventKey, emptyHistory);
+        }
+        else
+        {
+            hadHistory = _fileEventHistories.Remove(name);
+            ModEntry.SHelper.Data.WriteJsonFile(_multiplayerFilename, _fileEventHistories);
+        }
+
+        ConversationTranscriptExporter.Export(name, emptyHistory);
+        return hadHistory;
+    }
+
     private static string GetSaveName(string name)
     {
         string saveName;

@@ -15,6 +15,7 @@ internal sealed class BehaviorDebugCommandHandler
     private readonly BehaviorMemory memory;
     private readonly BehaviorMailService mailService;
     private readonly Action<string> showFeedback;
+    private readonly Action afterMemoryCleared;
 
     public BehaviorDebugCommandHandler(
         IModHelper helper,
@@ -22,7 +23,8 @@ internal sealed class BehaviorDebugCommandHandler
         ModConfig config,
         BehaviorMemory memory,
         BehaviorMailService mailService,
-        Action<string> showFeedback)
+        Action<string> showFeedback,
+        Action afterMemoryCleared)
     {
         this.helper = helper;
         this.monitor = monitor;
@@ -30,6 +32,7 @@ internal sealed class BehaviorDebugCommandHandler
         this.memory = memory;
         this.mailService = mailService;
         this.showFeedback = showFeedback;
+        this.afterMemoryCleared = afterMemoryCleared;
     }
 
     public void RegisterConsoleCommands()
@@ -59,6 +62,11 @@ internal sealed class BehaviorDebugCommandHandler
             I18n.Get("command.livingnpcs_giftmail.description"),
             this.OnGiftMailCommand
         );
+        this.helper.ConsoleCommands.Add(
+            "livingnpcs_forget",
+            I18n.Get("command.livingnpcs_forget.description"),
+            this.OnForgetCommand
+        );
     }
 
     private void OnGiftMailCommand(string command, string[] args)
@@ -73,6 +81,98 @@ internal sealed class BehaviorDebugCommandHandler
         {
             this.monitor.Log(line, LogLevel.Info);
         }
+    }
+
+    private void OnForgetCommand(string command, string[] args)
+    {
+        if (!Context.IsWorldReady)
+        {
+            this.monitor.Log(I18n.Get("debug.needSaveLoaded"), LogLevel.Info);
+            return;
+        }
+
+        string target = JoinCommandArgs(args);
+        if (string.IsNullOrWhiteSpace(target) || target.Equals("near", StringComparison.OrdinalIgnoreCase))
+        {
+            if (!this.TryFindNearestNpcIgnoringDailyBudget(out NPC? nearbyNpc) || nearbyNpc == null)
+            {
+                this.monitor.Log(I18n.Get("debug.noNearbyForgetNpc"), LogLevel.Info);
+                return;
+            }
+
+            this.ClearNpcMemory(nearbyNpc.Name, nearbyNpc.displayName);
+            return;
+        }
+
+        if (target.Equals("all", StringComparison.OrdinalIgnoreCase))
+        {
+            this.monitor.Log(I18n.Get("debug.forgetConfirmAll"), LogLevel.Info);
+            return;
+        }
+
+        if (target.Equals("all confirm", StringComparison.OrdinalIgnoreCase))
+        {
+            int count = this.memory.ClearAllMemory();
+            this.afterMemoryCleared();
+            this.monitor.Log(I18n.Get("debug.forgetAllDone", new { count }), LogLevel.Info);
+            this.showFeedback(I18n.Get("debug.forgetAllHud", new { count }));
+            return;
+        }
+
+        if (!this.TryResolveMemoryTarget(target, out string npcName, out string displayName, out string error))
+        {
+            this.monitor.Log(error, LogLevel.Info);
+            return;
+        }
+
+        this.ClearNpcMemory(npcName, displayName);
+    }
+
+    private void ClearNpcMemory(string npcName, string displayName)
+    {
+        if (!this.memory.ClearNpcMemory(npcName))
+        {
+            this.monitor.Log(I18n.Get("debug.forgetNpcNoMemory", new { npc = displayName }), LogLevel.Info);
+            return;
+        }
+
+        this.afterMemoryCleared();
+        this.monitor.Log(I18n.Get("debug.forgetNpcDone", new { npc = displayName }), LogLevel.Info);
+        this.showFeedback(I18n.Get("debug.forgetNpcHud", new { npc = displayName }));
+    }
+
+    private bool TryResolveMemoryTarget(string query, out string npcName, out string displayName, out string error)
+    {
+        npcName = string.Empty;
+        displayName = query;
+        error = string.Empty;
+
+        NPC? npc = Game1.currentLocation?.characters.FirstOrDefault(candidate =>
+            string.Equals(candidate.Name, query, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(candidate.displayName, query, StringComparison.OrdinalIgnoreCase));
+        if (npc == null)
+        {
+            npc = Game1.getCharacterFromName(query);
+        }
+
+        if (npc != null)
+        {
+            npcName = npc.Name;
+            displayName = npc.displayName;
+            return true;
+        }
+
+        LivingNpcState? state = this.memory.GetTrackedStates()
+            .FirstOrDefault(candidate => string.Equals(candidate.NpcName, query, StringComparison.OrdinalIgnoreCase));
+        if (state != null)
+        {
+            npcName = state.NpcName;
+            displayName = state.NpcName;
+            return true;
+        }
+
+        error = I18n.Get("debug.npcNotFoundForget", new { query });
+        return false;
     }
 
     public void ShowNearestNpcMemory()

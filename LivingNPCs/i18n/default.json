@@ -532,6 +532,7 @@
   "command.livingnpcs_export.description": "Export a Markdown debug report. Usage: livingnpcs_export [near|all|NPC name]",
   "command.livingnpcs_eval.description": "Run a lightweight runtime diagnostic suite to check key personality rules.",
   "command.livingnpcs_giftmail.description": "Diagnose LivingNPCs gift mail: tracking state, mailbox position, Data/mail entry, generated text, and orphaned dead letters.",
+  "command.livingnpcs_forget.description": "Clear LivingNPCs behavior memory/state. Usage: livingnpcs_forget [near|NPC name|all confirm]",
 
   "debug.needSaveLoaded": "Load a save before running this command.",
   "debug.needSaveLoadedDebug": "LivingNPCs: load a save before using the debug command.",
@@ -546,6 +547,14 @@
   "debug.exportedNpcHud": "LivingNPCs: exported {{npc}}'s debug report.",
   "debug.noNearbyDebugNpc": "LivingNPCs: no nearby NPC to debug.",
   "debug.npcNotFound": "LivingNPCs: no NPC named \"{{query}}\" was found in the current location. Stand near an NPC and use near, or use the name of an NPC on the current map.",
+  "debug.noNearbyForgetNpc": "LivingNPCs: no nearby NPC memory to clear.",
+  "debug.npcNotFoundForget": "LivingNPCs: no NPC or saved LivingNPCs memory named \"{{query}}\" was found.",
+  "debug.forgetConfirmAll": "LivingNPCs: this clears all LivingNPCs behavior memory for the current save. Run: livingnpcs_forget all confirm",
+  "debug.forgetAllDone": "LivingNPCs: cleared behavior memory for {{count}} NPC(s).",
+  "debug.forgetAllHud": "LivingNPCs: cleared behavior memory for {{count}} NPC(s).",
+  "debug.forgetNpcDone": "LivingNPCs: cleared behavior memory for {{npc}}.",
+  "debug.forgetNpcHud": "LivingNPCs: cleared {{npc}}'s behavior memory.",
+  "debug.forgetNpcNoMemory": "LivingNPCs: {{npc}} has no saved LivingNPCs behavior memory.",
   "debug.none": "none",
   "debug.listSeparator": ", ",
   "debug.summary.noState": "{{npc}} has no LivingNPCs behavior/interaction memory or state yet.",
@@ -627,7 +636,7 @@
   "debug.pending.conflicts": "conflicts {{count}}",
 
   "gmcm.para.loaded": "LivingNPCs is loaded. If you can see this page, the mod is running.",
-  "gmcm.para.commands": "SMAPI debug commands: livingnpcs_debug, livingnpcs_prompt, livingnpcs_export, livingnpcs_eval.",
+  "gmcm.para.commands": "SMAPI debug commands: livingnpcs_debug, livingnpcs_prompt, livingnpcs_export, livingnpcs_eval, livingnpcs_forget.",
 
   "gmcm.section.basic": "General",
   "gmcm.section.manualTest": "Manual testing",

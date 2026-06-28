@@ -318,6 +318,7 @@ LivingNPCs 现在会把“这个存档已经走到哪里”压成一层独立的
 - `livingnpcs_export [near|all|NPC名]`：导出 Markdown 调试报告到 `Mods/LivingNPCs/debug_reports/<存档名>/`。
 - `livingnpcs_eval`：运行一组轻量运行时诊断，确认关键人格化规则还在。
 - `livingnpcs_giftmail`：诊断 LivingNPCs 礼物信——状态、邮箱位置、`Data/mail` 是否有对应条目、生成文本和孤儿死信。
+- `livingnpcs_forget [near|NPC名|all confirm]`：清除 LivingNPCs 保存的行为记忆/状态。`all` 必须写成 `all confirm`。
 
 报告里会显示：
 

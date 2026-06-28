@@ -103,6 +103,43 @@ internal sealed class BehaviorMemory
         return this.statesByNpc.Values.ToList();
     }
 
+    public bool ClearNpcMemory(string npcName)
+    {
+        if (string.IsNullOrWhiteSpace(npcName))
+        {
+            return false;
+        }
+
+        string? key = this.statesByNpc.Keys
+            .Concat(this.entriesByNpc.Keys)
+            .Concat(this.dailyCountsByNpc.Keys)
+            .FirstOrDefault(candidate => string.Equals(candidate, npcName, System.StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrWhiteSpace(key))
+        {
+            return false;
+        }
+
+        bool removed = this.statesByNpc.Remove(key);
+        removed = this.entriesByNpc.Remove(key) || removed;
+        removed = this.dailyCountsByNpc.Remove(key) || removed;
+        return removed;
+    }
+
+    public int ClearAllMemory()
+    {
+        int count = this.statesByNpc.Keys
+            .Concat(this.entriesByNpc.Keys)
+            .Concat(this.dailyCountsByNpc.Keys)
+            .Distinct(System.StringComparer.OrdinalIgnoreCase)
+            .Count();
+
+        this.statesByNpc.Clear();
+        this.entriesByNpc.Clear();
+        this.dailyCountsByNpc.Clear();
+        this.lastStateDecayTotalDays = -1;
+        return count;
+    }
+
     public IReadOnlyList<CommunityImpressionFact> GetRetellableCommunityImpressions(LivingNpcState state, int maxCount)
     {
         this.RefreshMemoryStores(state);
