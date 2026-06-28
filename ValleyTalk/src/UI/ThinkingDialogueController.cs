@@ -13,6 +13,7 @@ internal static class ThinkingDialogueController
     private static string npcName;
     private static string baseText;
     private static DialogueBox activeBox;
+    private static Dialogue activeDialogue;
     private static string ThinkingDialogueKey => $"{SldConstants.DialogueKeyPrefix}Thinking";
 
     public static void Start(NPC npc)
@@ -32,25 +33,34 @@ internal static class ThinkingDialogueController
             ?? $"{npc.displayName} is thinking";
         baseText = thinkingText;
         activeBox = null;
+        activeDialogue = null;
 
         var dialogue = new Dialogue(npc, ThinkingDialogueKey, $"{baseText}...")
         {
-            removeOnNextMove = true,
+            removeOnNextMove = false,
             temporaryDialogueKey = ThinkingDialogueKey
         };
+        activeDialogue = dialogue;
         npc.CurrentDialogue.Push(dialogue);
+        Game1.currentSpeaker = npc;
         Game1.DrawDialogue(dialogue);
         activeBox = Game1.activeClickableMenu as DialogueBox;
     }
 
     public static void Close()
     {
-        if (Game1.activeClickableMenu is DialogueBox dialogueBox && IsThinkingBox(dialogueBox))
+        var npc = activeNpc;
+        var dialogueBox = Game1.activeClickableMenu as DialogueBox;
+        bool closingThinkingBox = IsThinkingBox(dialogueBox);
+
+        DialogueUiStateGuard.RemoveDialogue(npc, activeDialogue);
+        RemoveStale(npc);
+
+        if (closingThinkingBox || DialogueUiStateGuard.HasEmptyDialogueStack(npc))
         {
-            Game1.exitActiveMenu();
+            DialogueUiStateGuard.ClearDialogueState(npc, closingThinkingBox ? dialogueBox : null);
         }
 
-        RemoveStale(activeNpc);
         Clear();
     }
 
@@ -122,6 +132,7 @@ internal static class ThinkingDialogueController
         npcName = null;
         baseText = null;
         activeBox = null;
+        activeDialogue = null;
     }
 
     private static void Remove(NPC npc, Dialogue dialogue)
@@ -131,30 +142,14 @@ internal static class ThinkingDialogueController
             return;
         }
 
-        Remove(npc, candidate => ReferenceEquals(candidate, dialogue));
+        DialogueUiStateGuard.RemoveDialogue(npc, dialogue);
     }
 
     private static void Remove(NPC npc, Predicate<Dialogue> predicate)
     {
-        var stack = npc?.CurrentDialogue;
-        if (stack == null || stack.Count == 0 || predicate == null)
+        if (predicate != null)
         {
-            return;
-        }
-
-        var kept = new List<Dialogue>();
-        while (stack.Count > 0)
-        {
-            var dialogue = stack.Pop();
-            if (!predicate(dialogue))
-            {
-                kept.Add(dialogue);
-            }
-        }
-
-        for (int i = kept.Count - 1; i >= 0; i--)
-        {
-            stack.Push(kept[i]);
+            DialogueUiStateGuard.RemoveDialogues(npc, predicate);
         }
     }
 

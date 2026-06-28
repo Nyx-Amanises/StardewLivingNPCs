@@ -19,6 +19,7 @@ internal static class NativeDialogueTextInputController
     private static bool active;
     private static NPC currentNpc;
     private static DialogueBox activeBox;
+    private static Dialogue activeDialogue;
     private static string prompt;
     private static string text;
     private static int caretPosition;
@@ -41,15 +42,17 @@ internal static class NativeDialogueTextInputController
         active = true;
         currentNpc = npc;
         activeBox = null;
+        activeDialogue = null;
         prompt = string.IsNullOrWhiteSpace(title) ? "What do you want to say?" : title;
         text = string.Empty;
         caretPosition = 0;
         onSubmitted = callback;
 
         var dialogue = new Dialogue(npc, $"{SldConstants.DialogueKeyPrefix}Input", prompt);
+        activeDialogue = dialogue;
         npc.CurrentDialogue.Push(dialogue);
+        Game1.currentSpeaker = npc;
         Game1.DrawDialogue(dialogue);
-        npc.CurrentDialogue.TryPop(out _);
         activeBox = Game1.activeClickableMenu as DialogueBox;
 
         subscriber = new InputSubscriber();
@@ -152,9 +155,14 @@ internal static class NativeDialogueTextInputController
 
     private static void Close()
     {
-        if (Game1.activeClickableMenu is DialogueBox dialogueBox && IsInputBox(dialogueBox))
+        var npc = currentNpc;
+        var dialogueBox = Game1.activeClickableMenu as DialogueBox;
+        bool closingInputBox = IsInputBox(dialogueBox);
+
+        DialogueUiStateGuard.RemoveDialogue(npc, activeDialogue);
+        if (closingInputBox || DialogueUiStateGuard.HasEmptyDialogueStack(npc))
         {
-            Game1.exitActiveMenu();
+            DialogueUiStateGuard.ClearDialogueState(npc, closingInputBox ? dialogueBox : null);
         }
 
         if (ReferenceEquals(Game1.keyboardDispatcher.Subscriber, subscriber))
@@ -166,6 +174,7 @@ internal static class NativeDialogueTextInputController
         active = false;
         currentNpc = null;
         activeBox = null;
+        activeDialogue = null;
         prompt = null;
         text = string.Empty;
         caretPosition = 0;

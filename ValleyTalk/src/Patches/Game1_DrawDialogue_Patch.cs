@@ -28,4 +28,13 @@ namespace ValleyTalk
         }
     }
 
+    [HarmonyPatch(typeof(Game1), nameof(Game1.drawDialogueBox), new Type[] { })]
+    internal static class Game1_DrawDialogueBox_EmptyStackGuard_Patch
+    {
+        public static bool Prefix()
+        {
+            return DialogueUiStateGuard.TrySkipEmptySpeakerDraw();
+        }
+    }
+
 }

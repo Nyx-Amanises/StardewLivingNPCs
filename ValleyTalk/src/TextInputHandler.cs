@@ -61,8 +61,6 @@ namespace ValleyTalk
 
         private static void OnTextEntered(string enteredText)
         {
-            Game1.exitActiveMenu();
-
             if (_currentNpc == null || string.IsNullOrWhiteSpace(enteredText))
             {
                 // Reset state
