@@ -17,6 +17,8 @@ internal static class I18n
         translations = helper;
     }
 
+    public static string Locale => translations?.Locale ?? string.Empty;
+
     /// <summary>Gets the localized string for <paramref name="key"/>, or the key itself if not initialized.</summary>
     public static string Get(string key)
     {

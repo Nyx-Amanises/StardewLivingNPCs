@@ -299,7 +299,27 @@ internal sealed class BehaviorMailService
         return !string.IsNullOrWhiteSpace(body)
             && body.IndexOf('%') < 0
             && body.IndexOf('[') < 0
-            && body.IndexOf(']') < 0;
+            && body.IndexOf(']') < 0
+            && !LooksLikeWrongLanguage(body);
+    }
+
+    private static bool LooksLikeWrongLanguage(string body)
+    {
+        string locale = I18n.Locale;
+        int chineseCharacters = body.Count(c => c >= '\u4e00' && c <= '\u9fff');
+        int latinLetters = body.Count(c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
+        if (locale.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+        {
+            if (latinLetters < 12)
+            {
+                return false;
+            }
+
+            return chineseCharacters < 2 || latinLetters > chineseCharacters * 2;
+        }
+
+        int letters = body.Count(char.IsLetter);
+        return chineseCharacters >= 2 && chineseCharacters * 2 >= Math.Max(letters, 1);
     }
 
     public void QueueDueGiftMailsForTomorrow()

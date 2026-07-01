@@ -121,14 +121,35 @@ internal static class ConversationTextPostProcessor
         }
 
         string locale = ModEntry.SHelper.Translation.Locale ?? string.Empty;
-        if (locale.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+        return LooksLikeWrongLanguage(text, locale);
+    }
+
+    internal static bool LooksLikeWrongLanguage(string text, string locale)
+    {
+        if (string.IsNullOrWhiteSpace(text))
         {
             return false;
+        }
+
+        if (locale.StartsWith("zh", StringComparison.OrdinalIgnoreCase))
+        {
+            return LooksMostlyNonChinese(text);
         }
 
         int chineseCharacters = text.Count(c => c >= '\u4e00' && c <= '\u9fff');
         int letters = text.Count(char.IsLetter);
         return chineseCharacters >= 2 && chineseCharacters * 2 >= Math.Max(letters, 1);
+    }
+    private static bool LooksMostlyNonChinese(string text)
+    {
+        int chineseCharacters = text.Count(c => c >= '\u4e00' && c <= '\u9fff');
+        int latinLetters = text.Count(c => (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z'));
+        if (latinLetters < 12)
+        {
+            return false;
+        }
+
+        return chineseCharacters < 2 || latinLetters > chineseCharacters * 2;
     }
 
     public static string GetLanguageRetryInstruction()
