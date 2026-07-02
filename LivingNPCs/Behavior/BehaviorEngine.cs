@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -13,6 +14,16 @@ namespace LivingNPCs.Behavior;
 
 internal sealed class BehaviorEngine
 {
+    /// <summary>An exchange reported by ValleyTalk, waiting to be applied on the main thread.</summary>
+    private sealed class PendingValleyTalkExchange
+    {
+        public string NpcName = string.Empty;
+        public string NpcDisplayName = string.Empty;
+        public string PlayerText = string.Empty;
+        public string NpcResponse = string.Empty;
+        public string AnalysisJson = string.Empty;
+    }
+
     private const string SaveDataKey = "behavior-memory";
 
     private readonly IModHelper helper;
@@ -39,6 +50,7 @@ internal sealed class BehaviorEngine
     private readonly HelpRequestRuntime helpRequests;
     private readonly ConversationStartRecorder conversationStartRecorder;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
+    private readonly ConcurrentQueue<PendingValleyTalkExchange> pendingValleyTalkExchanges = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
     private readonly HashSet<string> loggedHandlerExceptions = new();
     private string pendingGiftMailKey = string.Empty;
@@ -287,6 +299,7 @@ internal sealed class BehaviorEngine
         this.SafeRun("returned to title", () =>
         {
             this.memory.ResetDaily();
+            this.pendingValleyTalkExchanges.Clear();
             this.valleyTalkBridge.ClearAll();
             this.pendingRequests.Clear();
             this.ClearGiftMailTracking();
@@ -413,6 +426,7 @@ internal sealed class BehaviorEngine
             return;
         }
 
+        this.SafeRun("update tick: valleytalk exchanges", this.ProcessPendingValleyTalkExchanges);
         this.SafeRun("update tick: pending gift verifications", () => this.conversationStartRecorder.ProcessPendingGiftVerifications());
         this.SafeRun("update tick: pending behavior requests", this.ProcessPendingBehaviorRequests);
         this.SafeRun("update tick: gift mail tracking", this.TryTrackGiftMailOpening);
@@ -559,6 +573,8 @@ internal sealed class BehaviorEngine
 
     public bool RecordValleyTalkExchange(string npcName, string npcDisplayName, string playerText, string npcResponse, string analysisJson)
     {
+        // These checks only touch the immutable arguments and config flags, so they are safe on
+        // any thread.
         if (RsvAiPolicy.IsBlockedNpcName(npcName)
             || RsvAiPolicy.IsBlockedNpcName(npcDisplayName)
             || !this.config.EnableConversationMemory
@@ -567,16 +583,44 @@ internal sealed class BehaviorEngine
             return false;
         }
 
-        if (!this.TryFindNpcInCurrentLocation(npcName, out NPC? npc) || npc == null)
+        // ValleyTalk calls this from LLM-response continuations on thread-pool threads (desktop
+        // has no SynchronizationContext). Everything downstream mutates net-synced game state
+        // (friendship, inventory, money, quest log) and the shared behavior memory, so defer to
+        // the next UpdateTicked on the main thread. The bridge treats this as fire-and-forget;
+        // the return value only means the exchange was queued.
+        this.pendingValleyTalkExchanges.Enqueue(new PendingValleyTalkExchange
         {
-            return false;
+            NpcName = npcName,
+            NpcDisplayName = npcDisplayName,
+            PlayerText = playerText,
+            NpcResponse = npcResponse ?? string.Empty,
+            AnalysisJson = analysisJson ?? string.Empty
+        });
+        return true;
+    }
+
+    private void ProcessPendingValleyTalkExchanges()
+    {
+        while (this.pendingValleyTalkExchanges.TryDequeue(out PendingValleyTalkExchange? exchange))
+        {
+            this.ApplyValleyTalkExchange(exchange);
+        }
+    }
+
+    private void ApplyValleyTalkExchange(PendingValleyTalkExchange exchange)
+    {
+        if (!this.TryFindNpcInCurrentLocation(exchange.NpcName, out NPC? npc) || npc == null)
+        {
+            return;
         }
 
+        string playerText = exchange.PlayerText;
+        string npcResponse = exchange.NpcResponse;
         var result = this.memory.RecordValleyTalkExchange(
             npc,
             playerText,
             npcResponse,
-            analysisJson,
+            exchange.AnalysisJson,
             this.config.MaxMemoryEntriesPerNpc,
             this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
             this.config.HelpRequestCooldownDays,
@@ -591,7 +635,7 @@ internal sealed class BehaviorEngine
                 this.TryExecuteConversationActions(npc, result.Actions, playerText, npcResponse);
             }
 
-            return false;
+            return;
         }
 
         if (result.AppliedFriendshipDelta > 0)
@@ -636,7 +680,6 @@ internal sealed class BehaviorEngine
                     friendship = result.AppliedFriendshipDelta
                 })
         );
-        return true;
     }
 
     public string GetConversationContext(string npcName, string npcDisplayName)

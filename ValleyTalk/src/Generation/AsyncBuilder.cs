@@ -69,23 +69,17 @@ public class AsyncBuilder
             }
 
             var newDialogue = await dialogueTask;
-            
-            // Ensure UI updates happen on main thread for Android compatibility
-            if (AndroidHelper.IsAndroid)
+
+            // The continuation after the await runs on a thread-pool thread (desktop has no
+            // SynchronizationContext), and DrawDialogue/menu state are main-thread only, so
+            // always defer the UI update to the next game tick — on every platform.
+            EventHandler<UpdateTickedEventArgs> updateHandler = null;
+            updateHandler = (sender, e) =>
             {
-                // Schedule UI update for next game tick on main thread
-                EventHandler<UpdateTickedEventArgs> updateHandler = null;
-                updateHandler = (sender, e) =>
-                {
-                    UpdateUI();
-                    ModEntry.SHelper.Events.GameLoop.UpdateTicked -= updateHandler;
-                };
-                ModEntry.SHelper.Events.GameLoop.UpdateTicked += updateHandler;
-            }
-            else
-            {
+                ModEntry.SHelper.Events.GameLoop.UpdateTicked -= updateHandler;
                 UpdateUI();
-            }
+            };
+            ModEntry.SHelper.Events.GameLoop.UpdateTicked += updateHandler;
 
             void UpdateUI()
             {
@@ -114,23 +108,16 @@ public class AsyncBuilder
                 return;
             }
 
-            // Make sure to hide thinking window even if there's an error
-            if (AndroidHelper.IsAndroid)
+            // Same main-thread rule as the success path: close the thinking window and show the
+            // fallback on the next game tick, never from this thread-pool continuation.
+            EventHandler<UpdateTickedEventArgs> errorHandler = null;
+            errorHandler = (sender, e) =>
             {
-                EventHandler<UpdateTickedEventArgs> errorHandler = null;
-                errorHandler = (sender, e) =>
-                {
-                    ThinkingDialogueController.Close();
-                    ShowFallbackDialogue(npc);
-                    ModEntry.SHelper.Events.GameLoop.UpdateTicked -= errorHandler;
-                };
-                ModEntry.SHelper.Events.GameLoop.UpdateTicked += errorHandler;
-            }
-            else
-            {
+                ModEntry.SHelper.Events.GameLoop.UpdateTicked -= errorHandler;
                 ThinkingDialogueController.Close();
                 ShowFallbackDialogue(npc);
-            }
+            };
+            ModEntry.SHelper.Events.GameLoop.UpdateTicked += errorHandler;
         }
         finally
         {
