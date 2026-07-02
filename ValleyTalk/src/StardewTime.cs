@@ -58,6 +58,11 @@ internal class StardewTime : IComparable<StardewTime>
         return days;
     }
 
+    internal int ToAbsoluteDays()
+    {
+        return year * 112 + SeasonToInt(season) * 28 + dayOfMonth;
+    }
+
     public string SinceDescription(StardewTime other = null)
     {
         if (other == null)

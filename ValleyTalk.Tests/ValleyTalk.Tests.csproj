@@ -5,10 +5,19 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <!-- ModBuildConfig in unit-test mode: reference the game assemblies (tests touch StardewTime
+         and the history models, which use game types) without deploying anything.
+         BundleExtraAssemblies=Game marks the game DLLs Private=true so they are copied into the
+         test output for the runner; with EnableModDeploy=false nothing is deployed to Mods. -->
+    <EnableModDeploy>false</EnableModDeploy>
+    <EnableModZip>false</EnableModZip>
+    <EnableGameDebugging>false</EnableGameDebugging>
+    <BundleExtraAssemblies>Game</BundleExtraAssemblies>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" />
     <PackageReference Include="xunit" Version="2.9.2" />
     <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2">
       <PrivateAssets>all</PrivateAssets>

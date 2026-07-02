@@ -60,17 +60,45 @@ public class EventHistoryReader
     {
         if (Context.IsMainPlayer)
         {
-            return LoadFromSaveFile(name);
+            var history = LoadFromSaveFile(name);
+            PruneAndArchive(name, history);
+            return history;
         }
         else
         {
             if (_fileEventHistories.TryGetValue(name, out var history))
             {
+                PruneAndArchive(name, history);
                 return history;
             }
-            
+
             return new StardewEventHistory();
         }
+    }
+
+    /// <summary>
+    /// Trim the history to its retention caps and archive any pruned conversations into the
+    /// exported transcript. Idempotent: pruning an already-pruned history drops nothing, and the
+    /// transcript archive skips conversations at or before its watermark, so re-loading the same
+    /// unpruned save blob (the main-player path deserializes it fresh on every call) is safe.
+    /// </summary>
+    private void PruneAndArchive(string name, StardewEventHistory history)
+    {
+        var dropped = history.Prune(new StardewTime(Game1.Date, Game1.timeOfDay));
+        if (dropped.Count == 0)
+        {
+            return;
+        }
+
+        ConversationTranscriptExporter.ArchivePrunedConversations(name, dropped);
+        if (Context.IsMainPlayer)
+        {
+            // Queue the pruned history so the next save persists the smaller blob even if the
+            // player never talks to this NPC again this session.
+            _saveCache[$"EventHistory_{GetSaveName(name)}"] = history;
+        }
+        // Farmhand path: the history object is the same instance stored in _fileEventHistories,
+        // so the pruned state is written out with the next file save automatically.
     }
             
     private static StardewEventHistory LoadFromSaveFile(string name)
@@ -99,6 +127,10 @@ public class EventHistoryReader
 
     internal void UpdateEventHistory(string name, StardewEventHistory eventHistory)
     {
+        // Keep long play sessions bounded too: history grows on every recorded line, and the save
+        // is only pruned again at the next load.
+        PruneAndArchive(name, eventHistory);
+
         if (Context.IsMainPlayer)
         {
             var saveName = GetSaveName(name);
@@ -137,7 +169,8 @@ public class EventHistoryReader
             ModEntry.SHelper.Data.WriteJsonFile(_multiplayerFilename, _fileEventHistories);
         }
 
-        ConversationTranscriptExporter.Export(name, emptyHistory);
+        // Wipe the transcript archive along with the live section: "forget" means the whole file.
+        ConversationTranscriptExporter.ResetTranscript(name);
         return hadHistory;
     }
 

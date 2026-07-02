@@ -8,6 +8,18 @@ namespace ValleyTalk;
 
 internal class StardewEventHistory
 {
+    // Retention caps. Prompt assembly only ever consumes the ~20 most recent entries across all
+    // four lists combined (Character.EventHistorySample), so these caps are invisible to dialogue
+    // generation; they exist to keep save data bounded. Conversations are the largest entries and
+    // the only ones surfaced in exported transcripts, so pruned conversations are returned to the
+    // caller for archiving instead of being silently dropped.
+    internal const int MaxEventEntries = 40;
+    internal const int MaxOverheardEntries = 40;
+    internal const int MaxDialogueEntries = 60;
+    internal const int MaxConversationEntries = 30;
+    // One in-game year; matches the "a long time ago" boundary in StardewTime.SinceDescription.
+    internal const int MaxAgeDays = 112;
+
     private List<Tuple<StardewTime,IHistory>> _eventHistory = new();
     private List<Tuple<StardewTime,IHistory>> _overheardHistory = new();
     private List<Tuple<StardewTime,IHistory>> _dialogueHistory = new();
@@ -98,7 +110,11 @@ internal class StardewEventHistory
                 _conversationHistory.Add(new(time,chEvent));
                 break;
             default:
-                throw new NotImplementedException();
+                // ThirdPartyHistory (and any future type) has no persistable bucket: it holds live
+                // object references that cannot round-trip through save data. Dropping the entry is
+                // safer than throwing from inside the dialogue-recording pipeline.
+                ModEntry.SMonitor?.Log($"Ignoring non-persistable history entry of type {theEvent.GetType().Name}.", StardewModdingAPI.LogLevel.Trace);
+                break;
         }
     }
 
@@ -149,8 +165,74 @@ internal class StardewEventHistory
         }
     }
 
-    internal void RemoveDialogueOverlapping(List<ConversationElement> chatHistory)
+    /// <summary>
+    /// Trim each history list to its retention cap (and age limit where applicable) so save data
+    /// stays bounded. Returns the dropped conversation entries, oldest first, so the caller can
+    /// archive them into the exported transcript before they disappear; dropped entries from the
+    /// other lists are discarded (they never surface in transcripts).
+    /// Calling this on an already-pruned history is a no-op that returns an empty list.
+    /// </summary>
+    internal List<Tuple<StardewTime, ConversationHistory>> Prune(StardewTime now)
     {
+        PruneList(_eventHistory, MaxEventEntries, now, applyAgeLimit: false);
+        PruneList(_overheardHistory, MaxOverheardEntries, now, applyAgeLimit: true);
+        PruneList(_dialogueHistory, MaxDialogueEntries, now, applyAgeLimit: true);
+        return PruneList(_conversationHistory, MaxConversationEntries, now, applyAgeLimit: true, protectToday: true)
+            .Select(x => new Tuple<StardewTime, ConversationHistory>(x.Item1, (ConversationHistory)x.Item2))
+            .ToList();
+    }
+
+    private static List<Tuple<StardewTime, IHistory>> PruneList(
+        List<Tuple<StardewTime, IHistory>> list,
+        int maxEntries,
+        StardewTime now,
+        bool applyAgeLimit,
+        bool protectToday = false)
+    {
+        var dropped = new List<Tuple<StardewTime, IHistory>>();
+        if (list.Count == 0)
+        {
+            return dropped;
+        }
+
+        // Entries protected from pruning: an in-progress conversation is re-added with today's
+        // timestamp on every turn, so dropping a same-day entry could archive a live conversation.
+        bool IsProtected(Tuple<StardewTime, IHistory> entry) => protectToday && entry.Item1.DaysSince(now) < 1;
+
+        var ordered = list.OrderBy(x => x.Item1).ToList();
+        var retained = new List<Tuple<StardewTime, IHistory>>(ordered.Count);
+        foreach (var entry in ordered)
+        {
+            if (applyAgeLimit && !IsProtected(entry) && entry.Item1.DaysSince(now) > MaxAgeDays)
+            {
+                dropped.Add(entry);
+            }
+            else
+            {
+                retained.Add(entry);
+            }
+        }
+
+        int excess = retained.Count - maxEntries;
+        for (int i = 0; i < retained.Count && excess > 0;)
+        {
+            if (IsProtected(retained[i]))
+            {
+                i++;
+                continue;
+            }
+
+            dropped.Add(retained[i]);
+            retained.RemoveAt(i);
+            excess--;
+        }
+
+        list.Clear();
+        list.AddRange(retained);
+        return dropped;
+    }
+
+    internal void RemoveDialogueOverlapping(List<ConversationElement> chatHistory)    {
         foreach (var chat in chatHistory)
         {
             _dialogueHistory.RemoveAll(x => ((DialogueHistory)x.Item2).Dialogues.Any(z => z.Text.Equals(chat.Text)));
