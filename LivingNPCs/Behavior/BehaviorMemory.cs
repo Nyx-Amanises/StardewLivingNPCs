@@ -21,6 +21,34 @@ internal sealed class BehaviorMemory
             this.AddEntry
         );
 
+    private NpcStateUpdateService? stateUpdates;
+
+    private NpcStateUpdateService StateUpdates =>
+        this.stateUpdates ??= new NpcStateUpdateService(
+            this.AddFamiliarity,
+            this.ApplyEmotion,
+            this.ApplyRelationshipTrustDelta,
+            this.MarkRepairGiftReceived,
+            this.ApplyConflictRepair,
+            this.StoreConflict
+        );
+
+    private ExchangeApplicationService? exchangeApplication;
+
+    private ExchangeApplicationService ExchangeApplication =>
+        this.exchangeApplication ??= new ExchangeApplicationService(
+            this.HelpRequests,
+            this.CreateEntry,
+            this.AddEntry,
+            this.StorePlayerPreferenceMemory,
+            this.StoreLongTermMemory,
+            this.StoreConflict,
+            this.StoreDialogueBehaviorInfluence,
+            this.ApplyDialogueEmotionImpact,
+            this.ApplyConflictRepair,
+            this.ApplyAiDialogueFriendship
+        );
+
     public void Load(BehaviorMemorySaveData? saveData, int maxEntriesPerNpc)
     {
         this.entriesByNpc.Clear();
@@ -299,403 +327,28 @@ internal sealed class BehaviorMemory
         int maxExtraFriendshipPerDay,
         int maxDialogueBehaviorInfluenceDays)
     {
-        var analysis = ParseExchangeAnalysis(analysisJson);
-        var state = this.GetOrCreateState(npc);
-        int storedMemories = 0;
-        int storedPlayerPreferences = 0;
-        int storedHelpRequests = 0;
-        int updatedHelpRequests = 0;
-        int storedConflicts = 0;
-        int storedBehaviorInfluences = 0;
-        int resolvedConflicts = 0;
-        bool emotionChanged = false;
-        var fulfilledHelpRequests = new List<NpcHelpRequestFact>();
-
-        foreach (var candidate in analysis.Memories
-                     .Where(memory => memory.Importance >= 40 && !string.IsNullOrWhiteSpace(memory.Summary))
-                     .OrderByDescending(memory => memory.Importance)
-                     .Take(4))
-        {
-            if (candidate.PlayerPreference && this.StorePlayerPreferenceMemory(state, candidate))
-            {
-                storedPlayerPreferences++;
-                var entry = this.CreateEntry(
-                    npc,
-                    "PlayerPreferenceMemory",
-                    candidate.PlayerPreferenceKind,
-                    candidate.Summary
-                );
-                this.AddEntry(entry, maxEntriesPerNpc);
-                continue;
-            }
-
-            if (this.StoreLongTermMemory(state, candidate))
-            {
-                storedMemories++;
-                var entry = this.CreateEntry(
-                    npc,
-                    "LongTermMemory",
-                    candidate.Kind,
-                    candidate.Summary
-                );
-                this.AddEntry(entry, maxEntriesPerNpc);
-            }
-        }
-
-        foreach (var candidate in analysis.HelpRequests
-                     .Where(request =>
-                         maxPendingHelpRequestsPerNpc > 0
-                         && !string.IsNullOrWhiteSpace(request.Summary)
-                         && NormalizeHelpRequestType(request.Type) == "item_request")
-                     .Take(1))
-        {
-            if (this.HelpRequests.Store(
-                    npc,
-                    state,
-                    candidate,
-                    playerText,
-                    maxPendingHelpRequestsPerNpc,
-                    helpRequestCooldownDays))
-            {
-                storedHelpRequests++;
-                var entry = this.CreateEntry(
-                    npc,
-                    "HelpRequest",
-                    candidate.Type,
-                    candidate.Summary
-                );
-                this.AddEntry(entry, maxEntriesPerNpc);
-            }
-        }
-
-        // Creation safety net: if the AI mentioned an item favor in the visible reply but omitted
-        // the structured helpRequests field, synthesize it from the dialogue (still gated by Store).
-        if (storedHelpRequests == 0
-            && this.HelpRequests.TrySynthesizeItemRequestFromDialogue(
-                npc,
-                state,
-                playerText,
-                npcResponse,
-                maxPendingHelpRequestsPerNpc,
-                helpRequestCooldownDays))
-        {
-            storedHelpRequests++;
-            this.AddEntry(
-                this.CreateEntry(npc, "HelpRequest", "item_request", "the visible conversation raised an item favor"),
-                maxEntriesPerNpc
-            );
-        }
-
-        foreach (var candidate in analysis.HelpRequestUpdates
-                     .Where(update => !string.IsNullOrWhiteSpace(update.Summary))
-                     .Take(2))
-        {
-            if (this.HelpRequests.ApplyUpdate(state, candidate, playerText, out NpcHelpRequestFact? fulfilledRequest))
-            {
-                updatedHelpRequests++;
-                if (fulfilledRequest != null)
-                {
-                    fulfilledHelpRequests.Add(fulfilledRequest);
-                }
-                var entry = this.CreateEntry(
-                    npc,
-                    "HelpRequestUpdate",
-                    candidate.Status,
-                    string.IsNullOrWhiteSpace(candidate.Resolution) ? candidate.Summary : candidate.Resolution
-                );
-                this.AddEntry(entry, maxEntriesPerNpc);
-            }
-        }
-
-        // Deterministic fallback: if the farmer's reply clearly agrees to help and an offered
-        // request is still waiting, accept it even when the AI did not emit an accepted update.
-        if (this.HelpRequests.TryAcceptOfferedFromPlayerAffirmation(state, playerText))
-        {
-            updatedHelpRequests++;
-            this.AddEntry(
-                this.CreateEntry(npc, "HelpRequestUpdate", "accepted", "the farmer agreed to help"),
-                maxEntriesPerNpc
-            );
-        }
-
-        foreach (var candidate in analysis.Conflicts
-                     .Where(conflict => !string.IsNullOrWhiteSpace(conflict.Summary) && conflict.Severity > 0)
-                     .Take(2))
-        {
-            if (this.StoreConflict(state, candidate))
-            {
-                storedConflicts++;
-                var entry = this.CreateEntry(
-                    npc,
-                    "Conflict",
-                    candidate.CauseKind,
-                    candidate.Summary
-                );
-                this.AddEntry(entry, maxEntriesPerNpc);
-            }
-        }
-
-        foreach (var candidate in analysis.BehaviorInfluences
-                     .Where(influence => !string.IsNullOrWhiteSpace(influence.Summary))
-                     .Take(2))
-        {
-            if (this.StoreDialogueBehaviorInfluence(npc, state, candidate, maxDialogueBehaviorInfluenceDays))
-            {
-                storedBehaviorInfluences++;
-                var entry = this.CreateEntry(
-                    npc,
-                    "DialogueBehavior",
-                    candidate.Type,
-                    candidate.Summary
-                );
-                this.AddEntry(entry, maxEntriesPerNpc);
-            }
-        }
-
-        if (analysis.EmotionImpact.HasEffect)
-        {
-            emotionChanged = this.ApplyDialogueEmotionImpact(state, analysis.EmotionImpact);
-            resolvedConflicts += this.ApplyConflictRepair(
-                state,
-                analysis.EmotionImpact.RepairDelta,
-                analysis.EmotionImpact.Apology,
-                specificRepairTalk: analysis.EmotionImpact.RepairDelta > 0
-            );
-        }
-
-        // Keep one deterministic fallback for nickname requests if the model forgets metadata.
-        if (storedMemories == 0
-            && storedPlayerPreferences == 0
-            && storedHelpRequests == 0
-            && updatedHelpRequests == 0
-            && storedConflicts == 0
-            && storedBehaviorInfluences == 0
-            && NicknamePreferenceService.TryCreateFallbackMemory(playerText, npcResponse, out var fallbackMemory))
-        {
-            if (this.StoreLongTermMemory(state, fallbackMemory))
-            {
-                storedMemories++;
-                var entry = this.CreateEntry(npc, "LongTermMemory", "preference", fallbackMemory.Summary);
-                this.AddEntry(entry, maxEntriesPerNpc);
-            }
-        }
-
-        int appliedFriendship = this.ApplyAiDialogueFriendship(state, analysis.RapportDelta, maxExtraFriendshipPerDay);
-        if (storedMemories > 0
-            || storedPlayerPreferences > 0
-            || storedHelpRequests > 0
-            || updatedHelpRequests > 0
-            || storedConflicts > 0
-            || storedBehaviorInfluences > 0
-            || resolvedConflicts > 0
-            || emotionChanged
-            || appliedFriendship > 0)
-        {
-            if (storedMemories > 0 || storedPlayerPreferences > 0 || storedHelpRequests > 0)
-            {
-                state.LastInteraction = "the farmer shared something worth remembering";
-            }
-            else if (updatedHelpRequests > 0)
-            {
-                state.LastInteraction = "they updated a personal help request with the farmer";
-            }
-            else if (storedConflicts > 0)
-            {
-                state.LastInteraction = "the farmer caused interpersonal friction";
-            }
-            else if (storedBehaviorInfluences > 0)
-            {
-                state.LastInteraction = "the latest conversation changed how they may behave around the farmer";
-            }
-            else if (resolvedConflicts > 0)
-            {
-                state.LastInteraction = "the farmer helped repair a conflict";
-            }
-            else
-            {
-                state.LastInteraction = "the farmer had an AI conversation";
-            }
-
-            state.LastUpdatedTotalDays = Game1.Date.TotalDays;
-            state.LastUpdatedTimeOfDay = Game1.timeOfDay;
-        }
-
-        return new ValleyTalkExchangeResult(
-            storedMemories,
-            storedPlayerPreferences,
-            storedHelpRequests,
-            updatedHelpRequests,
-            storedConflicts,
-            storedBehaviorInfluences,
-            resolvedConflicts,
-            emotionChanged,
-            appliedFriendship,
-            analysis.RapportDelta,
-            analysis.EndConversation,
-            analysis.AmbientFollowUp.Text,
-            analysis.AmbientFollowUp.DelayMinutes,
-            analysis.Actions,
-            fulfilledHelpRequests
+        return this.ExchangeApplication.Apply(
+            npc,
+            this.GetOrCreateState(npc),
+            playerText,
+            npcResponse,
+            analysisJson,
+            maxEntriesPerNpc,
+            maxPendingHelpRequestsPerNpc,
+            helpRequestCooldownDays,
+            maxExtraFriendshipPerDay,
+            maxDialogueBehaviorInfluenceDays
         );
     }
 
     public LivingNpcState UpdateStateForBehavior(NPC npc, BehaviorIntent intent, string source)
     {
-        var state = this.GetOrCreateState(npc);
-        var world = WorldContext.For(npc);
-        int attentionDelta = source == "passive" ? 6 : 12;
-        int opennessDelta = source == "passive" ? 2 : 4;
-        int familiarityGain = source == "passive" ? 0 : 1;
-
-        switch (intent.Type)
-        {
-            case BehaviorIntentType.FacePlayer:
-                state.Mood = source == "passive" ? "Aware" : "Curious";
-                state.CurrentInclination = "Acknowledging";
-                break;
-
-            case BehaviorIntentType.Emote:
-                state.Mood = "Expressive";
-                state.CurrentInclination = "Reacting";
-                attentionDelta += 4;
-                break;
-
-            case BehaviorIntentType.ApproachPlayer:
-                state.Mood = "Engaged";
-                state.CurrentInclination = "OpenToTalk";
-                attentionDelta += 8;
-                opennessDelta += 6;
-                familiarityGain += 1;
-                break;
-
-            case BehaviorIntentType.Pause:
-                state.Mood = "Attentive";
-                state.CurrentInclination = "Acknowledging";
-                attentionDelta += 2;
-                break;
-
-            case BehaviorIntentType.LookAround:
-                state.Mood = "Aware";
-                state.CurrentInclination = "Aware";
-                attentionDelta += 1;
-                break;
-
-            case BehaviorIntentType.StepAway:
-                state.Mood = source == "passive" ? "Careful" : "Guarded";
-                state.CurrentInclination = "GentleBoundary";
-                attentionDelta += 2;
-                opennessDelta -= 4;
-                break;
-        }
-
-        this.AddFamiliarity(state, familiarityGain, dailyCap: 6);
-        state.Attention = LivingNpcState.ClampScore(state.Attention + attentionDelta);
-        state.Openness = LivingNpcState.ClampScore(state.Openness + opennessDelta);
-        ConversationStateService.ApplyWorldStateInfluence(state, world);
-        state.LastInteraction = source == "passive" ? "passive nearby reaction" : "small behavior near the farmer";
-        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
-        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
-        return state;
+        return this.StateUpdates.UpdateForBehavior(this.GetOrCreateState(npc), npc, intent, source);
     }
 
     public LivingNpcState UpdateStateForGift(NPC npc, GiftMemoryDetails gift)
     {
-        var state = this.GetOrCreateState(npc);
-        var world = WorldContext.For(npc);
-        if (state.LastGiftTotalDays != Game1.Date.TotalDays)
-        {
-            state.GiftsToday = 0;
-        }
-
-        state.GiftsToday += 1;
-        state.LastGiftName = gift.ItemName;
-        state.LastGiftTaste = gift.IsBirthdayGift
-            ? $"{gift.TasteLabel}，生日礼物"
-            : gift.TasteLabel;
-        state.LastGiftTotalDays = Game1.Date.TotalDays;
-        state.LastGiftTimeOfDay = Game1.timeOfDay;
-
-        int familiarityGain = gift.TasteScore switch
-        {
-            0 => 4,
-            2 => 3,
-            8 => 1,
-            _ => 0
-        };
-
-        int attentionDelta = gift.TasteScore switch
-        {
-            0 => 14,
-            2 => 10,
-            4 => 4,
-            6 => 6,
-            _ => 6
-        };
-
-        int opennessDelta = gift.TasteScore switch
-        {
-            0 => 12,
-            2 => 8,
-            4 => -5,
-            6 => -12,
-            _ => 2
-        };
-
-        state.Mood = gift.TasteScore switch
-        {
-            0 => "Delighted",
-            2 => "Pleased",
-            4 => "Awkward",
-            6 => "Upset",
-            _ => "GiftAware"
-        };
-        state.CurrentInclination = gift.TasteScore is 0 or 2 ? "OpenToTalk" : gift.TasteScore == 6 ? "Reserved" : "Acknowledging";
-
-        switch (gift.TasteScore)
-        {
-            case 0:
-                this.ApplyEmotion(state, "Happy", 18, $"the farmer gave them a loved gift: {gift.ItemName}{(gift.IsBirthdayGift ? " on their birthday" : string.Empty)}");
-                this.ApplyRelationshipTrustDelta(state, 4);
-                this.MarkRepairGiftReceived(state, gift.ItemName);
-                this.ApplyConflictRepair(state, 18, apology: false, specificRepairTalk: false);
-                break;
-
-            case 2:
-                this.ApplyEmotion(state, "Happy", 10, $"the farmer gave them a liked gift: {gift.ItemName}{(gift.IsBirthdayGift ? " on their birthday" : string.Empty)}");
-                this.ApplyRelationshipTrustDelta(state, 2);
-                this.MarkRepairGiftReceived(state, gift.ItemName);
-                this.ApplyConflictRepair(state, 10, apology: false, specificRepairTalk: false);
-                break;
-
-            case 4:
-                this.ApplyEmotion(state, "Uneasy", 14, $"the farmer gave them a disliked gift: {gift.ItemName}");
-                this.StoreConflict(state, new ValleyTalkConflictCandidate
-                {
-                    CauseKind = "gift",
-                    Summary = $"The farmer gave them a disliked gift: {gift.ItemName}.",
-                    Severity = 15
-                });
-                break;
-
-            case 6:
-                this.ApplyEmotion(state, "Upset", 28, $"the farmer gave them a hated gift: {gift.ItemName}");
-                this.StoreConflict(state, new ValleyTalkConflictCandidate
-                {
-                    CauseKind = "gift",
-                    Summary = $"The farmer gave them a hated gift: {gift.ItemName}.",
-                    Severity = 35
-                });
-                break;
-        }
-
-        this.AddFamiliarity(state, familiarityGain, dailyCap: 8);
-        state.Attention = LivingNpcState.ClampScore(state.Attention + attentionDelta);
-        state.Openness = LivingNpcState.ClampScore(state.Openness + opennessDelta);
-        ConversationStateService.ApplyWorldStateInfluence(state, world);
-        state.LastInteraction = "the farmer offered a gift";
-        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
-        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
-        return state;
+        return this.StateUpdates.UpdateForGift(this.GetOrCreateState(npc), npc, gift);
     }
 
     public IReadOnlyList<NpcHelpRequestFact> TryCompleteItemHelpRequests(NPC npc, GiftMemoryDetails gift, int maxEntriesPerNpc)
@@ -706,21 +359,7 @@ internal sealed class BehaviorMemory
 
     public LivingNpcState UpdateStateForEventInteraction(NPC npc, string eventContext)
     {
-        var state = this.GetOrCreateState(npc);
-        var world = WorldContext.For(npc);
-        state.LastEventContext = eventContext;
-        state.LastEventTotalDays = Game1.Date.TotalDays;
-        state.LastEventTimeOfDay = Game1.timeOfDay;
-        state.Mood = "EventAware";
-        state.CurrentInclination = state.Familiarity >= 35 || world.FriendshipHearts >= 4 ? "OpenToTalk" : "Acknowledging";
-        state.Attention = LivingNpcState.ClampScore(state.Attention + 8);
-        state.Openness = LivingNpcState.ClampScore(state.Openness + (world.FriendshipHearts >= 4 ? 4 : 1));
-        this.AddFamiliarity(state, amount: 1, dailyCap: 8);
-        ConversationStateService.ApplyWorldStateInfluence(state, world);
-        state.LastInteraction = "the farmer interacted during an event";
-        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
-        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
-        return state;
+        return this.StateUpdates.UpdateForEventInteraction(this.GetOrCreateState(npc), npc, eventContext);
     }
 
     public LivingNpcState UpdateStateForExpiredHelpRequest(LivingNpcState state, NpcHelpRequestFact request)
@@ -730,60 +369,12 @@ internal sealed class BehaviorMemory
 
     public LivingNpcState UpdateStateForConversationStart(NPC npc)
     {
-        var state = this.GetOrCreateState(npc);
-        var world = WorldContext.For(npc);
-        ConversationStateService.UpdateConversationRhythm(state, world.FriendshipHearts, Game1.Date.TotalDays, Game1.timeOfDay);
-        int repeatFamiliarityLimit = System.Math.Min(3, state.DailyConversationComfortLimit);
-        int familiarityGain = state.ConversationsToday == 1 ? 3 : state.ConversationsToday <= repeatFamiliarityLimit ? 1 : 0;
-        if (state.ConversationsToday == 1 && state.ConsecutiveConversationDays >= 3)
-        {
-            familiarityGain += 1;
-        }
-
-        this.AddFamiliarity(state, familiarityGain, dailyCap: 6);
-        state.Mood = state.Openness >= 60 || state.Familiarity >= 40 ? "Warm" : "Attentive";
-        state.CurrentInclination = "OpenToTalk";
-        state.Attention = LivingNpcState.ClampScore(state.Attention + 18);
-        state.Openness = LivingNpcState.ClampScore(state.Openness + (state.Familiarity >= 40 ? 8 : 6));
-        if (state.HasUnresolvedConflict)
-        {
-            int severity = state.HighestUnresolvedConflictSeverity;
-            state.Mood = severity >= 60 ? "Guarded" : "Polite";
-            state.CurrentInclination = severity >= 60 ? "NeedsSpace" : "Reserved";
-            state.Openness = LivingNpcState.ClampScore(state.Openness - System.Math.Min(18, 4 + (severity / 5)));
-        }
-
-        ConversationStateService.ApplyConversationRhythmInfluence(state);
-        ConversationStateService.ApplyObservedConcern(
-            state,
-            Game1.Date.TotalDays,
-            Game1.player.health,
-            Game1.player.maxHealth,
-            this.ApplyEmotion
-        );
-        ConversationStateService.ApplyWorldStateInfluence(state, world);
-        state.LastInteraction = "the farmer started a conversation";
-        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
-        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
-        return state;
+        return this.StateUpdates.UpdateForConversationStart(this.GetOrCreateState(npc), npc);
     }
 
     public LivingNpcState UpdateStateForObservedRomanticInteraction(NPC observer, NPC otherNpc)
     {
-        var state = this.GetOrCreateState(observer);
-        this.ApplyEmotion(
-            state,
-            "Jealous",
-            state.RelationshipTrust >= 70 ? 10 : 6,
-            $"they noticed the farmer giving romantic attention to {otherNpc.displayName}"
-        );
-        state.Mood = "Guarded";
-        state.CurrentInclination = "Measured";
-        state.Openness = LivingNpcState.ClampScore(state.Openness - 4);
-        state.LastInteraction = $"they noticed the farmer being close with {otherNpc.displayName}";
-        state.LastUpdatedTotalDays = Game1.Date.TotalDays;
-        state.LastUpdatedTimeOfDay = Game1.timeOfDay;
-        return state;
+        return this.StateUpdates.UpdateForObservedRomanticInteraction(this.GetOrCreateState(observer), otherNpc);
     }
 
     public void DecayStates(int dailyDecay, int emotionDailyDecay, int conflictDailyDecay)
