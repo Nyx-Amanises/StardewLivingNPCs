@@ -251,10 +251,6 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         {
             try
             {
-                using var client = new HttpClient
-                {
-                    Timeout = Timeout.InfiniteTimeSpan
-                };
                 using var request = new HttpRequestMessage(HttpMethod.Post, fullUrl)
                 {
                     Content = new StringContent(inputString, Encoding.UTF8, "application/json")
@@ -264,11 +260,7 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
                     request.Headers.Add("Authorization", $"Bearer {apiKey}");
                 }
 
-                using var response = await client.SendAsync(
-                    request,
-                    HttpCompletionOption.ResponseHeadersRead,
-                    cancellationToken
-                );
+                using var response = await NetworkHelper.SendForStreamingAsync(request, cancellationToken);
                 apiResponseCode = (int)response.StatusCode;
                 response.EnsureSuccessStatusCode();
 
@@ -509,25 +501,17 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
 
     public string[] CoreGetModelNames(Dictionary<string, string> extraHeaders = null)
     {
-        if (extraHeaders == null)
+        try
         {
-            extraHeaders = new Dictionary<string, string>();
-        }
-        try 
-        {
-        var client = new HttpClient
-        {
-            Timeout = TimeSpan.FromMinutes(1)
-        };
         var fullUrl = $"{url}/v1/models";
-        var request = new HttpRequestMessage(HttpMethod.Get, fullUrl);
-        request.Headers.Add("Authorization", $"Bearer {apiKey}");
-        foreach (var header in extraHeaders)
-        {
-            request.Headers.Add(header.Key, header.Value);
-        }
-        var response = client.SendAsync(request).Result;
-        var responseString = response.Content.ReadAsStringAsync().Result;
+        var responseString = NetworkHelper.MakeRequestAsync(
+            HttpMethod.Get,
+            fullUrl,
+            content: null,
+            headers: extraHeaders,
+            authToken: apiKey,
+            timeout: TimeSpan.FromMinutes(1)
+        ).GetAwaiter().GetResult();
         var responseJson = JObject.Parse(responseString); // Changed
         var dataToken = responseJson["data"];
         if (dataToken == null || dataToken.Type == JTokenType.Null || !(dataToken is JArray modelsArray)) // Changed and added checks

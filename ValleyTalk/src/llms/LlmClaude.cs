@@ -165,17 +165,21 @@ internal class LlmClaude : Llm, IGetModelNames
         {
             return new string[] { };
         }
-        try 
+        try
         {
-        var client = new HttpClient
+        var headers = new Dictionary<string, string>
         {
-            Timeout = TimeSpan.FromMinutes(1)
+            { "x-api-key", apiKey },
+            { "anthropic-version", "2023-06-01" }
         };
-        var request = new HttpRequestMessage(HttpMethod.Get, "https://api.anthropic.com/v1/models");
-        request.Headers.Add("x-api-key", apiKey);
-        request.Headers.Add("anthropic-version", "2023-06-01");
-        var response = client.SendAsync(request).Result;
-        var responseString = response.Content.ReadAsStringAsync().Result;
+        var responseString = NetworkHelper.MakeRequestAsync(
+            HttpMethod.Get,
+            "https://api.anthropic.com/v1/models",
+            content: null,
+            headers: headers,
+            authToken: null,
+            timeout: TimeSpan.FromMinutes(1)
+        ).GetAwaiter().GetResult();
         var responseJson = JObject.Parse(responseString);
         var models = responseJson["data"] as JArray;
         var modelNames = new List<string>();

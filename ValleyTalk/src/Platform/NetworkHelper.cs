@@ -1,5 +1,6 @@
 using System;
 using System.Net.Http;
+using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Collections.Generic;
@@ -7,20 +8,22 @@ using System.Collections.Generic;
 namespace ValleyTalk.Platform
 {
     /// <summary>
-    /// Helper class for Android-compatible network operations
+    /// Shared HTTP entry point for every LLM provider. All requests reuse one HttpClient so
+    /// connections (and their TLS handshakes) are pooled instead of being re-established per call.
+    /// The client itself has no timeout; each request enforces its own deadline via a linked
+    /// cancellation token, so QueryTimeout changes apply live and streaming can run unbounded.
     /// </summary>
     public static class NetworkHelper
     {
         private static readonly HttpClient _httpClient;
-        
+
         static NetworkHelper()
         {
             var handler = new HttpClientHandler();
-            
-            // Increase timeout for mobile networks
+
             _httpClient = new HttpClient(handler)
             {
-                Timeout = TimeSpan.FromSeconds(ModEntry.Config.QueryTimeout)
+                Timeout = Timeout.InfiniteTimeSpan
             };
 
             // Android-specific configuration
@@ -32,63 +35,59 @@ namespace ValleyTalk.Platform
             }
         }
 
+        private static TimeSpan DefaultTimeout =>
+            TimeSpan.FromSeconds(Math.Max(5, ModEntry.Config?.QueryTimeout ?? 85));
+
         /// <summary>
-        /// Makes an HTTP request with Android-compatible settings
+        /// Makes an HTTP request with Android-compatible settings. A null/empty content sends GET,
+        /// otherwise POST with a JSON body.
         /// </summary>
-        public static async Task<string> MakeRequestAsync(string url, string content = null, CancellationToken cancellationToken = default, string authToken = null)
+        public static Task<string> MakeRequestAsync(string url, string content = null, CancellationToken cancellationToken = default, string authToken = null, TimeSpan? timeout = null)
+        {
+            return MakeRequestAsync(
+                string.IsNullOrEmpty(content) ? HttpMethod.Get : HttpMethod.Post,
+                url,
+                content,
+                headers: null,
+                authToken,
+                cancellationToken,
+                timeout
+            );
+        }
+
+        /// <summary>
+        /// Makes an HTTP POST request with custom headers for specific LLM providers
+        /// </summary>
+        public static Task<string> MakeRequestWithCustomHeadersAsync(string url, string content, Dictionary<string, string> headers, CancellationToken cancellationToken = default, TimeSpan? timeout = null)
+        {
+            return MakeRequestAsync(HttpMethod.Post, url, content, headers, authToken: null, cancellationToken, timeout);
+        }
+
+        /// <summary>
+        /// Core request method every overload funnels into: shared client, per-request headers,
+        /// per-request timeout (defaults to the configured QueryTimeout).
+        /// </summary>
+        public static async Task<string> MakeRequestAsync(
+            HttpMethod method,
+            string url,
+            string content,
+            Dictionary<string, string> headers,
+            string authToken,
+            CancellationToken cancellationToken = default,
+            TimeSpan? timeout = null)
         {
             HttpResponseMessage response = null;
             try
             {
-                
-                if (string.IsNullOrEmpty(content))
+                using var request = new HttpRequestMessage(method, url);
+                if (!string.IsNullOrEmpty(content))
                 {
-                    var request = new HttpRequestMessage(HttpMethod.Get, url);
-                    if (!string.IsNullOrEmpty(authToken))
-                        request.Headers.Add("Authorization", $"Bearer {authToken}");
-                    response = await _httpClient.SendAsync(request, cancellationToken);
+                    request.Content = new StringContent(content, Encoding.UTF8, "application/json");
                 }
-                else
+                if (!string.IsNullOrEmpty(authToken))
                 {
-                    var stringContent = new StringContent(content, System.Text.Encoding.UTF8, "application/json");
-                    var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = stringContent };
-                    if (!string.IsNullOrEmpty(authToken))
-                        request.Headers.Add("Authorization", $"Bearer {authToken}");
-                    response = await _httpClient.SendAsync(request, cancellationToken);
+                    request.Headers.Add("Authorization", $"Bearer {authToken}");
                 }
-
-                response.EnsureSuccessStatusCode();
-                return await response.Content.ReadAsStringAsync();
-            }
-            catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
-            {
-                throw new OperationCanceledException("Request was cancelled");
-            }
-            catch (TaskCanceledException)
-            {
-                throw new TimeoutException("Request timed out");
-            }
-            catch (HttpRequestException ex)
-            {
-                string message = ex.Message;
-                if (response != null && response.Content != null)
-                {
-                    message += $"\n (HTTP {(int)response.StatusCode} - {response.Content.ReadAsStringAsync().Result})";
-                }
-                throw new InvalidOperationException($"Network request failed: {message}", ex);
-            }
-        }
-
-        /// <summary>
-        /// Makes an HTTP request with custom headers for specific LLM providers
-        /// </summary>
-        public static async Task<string> MakeRequestWithCustomHeadersAsync(string url, string content, Dictionary<string, string> headers, CancellationToken cancellationToken = default)
-        {
-            try
-            {
-                var stringContent = new StringContent(content, System.Text.Encoding.UTF8, "application/json");
-                var request = new HttpRequestMessage(HttpMethod.Post, url) { Content = stringContent };
-                
                 if (headers != null)
                 {
                     foreach (var header in headers)
@@ -97,22 +96,44 @@ namespace ValleyTalk.Platform
                     }
                 }
 
-                var response = await _httpClient.SendAsync(request, cancellationToken);
+                using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                timeoutCts.CancelAfter(timeout ?? DefaultTimeout);
+
+                response = await _httpClient.SendAsync(request, timeoutCts.Token);
                 response.EnsureSuccessStatusCode();
-                return await response.Content.ReadAsStringAsync();
+                return await response.Content.ReadAsStringAsync(timeoutCts.Token);
             }
-            catch (TaskCanceledException) when (cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
                 throw new OperationCanceledException("Request was cancelled");
             }
-            catch (TaskCanceledException)
+            catch (OperationCanceledException)
             {
                 throw new TimeoutException("Request timed out");
             }
             catch (HttpRequestException ex)
             {
-                throw new InvalidOperationException($"Network request failed: {ex.Message}", ex);
+                string message = ex.Message;
+                if (response != null && response.Content != null)
+                {
+                    message += $"\n (HTTP {(int)response.StatusCode} - {await response.Content.ReadAsStringAsync(CancellationToken.None)})";
+                }
+                throw new InvalidOperationException($"Network request failed: {message}", ex);
             }
+            finally
+            {
+                response?.Dispose();
+            }
+        }
+
+        /// <summary>
+        /// Sends a request on the shared client for streaming consumption: only the response
+        /// headers are awaited, the body stream stays open for the caller to read. The caller owns
+        /// disposing the request and response, and bounds the read with its cancellation token.
+        /// </summary>
+        public static Task<HttpResponseMessage> SendForStreamingAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            return _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken);
         }
 
         /// <summary>

@@ -39,30 +39,26 @@ internal class LlmLlamaCpp : Llm
         promptString = gameCacheString + npcCacheString + promptString;
         var fullPrompt = BuildPrompt(systemPromptString, promptString, responseStart);
         // Create a JSON object with the prompt and other parameters
-        var json = new StringContent(
-            JsonConvert.SerializeObject(new // Changed
-            {
-                prompt = fullPrompt,
-                n_predict = n_predict,
-                stream = false,
-                temperature = n_predict == 1 ? 0 : 1.5,
-                top_p = 0.88,
-                min_p = 0.05,
-                repeat_penalty = 1.05,
-            }),
-            Encoding.UTF8,
-            "application/json"
-        );
+        var jsonData = JsonConvert.SerializeObject(new
+        {
+            prompt = fullPrompt,
+            n_predict = n_predict,
+            stream = false,
+            temperature = n_predict == 1 ? 0 : 1.5,
+            top_p = 0.88,
+            min_p = 0.05,
+            repeat_penalty = 1.05,
+        });
 
         // call out to URL passing the object as the body, and return the result
         bool retry = true;
-        
+
         // Check network availability on Android
         if (AndroidHelper.IsAndroid && !NetworkHelper.IsNetworkAvailable())
         {
             throw new InvalidOperationException("Network not available");
         }
-       
+
         string responseString = "";
         while (retry)
         {
@@ -70,29 +66,7 @@ internal class LlmLlamaCpp : Llm
             {
                 retry = false;
 
-                if (AndroidHelper.IsAndroid)
-                {
-                    var jsonData = JsonConvert.SerializeObject(new
-                    {
-                        prompt = fullPrompt,
-                        n_predict = n_predict,
-                        stream = false,
-                        temperature = n_predict == 1 ? 0 : 1.5,
-                        top_p = 0.88,
-                        min_p = 0.05,
-                        repeat_penalty = 1.05,
-                    });
-                    responseString = await NetworkHelper.MakeRequestAsync(url, jsonData);
-                }
-                else
-                {
-                    var client = new HttpClient
-                    {
-                        Timeout = TimeSpan.FromSeconds(ModEntry.Config.QueryTimeout)
-                    };
-                    var response = await client.PostAsync(url, json);
-                    responseString = await response.Content.ReadAsStringAsync();
-                }
+                responseString = await NetworkHelper.MakeRequestAsync(url, jsonData);
 
                 var responseJson = JObject.Parse(responseString);
 
@@ -133,38 +107,28 @@ internal class LlmLlamaCpp : Llm
     internal override Dictionary<string,double>[] RunInferenceProbabilities(string fullPrompt,int n_predict = 1)
     {
       // Create a JSON object with the prompt and other parameters
-        var json = new StringContent(
-            JsonConvert.SerializeObject(new // Changed
-            {
-                prompt = fullPrompt,
-                n_predict = n_predict,
-                stream = false,
-                temperature = 0.8,
-                top_p = 0.88,
-                min_p = 0.05,
-                //repeat_penalty = 1.05,
-                //presence_penalty = 0.0,
-                cache_prompt = true,
-                n_probs = 10
-            }),
-            Encoding.UTF8,
-            "application/json"
-        );
+        var jsonData = JsonConvert.SerializeObject(new
+        {
+            prompt = fullPrompt,
+            n_predict = n_predict,
+            stream = false,
+            temperature = 0.8,
+            top_p = 0.88,
+            min_p = 0.05,
+            //repeat_penalty = 1.05,
+            //presence_penalty = 0.0,
+            cache_prompt = true,
+            n_probs = 10
+        });
 
         // call out to URL passing the object as the body, and return the result
-        var client = new HttpClient
-        {
-            Timeout = TimeSpan.FromMinutes(1)
-        };
         bool retry=true;
         while (retry)
         {
             try
             {
                 retry=false;
-                var response = client.PostAsync(url, json).Result;
-                // Return the 'content' element of the response json
-                var responseString = response.Content.ReadAsStringAsync().Result;
+                var responseString = NetworkHelper.MakeRequestAsync(url, jsonData, timeout: TimeSpan.FromMinutes(1)).GetAwaiter().GetResult();
                 var responseJson = JObject.Parse(responseString); // Changed
                 
                 var token_stats = responseJson["timings"] as JObject; // Changed and cast to JObject

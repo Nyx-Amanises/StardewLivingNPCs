@@ -181,36 +181,18 @@ internal class LlmVolcEngine : Llm, IGetModelNames
 
     public string[] CoreGetModelNames(Dictionary<string, string> extraHeaders = null)
     {
-        if (extraHeaders == null)
-        {
-            extraHeaders = new Dictionary<string, string>();
-        }
-        try 
+        try
         {
         var fullUrl = $"{url}/models";
-        
-        // Use Android-compatible network helper
-        string responseString;
-        if (AndroidHelper.IsAndroid && NetworkHelper.IsNetworkAvailable())
-        {
-            responseString = NetworkHelper.MakeRequestAsync(fullUrl, null, CancellationToken.None, apiKey).Result;
-        }
-        else
-        {
-            var client = new HttpClient
-            {
-                Timeout = TimeSpan.FromMinutes(1)
-            };
-            var request = new HttpRequestMessage(HttpMethod.Get, fullUrl);
-            request.Headers.Add("Authorization", $"Bearer {apiKey}");
-            foreach (var header in extraHeaders)
-            {
-                request.Headers.Add(header.Key, header.Value);
-            }
-            var response = client.SendAsync(request).Result;
-            responseString = response.Content.ReadAsStringAsync().Result;
-        }
-        
+        string responseString = NetworkHelper.MakeRequestAsync(
+            HttpMethod.Get,
+            fullUrl,
+            content: null,
+            headers: extraHeaders,
+            authToken: apiKey,
+            timeout: TimeSpan.FromMinutes(1)
+        ).GetAwaiter().GetResult();
+
         var responseJson = JObject.Parse(responseString);
         var dataToken = responseJson["data"];
         if (!(dataToken is JArray modelsArray))

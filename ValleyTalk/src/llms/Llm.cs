@@ -24,99 +24,153 @@ internal abstract class Llm
         };
         Llm instance = CreateInstance(llmType, paramsDict);
         Instance = instance;
-        try
+        DialogueBuilder.Instance.LlmDisabled = false;
+
+        if (ModEntry.Config.SuppressConnectionCheck)
         {
-            bool checkFailed = CheckConnection(apiKey, modelName).GetAwaiter().GetResult();
-            DialogueBuilder.Instance.LlmDisabled = false;
-            if (checkFailed)
+            return;
+        }
+
+        // Resolve every localized console message on the main thread before handing off:
+        // Util.GetString goes through PromptCache/Game1.content, which is not safe to touch from a
+        // worker thread. The check itself is pure network I/O plus thread-safe Monitor logging, so
+        // it runs in the background instead of freezing the game during startup or a config save.
+        var messages = ConnectionCheckMessages.Resolve();
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                bool checkFailed = await CheckConnection(instance, apiKey, modelName, messages);
+                if (!ReferenceEquals(Instance, instance))
+                {
+                    return; // The provider was switched again before this check finished.
+                }
+
+                if (checkFailed)
+                {
+                    ModEntry.SMonitor.Log(messages.NonBlocking, StardewModdingAPI.LogLevel.Warn);
+                }
+            }
+            catch (Exception ex)
             {
                 ModEntry.SMonitor.Log(
-                    Util.GetString("modelCheckNonBlocking", returnNull: true)
-                    ?? "The startup model check failed, but ValleyTalk will stay enabled and try the real dialogue request when you talk to an NPC.",
-                    StardewModdingAPI.LogLevel.Warn
+                    $"Model connection check failed unexpectedly for {modelName ?? "(default)"} using provider {instance.GetType().Name}: {ex.Message}",
+                    StardewModdingAPI.LogLevel.Error
                 );
             }
-        }
-        catch (Exception ex)
+        });
+    }
+
+    private sealed class ConnectionCheckMessages
+    {
+        public string NonBlocking;
+        public string ApiKeyMissing;
+        public string ModelNameMissing;
+        public string ValidModelName;
+        public string CantGenerate;
+        public string Insecure;
+        public string GetNamesFailed;
+        public string GenericError;
+        public string Success;
+
+        public static ConnectionCheckMessages Resolve()
         {
-            ModEntry.SMonitor.Log(
-                $"Model connection check failed unexpectedly for {modelName ?? "(default)"} using provider {Instance.GetType().Name}: {ex.Message}",
-                StardewModdingAPI.LogLevel.Error
-            );
-            DialogueBuilder.Instance.LlmDisabled = false;
+            return new ConnectionCheckMessages
+            {
+                NonBlocking = Util.GetString("modelCheckNonBlocking", returnNull: true)
+                    ?? "The startup model check failed, but ValleyTalk will stay enabled and try the real dialogue request when you talk to an NPC.",
+                ApiKeyMissing = Util.GetString("modelCheckApiKey", returnNull: true)
+                    ?? "API key is not provided. Please check the configuration.",
+                ModelNameMissing = Util.GetString("modelCheckModelName", returnNull: true)
+                    ?? "Model name is not provided. Usually this is requires, please check the configuration.",
+                ValidModelName = Util.GetString("modelCheckValidModelName", returnNull: true)
+                    ?? "Can retreive model names and model name is a valid option.  Possible causes - model is not a text generation model, insecure endpoint specified or incorrect API key (some providers).",
+                CantGenerate = Util.GetString("modelCheckCantGenerate", returnNull: true)
+                    ?? "Can retreive model names but not generate dialogue. Check the model name is correctly configured.",
+                Insecure = Util.GetString("modelCheckInsecure", returnNull: true)
+                    ?? "The server address specified does not use a secure connection (https). This can block text generation.",
+                GetNamesFailed = Util.GetString("modelCheckGetNames", returnNull: true)
+                    ?? "Unable to get model names or generate dialogue.  Please check the API Key is correctly entered.",
+                GenericError = Util.GetString("modelCheckGenericError", returnNull: true)
+                    ?? "Please check the server address and details.",
+                Success = Util.GetString("modelCheckSuccess", returnNull: true)
+                    ?? "Connected to the model successfully."
+            };
         }
     }
 
-    private static async Task<bool> CheckConnection(string apiKey, string modelName)
+    private static async Task<bool> CheckConnection(Llm instance, string apiKey, string modelName, ConnectionCheckMessages messages)
     {
-        if (ModEntry.Config.SuppressConnectionCheck)
-            return false;
-
         LlmResponse response;
         try
         {
-            response = await Instance.RunInference("You are performing LLM connection testing", "Please just ", "respond with ", "'Connection successful'", allowRetry: false);
+            response = await instance.RunInference("You are performing LLM connection testing", "Please just ", "respond with ", "'Connection successful'", allowRetry: false);
         }
         catch (Exception ex)
         {
             ModEntry.SMonitor.Log(
-                $"Failed to connect to the model {modelName ?? "(default)"} using provider {Instance.GetType().Name}: {ex.Message}",
+                $"Failed to connect to the model {modelName ?? "(default)"} using provider {instance.GetType().Name}: {ex.Message}",
                 StardewModdingAPI.LogLevel.Error
             );
             return true;
         }
 
+        if (!ReferenceEquals(Instance, instance))
+        {
+            return false; // Stale check: a newer provider took over, don't log confusing diagnostics.
+        }
+
         if (!response.IsSuccess || string.IsNullOrWhiteSpace(response.Text) || response.Text.Length < 5)
         {
-            ModEntry.SMonitor.Log($"Failed to connect to the model {modelName} using provider {Instance.GetType().Name}. ", StardewModdingAPI.LogLevel.Error);
+            ModEntry.SMonitor.Log($"Failed to connect to the model {modelName} using provider {instance.GetType().Name}. ", StardewModdingAPI.LogLevel.Error);
             if (!string.IsNullOrWhiteSpace(response.ErrorMessage))
             {
                 ModEntry.SMonitor.Log($"Error message: {response.ErrorMessage}", StardewModdingAPI.LogLevel.Error);
             }
             if (string.IsNullOrWhiteSpace(apiKey))
             {
-                ModEntry.SMonitor.Log(Util.GetString("modelCheckApiKey", returnNull: true) ?? "API key is not provided. Please check the configuration.", StardewModdingAPI.LogLevel.Error);
+                ModEntry.SMonitor.Log(messages.ApiKeyMissing, StardewModdingAPI.LogLevel.Error);
             }
             else
             {
-                var getList = Llm.Instance as IGetModelNames;
+                var getList = instance as IGetModelNames;
                 if (getList != null)
                 {
                     if (string.IsNullOrWhiteSpace(modelName))
                     {
-                        ModEntry.SMonitor.Log(Util.GetString("modelCheckModelName", returnNull: true) ?? "Model name is not provided. Usually this is requires, please check the configuration.", StardewModdingAPI.LogLevel.Error);
+                        ModEntry.SMonitor.Log(messages.ModelNameMissing, StardewModdingAPI.LogLevel.Error);
                     }
                     var modelNames = getList.GetModelNames();
                     if (modelNames.Any())
                     {
                         if (modelNames.Contains(modelName))
                         {
-                            ModEntry.SMonitor.Log(Util.GetString("modelCheckValidModelName", returnNull: true) ?? "Can retreive model names and model name is a valid option.  Possible causes - model is not a text generation model, insecure endpoint specified or incorrect API key (some providers).", StardewModdingAPI.LogLevel.Error);
+                            ModEntry.SMonitor.Log(messages.ValidModelName, StardewModdingAPI.LogLevel.Error);
                         }
                         else
                         {
-                            ModEntry.SMonitor.Log(Util.GetString("modelCheckCantGenerate", returnNull: true) ?? "Can retreive model names but not generate dialogue. Check the model name is correctly configured.", StardewModdingAPI.LogLevel.Error);
+                            ModEntry.SMonitor.Log(messages.CantGenerate, StardewModdingAPI.LogLevel.Error);
                         }
-                        if ((Llm.Instance is LlmOAICompatible || Llm.Instance is LlmLlamaCpp) && !Llm.Instance.url.Contains("https"))
+                        if ((instance is LlmOAICompatible || instance is LlmLlamaCpp) && !instance.url.Contains("https"))
                         {
-                            ModEntry.SMonitor.Log(Util.GetString("modelCheckInsecure", returnNull: true) ?? "The server address specified does not use a secure connection (https). This can block text generation.", StardewModdingAPI.LogLevel.Error);
+                            ModEntry.SMonitor.Log(messages.Insecure, StardewModdingAPI.LogLevel.Error);
                         }
                     }
                     else
                     {
-                        ModEntry.SMonitor.Log(Util.GetString("modelCheckGetNames", returnNull: true) ?? "Unable to get model names or generate dialogue.  Please check the API Key is correctly entered.", StardewModdingAPI.LogLevel.Error);
+                        ModEntry.SMonitor.Log(messages.GetNamesFailed, StardewModdingAPI.LogLevel.Error);
                     }
                 }
                 else
                 {
-                    ModEntry.SMonitor.Log(Util.GetString("modelCheckGenericError", returnNull: true) ?? "Please check the server address and details.", StardewModdingAPI.LogLevel.Error);
+                    ModEntry.SMonitor.Log(messages.GenericError, StardewModdingAPI.LogLevel.Error);
                 }
             }
             return true;
         }
         else
         {
-            ModEntry.SMonitor.Log(Util.GetString("modelCheckSuccess", returnNull: true) ?? "Connected to the model successfully.", StardewModdingAPI.LogLevel.Info);
+            ModEntry.SMonitor.Log(messages.Success, StardewModdingAPI.LogLevel.Info);
             return false;
         }
     }

@@ -43,20 +43,10 @@ internal class LlmGemini : Llm, IGetModelNames
     {
         try{
         var modelsUrl = $"https://generativelanguage.googleapis.com/v1beta/models?key="+apiKey;
-        
-        // Use Android-compatible network helper
-        string responseString;
-        if (AndroidHelper.IsAndroid && NetworkHelper.IsNetworkAvailable())
-        {
-            responseString = NetworkHelper.MakeRequestAsync(modelsUrl).Result;
-        }
-        else
-        {
-            var client = new HttpClient();
-            var response = client.GetAsync(modelsUrl).Result;
-            responseString = response.Content.ReadAsStringAsync().Result;
-        }
-        
+
+        // Gemini authenticates via the key in the URL, so the shared client needs no extra headers.
+        string responseString = NetworkHelper.MakeRequestAsync(modelsUrl, timeout: TimeSpan.FromMinutes(1)).GetAwaiter().GetResult();
+
         var responseJson = JObject.Parse(responseString); // Changed
         var modelsToken = responseJson["models"]; // Changed
         var modelNames = new List<string>();
@@ -105,7 +95,7 @@ internal class LlmGemini : Llm, IGetModelNames
         }
 
         string responseString = "";
-        HttpResponseMessage response = new HttpResponseMessage();
+        int apiResponseCode = 500;
         foreach (GeminiRequestBody requestBody in BuildRequestBodies(systemPromptString, promptString, n_predict, disableThinking))
         {
             string jsonData = requestBody.Json;
@@ -115,25 +105,7 @@ internal class LlmGemini : Llm, IGetModelNames
             {
                 try
                 {
-                    var json = new StringContent(
-                        jsonData,
-                        Encoding.UTF8,
-                        "application/json"
-                    );
-
-                    if (AndroidHelper.IsAndroid)
-                    {
-                        responseString = await NetworkHelper.MakeRequestAsync(fullUrl, jsonData);
-                    }
-                    else
-                    {
-                        var client = new HttpClient
-                        {
-                            Timeout = TimeSpan.FromSeconds(ModEntry.Config.QueryTimeout)
-                        };
-                        response = await client.PostAsync(fullUrl, json);
-                        responseString = await response.Content.ReadAsStringAsync();
-                    }
+                    responseString = await NetworkHelper.MakeRequestAsync(fullUrl, jsonData);
                     lastFailure = responseString;
                     var responseJson = JObject.Parse(responseString); // Changed
 
@@ -198,11 +170,20 @@ internal class LlmGemini : Llm, IGetModelNames
                         {
                             return new LlmResponse(text, usage: TokenUsage.FromGeminiUsage(responseJson["usageMetadata"] as JObject));
                         }
-                        return new LlmResponse("Empty response", (int)response.StatusCode);
+                        // NetworkHelper throws on non-success codes, so reaching here means HTTP 200.
+                        return new LlmResponse("Empty response", 200);
                     }
                 }
                 catch(Exception ex)
                 {
+                    if (ex.InnerException is HttpRequestException httpException && httpException.StatusCode.HasValue)
+                    {
+                        apiResponseCode = (int)httpException.StatusCode.Value;
+                    }
+                    else if (ex is HttpRequestException directHttpException && directHttpException.StatusCode.HasValue)
+                    {
+                        apiResponseCode = (int)directHttpException.StatusCode.Value;
+                    }
                     Log.Debug(ex.Message);
                     Log.Debug("Retrying...");
                     lastFailure = ex.Message;
@@ -221,7 +202,7 @@ internal class LlmGemini : Llm, IGetModelNames
                 );
             }
         }
-        return new LlmResponse(responseString, (int)response.StatusCode);
+        return new LlmResponse(responseString, apiResponseCode);
     }
 
     private IEnumerable<GeminiRequestBody> BuildRequestBodies(
