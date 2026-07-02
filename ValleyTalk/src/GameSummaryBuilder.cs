@@ -32,10 +32,29 @@ internal class GameSummaryBuilder
         }
     }
 
+    private static bool _assetEventsRegistered;
+
     public GameSummaryBuilder(string gameSummaryPath = null, string baseContentPackFileName = null)
     {
         _gameSummaryPath = gameSummaryPath ?? VtConstants.GameSummaryPath;
         _baseContentPackFileName = baseContentPackFileName;
+        EnsureAssetEventsRegistered();
+    }
+
+    /// <summary>
+    /// Registers the asset hooks once for the whole class. Builders used to subscribe per
+    /// instance with lambdas capturing <c>this</c>, which both leaked every builder into the
+    /// event system and only invalidated that builder's private dictionary — the summary strings
+    /// cached by <see cref="Prompts"/> kept the old language after a locale switch.
+    /// </summary>
+    private static void EnsureAssetEventsRegistered()
+    {
+        if (_assetEventsRegistered)
+        {
+            return;
+        }
+
+        _assetEventsRegistered = true;
         ModEntry.SHelper.Events.Content.AssetRequested += (sender, e) =>
         {
             if (e.Name.IsEquivalentTo(VtConstants.GameSummaryPath) || e.Name.IsEquivalentTo(VtConstants.OptimizedGameSummaryPath))
@@ -47,7 +66,7 @@ internal class GameSummaryBuilder
         {
             if (e.NamesWithoutLocale.Any(an => an.IsEquivalentTo(VtConstants.GameSummaryPath) || an.IsEquivalentTo(VtConstants.OptimizedGameSummaryPath)))
             {
-                _gameSummaryDict = null;
+                Prompts.InvalidateWorldSummaries();
             }
         };
     }

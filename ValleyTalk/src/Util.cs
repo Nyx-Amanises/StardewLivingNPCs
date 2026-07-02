@@ -9,6 +9,24 @@ namespace ValleyTalk
     {
         private static StardewModdingAPI.ITranslationHelper _translationHelper => ModEntry.SHelper?.Translation;
 
+        private static readonly HashSet<string> _warnedMissingPromptKeys = new();
+
+        /// <summary>
+        /// Logs (once per key) when a prompt key resolves to nothing. Missing keys fail silently
+        /// otherwise — a typo'd key or a translation without an assets/Prompts.json mapping just
+        /// blanks out that prompt section, which has hidden whole context blocks in the past.
+        /// </summary>
+        private static void WarnMissingPromptKey(string key)
+        {
+            if (_warnedMissingPromptKeys.Add(key))
+            {
+                ModEntry.SMonitor?.Log(
+                    $"Prompt key '{key}' has no value in the ValleyTalk/Prompts asset (check assets/Prompts.json and i18n); that prompt section will be blank.",
+                    StardewModdingAPI.LogLevel.Warn
+                );
+            }
+        }
+
         public static IEnumerable<NPC> GetNearbyNpcs(NPC npc)
         {
             // Check for any other NPCs within 3 squares
@@ -92,6 +110,11 @@ namespace ValleyTalk
                 return null;
             }
 
+            if (result == null)
+            {
+                WarnMissingPromptKey(key);
+            }
+
             // Replace tokens
             if (tokens != null && result != null)
             {
@@ -107,11 +130,16 @@ namespace ValleyTalk
         internal static string GetString(string key, object tokens = null, bool returnNull = false)
         {
             string result = string.Empty;
-            if (!PromptCache.Instance.Cache.TryGetValue(key, out result) && returnNull)
+            if (!PromptCache.Instance.Cache.TryGetValue(key, out result))
             {
-                return null;
+                if (returnNull)
+                {
+                    return null;
+                }
+
+                WarnMissingPromptKey(key);
             }
-            
+
             return ApplyTokens(result, tokens);
         }
 

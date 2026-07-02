@@ -26,6 +26,20 @@ public class Prompts
     static string _optimizedStardewSummary;
     static string _baseStardewSummary;
     static string _optimizedBaseStardewSummary;
+
+    /// <summary>
+    /// Drops the cached world-summary strings so the next prompt rebuilds them from the (possibly
+    /// reloaded or re-localized) GameSummary assets. Called when those assets are invalidated,
+    /// e.g. on language switch or a Content Patcher reload.
+    /// </summary>
+    internal static void InvalidateWorldSummaries()
+    {
+        _stardewSummary = null;
+        _optimizedStardewSummary = null;
+        _baseStardewSummary = null;
+        _optimizedBaseStardewSummary = null;
+    }
+
     private string _system;
     public string System { get => _system ??= GetSystemPrompt(); internal set => _system = value; }
     private string _gameConstantContext;
@@ -285,7 +299,8 @@ public class Prompts
             AppendCoreSection("OtherNpcs", GetOtherNpcs, prompt);
         }
         Game1.getPlayerOrEventFarmer().friendshipData.TryGetValue(Character.Name, out Friendship friendship);
-        if (friendship.IsMarried() || friendship.IsRoommate())
+        // friendship is null for NPCs the farmer has never formally met (no friendship entry yet).
+        if (friendship != null && (friendship.IsMarried() || friendship.IsRoommate()))
         {
             if (friendship.IsRoommate())
             {
@@ -350,7 +365,7 @@ public class Prompts
         {
             AppendCoreSection("SpouseAction", GetSpouseAction, prompt);
         }
-        if (!friendship.IsMarried())
+        if (friendship?.IsMarried() != true)
         {
             if (this.contextRoutingPlan.Include(ContextModule.Relationship))
             {
@@ -1250,13 +1265,16 @@ public class Prompts
             prompt.AppendLine();
             foreach (var child in Context.Children)
             {
-                prompt.AppendLine($"- {Util.GetString(Character, child.IsMale ? "childrenDescriptionBoy" : "childDescriptionGirl", new { Name = child.Name, Age = child.Age })}");
+                prompt.AppendLine($"- {Util.GetString(Character, child.IsMale ? "childrenDescriptionBoy" : "childrenDescriptionGirl", new { Name = child.Name, Age = child.Age })}");
             }
         }
         if (friendship.DaysUntilBirthing > 0)
         {
             var daysUntilBirth = friendship.DaysUntilBirthing;
-            prompt.AppendLine(Util.GetString(Character, "childrenPregnant", new { Name = Name, daysUntilBirth = daysUntilBirth }));
+            // npcFemale = the NPC spouse is the one expecting; npcMale = the farmer is. Both
+            // variants exist in i18n, but only npcMale was ever mapped/used before, so prompts
+            // claimed the farmer was pregnant even when married to a female NPC.
+            prompt.AppendLine(Util.GetString(Character, npcIsMale ? "childrenPregnant.npcMale" : "childrenPregnant.npcFemale", new { Name = Name, daysUntilBirth = daysUntilBirth }));
         }
     }
 
@@ -1492,7 +1510,8 @@ public class Prompts
     {
         if (ModEntry.Config?.UseOptimizedPrompts == true)
         {
-            string optimized = Util.GetString(Character, $"{baseKey}Optimized");
+            // Probe only (returnNull): a missing Optimized variant is expected and falls back below.
+            string optimized = Util.GetString(Character, $"{baseKey}Optimized", returnNull: true);
             if (!string.IsNullOrWhiteSpace(optimized))
             {
                 return optimized;
