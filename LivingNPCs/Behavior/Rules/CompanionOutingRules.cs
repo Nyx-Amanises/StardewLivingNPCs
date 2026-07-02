@@ -108,6 +108,17 @@ internal static class CompanionOutingRules
         return NormalizeRequestedStayMinutes(durationMinutes) < MinimumStayMinutes;
     }
 
+    /// <summary>
+    /// The stay length used for every full (non-short-visit) outing. This is a fixed, predictable
+    /// duration from config by design: the AI-requested durationMinutes only distinguishes a brief
+    /// escort from a real outing, and the action-decision instructions tell the model the same so
+    /// the spoken plans stay consistent with the actual behavior.
+    /// </summary>
+    public static int GetFixedFullOutingStayMinutes(int configuredStayMinutes)
+    {
+        return Math.Clamp(configuredStayMinutes, MinimumStayMinutes, 600);
+    }
+
     private static int GetEstimatedTravelMinutes(int stayMinutes)
     {
         return stayMinutes < MinimumStayMinutes

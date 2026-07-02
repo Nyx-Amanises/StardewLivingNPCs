@@ -634,4 +634,17 @@ public sealed class CompanionOutingRulesTests
         Assert.Equal(1520, BehaviorTimeMath.AddMinutesToTime(1320, 120));
         Assert.Equal(120, BehaviorTimeMath.GetElapsedMinutes(1320, 1520));
     }
+
+    [Theory]
+    [InlineData(0, 60)]
+    [InlineData(45, 60)]
+    [InlineData(60, 60)]
+    [InlineData(90, 90)]
+    [InlineData(1200, 600)]
+    public void FullOutingStayLengthComesFromConfigOnly(int configuredStayMinutes, int expected)
+    {
+        Assert.Equal(
+            expected,
+            CompanionOutingRules.GetFixedFullOutingStayMinutes(configuredStayMinutes));
+    }
 }

@@ -62,6 +62,40 @@ internal sealed class CompanionOutingRuntime
         this.pendingOutings.Clear();
     }
 
+    /// <summary>
+    /// Runs on DayEnding, while the outing day is still current. Credits the shared time of
+    /// outings interrupted by the player going to bed (they would otherwise leave no memory at
+    /// all) and restores the schedule flags. Vanilla dayUpdate reloads schedules at dawn, so no
+    /// further recovery is needed.
+    /// </summary>
+    public void FinalizeForDayEnd()
+    {
+        foreach (var outing in this.pendingOutings.ToList())
+        {
+            this.pendingOutings.Remove(outing);
+            NPC? npc = Game1.getCharacterFromName(outing.NpcName);
+            if (npc == null)
+            {
+                continue;
+            }
+
+            if (outing.Phase == CompanionOutingPhase.AtDestination)
+            {
+                this.AccumulateSharedTime(outing);
+                this.RecordCompletedStay(npc, outing);
+            }
+
+            npc.controller = null;
+            npc.DirectionsToNewLocation = null;
+            npc.Halt();
+            NpcTravelRuntime.RestoreSchedule(
+                npc,
+                outing.OriginalIgnoreScheduleToday,
+                outing.OriginalFollowSchedule
+            );
+        }
+    }
+
     public bool TryStart(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
     {
         reason = string.Empty;
@@ -76,8 +110,30 @@ internal sealed class CompanionOutingRuntime
             return false;
         }
 
+        if (!Game1.IsMasterGame)
+        {
+            // Farmhands cannot drive NPC pathfinding (controller.update only runs on the host),
+            // so an outing started there would hang in the traveling phase forever.
+            reason = "companion outings only run for the host player";
+            return false;
+        }
+
         if (IsProtectedScene(npc, out reason))
         {
+            return false;
+        }
+
+        if (Utility.isFestivalDay(Game1.dayOfMonth, Game1.season))
+        {
+            // Festival-day schedules all lead to the event, and entering the festival would
+            // force-stop the outing mid-way; better to decline up front with a clear reason.
+            reason = "today is a festival day, so the NPC keeps the day free for it";
+            return false;
+        }
+
+        if (Game1.isLightning)
+        {
+            reason = "a thunderstorm is raging outside";
             return false;
         }
 
@@ -104,10 +160,11 @@ internal sealed class CompanionOutingRuntime
         int plannedStayMinutes = CompanionOutingRules.NormalizeRequestedStayMinutes(action.DurationMinutes);
         if (!CompanionOutingRules.IsShortVisit(plannedStayMinutes))
         {
-            plannedStayMinutes = CompanionOutingRules.NormalizeRequestedStayMinutes(Math.Max(
-                CompanionOutingRules.MinimumStayMinutes,
+            // Full outings intentionally use a fixed stay length from config; the AI-requested
+            // duration only decides short visit vs. full outing.
+            plannedStayMinutes = CompanionOutingRules.GetFixedFullOutingStayMinutes(
                 this.config.MinimumCompanionOutingStayMinutes
-            ));
+            );
         }
 
         if (!CompanionOutingRules.CanFitMinimumStay(Game1.timeOfDay, plannedStayMinutes))
@@ -256,9 +313,8 @@ internal sealed class CompanionOutingRuntime
                 NPC? npc = Game1.getCharacterFromName(outing.NpcName);
                 if (outing.TotalDays != Game1.Date.TotalDays || npc == null)
                 {
-                    // A new day started (or the NPC vanished) while the outing was still active.
-                    // Undo the schedule suppression so the NPC resumes its fresh daily schedule;
-                    // otherwise followSchedule could stay false and strand the NPC the next day.
+                    // Defensive only: FinalizeForDayEnd clears outings on DayEnding, and vanilla
+                    // dayUpdate reloads schedules at dawn anyway. This branch just drops strays.
                     if (npc != null)
                     {
                         NpcTravelRuntime.RestoreSchedule(
@@ -274,6 +330,15 @@ internal sealed class CompanionOutingRuntime
 
                 if (Game1.eventUp || Game1.currentLocation?.currentEvent != null)
                 {
+                    this.Stop(outing, npc, returnToSchedule: true);
+                    continue;
+                }
+
+                if (Game1.timeOfDay >= CompanionOutingRules.LatestPlannedStayEndTime
+                    && IsTravelingPhase(outing.Phase))
+                {
+                    // Too late in the day to still be walking there; give up so the NPC can
+                    // head home instead of standing in transit until the forced bedtime.
                     this.Stop(outing, npc, returnToSchedule: true);
                     continue;
                 }
@@ -364,7 +429,7 @@ internal sealed class CompanionOutingRuntime
         prompt.AppendLine($"- The farmer is {(farmerPresent ? "currently present with the NPC" : "temporarily elsewhere")}.");
         if (outing.Phase == CompanionOutingPhase.AtDestination)
         {
-            prompt.AppendLine($"- They arrived at {BehaviorTimeMath.FormatTime(outing.ArrivalTimeOfDay)} and the NPC plans to remain until at least {BehaviorTimeMath.FormatTime(outing.StayUntilTimeOfDay)}.");
+            prompt.AppendLine($"- They arrived at {BehaviorTimeMath.FormatTime(outing.ArrivalTimeOfDay)} and the NPC plans to remain until about {BehaviorTimeMath.FormatTime(outing.StayUntilTimeOfDay)}, then return to the day's schedule. Do not promise a longer stay.");
             prompt.AppendLine($"- The NPC is settled {outing.AnchorLabel}.");
             prompt.AppendLine($"- Shared time together at the destination so far: about {outing.SharedMinutesAtDestination} game minutes.");
             if (outing.IsShortVisit)
@@ -540,9 +605,11 @@ internal sealed class CompanionOutingRuntime
         npc.faceDirection(outing.AnchorFacingDirection);
         outing.Phase = CompanionOutingPhase.AtDestination;
         outing.ArrivalTimeOfDay = Game1.timeOfDay;
-        outing.StayUntilTimeOfDay = BehaviorTimeMath.AddMinutesToTime(
-            Game1.timeOfDay,
-            outing.PlannedStayMinutes
+        // Cap the stay end so a late arrival never pushes it past a reachable time of day
+        // (times beyond the latest planned end would otherwise never trigger the return leg).
+        outing.StayUntilTimeOfDay = Math.Min(
+            BehaviorTimeMath.AddMinutesToTime(Game1.timeOfDay, outing.PlannedStayMinutes),
+            CompanionOutingRules.LatestPlannedStayEndTime
         );
         outing.LastObservedTimeOfDay = Game1.timeOfDay;
         outing.RouteRetryCount = 0;
@@ -579,13 +646,15 @@ internal sealed class CompanionOutingRuntime
 
         if (npc.currentLocation != destination)
         {
+            // The NPC was moved off-map mid-stay (event scripts, other mods). Assign the walk
+            // back once and wait for it, instead of re-running cross-map pathfinding every tick.
+            if (npc.controller != null && npc.controller == outing.LastAssignedController)
+            {
+                return;
+            }
+
             if (!this.TryAssignRoute(npc, outing, destination, outing.AnchorTile, outing.AnchorFacingDirection))
             {
-                if (destination == Game1.getFarm() && this.TryBeginFarmEntryStay(npc, outing, destination))
-                {
-                    return;
-                }
-
                 this.Stop(outing, npc, returnToSchedule: true);
             }
 
@@ -1113,16 +1182,34 @@ internal sealed class CompanionOutingRuntime
         GameLocation source,
         string targetLocationName)
     {
-        if (NpcTravelRuntime.TryGetWarpBoundary(source, targetLocationName, npc, out Point sourceTile, out Point targetTile))
+        if (NpcTravelRuntime.TryGetWarpBoundary(source, targetLocationName, npc, out Point sourceTile, out _))
         {
-            int dx = targetTile.X - sourceTile.X;
-            int dy = targetTile.Y - sourceTile.Y;
-            if (Math.Abs(dx) >= Math.Abs(dy))
+            // Face outward across the map edge the warp tile sits on. The warp's target tile
+            // lives in the other map's coordinate space, so differencing the two would be
+            // meaningless; the edge the tile touches is what tells us the crossing direction.
+            var layer = source.Map?.Layers.Count > 0 ? source.Map.Layers[0] : null;
+            if (layer != null)
             {
-                return dx >= 0 ? 1 : 3;
-            }
+                if (sourceTile.Y <= 1)
+                {
+                    return 0;
+                }
 
-            return dy >= 0 ? 2 : 0;
+                if (sourceTile.Y >= layer.LayerHeight - 2)
+                {
+                    return 2;
+                }
+
+                if (sourceTile.X <= 1)
+                {
+                    return 3;
+                }
+
+                if (sourceTile.X >= layer.LayerWidth - 2)
+                {
+                    return 1;
+                }
+            }
         }
 
         return 2;
@@ -1346,6 +1433,17 @@ internal sealed class CompanionOutingRuntime
             if (normalized == "Farm")
             {
                 return Game1.getFarm();
+            }
+
+            if (normalized == "Trailer"
+                && Game1.MasterPlayer?.mailReceived.Contains("pamHouseUpgrade") == true)
+            {
+                // After Pam's house upgrade, vanilla pathfinding redirects Trailer to
+                // Trailer_Big while the old Trailer location still exists. Resolve to the
+                // upgraded map so anchors and arrival checks land where the NPC actually walks.
+                return Game1.getLocationFromName("Trailer_Big")
+                    ?? Game1.getLocationFromName(locationName)
+                    ?? Game1.getLocationFromName(normalized);
             }
 
             GameLocation? location = Game1.getLocationFromName(locationName) ?? Game1.getLocationFromName(normalized);

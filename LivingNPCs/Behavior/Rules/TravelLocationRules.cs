@@ -30,7 +30,10 @@ internal static class TravelLocationRules
         "FishShop",
         "WizardHouse",
         "Tent",
-        "FlowerDance",
+        // Note: "FlowerDance" is intentionally NOT an outing target. No GameLocation with that
+        // name exists (the festival loads on a Temp map), so an outing there can never resolve;
+        // it remains a valid festival-anchor target for DirectWorldActionRuntime, which paths
+        // within the current festival map and keeps using the aliases/labels below.
         "Custom_GrampletonCoast",
         "Custom_BlueMoonVineyard",
         "Custom_AuroraVineyard",

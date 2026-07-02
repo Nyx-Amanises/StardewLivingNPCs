@@ -149,6 +149,7 @@ internal sealed class BehaviorEngine
         this.helper.Events.GameLoop.SaveLoaded += this.OnSaveLoaded;
         this.helper.Events.GameLoop.Saving += this.OnSaving;
         this.helper.Events.GameLoop.DayStarted += this.OnDayStarted;
+        this.helper.Events.GameLoop.DayEnding += this.OnDayEnding;
         this.helper.Events.GameLoop.ReturnedToTitle += this.OnReturnedToTitle;
         this.helper.Events.GameLoop.TimeChanged += this.OnTimeChanged;
         this.helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
@@ -213,6 +214,13 @@ internal sealed class BehaviorEngine
         this.pendingRequests.Clear();
         this.ClearGiftMailTracking();
     }
+    private void OnDayEnding(object? sender, DayEndingEventArgs e)
+    {
+        // Runs while the outing day is still current, before OnDayStarted clears the list:
+        // outings interrupted by bedtime get their shared-time memory credited here.
+        this.SafeRun("day ending", () => this.companionOutings.FinalizeForDayEnd());
+    }
+
     private void OnDayStarted(object? sender, DayStartedEventArgs e)
     {
         this.SafeRun("day started", () =>

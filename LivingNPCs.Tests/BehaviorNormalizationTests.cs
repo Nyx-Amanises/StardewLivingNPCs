@@ -19,10 +19,18 @@ public sealed class BehaviorNormalizationTests
     [Theory]
     [InlineData("Custom_GrampletonCoast")]
     [InlineData("Custom_BlueMoonVineyard")]
-    [InlineData("FlowerDance")]
     public void ExpandedLocationsArePublicOutingTargets(string locationName)
     {
         Assert.True(TravelLocationRules.IsKnownPublicOutingTarget(locationName));
+    }
+
+    [Fact]
+    public void FlowerDanceIsNotAnOutingTargetButStillNormalizes()
+    {
+        // No GameLocation named "FlowerDance" exists (the festival loads on a Temp map), so it
+        // must not be offered as an outing destination; the alias stays for festival anchors.
+        Assert.False(TravelLocationRules.IsKnownPublicOutingTarget("FlowerDance"));
+        Assert.Equal("FlowerDance", TravelLocationRules.Normalize("花舞节", string.Empty));
     }
 
     [Fact]
