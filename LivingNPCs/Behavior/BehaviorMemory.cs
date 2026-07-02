@@ -1499,6 +1499,21 @@ internal sealed class BehaviorMemory
         };
     }
 
+    /// <summary>
+    /// Priority when the help-request list is clamped to its cap. Fulfilled requests whose money
+    /// reward is still waiting in the quest journal must never be evicted: dropping the fact makes
+    /// the next Sync delete the proxy quest, silently destroying the payout. Everything else keeps
+    /// the normal status order (shifted by one).
+    /// </summary>
+    internal static int HelpRequestRetentionRank(NpcHelpRequestFact request)
+    {
+        bool unclaimedMoneyReward = request.Status == "Fulfilled"
+            && request.RewardMoneyClaimQueued
+            && !request.RewardMoneyGranted
+            && request.RewardMoney > 0;
+        return unclaimedMoneyReward ? 0 : HelpRequestStatusOrder(request.Status) + 1;
+    }
+
     internal static int ConflictStatusOrder(string status)
     {
         return status switch

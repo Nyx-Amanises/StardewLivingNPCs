@@ -57,10 +57,15 @@ internal sealed class HelpRequestMemoryService
         GiftMemoryDetails gift,
         int maxEntriesPerNpc)
     {
+        // One handed-over item advances exactly one request (the most urgent match): the delivery
+        // consumes a single item, so completing several matching requests with it would double
+        // rewards. Repeated hand-ins serve any remaining requests one at a time.
         var fulfilled = state.HelpRequests
             .Where(request => request.Status == "Pending"
                 && request.Type == "item_request"
                 && string.Equals(request.RequestedItemId, gift.ItemId, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(request => request.DueTotalDays)
+            .Take(1)
             .ToList();
 
         foreach (var request in fulfilled)
@@ -153,7 +158,14 @@ internal sealed class HelpRequestMemoryService
             return false;
         }
 
-        bool requiresAcceptance = candidate.RequiresAcceptance && !IsFarmerExplicitlyOfferingHelp(playerText);
+        // A request may only start out accepted (Pending) when the farmer's own words in this
+        // exchange deterministically agreed or offered to help. The model's requiresAcceptance
+        // flag is not trusted on its own: a hallucinated "no confirmation needed" would otherwise
+        // put an unagreed task in the journal, and letting it expire punishes the farmer as a
+        // broken promise.
+        bool farmerAgreedHere = IsFarmerExplicitlyOfferingHelp(playerText)
+            || LooksLikeFarmerAcceptingHelp(playerText);
+        bool requiresAcceptance = !farmerAgreedHere;
 
         state.HelpRequests.Add(new NpcHelpRequestFact
         {
@@ -187,7 +199,7 @@ internal sealed class HelpRequestMemoryService
         state.LastHelpRequestTotalDays = Game1.Date.TotalDays;
         state.LastHelpRequestTimeOfDay = Game1.timeOfDay;
         state.HelpRequests = state.HelpRequests
-            .OrderBy(request => BehaviorMemory.HelpRequestStatusOrder(request.Status))
+            .OrderBy(BehaviorMemory.HelpRequestRetentionRank)
             .ThenBy(request => request.DueTotalDays)
             .ThenByDescending(request => request.LastUpdatedTotalDays)
             .Take(12)
@@ -224,6 +236,17 @@ internal sealed class HelpRequestMemoryService
         switch (candidate.Status)
         {
             case "accepted":
+                // Offered→Pending needs the farmer's own affirmative words; a hallucinated
+                // "accepted" must not put an unagreed task in the journal (and expiring an
+                // "accepted" request later punishes the farmer as a broken promise).
+                // Already-Pending requests pass through: Accept is a no-op for them.
+                if (existing.Status == "Offered"
+                    && !LooksLikeFarmerAcceptingHelp(playerText)
+                    && !IsFarmerExplicitlyOfferingHelp(playerText))
+                {
+                    return false;
+                }
+
                 this.Accept(state, existing, candidate.Resolution);
                 break;
 
@@ -245,6 +268,13 @@ internal sealed class HelpRequestMemoryService
                 return false;
 
             case "declined":
+                // Only decline (with its trust/mood penalty) when the farmer's words actually
+                // refused; otherwise leave the request open — expiring unaccepted is the mild path.
+                if (!LooksLikeFarmerDecliningHelp(playerText))
+                {
+                    return false;
+                }
+
                 this.Decline(state, existing, candidate.Resolution);
                 break;
         }
@@ -307,7 +337,9 @@ internal sealed class HelpRequestMemoryService
         }
 
         string combined = $"{playerText} {npcResponse}";
-        if (LooksLikeNpcOfferingItemToFarmer(npcResponse) || !LooksLikeItemFavorRequested(combined))
+        // The favor phrasing must come from the NPC's own reply: judging the combined text let a
+        // farmer's "能不能给我带点面包" synthesize a reversed request where the NPC asks the farmer.
+        if (LooksLikeNpcOfferingItemToFarmer(npcResponse) || !LooksLikeItemFavorRequested(npcResponse))
         {
             return false;
         }
@@ -512,6 +544,39 @@ internal sealed class HelpRequestMemoryService
         );
     }
 
+    /// <summary>Deterministic refusal check, shared as the negative gate of acceptance.</summary>
+    internal static bool LooksLikeFarmerDecliningHelp(string playerText)
+    {
+        if (string.IsNullOrWhiteSpace(playerText))
+        {
+            return false;
+        }
+
+        return ContainsAny(
+            playerText.ToLowerInvariant(),
+            "不用了",
+            "不用帮",
+            "不帮",
+            "不行",
+            "不可以",
+            "算了",
+            "下次再",
+            "下次吧",
+            "改天",
+            "以后再",
+            "以后吧",
+            "没办法",
+            "做不到",
+            "不想",
+            "no thanks",
+            "not now",
+            "maybe later",
+            "can't help",
+            "won't help",
+            "i can't",
+            "i won't");
+    }
+
     internal static bool LooksLikeFarmerAcceptingHelp(string playerText)
     {
         if (string.IsNullOrWhiteSpace(playerText))
@@ -519,34 +584,12 @@ internal sealed class HelpRequestMemoryService
             return false;
         }
 
-        string text = playerText.ToLowerInvariant();
-        if (ContainsAny(
-                text,
-                "不用了",
-                "不用帮",
-                "不帮",
-                "不行",
-                "不可以",
-                "算了",
-                "下次再",
-                "下次吧",
-                "改天",
-                "以后再",
-                "以后吧",
-                "没办法",
-                "做不到",
-                "不想",
-                "no thanks",
-                "not now",
-                "maybe later",
-                "can't help",
-                "won't help",
-                "i can't",
-                "i won't"))
+        if (LooksLikeFarmerDecliningHelp(playerText))
         {
             return false;
         }
 
+        string text = playerText.ToLowerInvariant();
         return ContainsAny(
             text,
             "好的",

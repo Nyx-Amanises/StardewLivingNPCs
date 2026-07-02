@@ -90,6 +90,21 @@ internal sealed class ConversationStartRecorder
         }
 
         SObject? heldGift = Game1.player.ActiveObject;
+        GiftMemoryDetails? heldGiftDetails = heldGift != null ? GiftMemoryDetailsFactory.Build(npc, heldGift) : null;
+        if (heldGift != null
+            && heldGiftDetails != null
+            && this.config.EnableHelpRequests
+            && this.HasPendingItemHelpRequest(npc, heldGiftDetails))
+        {
+            // Deliveries run BEFORE the per-10-minute interaction marker: they are idempotent
+            // (the pending predicate stops matching once the step completes), and a second click
+            // inside the same window must still be suppressed and delivered — otherwise vanilla
+            // gifting consumes the quest item as an ordinary daily gift.
+            this.helper.Input.Suppress(e.Button);
+            this.DeliverHelpRequestItem(npc, heldGift, heldGiftDetails);
+            return;
+        }
+
         int timeMarker = (Game1.Date.TotalDays * 10000) + Game1.timeOfDay;
         if (this.lastConversationMemoryTimeByNpc.TryGetValue(npc.Name, out int lastTimeMarker) && lastTimeMarker == timeMarker)
         {
@@ -98,15 +113,9 @@ internal sealed class ConversationStartRecorder
 
         this.lastConversationMemoryTimeByNpc[npc.Name] = timeMarker;
         this.TryRecordObservedRomanticInteraction(npc);
-        if (heldGift != null)
+        if (heldGift != null && heldGiftDetails != null)
         {
-            var gift = GiftMemoryDetailsFactory.Build(npc, heldGift);
-            if (this.config.EnableHelpRequests && this.HasPendingItemHelpRequest(npc, gift))
-            {
-                this.helper.Input.Suppress(e.Button);
-                this.DeliverHelpRequestItem(npc, heldGift, gift);
-                return;
-            }
+            GiftMemoryDetails gift = heldGiftDetails;
 
             // Defer the gift record until vanilla has processed this click: vanilla refuses gifts
             // past the weekly/daily limit, during festivals, or for quest hand-ins, and none of

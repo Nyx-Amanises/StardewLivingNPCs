@@ -31,7 +31,10 @@ internal sealed class HelpRequestQuestLogService
 
         var trackedRequests = this.memory.GetTrackedStates()
             .SelectMany(state => state.HelpRequests
-                .Where(request => request.Status == "Pending" || IsClaimableMoneyRequest(request))
+                // With the feature turned off mid-save, stop tracking Pending proxies (they could
+                // never be delivered) but keep already-earned money rewards claimable.
+                .Where(request => (this.config.EnableHelpRequests && request.Status == "Pending")
+                    || IsClaimableMoneyRequest(request))
                 .Select(request => new
                 {
                     State = state,

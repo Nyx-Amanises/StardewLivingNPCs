@@ -670,7 +670,11 @@ internal sealed class LivingNpcState
                 return request;
             })
             .Where(request => request.Type != "none")
-            .OrderBy(request => BehaviorMemory.HelpRequestStatusOrder(request.Status))
+            // Live question_requests are legacy data with no completion path (current builds only
+            // create item requests): left alone they can only expire and punish the player, so
+            // drop them; the next quest-log sync removes their proxy entries.
+            .Where(request => !(request.Type == "question_request" && request.Status is "Offered" or "Pending"))
+            .OrderBy(BehaviorMemory.HelpRequestRetentionRank)
             .ThenBy(request => request.DueTotalDays)
             .ThenByDescending(request => request.LastUpdatedTotalDays)
             .Take(12)

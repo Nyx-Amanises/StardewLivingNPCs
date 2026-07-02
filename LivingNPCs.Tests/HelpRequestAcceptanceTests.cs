@@ -28,6 +28,24 @@ public sealed class HelpRequestAcceptanceTests
     }
 
     [Theory]
+    [InlineData("算了，这次就不用了。")]
+    [InlineData("我现在没办法。")]
+    [InlineData("No thanks, not now.")]
+    public void RecognizesRefusal(string playerText)
+    {
+        Assert.True(HelpRequestMemoryService.LooksLikeFarmerDecliningHelp(playerText));
+    }
+
+    [Theory]
+    [InlineData("好的，我帮你找找。")]
+    [InlineData("今天天气真好。")]
+    [InlineData("")]
+    public void NeutralOrAgreeingTextIsNotRefusal(string playerText)
+    {
+        Assert.False(HelpRequestMemoryService.LooksLikeFarmerDecliningHelp(playerText));
+    }
+
+    [Theory]
     [InlineData("你能帮我找点黄水仙吗？")]
     [InlineData("能不能给我带些面包。")]
     [InlineData("帮我留意一下石英好吗？")]

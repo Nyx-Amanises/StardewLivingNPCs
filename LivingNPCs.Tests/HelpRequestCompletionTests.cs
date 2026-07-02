@@ -27,6 +27,80 @@ public sealed class HelpRequestCompletionTests
         Assert.False(request.RewardGranted);
     }
 
+    [Theory]
+    [InlineData("今天天气真好。")]
+    [InlineData("你最近在忙什么？")]
+    public void AiAcceptedUpdateWithoutFarmerAffirmationIsIgnored(string playerText)
+    {
+        var state = TestScenarios.TrustedState();
+        var request = PendingItemRequest();
+        request.Status = "Offered";
+        request.AcceptedTotalDays = -1;
+        state.HelpRequests.Add(request);
+
+        bool applied = NewService().ApplyUpdate(
+            state,
+            new ValleyTalkHelpRequestUpdateCandidate
+            {
+                Summary = "Bring Emily some quartz.",
+                Status = "accepted",
+                Resolution = string.Empty
+            },
+            playerText,
+            out _);
+
+        Assert.False(applied);
+        Assert.Equal("Offered", request.Status);
+        Assert.Equal(-1, request.AcceptedTotalDays);
+    }
+
+    [Theory]
+    [InlineData("今天天气真好。")]
+    [InlineData("石英听起来不错。")]
+    public void AiDeclinedUpdateWithoutFarmerRefusalIsIgnored(string playerText)
+    {
+        var state = TestScenarios.TrustedState();
+        var request = PendingItemRequest();
+        request.Status = "Offered";
+        state.HelpRequests.Add(request);
+
+        bool applied = NewService().ApplyUpdate(
+            state,
+            new ValleyTalkHelpRequestUpdateCandidate
+            {
+                Summary = "Bring Emily some quartz.",
+                Status = "declined",
+                Resolution = string.Empty
+            },
+            playerText,
+            out _);
+
+        Assert.False(applied);
+        Assert.Equal("Offered", request.Status);
+    }
+
+    [Fact]
+    public void UnclaimedMoneyRewardIsNeverEvictedFirst()
+    {
+        // The retention rank must keep a fulfilled request with queued, unclaimed money ahead of
+        // every other status; evicting it deletes the proxy quest and silently destroys the payout.
+        var claimable = new NpcHelpRequestFact
+        {
+            Status = "Fulfilled",
+            RewardMoney = 500,
+            RewardMoneyClaimQueued = true,
+            RewardMoneyGranted = false
+        };
+        var claimed = new NpcHelpRequestFact { Status = "Fulfilled", RewardMoney = 500, RewardMoneyGranted = true };
+        var pending = new NpcHelpRequestFact { Status = "Pending" };
+        var expired = new NpcHelpRequestFact { Status = "Expired" };
+
+        int claimableRank = BehaviorMemory.HelpRequestRetentionRank(claimable);
+        Assert.True(claimableRank < BehaviorMemory.HelpRequestRetentionRank(pending));
+        Assert.True(claimableRank < BehaviorMemory.HelpRequestRetentionRank(expired));
+        Assert.True(claimableRank < BehaviorMemory.HelpRequestRetentionRank(claimed));
+    }
+
     private static NpcHelpRequestFact PendingItemRequest()
     {
         return new NpcHelpRequestFact
