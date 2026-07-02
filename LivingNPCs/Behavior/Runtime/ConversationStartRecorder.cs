@@ -13,6 +13,21 @@ internal delegate bool TryFindNpcForInteractionHandler(ICursorPosition cursor, o
 
 internal sealed class ConversationStartRecorder
 {
+    /// <summary>
+    /// A gift interaction observed on button-press, waiting to be confirmed against vanilla.
+    /// Vanilla may refuse the offered item (weekly/daily gift limit reached, festival dialogue,
+    /// non-giftable item, quest hand-in), in which case nothing should be recorded.
+    /// </summary>
+    private sealed class PendingGiftVerification
+    {
+        public NPC Npc = null!;
+        public GiftMemoryDetails Gift = null!;
+        public int TotalDays;
+        public int TimeMarker;
+        public int SnapshotGiftsToday;
+        public int SnapshotLastGiftDateTotalDays;
+    }
+
     private readonly IModHelper helper;
     private readonly IMonitor monitor;
     private readonly ModConfig config;
@@ -26,6 +41,7 @@ internal sealed class ConversationStartRecorder
     private readonly TryFindNpcForInteractionHandler tryFindNpcForInteraction;
     private readonly Action<NPC, string, string> pushInteractionContext;
     private readonly Dictionary<string, int> lastConversationMemoryTimeByNpc = new();
+    private readonly List<PendingGiftVerification> pendingGiftVerifications = new();
 
     public ConversationStartRecorder(
         IModHelper helper,
@@ -58,6 +74,7 @@ internal sealed class ConversationStartRecorder
     public void Clear()
     {
         this.lastConversationMemoryTimeByNpc.Clear();
+        this.pendingGiftVerifications.Clear();
     }
 
     public void TryRecord(ButtonPressedEventArgs e)
@@ -91,27 +108,21 @@ internal sealed class ConversationStartRecorder
                 return;
             }
 
-            this.memory.RecordGiftOffered(npc, gift, this.config.MaxMemoryEntriesPerNpc);
-            if (this.config.EnableNpcState)
+            // Defer the gift record until vanilla has processed this click: vanilla refuses gifts
+            // past the weekly/daily limit, during festivals, or for quest hand-ins, and none of
+            // those should update memory, mood, or roll a reciprocal gift. The verification runs
+            // in the same tick's UpdateTicked, after vanilla's input handling.
+            Game1.player.friendshipData.TryGetValue(npc.Name, out Friendship? friendship);
+            this.pendingGiftVerifications.RemoveAll(pending => pending.Npc.Name == npc.Name);
+            this.pendingGiftVerifications.Add(new PendingGiftVerification
             {
-                LivingNpcState state = this.memory.UpdateStateForGift(npc, gift);
-                this.giftOpportunities.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
-            }
-
-            if (this.config.EnableHelpRequests)
-            {
-                IReadOnlyList<NpcHelpRequestFact> changedHelpRequests = this.memory.TryCompleteItemHelpRequests(npc, gift, this.config.MaxMemoryEntriesPerNpc);
-                if (changedHelpRequests.Count > 0)
-                {
-                    this.helpRequestRewards.RewardFulfilled(npc, changedHelpRequests);
-                    this.helpRequestQuestLog.Sync();
-                    int fulfilledCount = changedHelpRequests.Count(request => request.Status == "Fulfilled");
-                    int advancedCount = changedHelpRequests.Count - fulfilledCount;
-                    this.PushInteractionContext(npc, $"Updated {changedHelpRequests.Count} help request(s) for {npc.Name} through a gifted item: {fulfilledCount} fulfilled, {advancedCount} advanced.");
-                }
-            }
-
-            this.PushInteractionContext(npc, $"Recorded gift interaction for {npc.Name}: {gift.ItemName} ({gift.TastePromptLabel}).");
+                Npc = npc,
+                Gift = gift,
+                TotalDays = Game1.Date.TotalDays,
+                TimeMarker = timeMarker,
+                SnapshotGiftsToday = friendship?.GiftsToday ?? 0,
+                SnapshotLastGiftDateTotalDays = friendship?.LastGiftDate?.TotalDays ?? -1
+            });
             return;
         }
 
@@ -143,6 +154,95 @@ internal sealed class ConversationStartRecorder
 
         this.PushInteractionContext(npc, $"Recorded conversation start for {npc.Name}.");
         this.MarkConflictFollowUpsMentionedAfterPrompt(npc);
+    }
+
+    /// <summary>
+    /// Confirms pending gift interactions against vanilla and records the accepted ones. Runs from
+    /// UpdateTicked, which fires after vanilla has handled the click that offered the gift, so the
+    /// friendship gift counters already reflect whether the NPC actually took the item.
+    /// </summary>
+    public void ProcessPendingGiftVerifications()
+    {
+        if (this.pendingGiftVerifications.Count == 0)
+        {
+            return;
+        }
+
+        var pending = new List<PendingGiftVerification>(this.pendingGiftVerifications);
+        this.pendingGiftVerifications.Clear();
+        foreach (var candidate in pending)
+        {
+            if (candidate.TotalDays != Game1.Date.TotalDays)
+            {
+                continue;
+            }
+
+            if (!WasGiftAcceptedByVanilla(candidate))
+            {
+                // Vanilla refused the item, so this click was ordinary dialogue, not a gift. Drop
+                // the interaction marker so the conversation can still be recorded in this window.
+                if (this.lastConversationMemoryTimeByNpc.TryGetValue(candidate.Npc.Name, out int marker)
+                    && marker == candidate.TimeMarker)
+                {
+                    this.lastConversationMemoryTimeByNpc.Remove(candidate.Npc.Name);
+                }
+
+                if (this.config.Debug)
+                {
+                    this.monitor.Log(
+                        $"Skipped gift record for {candidate.Npc.Name}: vanilla did not accept {candidate.Gift.ItemName}.",
+                        LogLevel.Debug
+                    );
+                }
+
+                continue;
+            }
+
+            this.RecordAcceptedGift(candidate.Npc, candidate.Gift);
+        }
+    }
+
+    private static bool WasGiftAcceptedByVanilla(PendingGiftVerification candidate)
+    {
+        if (!Game1.player.friendshipData.TryGetValue(candidate.Npc.Name, out Friendship? friendship)
+            || friendship == null)
+        {
+            return false;
+        }
+
+        int today = Game1.Date.TotalDays;
+        if ((friendship.LastGiftDate?.TotalDays ?? -1) != today)
+        {
+            return false;
+        }
+
+        return candidate.SnapshotLastGiftDateTotalDays != today
+            || friendship.GiftsToday != candidate.SnapshotGiftsToday;
+    }
+
+    private void RecordAcceptedGift(NPC npc, GiftMemoryDetails gift)
+    {
+        this.memory.RecordGiftOffered(npc, gift, this.config.MaxMemoryEntriesPerNpc);
+        if (this.config.EnableNpcState)
+        {
+            LivingNpcState state = this.memory.UpdateStateForGift(npc, gift);
+            this.giftOpportunities.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
+        }
+
+        if (this.config.EnableHelpRequests)
+        {
+            IReadOnlyList<NpcHelpRequestFact> changedHelpRequests = this.memory.TryCompleteItemHelpRequests(npc, gift, this.config.MaxMemoryEntriesPerNpc);
+            if (changedHelpRequests.Count > 0)
+            {
+                this.helpRequestRewards.RewardFulfilled(npc, changedHelpRequests);
+                this.helpRequestQuestLog.Sync();
+                int fulfilledCount = changedHelpRequests.Count(request => request.Status == "Fulfilled");
+                int advancedCount = changedHelpRequests.Count - fulfilledCount;
+                this.PushInteractionContext(npc, $"Updated {changedHelpRequests.Count} help request(s) for {npc.Name} through a gifted item: {fulfilledCount} fulfilled, {advancedCount} advanced.");
+            }
+        }
+
+        this.PushInteractionContext(npc, $"Recorded gift interaction for {npc.Name}: {gift.ItemName} ({gift.TastePromptLabel}).");
     }
 
     private bool HasPendingItemHelpRequest(NPC npc, GiftMemoryDetails gift)

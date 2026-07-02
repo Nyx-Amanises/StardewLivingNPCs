@@ -54,9 +54,10 @@ internal sealed class BehaviorMailService
 
     public bool HasPendingGiftMail(LivingNpcState state, string motive)
     {
+        // Any unclaimed mail counts, including ones past their due date that the player has not
+        // opened yet — otherwise repeated gifting can stack several letters of the same motive.
         return state.GiftMails.Any(mail =>
             !mail.Claimed
-            && mail.DueTotalDays >= Game1.Date.TotalDays
             && string.Equals(mail.Motive, motive, StringComparison.OrdinalIgnoreCase));
     }
 

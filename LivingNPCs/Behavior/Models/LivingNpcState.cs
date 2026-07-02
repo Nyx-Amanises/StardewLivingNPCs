@@ -6,6 +6,9 @@ namespace LivingNPCs.Behavior;
 
 internal sealed class LivingNpcState
 {
+    /// <summary>Claimed gift-mail facts older than this are dropped when the state is clamped.</summary>
+    private const int ClaimedGiftMailRetentionDays = 14;
+
     public string NpcName { get; set; } = string.Empty;
     public string Mood { get; set; } = "Neutral";
     public string CurrentEmotion { get; set; } = "Calm";
@@ -864,14 +867,42 @@ internal sealed class LivingNpcState
                     mail.ClaimedTimeOfDay = 0;
                 }
 
+                mail.GeneratedBody = mail.GeneratedBody?.Trim() ?? string.Empty;
+                mail.GenerationStatus = (mail.GenerationStatus ?? "none").Trim().ToLowerInvariant() switch
+                {
+                    "pending" => "pending",
+                    "ready" => mail.GeneratedBody.Length > 0 ? "ready" : "none",
+                    "failed" => "failed",
+                    _ => "none"
+                };
+                mail.GenerationAttempts = System.Math.Max(0, mail.GenerationAttempts);
+
                 return mail;
             })
-            .OrderBy(mail => mail.QueuedForDelivery)
-            .ThenBy(mail => mail.DueTotalDays)
+            .Where(mail => !mail.Claimed
+                || mail.ClaimedTotalDays < 0
+                || Game1.Date.TotalDays - mail.ClaimedTotalDays <= ClaimedGiftMailRetentionDays)
+            .OrderBy(GiftMailRetentionRank)
             .ThenByDescending(mail => mail.CreatedTotalDays)
             .ThenByDescending(mail => mail.CreatedTimeOfDay)
             .Take(12)
             .ToList();
+    }
+
+    /// <summary>
+    /// Priority when the gift-mail list is clamped to its cap. Delivered-but-unclaimed mails map to a
+    /// real letter already sitting in the mailbox/tomorrow queue — dropping their fact would orphan
+    /// that letter (blank mail, attached item lost), so they are kept first. Undelivered mails are
+    /// kept next (dropping one silently cancels a planned gift). Claimed mails are history only.
+    /// </summary>
+    private static int GiftMailRetentionRank(NpcGiftMailFact mail)
+    {
+        if (mail.Claimed)
+        {
+            return 2;
+        }
+
+        return mail.QueuedForDelivery ? 0 : 1;
     }
 
     public LivingNpcState Clone()
@@ -1088,7 +1119,10 @@ internal sealed class LivingNpcState
                     QueuedForDelivery = mail.QueuedForDelivery,
                     Claimed = mail.Claimed,
                     ClaimedTotalDays = mail.ClaimedTotalDays,
-                    ClaimedTimeOfDay = mail.ClaimedTimeOfDay
+                    ClaimedTimeOfDay = mail.ClaimedTimeOfDay,
+                    GeneratedBody = mail.GeneratedBody,
+                    GenerationStatus = mail.GenerationStatus,
+                    GenerationAttempts = mail.GenerationAttempts
                 })
                 .ToList(),
             Conflicts = this.Conflicts

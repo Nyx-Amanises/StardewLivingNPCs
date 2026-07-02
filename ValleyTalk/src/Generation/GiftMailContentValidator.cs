@@ -16,10 +16,21 @@ public static class GiftMailContentValidator
     private const int MinLength = 16;
     private const int MaxLength = 700;
 
+    // Only assistant meta-talk and explicit task-refusal phrases are rejected. Bare apologies
+    // ("抱歉这么晚才回礼", "I'm sorry this letter is late") and bare inability phrases ("I cannot
+    // thank you enough", "无法用言语表达我的感谢") are normal letter prose and must pass.
     private static readonly string[] RefusalMarkers =
     {
-        "as an ai", "as a language model", "language model", "i cannot", "i can't", "i can not",
-        "i'm sorry", "i am sorry", "cannot assist", "对不起", "抱歉", "我不能", "我无法", "作为一个ai", "作为ai"
+        "as an ai", "as a language model", "language model", "ai assistant",
+        "i cannot write", "i can't write", "i cannot generate", "i can't generate",
+        "i cannot create", "i can't create", "i cannot fulfill", "i can't fulfill",
+        "cannot comply", "cannot assist", "can't assist", "unable to assist",
+        "cannot help with", "can't help with", "i cannot do that", "i can't do that",
+        "not something i can",
+        "作为一个ai", "作为ai", "作为人工智能", "人工智能", "语言模型", "ai助手",
+        "我不能写", "我无法写", "无法生成", "不能生成", "无法创作", "无法撰写", "不能撰写",
+        "无法协助", "不能协助", "无法完成这个", "无法完成该", "不能完成这个", "不能完成该",
+        "我做不到", "我不能这样做", "我不能这么做"
     };
 
     /// <summary>

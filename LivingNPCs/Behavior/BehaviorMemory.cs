@@ -1076,7 +1076,7 @@ internal sealed class BehaviorMemory
         );
     }
 
-    private LivingNpcState GetOrCreateState(NPC npc)
+    public LivingNpcState GetOrCreateState(NPC npc)
     {
         if (!this.statesByNpc.TryGetValue(npc.Name, out var state))
         {

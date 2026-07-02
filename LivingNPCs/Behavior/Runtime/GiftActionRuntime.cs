@@ -149,7 +149,9 @@ internal sealed class GiftActionRuntime
             return false;
         }
 
-        int amount = Math.Clamp(action.Amount <= 0 ? 100 : action.Amount, 25, this.config.MaxAiMoneyGiftAmount);
+        // Guard the upper bound: Math.Clamp throws when max < min, and the config allows values below 25.
+        int maxAmount = Math.Max(25, this.config.MaxAiMoneyGiftAmount);
+        int amount = Math.Clamp(action.Amount <= 0 ? 100 : action.Amount, 25, maxAmount);
         Game1.player.Money += amount;
         state.LastAiMoneyGiftTotalDays = Game1.Date.TotalDays;
         this.memory.RecordNpcWorldAction(

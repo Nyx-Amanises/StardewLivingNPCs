@@ -405,6 +405,7 @@ internal sealed class BehaviorEngine
             return;
         }
 
+        this.SafeRun("update tick: pending gift verifications", () => this.conversationStartRecorder.ProcessPendingGiftVerifications());
         this.SafeRun("update tick: pending behavior requests", this.ProcessPendingBehaviorRequests);
         this.SafeRun("update tick: gift mail tracking", this.TryTrackGiftMailOpening);
         this.SafeRun("update tick: HUD messages", () => this.feedback.TryShowPendingHudMessages());
@@ -665,7 +666,7 @@ internal sealed class BehaviorEngine
             taste,
             GiftMemoryDetailsFactory.IsBirthdayGift(npc)
         );
-        LivingNpcState state = this.memory.GetState(npc) ?? this.memory.UpdateStateForGift(npc, gift);
+        LivingNpcState state = this.memory.GetOrCreateState(npc);
         var matchingHelpRequests = FindMatchingItemHelpRequestGiftContexts(state, gift).ToList();
         if (matchingHelpRequests.Count > 0)
         {
@@ -677,9 +678,9 @@ internal sealed class BehaviorEngine
             return string.Empty;
         }
 
-        bool scheduledResponseGift = this.giftOpportunities.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
-        bool hasResponseMail = scheduledResponseGift
-            || this.mailService.HasPendingGiftMail(state, "reciprocal")
+        // Read-only: the reciprocal-gift roll happens once, in ConversationStartRecorder, after the
+        // gift is confirmed accepted. Rolling here too would stack a second chance per gift.
+        bool hasResponseMail = this.mailService.HasPendingGiftMail(state, "reciprocal")
             || this.mailService.HasPendingGiftMail(state, "birthday");
         return hasResponseMail
             ? BuildGiftResponseMailPrompt(npc, gift)

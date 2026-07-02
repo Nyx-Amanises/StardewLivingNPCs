@@ -75,4 +75,37 @@ public sealed class SaveDataSerializationTests
         Assert.True(helpRequest.RewardMoneyClaimQueued);
         Assert.True(helpRequest.RewardMoneyQuestPosted);
     }
+
+    [Fact]
+    public void CloneCopiesEveryGiftMailField()
+    {
+        // Save data is produced via LivingNpcState.Clone(), so any NpcGiftMailFact property the
+        // clone forgets to copy is silently reset on every save/load (this happened to the
+        // AI-generated letter body). Set every writable property to a non-default value and make
+        // sure the clone keeps all of them.
+        var mail = new NpcGiftMailFact();
+        var properties = typeof(NpcGiftMailFact).GetProperties()
+            .Where(property => property.CanWrite)
+            .ToList();
+        for (int i = 0; i < properties.Count; i++)
+        {
+            var property = properties[i];
+            object value = property.PropertyType == typeof(string) ? $"value-{i}"
+                : property.PropertyType == typeof(int) ? 100 + i
+                : property.PropertyType == typeof(bool) ? (object)true
+                : throw new InvalidOperationException($"Add a sample value for {property.PropertyType} {property.Name}");
+            property.SetValue(mail, value);
+        }
+
+        var state = new LivingNpcState { NpcName = "Emily", GiftMails = [mail] };
+
+        var clonedMail = Assert.Single(state.Clone().GiftMails);
+
+        foreach (var property in properties)
+        {
+            Assert.True(
+                Equals(property.GetValue(mail), property.GetValue(clonedMail)),
+                $"LivingNpcState.Clone() dropped NpcGiftMailFact.{property.Name}");
+        }
+    }
 }
