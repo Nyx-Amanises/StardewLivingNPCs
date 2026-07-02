@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using LivingNpcs.Shared;
 
 namespace LivingNPCs.Behavior;
 
@@ -31,14 +32,14 @@ internal static class ValleyTalkExchangeParser
             analysis.HelpRequests ??= new List<ValleyTalkHelpRequestCandidate>();
             analysis.HelpRequestUpdates ??= new List<ValleyTalkHelpRequestUpdateCandidate>();
             analysis.Conflicts ??= new List<ValleyTalkConflictCandidate>();
-            analysis.RapportDelta = System.Math.Clamp(analysis.RapportDelta, 0, 30);
+            analysis.RapportDelta = LivingNpcMetadataRules.ClampRapportDelta(analysis.RapportDelta);
             analysis.AmbientFollowUp ??= new ValleyTalkAmbientFollowUp();
             analysis.AmbientFollowUp.Text = analysis.AmbientFollowUp.Text?.Trim() ?? string.Empty;
-            analysis.AmbientFollowUp.DelayMinutes = System.Math.Clamp(analysis.AmbientFollowUp.DelayMinutes, 0, 120);
+            analysis.AmbientFollowUp.DelayMinutes = LivingNpcMetadataRules.ClampAmbientFollowUpDelayMinutes(analysis.AmbientFollowUp.DelayMinutes);
             analysis.EmotionImpact ??= new ValleyTalkEmotionImpact();
             analysis.EmotionImpact.Emotion = BehaviorValueNormalizer.NormalizeEmotion(analysis.EmotionImpact.Emotion);
-            analysis.EmotionImpact.IntensityDelta = System.Math.Clamp(analysis.EmotionImpact.IntensityDelta, -100, 100);
-            analysis.EmotionImpact.RepairDelta = System.Math.Clamp(analysis.EmotionImpact.RepairDelta, 0, 100);
+            analysis.EmotionImpact.IntensityDelta = LivingNpcMetadataRules.ClampEmotionIntensityDelta(analysis.EmotionImpact.IntensityDelta);
+            analysis.EmotionImpact.RepairDelta = LivingNpcMetadataRules.ClampRepairDelta(analysis.EmotionImpact.RepairDelta);
             analysis.EmotionImpact.Reason = analysis.EmotionImpact.Reason?.Trim() ?? string.Empty;
             analysis.Memories = analysis.Memories
                 .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
@@ -46,14 +47,14 @@ internal static class ValleyTalkExchangeParser
                 {
                     memory.Kind = BehaviorValueNormalizer.NormalizeLongTermMemoryKind(memory.Kind);
                     memory.Summary = memory.Summary.Trim();
-                    memory.Importance = System.Math.Clamp(memory.Importance, 0, 100);
+                    memory.Importance = LivingNpcMetadataRules.ClampImportance(memory.Importance);
                     memory.PlayerPreferenceKind = BehaviorValueNormalizer.NormalizePlayerPreferenceKind(memory.PlayerPreferenceKind);
                     memory.Subject = memory.Subject?.Trim() ?? string.Empty;
                     memory.Tags = BehaviorValueNormalizer.NormalizeMemoryTags(memory.Tags, memory.Subject, memory.Summary);
                     memory.PlayerPreference = memory.PlayerPreference && memory.PlayerPreferenceKind != "none";
                     return memory;
                 })
-                .Take(4)
+                .Take(LivingNpcMetadataRules.MaxMemories)
                 .ToList();
             analysis.Actions = analysis.Actions
                 .Where(action => action != null)
@@ -61,11 +62,11 @@ internal static class ValleyTalkExchangeParser
                 {
                     action.Type = BehaviorValueNormalizer.NormalizeWorldActionType(action.Type);
                     action.Reason = action.Reason?.Trim() ?? string.Empty;
-                    action.Amount = System.Math.Clamp(action.Amount, 0, 250);
+                    action.Amount = LivingNpcMetadataRules.ClampMoneyAmount(action.Amount);
                     action.DurationMinutes = action.Type == "companion_outing"
                         ? CompanionOutingRules.NormalizeRequestedStayMinutes(action.DurationMinutes)
-                        : System.Math.Clamp(action.DurationMinutes, 0, 20);
-                    action.DelayMinutes = System.Math.Clamp(action.DelayMinutes, 0, 20);
+                        : LivingNpcMetadataRules.NormalizeActionDurationMinutes(action.Type, action.DurationMinutes);
+                    action.DelayMinutes = LivingNpcMetadataRules.ClampActionDelayMinutes(action.DelayMinutes);
                     action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
                     action.TravelConsent = BehaviorValueNormalizer.NormalizeTravelConsent(action.TravelConsent);
                     action.QuestHint = action.QuestHint?.Trim() ?? string.Empty;
@@ -74,7 +75,7 @@ internal static class ValleyTalkExchangeParser
                     return action;
                 })
                 .Where(action => action.Type != "none")
-                .Take(1)
+                .Take(LivingNpcMetadataRules.MaxWorldActions)
                 .ToList();
             analysis.BehaviorInfluences = analysis.BehaviorInfluences
                 .Where(influence => influence != null && !string.IsNullOrWhiteSpace(influence.Summary))
@@ -84,13 +85,13 @@ internal static class ValleyTalkExchangeParser
                     influence.Summary = influence.Summary.Trim();
                     influence.TargetLocation = TravelLocationRules.Normalize(influence.TargetLocation, string.Empty);
                     influence.TargetLocationLabel = influence.TargetLocationLabel?.Trim() ?? string.Empty;
-                    influence.DurationDays = System.Math.Clamp(influence.DurationDays, 0, 7);
-                    influence.Intensity = System.Math.Clamp(influence.Intensity, 0, 100);
-                    influence.MaxTriggers = System.Math.Clamp(influence.MaxTriggers, 0, 4);
+                    influence.DurationDays = LivingNpcMetadataRules.ClampInfluenceDurationDays(influence.DurationDays);
+                    influence.Intensity = LivingNpcMetadataRules.ClampInfluenceIntensity(influence.Intensity);
+                    influence.MaxTriggers = LivingNpcMetadataRules.ClampInfluenceMaxTriggers(influence.MaxTriggers);
                     return influence;
                 })
                 .Where(influence => influence.Type != "none")
-                .Take(2)
+                .Take(LivingNpcMetadataRules.MaxBehaviorInfluences)
                 .ToList();
             analysis.HelpRequests = analysis.HelpRequests
                 .Where(request => request != null && !string.IsNullOrWhiteSpace(request.Summary))
@@ -101,7 +102,7 @@ internal static class ValleyTalkExchangeParser
                     request.RequestedItemId = request.RequestedItemId?.Trim() ?? string.Empty;
                     request.RequestedItemLabel = request.RequestedItemLabel?.Trim() ?? string.Empty;
                     request.QuestionTopic = request.QuestionTopic?.Trim() ?? string.Empty;
-                    request.DueInDays = System.Math.Clamp(request.DueInDays, 1, 7);
+                    request.DueInDays = LivingNpcMetadataRules.ClampHelpRequestDueDays(request.DueInDays);
                     request.Reason = request.Reason?.Trim() ?? string.Empty;
                     request.FollowUpPotential = BehaviorValueNormalizer.NormalizeHelpRequestFollowUpPotential(request.FollowUpPotential);
                     request.Steps = (request.Steps ?? new List<ValleyTalkHelpRequestStepCandidate>())
@@ -116,12 +117,12 @@ internal static class ValleyTalkExchangeParser
                             return step;
                         })
                         .Where(step => step.Type != "none" && !string.IsNullOrWhiteSpace(step.Summary))
-                        .Take(3)
+                        .Take(LivingNpcMetadataRules.MaxHelpRequestSteps)
                         .ToList();
                     return request;
                 })
                 .Where(request => request.Type != "none")
-                .Take(1)
+                .Take(LivingNpcMetadataRules.MaxHelpRequests)
                 .ToList();
             analysis.HelpRequestUpdates = analysis.HelpRequestUpdates
                 .Where(update => update != null && !string.IsNullOrWhiteSpace(update.Summary))
@@ -133,7 +134,7 @@ internal static class ValleyTalkExchangeParser
                     return update;
                 })
                 .Where(update => update.Status != "none")
-                .Take(2)
+                .Take(LivingNpcMetadataRules.MaxHelpRequestUpdates)
                 .ToList();
             analysis.Conflicts = analysis.Conflicts
                 .Where(conflict => conflict != null && !string.IsNullOrWhiteSpace(conflict.Summary))
@@ -141,11 +142,11 @@ internal static class ValleyTalkExchangeParser
                 {
                     conflict.CauseKind = BehaviorValueNormalizer.NormalizeConflictCauseKind(conflict.CauseKind);
                     conflict.Summary = conflict.Summary.Trim();
-                    conflict.Severity = System.Math.Clamp(conflict.Severity, 0, 100);
+                    conflict.Severity = LivingNpcMetadataRules.ClampConflictSeverity(conflict.Severity);
                     return conflict;
                 })
                 .Where(conflict => conflict.Severity > 0)
-                .Take(2)
+                .Take(LivingNpcMetadataRules.MaxConflicts)
                 .ToList();
             return analysis;
         }

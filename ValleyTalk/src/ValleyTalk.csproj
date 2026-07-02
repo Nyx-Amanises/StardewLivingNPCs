@@ -22,6 +22,10 @@
     <PackageReference Include="Pathoschild.Stardew.ModBuildConfig" Version="4.4.0" />
   </ItemGroup>
   <ItemGroup>
+    <!-- Metadata value-domain rules shared with LivingNPCs (single source of truth for both parsers). -->
+    <Compile Include="..\..\Shared\LivingNpcMetadataRules.cs" Link="Shared\LivingNpcMetadataRules.cs" />
+  </ItemGroup>
+  <ItemGroup>
     <None Update="manifest.json">
       <Link>%(Filename)%(Extension)</Link> 
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

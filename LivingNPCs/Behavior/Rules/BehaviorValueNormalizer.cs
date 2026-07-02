@@ -1,36 +1,18 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using LivingNpcs.Shared;
 
 namespace LivingNPCs.Behavior;
 
+/// <summary>
+/// Normalization for values stored by LivingNPCs. The value domains shared with the ValleyTalk
+/// metadata bridge live in <see cref="LivingNpcMetadataRules"/> (compiled into both mods); the
+/// members here either delegate to it or cover LivingNPCs-only concepts (community impressions,
+/// shared experiences, keyword-inferred tags, dedup keys).
+/// </summary>
 internal static class BehaviorValueNormalizer
 {
-    private static readonly HashSet<string> AllowedPlayerPreferenceTags = new(System.StringComparer.OrdinalIgnoreCase)
-    {
-        "food",
-        "drink",
-        "flower",
-        "mineral",
-        "forage",
-        "nature",
-        "sweet",
-        "comfort",
-        "practical",
-        "scholarly",
-        "adventurous",
-        "magical",
-        "artistic",
-        "refined",
-        "work",
-        "active",
-        "fishing",
-        "mining",
-        "farming",
-        "morning",
-        "night"
-    };
-
     private static readonly IReadOnlyDictionary<string, IReadOnlyCollection<string>> MemoryKeywordTags =
         new Dictionary<string, IReadOnlyCollection<string>>(System.StringComparer.OrdinalIgnoreCase)
         {
@@ -71,27 +53,12 @@ internal static class BehaviorValueNormalizer
 
     public static string NormalizeLongTermMemoryKind(string kind)
     {
-        return kind?.Trim().ToLowerInvariant() switch
-        {
-            "preference" => "preference",
-            "promise" => "promise",
-            "boundary" => "boundary",
-            "relationship" => "relationship",
-            _ => "fact"
-        };
+        return LivingNpcMetadataRules.NormalizeLongTermMemoryKind(kind);
     }
 
     public static string NormalizePlayerPreferenceKind(string kind)
     {
-        return kind?.Trim().ToLowerInvariant() switch
-        {
-            "liked_item_category" => "liked_item_category",
-            "disliked_item" => "disliked_item",
-            "habit" => "habit",
-            "value" => "value",
-            "goal" => "goal",
-            _ => "none"
-        };
+        return LivingNpcMetadataRules.NormalizePlayerPreferenceKind(kind);
     }
 
     public static string NormalizeCommunityImpressionKind(string kind)
@@ -130,114 +97,42 @@ internal static class BehaviorValueNormalizer
 
     public static string NormalizeWorldActionType(string type)
     {
-        return type?.Trim().ToLowerInvariant() switch
-        {
-            "give_small_gift" => "give_small_gift",
-            "give_meaningful_gift" => "give_meaningful_gift",
-            "give_money" => "give_money",
-            "companion_outing" => "companion_outing",
-            "escort_to_location" => "companion_outing",
-            "festival_interaction" => "festival_interaction",
-            "assist_quest" => "assist_quest",
-            _ => "none"
-        };
+        return LivingNpcMetadataRules.NormalizeWorldActionType(type);
     }
 
     public static string NormalizeTravelConsent(string consent)
     {
-        return consent?.Trim().ToLowerInvariant() switch
-        {
-            "accepted_now" => "accepted_now",
-            "accepted_later" => "accepted_later",
-            "deferred" => "accepted_later",
-            "declined" => "declined",
-            "rejected" => "declined",
-            "tentative" => "tentative",
-            "maybe" => "tentative",
-            "none" => "none",
-            _ => string.Empty
-        };
+        return LivingNpcMetadataRules.NormalizeTravelConsent(consent);
     }
 
     public static string NormalizeDialogueBehaviorInfluenceType(string type)
     {
-        return type?.Trim().ToLowerInvariant() switch
-        {
-            "visit_location" => "visit_location",
-            "go_to_location" => "visit_location",
-            "comforted" => "comforted",
-            "reassured" => "comforted",
-            "offended" => "offended",
-            "hurt" => "offended",
-            "give_space" => "give_space",
-            "needs_space" => "give_space",
-            "stay_near" => "stay_near",
-            "approach" => "stay_near",
-            "pause_to_talk" => "pause_to_talk",
-            "stop_to_talk" => "pause_to_talk",
-            _ => "none"
-        };
+        return LivingNpcMetadataRules.NormalizeBehaviorInfluenceType(type);
     }
 
     public static string NormalizeEmotion(string emotion)
     {
-        return emotion?.Trim().ToLowerInvariant() switch
-        {
-            "happy" => "Happy",
-            "calm" => "Calm",
-            "jealous" => "Jealous",
-            "worried" => "Worried",
-            "grateful" => "Grateful",
-            "disappointed" => "Disappointed",
-            "uneasy" => "Uneasy",
-            "upset" => "Upset",
-            "angry" => "Angry",
-            "sad" => "Sad",
-            _ => "none"
-        };
+        return LivingNpcMetadataRules.NormalizeEmotion(emotion);
     }
 
     public static string NormalizeConflictCauseKind(string causeKind)
     {
-        return causeKind?.Trim().ToLowerInvariant() switch
-        {
-            "dialogue" => "dialogue",
-            "gift" => "gift",
-            "boundary" => "boundary",
-            "promise" => "promise",
-            _ => "dialogue"
-        };
+        return LivingNpcMetadataRules.NormalizeConflictCauseKind(causeKind);
     }
 
     public static string NormalizeHelpRequestType(string type)
     {
-        return type?.Trim().ToLowerInvariant() switch
-        {
-            "item_request" => "item_request",
-            "question_request" => "question_request",
-            _ => "none"
-        };
+        return LivingNpcMetadataRules.NormalizeHelpRequestType(type);
     }
 
     public static string NormalizeHelpRequestUpdateStatus(string status)
     {
-        return status?.Trim().ToLowerInvariant() switch
-        {
-            "accepted" => "accepted",
-            "fulfilled" => "fulfilled",
-            "advanced" => "advanced",
-            "declined" => "declined",
-            _ => "none"
-        };
+        return LivingNpcMetadataRules.NormalizeHelpRequestUpdateStatus(status);
     }
 
     public static string NormalizeHelpRequestFollowUpPotential(string value)
     {
-        return value?.Trim().ToLowerInvariant() switch
-        {
-            "deeper_relationship" => "deeper_relationship",
-            _ => "none"
-        };
+        return LivingNpcMetadataRules.NormalizeHelpRequestFollowUpPotential(value);
     }
 
     public static string NormalizeSharedExperienceType(string type)
@@ -257,14 +152,7 @@ internal static class BehaviorValueNormalizer
 
     public static List<string> NormalizePlayerPreferenceTags(IEnumerable<string>? tags)
     {
-        return tags?
-            .Where(tag => !string.IsNullOrWhiteSpace(tag))
-            .Select(tag => tag.Trim().ToLowerInvariant())
-            .Where(tag => AllowedPlayerPreferenceTags.Contains(tag))
-            .Distinct(System.StringComparer.OrdinalIgnoreCase)
-            .Take(6)
-            .ToList()
-            ?? new List<string>();
+        return LivingNpcMetadataRules.NormalizePlayerPreferenceTags(tags);
     }
 
     public static List<string> NormalizeMemoryTags(IEnumerable<string>? tags, params string?[] texts)
