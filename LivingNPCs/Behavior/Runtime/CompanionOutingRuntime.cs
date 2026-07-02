@@ -429,7 +429,7 @@ internal sealed class CompanionOutingRuntime
         prompt.AppendLine($"- The farmer is {(farmerPresent ? "currently present with the NPC" : "temporarily elsewhere")}.");
         if (outing.Phase == CompanionOutingPhase.AtDestination)
         {
-            prompt.AppendLine($"- They arrived at {BehaviorTimeMath.FormatTime(outing.ArrivalTimeOfDay)} and the NPC plans to remain until about {BehaviorTimeMath.FormatTime(outing.StayUntilTimeOfDay)}, then return to the day's schedule. Do not promise a longer stay.");
+            prompt.AppendLine($"- They arrived at {BehaviorTimeMath.FormatTime(outing.ArrivalTimeOfDay)}.");
             prompt.AppendLine($"- The NPC is settled {outing.AnchorLabel}.");
             prompt.AppendLine($"- Shared time together at the destination so far: about {outing.SharedMinutesAtDestination} game minutes.");
             if (outing.IsShortVisit)

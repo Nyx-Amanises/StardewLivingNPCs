@@ -182,7 +182,7 @@ internal static class LivingNpcActionDecisionPass
         prompt.AppendLine("- Mentioning a location as background or origin is not a destination. Example: 'just came from the farm', 'farm mud on your shoes', or 'your farm looks muddy' does not target Farm.");
         prompt.AppendLine("- For travel, include companion_outing in actions only when consent=accepted_now and targetLocation is supported. Use the farmer's invitation to infer targetLocation if the NPC reply says yes/now but omits the destination.");
         prompt.AppendLine("- Later/maybe/refusal means no action and travelDecision consent accepted_later/tentative/declined.");
-        prompt.AppendLine("- For brief escort/show-the-way use durationMinutes 20; for a real stay together use 60. The actual stay length is fixed by mod config (roughly an hour), so the visible reply must not promise a longer stay such as a whole afternoon. Use delayMinutes 1-10 for short preparation.");
+        prompt.AppendLine("- For brief escort/show-the-way use durationMinutes 20; for a real stay together use 60. Use delayMinutes 1-10 for short preparation.");
         prompt.AppendLine("- For giftDecision, set isGiftReply=true only when the NPC visibly gives or offers the farmer an item now. timing=now means the player should receive the item immediately.");
         prompt.AppendLine("- If the NPC promises to mail, send, bring later, give tomorrow, or return the favor some other time, set timing=mail/later/promise and include no gift action.");
         prompt.AppendLine("- For gifts, include a gift action only when giftDecision isGiftReply=true and timing=now. If a specific in-game item is named, fill itemId and itemLabel when known; otherwise leave them empty so LivingNPCs can choose safely.");
