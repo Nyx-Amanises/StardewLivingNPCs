@@ -628,6 +628,43 @@ public sealed class CompanionOutingRulesTests
         Assert.Contains(expectedLabelFragment, first.SemanticLabel);
     }
 
+    [Theory]
+    [InlineData("Saloon", "social")]
+    [InlineData("SeedShop", "browse")]
+    [InlineData("Mine", "visit")]
+    [InlineData("Trailer", "quiet")]
+    public void SveReplacedInteriorsHaveSveAnchors(string target, string style)
+    {
+        // SVE rebuilds these interiors, so the SVE table must provide entries for them
+        // (coordinates verified against the actual SVE map tile data).
+        var anchors = CompanionOutingAnchorSelector.GetAuthoredAnchorPreview(
+            "Penny",
+            target,
+            style,
+            reason: string.Empty,
+            useSveAnchors: true
+        );
+
+        Assert.NotEmpty(anchors);
+    }
+
+    [Fact]
+    public void SveTrailerAnchorAvoidsTheBlockedVanillaSpot()
+    {
+        // (8,8) is furniture on the SVE Trailer_Big layout; the SVE entry moved to (10,8),
+        // which is walkable on both the small and upgraded SVE trailer maps.
+        var anchors = CompanionOutingAnchorSelector.GetAuthoredAnchorPreview(
+            "Penny",
+            "Trailer",
+            "quiet",
+            reason: string.Empty,
+            useSveAnchors: true
+        );
+
+        Assert.DoesNotContain(anchors, anchor => anchor.X == 8 && anchor.Y == 8);
+        Assert.Contains(anchors, anchor => anchor.X == 10 && anchor.Y == 8);
+    }
+
     [Fact]
     public void TimeMathTracksTwoGameHours()
     {

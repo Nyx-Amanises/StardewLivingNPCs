@@ -178,13 +178,12 @@ internal sealed class CompanionOutingAnchorSelector
             [
                 new(new Point(15, 33), 1, "on the meadow edge just outside the main flower dance circle", ["festival", "quiet", "visit"]),
                 new(new Point(20, 35), 3, "beside the flower dance path where a slow walk will not block anyone", ["festival", "quiet", "visit"]),
-                new(new Point(32, 37), 3, "near the lower edge of the festival meadow", ["festival", "quiet", "visit"])
+                new(new Point(32, 38), 3, "near the lower edge of the festival meadow", ["festival", "quiet", "visit"])
             ],
             ["Custom_GrampletonCoast"] =
             [
                 new(new Point(38, 18), 2, "on the Grampleton coast path facing the open surf", ["scenic", "quiet", "visit"]),
-                new(new Point(54, 29), 2, "near the long shoreline where the waves are easy to watch", ["scenic", "quiet", "visit"]),
-                new(new Point(23, 36), 1, "along the coastal walk with the sea beside them", ["scenic", "visit"])
+                new(new Point(56, 30), 2, "near the long shoreline where the waves are easy to watch", ["scenic", "quiet", "visit"])
             ],
             ["Custom_BlueMoonVineyard"] =
             [
@@ -195,7 +194,7 @@ internal sealed class CompanionOutingAnchorSelector
             ["Custom_AuroraVineyard"] =
             [
                 new(new Point(13, 17), 2, "among the restored Aurora Vineyard rows", ["scenic", "quiet", "visit"]),
-                new(new Point(20, 17), 2, "beside the vineyard path where the old estate feels lived-in again", ["scenic", "quiet", "visit"]),
+                new(new Point(20, 18), 2, "beside the vineyard path where the old estate feels lived-in again", ["scenic", "quiet", "visit"]),
                 new(new Point(11, 8), 2, "near the quiet upper vineyard walk", ["scenic", "quiet", "visit"])
             ],
             ["Custom_ForestWest"] =
@@ -207,8 +206,8 @@ internal sealed class CompanionOutingAnchorSelector
             ["Custom_SVESummit"] =
             [
                 new(new Point(11, 13), 0, "at the summit edge with the whole valley below", ["scenic", "quiet", "visit"]),
-                new(new Point(18, 15), 0, "on the upper summit path where the view opens wide", ["scenic", "quiet", "visit"]),
-                new(new Point(24, 20), 3, "beside the summit trail with room to linger", ["scenic", "quiet", "visit"])
+                new(new Point(14, 17), 0, "on the upper summit path where the view opens wide", ["scenic", "quiet", "visit"]),
+                new(new Point(23, 23), 3, "beside the summit trail with room to linger", ["scenic", "quiet", "visit"])
             ],
             ["Custom_GrandpasShedOutside"] =
             [
@@ -224,12 +223,17 @@ internal sealed class CompanionOutingAnchorSelector
             ],
             ["Custom_EnchantedGrove"] =
             [
-                new(new Point(12, 13), 2, "inside the enchanted grove where the air feels hushed", ["scenic", "quiet", "visit"]),
-                new(new Point(17, 15), 3, "near the grove path without blocking the nexus", ["scenic", "quiet", "visit"]),
-                new(new Point(9, 19), 1, "along the quieter side of the enchanted grove", ["scenic", "quiet", "visit"])
+                new(new Point(19, 11), 2, "inside the enchanted grove where the air feels hushed", ["scenic", "quiet", "visit"]),
+                new(new Point(20, 14), 3, "near the grove path without blocking the nexus", ["scenic", "quiet", "visit"]),
+                new(new Point(14, 24), 1, "along the quieter side of the enchanted grove", ["scenic", "quiet", "visit"])
             ],
         };
 
+    // Anchors for maps that SVE replaces. Every coordinate below was verified against the actual
+    // SVE map data (Back/Buildings layers + Water tile properties) — the vanilla-layout anchors
+    // frequently land on SVE water, furniture, or void tiles. Interiors whose vanilla anchors
+    // remain valid on the SVE layout (ArchaeologyHouse, AnimalShop, HaleyHouse) are omitted here
+    // and keep using the vanilla table.
     private static readonly IReadOnlyDictionary<string, IReadOnlyList<AuthoredAnchor>> SveAuthoredAnchors =
         new Dictionary<string, IReadOnlyList<AuthoredAnchor>>(StringComparer.OrdinalIgnoreCase)
         {
@@ -244,19 +248,19 @@ internal sealed class CompanionOutingAnchorSelector
             ],
             ["Beach"] =
             [
-                new(new Point(44, 34), 2, "on the SVE beach shoreline where the tide comes in", ["scenic", "quiet", "visit"], ["shore", "waves"], 38),
-                new(new Point(90, 36), 2, "along the wide SVE eastern beach where the surf is open", ["scenic", "quiet", "visit"], ["shore", "waves"], 34),
-                new(new Point(74, 28), 2, "on the longer SVE beach walk with room to linger", ["scenic", "quiet", "visit"], ["shore", "sand", "waves"], 28),
-                new(new Point(60, 14), 1, "near the SVE dock approach with the sea beside them", ["scenic", "visit"], ["pier", "dock"], 30),
+                new(new Point(43, 35), 2, "on the SVE beach shoreline where the tide comes in", ["scenic", "quiet", "visit"], ["shore", "waves"], 38),
+                new(new Point(88, 34), 2, "along the wide SVE eastern beach where the surf is open", ["scenic", "quiet", "visit"], ["shore", "waves"], 34),
+                new(new Point(70, 24), 2, "on the longer SVE beach walk with room to linger", ["scenic", "quiet", "visit"], ["shore", "sand", "waves"], 28),
+                new(new Point(63, 14), 1, "near the SVE dock approach with the sea beside them", ["scenic", "visit"], ["pier", "dock"], 30),
                 new(new Point(56, 10), 1, "beside the SVE pier path without blocking the dock", ["scenic", "quiet", "visit"], ["pier", "dock"], 24)
             ],
             ["Forest"] =
             [
                 new(new Point(88, 47), 2, "near the SVE forest river where the trees open up", ["scenic", "quiet", "visit"], ["river"], 36),
-                new(new Point(80, 55), 2, "beside the SVE forest bend with a quiet view of the water", ["scenic", "quiet", "visit"], ["river"], 32),
-                new(new Point(60, 60), 2, "on a central SVE forest path with room to talk", ["scenic", "quiet", "visit"], ["path", "clearing"], 26),
-                new(new Point(54, 100), 2, "near the lower SVE forest brook", ["scenic", "quiet", "visit"], ["river", "clearing"], 28),
-                new(new Point(64, 111), 0, "in the deeper SVE forest clearing away from the main road", ["scenic", "quiet", "visit"], ["clearing"], 24)
+                new(new Point(85, 50), 2, "beside the SVE forest bend with a quiet view of the water", ["scenic", "quiet", "visit"], ["river"], 32),
+                new(new Point(54, 54), 2, "on a central SVE forest path with room to talk", ["scenic", "quiet", "visit"], ["path", "clearing"], 26),
+                new(new Point(51, 97), 2, "near the lower SVE forest brook", ["scenic", "quiet", "visit"], ["river", "clearing"], 28),
+                new(new Point(70, 99), 0, "in the deeper SVE forest clearing away from the main road", ["scenic", "quiet", "visit"], ["clearing"], 24)
             ],
             ["Mountain"] =
             [
@@ -271,8 +275,105 @@ internal sealed class CompanionOutingAnchorSelector
                 new(new Point(24, 12), 2, "near the SVE bus platform without blocking the bus", ["quiet", "visit"], ["bus", "road"], 34),
                 new(new Point(31, 18), 3, "on the open SVE road shoulder near the bus stop", ["visit", "quiet"], ["road", "path"], 28),
                 new(new Point(16, 10), 3, "beside the SVE roadside sign", ["visit"], ["bus", "road"], 24),
-                new(new Point(12, 11), 2, "on the quiet SVE path toward the backwoods", ["scenic", "quiet", "visit"], ["path", "road"], 20)
+                new(new Point(13, 11), 2, "on the quiet SVE path toward the backwoods", ["scenic", "quiet", "visit"], ["path", "road"], 20)
+            ],
+            ["Saloon"] =
+            [
+                new(new Point(11, 20), 0, "leaning near the public side of Gus's bar counter", ["social", "visit"], ["bar"], 32),
+                new(new Point(13, 18), 0, "close to the bar where conversation blends into the room", ["social", "visit"], ["bar"], 28),
+                new(new Point(20, 17), 0, "beside one of the saloon's side tables", ["social", "quiet", "visit"], ["table"], 26),
+                new(new Point(26, 18), 3, "along the quieter side of the saloon", ["social", "quiet", "visit"], ["table", "quiet"], 22),
+                new(new Point(12, 18), 1, "near the public seating area", ["social", "visit"], ["table"], 20)
+            ],
+            ["SeedShop"] =
+            [
+                new(new Point(10, 17), 0, "beside the public shop shelves", ["browse", "visit"], ["shop", "shelves"], 28),
+                new(new Point(12, 17), 3, "along a public aisle in the general store", ["browse", "visit"], ["shop", "aisle"], 22),
+                new(new Point(6, 14), 1, "near the public display shelves", ["browse", "visit"], ["shop", "display"], 20)
+            ],
+            ["Blacksmith"] =
+            [
+                new(new Point(7, 14), 0, "near Clint's public counter", ["browse", "visit"], ["shop", "counter"], 32),
+                new(new Point(12, 13), 3, "beside the forge area without getting in the way", ["browse", "visit"], ["forge", "work"], 24),
+                new(new Point(5, 17), 1, "at the public side of the blacksmith shop", ["quiet", "visit"], ["shop"], 16)
+            ],
+            ["FishShop"] =
+            [
+                new(new Point(5, 4), 2, "near Willy's shop counter", ["browse", "visit"], ["shop", "counter"], 32),
+                new(new Point(7, 8), 0, "beside the fish shop display barrels", ["browse", "visit"], ["shop", "display"], 24),
+                new(new Point(2, 8), 1, "near the quiet side of Willy's shop", ["quiet", "visit"], ["shop"], 16)
+            ],
+            ["WizardHouse"] =
+            [
+                new(new Point(7, 13), 0, "near the Wizard's study circle", ["quiet", "browse", "visit"], ["study", "magic"], 32),
+                new(new Point(8, 15), 3, "beside the tower's public walkway", ["quiet", "visit"], ["tower"], 18)
+            ],
+            ["Hospital"] =
+            [
+                new(new Point(9, 17), 0, "in the clinic's public waiting area", ["quiet", "visit"], ["clinic", "waiting"], 32),
+                new(new Point(13, 16), 3, "along the side of the clinic waiting room", ["quiet", "visit"], ["clinic", "waiting"], 24)
+            ],
+            ["JoshHouse"] =
+            [
+                new(new Point(10, 14), 0, "in the public sitting area of Alex's house", ["quiet", "visit"], ["home", "sitting"], 28),
+                new(new Point(15, 17), 3, "beside the entry path inside Alex's house", ["visit"], ["home"], 16)
+            ],
+            ["SamHouse"] =
+            [
+                new(new Point(17, 18), 0, "near the family living room in Sam's house", ["quiet", "visit"], ["home", "sitting"], 28),
+                new(new Point(9, 18), 1, "beside the kitchen walkway at Sam's house", ["visit"], ["home", "kitchen"], 18)
+            ],
+            ["ScienceHouse"] =
+            [
+                new(new Point(16, 21), 0, "near Robin's shop counter without blocking customers", ["browse", "visit"], ["shop", "counter"], 30),
+                new(new Point(12, 16), 1, "beside the family sitting area at Robin's house", ["quiet", "visit"], ["home", "sitting"], 24),
+                new(new Point(22, 19), 3, "near the lab side of the mountain house", ["browse", "visit"], ["lab", "study"], 18)
+            ],
+            ["LeahHouse"] =
+            [
+                new(new Point(6, 8), 2, "near Leah's cottage work table", ["quiet", "browse", "visit"], ["home", "art"], 30),
+                new(new Point(10, 9), 3, "beside the cozy cottage sitting area", ["quiet", "visit"], ["home", "sitting"], 22)
+            ],
+            ["Trailer"] =
+            [
+                new(new Point(10, 8), 2, "in the trailer's small living area", ["quiet", "visit"], ["home", "living"], 30),
+                new(new Point(12, 9), 3, "near the kitchen side of the trailer", ["quiet", "visit"], ["home", "kitchen"], 20),
+                new(new Point(6, 11), 1, "beside the trailer walkway with room to talk", ["quiet", "visit"], ["home"], 16)
+            ],
+            ["Mine"] =
+            [
+                new(new Point(8, 10), 2, "near the mine entrance where adventurers gather", ["visit", "quiet"], ["mine", "entrance"], 30),
+                new(new Point(12, 11), 3, "beside the mine cart track", ["browse", "visit"], ["mine", "cart"], 20),
+                new(new Point(6, 12), 1, "at a safer edge of the mine lobby", ["quiet", "visit"], ["mine"], 16)
             ]
+        };
+
+    /// <summary>
+    /// Minimum map sizes measured from the actual SVE maps. When the live map is smaller than the
+    /// SVE version (i.e. SVE's replacement did not apply to it), fall back to the vanilla anchors.
+    /// Note Beach/Forest/Mountain share the vanilla canvas size, so for those this check cannot
+    /// distinguish the layouts — the ModCompatibility.EnableSve install check is what gates them.
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, Point> SveMapMinSizes =
+        new Dictionary<string, Point>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Town"] = new Point(130, 116),
+            ["Beach"] = new Point(104, 50),
+            ["Forest"] = new Point(120, 120),
+            ["Mountain"] = new Point(135, 41),
+            ["BusStop"] = new Point(65, 30),
+            ["Saloon"] = new Point(46, 25),
+            ["SeedShop"] = new Point(48, 32),
+            ["Blacksmith"] = new Point(15, 20),
+            ["FishShop"] = new Point(12, 11),
+            ["WizardHouse"] = new Point(15, 35),
+            ["Hospital"] = new Point(24, 20),
+            ["JoshHouse"] = new Point(25, 25),
+            ["SamHouse"] = new Point(25, 25),
+            ["ScienceHouse"] = new Point(32, 25),
+            ["LeahHouse"] = new Point(16, 16),
+            ["Trailer"] = new Point(25, 12),
+            ["Mine"] = new Point(77, 20)
         };
 
     private readonly Func<GameLocation, Point, NPC?, bool> isSafeDestinationTile;
@@ -483,22 +584,18 @@ internal sealed class CompanionOutingAnchorSelector
 
     private static bool IsSveVariantMap(string targetLocation, GameLocation location)
     {
-        if (!string.Equals(location.Name, targetLocation, StringComparison.OrdinalIgnoreCase))
+        // Trust the SVE install check first (ModCompatibility.EnableSve gates the caller); this
+        // size check only guards against another mod overriding SVE's map with a smaller layout.
+        // Intentionally no location-name comparison: "Trailer" resolves to Trailer_Big after
+        // Pam's house upgrade, and the SVE Trailer anchors are verified on both maps.
+        if (!SveMapMinSizes.TryGetValue(targetLocation, out Point minSize))
         {
-            return false;
+            return true;
         }
 
         int width = location.Map.Layers[0].LayerWidth;
         int height = location.Map.Layers[0].LayerHeight;
-        return targetLocation switch
-        {
-            "Town" => width >= 130 && height >= 116,
-            "Beach" => width >= 104 && height >= 50,
-            "Forest" => width >= 120 && height >= 120,
-            "Mountain" => width >= 135 && height >= 41,
-            "BusStop" => width >= 65 && height >= 30,
-            _ => false
-        };
+        return width >= minSize.X && height >= minSize.Y;
     }
 
     private bool IsUsable(

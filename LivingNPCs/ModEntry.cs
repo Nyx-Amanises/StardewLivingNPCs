@@ -20,6 +20,7 @@ public sealed class ModEntry : Mod
         I18n.Init(helper.Translation);
         this.config = helper.ReadConfig<ModConfig>();
         ActiveConfig = this.config;
+        ModCompatibility.Initialize(helper.ModRegistry);
         bool configChanged = this.config.Migrate();
         configChanged |= this.config.Validate();
         if (configChanged)
