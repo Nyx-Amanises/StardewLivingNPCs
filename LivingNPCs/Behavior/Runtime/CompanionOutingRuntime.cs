@@ -419,36 +419,7 @@ internal sealed class CompanionOutingRuntime
         bool farmerPresent = outing.Phase == CompanionOutingPhase.AtDestination
             ? IsPlayerAtLocation(outing.TargetLocation)
             : npc.currentLocation == Game1.currentLocation;
-        var prompt = new StringBuilder();
-        prompt.AppendLine("## Active Companion Outing");
-        prompt.AppendLine(outing.IsShortVisit
-            ? $"- {npc.displayName} is briefly accompanying the farmer to {outing.TargetLocationLabel}."
-            : $"- {npc.displayName} and the farmer have an active shared outing to {outing.TargetLocationLabel}.");
-        prompt.AppendLine($"- Phase: {FormatPhase(outing.Phase)}.");
-        prompt.AppendLine($"- Shared activity: {CompanionOutingRules.GetActivityPromptLabel(outing.ActivityStyle)}.");
-        prompt.AppendLine($"- The farmer is {(farmerPresent ? "currently present with the NPC" : "temporarily elsewhere")}.");
-        if (outing.Phase == CompanionOutingPhase.AtDestination)
-        {
-            prompt.AppendLine($"- They arrived at {BehaviorTimeMath.FormatTime(outing.ArrivalTimeOfDay)}.");
-            prompt.AppendLine($"- The NPC is settled {outing.AnchorLabel}.");
-            prompt.AppendLine($"- Shared time together at the destination so far: about {outing.SharedMinutesAtDestination} game minutes.");
-            if (outing.IsShortVisit)
-            {
-                prompt.AppendLine("- This is a brief escort or short visit, not a full outing.");
-            }
-        }
-        else if (IsTravelingPhase(outing.Phase))
-        {
-            prompt.AppendLine("- The NPC is walking there through normal doors and map exits; this is not a teleport or an escort task.");
-        }
-        else
-        {
-            prompt.AppendLine("- The planned stay has ended and the NPC is naturally returning to the day's schedule.");
-        }
-
-        prompt.AppendLine("- Let the place, time, weather, nearby people, and shared company shape the reply naturally.");
-        prompt.AppendLine("- Do not announce travel status, give route instructions, repeat the agreement, or describe game mechanics.");
-        return prompt.ToString().TrimEnd();
+        return PromptFragments.Outing.Section(npc.displayName, outing, farmerPresent);
     }
 
     private void UpdateTraveling(NPC npc, PendingCompanionOuting outing)
@@ -1555,18 +1526,6 @@ internal sealed class CompanionOutingRuntime
             < 1800 => I18n.Get("outing.returnOpening.afternoon"),
             < 2200 => I18n.Get("outing.returnOpening.evening"),
             _ => I18n.Get("outing.returnOpening.lateNight")
-        };
-    }
-
-    private static string FormatPhase(CompanionOutingPhase phase)
-    {
-        return phase switch
-        {
-            CompanionOutingPhase.Traveling
-                or CompanionOutingPhase.TravelingToFarmBoundary
-                or CompanionOutingPhase.TravelingFromFarmBoundary => "traveling naturally toward the destination",
-            CompanionOutingPhase.AtDestination => "spending time together at the destination",
-            _ => "returning to the normal daily schedule"
         };
     }
 

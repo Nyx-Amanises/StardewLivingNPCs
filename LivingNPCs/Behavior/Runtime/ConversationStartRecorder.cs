@@ -327,38 +327,38 @@ internal sealed class ConversationStartRecorder
     {
         var lines = new List<string>
         {
-            "## LivingNPCs Immediate Help Request Delivery",
-            $"- The farmer just handed {npc.displayName} {gift.ItemName} ({gift.ItemId}) for a LivingNPCs help request.",
-            "- This is a task hand-in, not an ordinary daily gift. Acknowledge the requested item even if the farmer has already given a normal gift today.",
-            "- Do not judge this item by ordinary gift taste; do not say it is unwanted, neutral, poor taste, or not a favorite.",
-            "- Respond now with a natural thank-you or reaction to the completed request/step. Do not mention the game's daily gift limit."
+            PromptFragments.HelpRequestDelivery.Header,
+            PromptFragments.HelpRequestDelivery.HandInLine(npc.displayName, gift.ItemName, gift.ItemId),
+            PromptFragments.HelpRequestDelivery.NotDailyGiftLine,
+            PromptFragments.HelpRequestDelivery.OverrideTasteLine,
+            PromptFragments.HelpRequestDelivery.RespondNowLine
         };
 
         foreach (var request in changedHelpRequests)
         {
-            lines.Add($"- Help request status: {request.Status}; summary: {request.Summary}; resolution: {request.Resolution}");
+            lines.Add(PromptFragments.HelpRequestDelivery.StatusLine(request));
             if (request.Status == "Fulfilled" && request.RewardGranted)
             {
-                lines.Add($"- LivingNPCs already granted the configured friendship reward (+{request.RewardFriendship}).");
+                lines.Add(PromptFragments.HelpRequestDelivery.FriendshipRewardLine(request.RewardFriendship));
             }
 
             if (request.Status == "Fulfilled" && request.RewardMoneyGranted)
             {
-                lines.Add($"- LivingNPCs already granted a system money reward of {request.RewardMoney}g.");
+                lines.Add(PromptFragments.HelpRequestDelivery.MoneyRewardGrantedLine(request.RewardMoney));
             }
             else if (request.Status == "Fulfilled" && request.RewardMoneyClaimQueued)
             {
-                lines.Add($"- LivingNPCs added a system money reward of {request.RewardMoney}g to the quest journal for the farmer to claim.");
+                lines.Add(PromptFragments.HelpRequestDelivery.MoneyRewardQueuedLine(request.RewardMoney));
             }
 
             if (request.RewardGiftGiven)
             {
-                lines.Add("- LivingNPCs scheduled a small thank-you item by mail for tomorrow; mention it only if it feels natural, and do not imply the farmer already received it.");
+                lines.Add(PromptFragments.HelpRequestDelivery.ThankYouMailLine);
             }
 
             if (request.SpecialFollowUpPlanned)
             {
-                lines.Add("- A later in-person follow-up may happen; do not promise it as guaranteed.");
+                lines.Add(PromptFragments.HelpRequestDelivery.FollowUpLine);
             }
         }
 

@@ -51,7 +51,7 @@ internal sealed class AiBehaviorClient
                 new
                 {
                     role = "system",
-                    content = "You choose tiny, safe Stardew Valley NPC behavior intents. Return only JSON."
+                    content = PromptFragments.Planner.SystemMessage
                 },
                 new
                 {
@@ -116,32 +116,14 @@ internal sealed class AiBehaviorClient
 
         var world = WorldContext.For(npc);
         var disposition = NpcDisposition.For(npc);
-        string nearby = string.Join(", ", world.NearbyNpcNames);
-
-        var prompt = new StringBuilder();
-        prompt.AppendLine($"NPC: {npc.displayName} ({npc.Name})");
-        prompt.AppendLine($"Profile source: {disposition.SourceLabel}");
-        prompt.AppendLine($"Disposition: {disposition.PromptLabel}");
-        if (disposition.HasProfileContext)
-        {
-            prompt.AppendLine($"Profile context: {disposition.BackgroundPrompt} {disposition.DialoguePrompt}");
-        }
-
-        prompt.AppendLine($"Trigger: {trigger}");
-        prompt.AppendLine($"Location: {world.LocationDisplayName} ({world.LocationName})");
-        prompt.AppendLine($"Date: year {Game1.year}, {world.Season} {world.DayOfMonth}");
-        prompt.AppendLine($"Time: {world.TimeOfDay}");
-        prompt.AppendLine($"Scene context: {world.PromptLabel}");
-        prompt.AppendLine($"World knowledge available to this NPC: {world.ProgressionKnowledge.PromptLabel}");
-        prompt.AppendLine($"Distance to farmer in tiles: {Math.Round(Vector2.Distance(npc.Tile, Game1.player.Tile), 1)}");
-        prompt.AppendLine($"Nearby NPCs: {(string.IsNullOrWhiteSpace(nearby) ? "none" : nearby)}");
-        prompt.AppendLine();
-        prompt.AppendLine($"Allowed intents: {string.Join(", ", allowed)}");
-        prompt.AppendLine();
-        prompt.AppendLine("Choose one tiny behavior that makes the NPC feel alive without disrupting schedules.");
-        prompt.AppendLine("Return exactly this JSON shape:");
-        prompt.AppendLine("{\"intent\":\"FacePlayer|Emote|ApproachPlayer|Pause|LookAround|StepAway\",\"reason\":\"short in-world reason\",\"emoteId\":16}");
-        return prompt.ToString();
+        return PromptFragments.Planner.UserPrompt(
+            npc,
+            trigger,
+            allowed,
+            world,
+            disposition,
+            Game1.year,
+            Vector2.Distance(npc.Tile, Game1.player.Tile));
     }
 
     private string ExtractAssistantContent(string responseBody)

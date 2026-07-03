@@ -60,24 +60,24 @@ internal static class BehaviorDiagnostics
         report.AppendLine();
         report.AppendLine(I18n.Get("debug.report.tableHeader"));
         report.AppendLine("| --- | --- |");
-        AppendTableRow(report, "debug.label.mood", state.MoodLabel);
-        AppendTableRow(report, "debug.label.interpersonalEmotion", state.EmotionLabel);
+        AppendTableRow(report, "debug.label.mood", StateDebugLabels.Mood(state));
+        AppendTableRow(report, "debug.label.interpersonalEmotion", StateDebugLabels.Emotion(state));
         AppendTableRow(report, "debug.label.emotionStyle", emotionalStyle.DebugSummaryLabel);
         AppendTableRow(report, "debug.label.attention", $"{state.Attention}/100");
         AppendTableRow(report, "debug.label.openness", $"{state.Openness}/100");
         AppendTableRow(report, "debug.label.familiarity", $"{state.Familiarity}/100");
-        AppendTableRow(report, "debug.label.relationshipTrust", state.RelationshipTrustDebugLabel);
-        AppendTableRow(report, "debug.label.interactionRhythm", state.InteractionRhythmLabel);
-        AppendTableRow(report, "debug.label.lastInteraction", state.LastInteractionLabel);
+        AppendTableRow(report, "debug.label.relationshipTrust", StateDebugLabels.RelationshipTrust(state));
+        AppendTableRow(report, "debug.label.interactionRhythm", StateDebugLabels.InteractionRhythm(state));
+        AppendTableRow(report, "debug.label.lastInteraction", StateDebugLabels.LastInteraction(state));
         report.AppendLine();
         report.AppendLine(I18n.Get("debug.report.relationshipMemoryHeading"));
         report.AppendLine();
-        AppendBullet(report, "debug.label.longTermMemory", state.LongTermMemoryDebugLabel);
-        AppendBullet(report, "debug.label.playerPreferenceMemory", state.PlayerPreferenceDebugLabel);
-        AppendBullet(report, "debug.label.communityImpression", state.CommunityImpressionDebugLabel);
-        AppendBullet(report, "debug.label.dialogueBehavior", state.DialogueBehaviorInfluenceDebugLabel);
-        AppendBullet(report, "debug.label.helpRequests", state.HelpRequestDebugLabel);
-        AppendBullet(report, "debug.label.conflictMemory", state.ConflictDebugLabel);
+        AppendBullet(report, "debug.label.longTermMemory", StateDebugLabels.LongTermMemories(state));
+        AppendBullet(report, "debug.label.playerPreferenceMemory", StateDebugLabels.PlayerPreferences(state));
+        AppendBullet(report, "debug.label.communityImpression", StateDebugLabels.CommunityImpressions(state));
+        AppendBullet(report, "debug.label.dialogueBehavior", StateDebugLabels.DialogueBehaviorInfluences(state));
+        AppendBullet(report, "debug.label.helpRequests", StateDebugLabels.HelpRequests(state));
+        AppendBullet(report, "debug.label.conflictMemory", StateDebugLabels.Conflicts(state));
         return report.ToString();
     }
 
@@ -103,7 +103,7 @@ internal static class BehaviorDiagnostics
         foreach (var state in orderedStates)
         {
             string pending = FormatPendingWork(state);
-            report.AppendLine($"| {EscapeTable(state.NpcName)} | {EscapeTable(state.EmotionLabel)} | {state.Familiarity} | {state.RelationshipTrust} | {EscapeTable(pending)} | {EscapeTable(state.LastInteractionLabel)} |");
+            report.AppendLine($"| {EscapeTable(state.NpcName)} | {EscapeTable(StateDebugLabels.Emotion(state))} | {state.Familiarity} | {state.RelationshipTrust} | {EscapeTable(pending)} | {EscapeTable(StateDebugLabels.LastInteraction(state))} |");
         }
 
         return report.ToString();

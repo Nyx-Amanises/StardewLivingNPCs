@@ -10,7 +10,7 @@ namespace LivingNPCs.Behavior;
 /// Assembles the hidden LivingNPCs context that gets pushed to ValleyTalk before a conversation:
 /// the base continuity summary from memory, plus the situational sections (gift opportunity,
 /// help-request opportunity, companion outing, immediate cues) and the gift-response prompts.
-/// Everything that turns LivingNPCs state into prompt text for the bridge lives here.
+/// This class decides which sections apply; their wording lives in <see cref="PromptFragments"/>.
 /// </summary>
 internal sealed class ValleyTalkContextService
 {
@@ -116,7 +116,7 @@ internal sealed class ValleyTalkContextService
         if (state.DailyGiftOpportunityTotalDays == Game1.Date.TotalDays)
         {
             cue = string.IsNullOrWhiteSpace(state.DailyGiftOpportunityReason)
-                ? "The relationship is warm enough that the NPC may offer a small everyday gift today."
+                ? PromptFragments.GiftOpportunity.DefaultDailyCue
                 : state.DailyGiftOpportunityReason;
         }
 
@@ -125,17 +125,11 @@ internal sealed class ValleyTalkContextService
             return string.Empty;
         }
 
-        return string.Join(
-            "\n",
-            "## LivingNPCs Gift Opportunity",
-            $"- Gift cue: {cue}.",
-            "- This is an opportunity, not an obligation. If it fits the visible reply, have the NPC naturally offer a small in-game gift now and include exactly one hidden action with type give_small_gift.",
-            "- If you include give_small_gift, the visible dialogue must explicitly offer the gift before the hidden metadata, using natural wording such as 'I brought you a small thing' or 'this is for you'. If the visible reply does not offer a gift, do not include the hidden action.",
-            $"- Shared small gift IDs: {this.giftSelector.BuildCommonPromptList(GiftTier.Small)}.",
-            $"- {npc.displayName}'s personalized small gift IDs: {this.giftSelector.BuildPersonalizedPromptList(npc, GiftTier.Small)}.",
-            "- If naming a specific gift, use an itemId from the two lists above and the matching itemLabel. Generic wording such as 'a small thing' is fine when no specific item is named.",
-            "- If the moment feels emotionally wrong, crowded, or abrupt, skip the gift rather than forcing it."
-        );
+        return PromptFragments.GiftOpportunity.Section(
+            npc.displayName,
+            cue,
+            this.giftSelector.BuildCommonPromptList(GiftTier.Small),
+            this.giftSelector.BuildPersonalizedPromptList(npc, GiftTier.Small));
     }
 
     private string BuildHelpRequestOpportunityPromptContext(NPC npc)
@@ -150,13 +144,7 @@ internal sealed class ValleyTalkContextService
             return string.Empty;
         }
 
-        return string.Join(
-            "\n",
-            "## LivingNPCs Help Request Opportunity",
-            $"- Today {npc.displayName} is inclined to ask the farmer for one small favor during this conversation.",
-            "- If the visible reply allows, naturally bring up needing one concrete item from the help-request fit list, and include exactly one hidden helpRequests entry (item_request) with that itemId — do not leave the favor only in the spoken text.",
-            "- Keep it brief and in character; if the moment genuinely does not fit, it is fine to wait for another day rather than forcing it."
-        );
+        return PromptFragments.HelpRequestOpportunity.Section(npc.displayName);
     }
 
     /// <summary>
@@ -243,42 +231,42 @@ internal sealed class ValleyTalkContextService
     {
         var lines = new List<string>
         {
-            "## LivingNPCs Help Request Gift Response",
-            $"- The farmer just handed {npc.displayName} {gift.ItemName} ({gift.ItemId}) for a LivingNPCs help request.",
-            "- This is a requested task hand-in, not an unexpected daily gift.",
-            "- Override ordinary gift taste guidance: do not say the item is unwanted, neutral, poor taste, or not a favorite.",
-            "- Thank the farmer for following through and connect the item to the request in a natural, in-character way."
+            PromptFragments.HelpRequestHandIn.Header,
+            PromptFragments.HelpRequestHandIn.HandInLine(npc.displayName, gift.ItemName, gift.ItemId),
+            PromptFragments.HelpRequestHandIn.NotDailyGiftLine,
+            PromptFragments.HelpRequestHandIn.OverrideTasteLine,
+            PromptFragments.HelpRequestHandIn.ThankNaturallyLine
         };
 
         foreach (var request in deliveredHelpRequests)
         {
-            lines.Add($"- Help request status after hand-in: {request.Status}; summary: {request.Summary}; resolution: {request.Resolution}");
+            lines.Add(PromptFragments.HelpRequestHandIn.StatusLine(request));
             if (request.Status == "Pending")
             {
-                lines.Add($"- The request advanced to another step. Current next step: {request.CurrentStepPromptLabel}");
+                lines.Add(PromptFragments.HelpRequestHandIn.AdvancedStepLine(request));
             }
             else if (request.Status == "Fulfilled")
             {
-                lines.Add("- The request is now complete; the immediate reply should sound grateful and complete, not like a normal gift reaction.");
+                lines.Add(PromptFragments.HelpRequestHandIn.CompletedLine);
             }
 
             if (request.RewardGranted)
             {
-                lines.Add($"- LivingNPCs already granted the configured friendship reward (+{request.RewardFriendship}); mention rewards only if it sounds natural.");
+                lines.Add(PromptFragments.HelpRequestHandIn.FriendshipRewardLine(request.RewardFriendship));
             }
 
             if (request.RewardMoneyGranted)
             {
-                lines.Add($"- LivingNPCs already granted the configured money reward ({request.RewardMoney}g); do not promise extra payment beyond the system reward.");
+                lines.Add(PromptFragments.HelpRequestHandIn.MoneyRewardGrantedLine(request.RewardMoney));
             }
             else if (request.RewardMoneyClaimQueued)
             {
-                lines.Add($"- LivingNPCs added the configured money reward ({request.RewardMoney}g) to the quest journal for the farmer to claim; do not promise extra payment beyond the system reward.");
+                lines.Add(PromptFragments.HelpRequestHandIn.MoneyRewardQueuedLine(request.RewardMoney));
             }
 
             if (request.RewardGiftGiven)
             {
-                lines.Add("- LivingNPCs scheduled a small thank-you item by mail for tomorrow; mention it only if it feels natural, and do not imply the farmer already received it.");
+                lines.Add(PromptFragments.HelpRequestHandIn.ThankYouMailLine);
             }
         }
 
@@ -287,21 +275,6 @@ internal sealed class ValleyTalkContextService
 
     private static string BuildGiftResponseMailPrompt(NPC npc, GiftMemoryDetails gift)
     {
-        string itemLabel = string.IsNullOrWhiteSpace(gift.ItemName)
-            ? "the farmer's gift"
-            : gift.ItemName.Trim();
-        string header = gift.IsBirthdayGift
-            ? "## LivingNPCs Birthday Gift Mail"
-            : "## LivingNPCs Reciprocal Gift Mail";
-        string reason = gift.IsBirthdayGift
-            ? $"LivingNPCs has scheduled a later birthday thank-you mail from {npc.displayName} because the farmer remembered their birthday with {itemLabel}."
-            : $"LivingNPCs has scheduled a later mailbox return gift from {npc.displayName} because the farmer gave them {itemLabel}.";
-        return string.Join(
-            "\n",
-            header,
-            $"- {reason}",
-            "- In this immediate gift reaction, the NPC may briefly imply they will send something later if it sounds natural.",
-            "- Do not give the farmer an item now, do not include a hidden give_small_gift or give_meaningful_gift action, and do not promise a specific item."
-        );
+        return PromptFragments.GiftResponseMail.Section(npc.displayName, gift.ItemName, gift.IsBirthdayGift);
     }
 }

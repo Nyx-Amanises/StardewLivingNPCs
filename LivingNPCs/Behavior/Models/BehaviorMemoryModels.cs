@@ -185,13 +185,6 @@ internal sealed class CommunityImpressionFact
             return "fading";
         }
     }
-
-    public string PromptLabel => this.Source switch
-    {
-        "Witnessed" => $"directly witnessed, {this.FreshnessStage} ({this.Visibility.ToLowerInvariant()}): {this.Summary}",
-        "CloseCircle" => $"heard through a close connection after {this.TransmissionDepth} retelling(s), {this.FreshnessStage} ({this.Visibility.ToLowerInvariant()}): {this.Summary}",
-        _ => $"picked up as a faint public impression after {this.TransmissionDepth} retelling(s), {this.FreshnessStage} ({this.Visibility.ToLowerInvariant()}): {this.Summary}"
-    };
 }
 
 internal sealed class SharedExperienceFact
@@ -210,9 +203,6 @@ internal sealed class SharedExperienceFact
     public int FollowUpEligibleTotalDays { get; set; } = -1;
     public int FollowUpShownTotalDays { get; set; } = -1;
     public int FollowUpShownTimeOfDay { get; set; }
-
-    public string PromptLabel =>
-        $"{this.Type} at {this.LocationLabel}; shared on total day {this.CreatedTotalDays}; summary: {this.Summary}";
 }
 
 internal sealed class DialogueBehaviorInfluenceFact
@@ -233,9 +223,6 @@ internal sealed class DialogueBehaviorInfluenceFact
     public int TriggerCount { get; set; }
     public int MaxTriggers { get; set; } = 1;
     public int TimesReinforced { get; set; }
-
-    public string PromptLabel =>
-        $"{this.Type}, intensity {this.Intensity}/100, target {this.TargetLocationLabel}, status {this.Status}, expires total day {this.ExpiresTotalDays}; summary: {this.Summary}";
 }
 
 internal sealed class NpcHelpRequestFact
@@ -280,29 +267,10 @@ internal sealed class NpcHelpRequestFact
     public bool SpecialFollowUpPlanned { get; set; }
     public int TimesReinforced { get; set; }
 
-    public string PromptLabel =>
-        $"{this.Type}, due on total day {this.DueTotalDays}, status {this.Status}, step {System.Math.Min(this.CurrentStepIndex + 1, System.Math.Max(1, this.Steps.Count))}/{System.Math.Max(1, this.Steps.Count)}; current step: {this.CurrentStepPromptLabel}; summary: {this.Summary}";
-
-    public string FulfilledPromptLabel =>
-        $"{this.Type} was fulfilled on total day {this.FulfilledTotalDays}; summary: {this.Summary}; follow-up potential: {this.FollowUpPotential}";
-
-    public string CurrentStepPromptLabel
-    {
-        get
-        {
-            var step = this.Steps.Count == 0
-                ? null
-                : this.Steps[System.Math.Clamp(this.CurrentStepIndex, 0, this.Steps.Count - 1)];
-            if (step == null)
-            {
-                return this.Type == "item_request"
-                    ? $"bring {this.RequestedItemLabel} {this.RequestedItemId}".Trim()
-                    : this.QuestionTopic;
-            }
-
-            return step.PromptLabel;
-        }
-    }
+    /// <summary>The step the request is currently waiting on, or null when no steps exist.</summary>
+    public NpcHelpRequestStepFact? CurrentStep => this.Steps.Count == 0
+        ? null
+        : this.Steps[System.Math.Clamp(this.CurrentStepIndex, 0, this.Steps.Count - 1)];
 }
 
 internal sealed class NpcGiftMailFact
@@ -342,10 +310,6 @@ internal sealed class NpcHelpRequestStepFact
     public string Resolution { get; set; } = string.Empty;
     public int CompletedTotalDays { get; set; } = -1;
     public int CompletedTimeOfDay { get; set; }
-
-    public string PromptLabel => this.Type == "item_request"
-        ? $"item step: {this.Summary}; needs {this.RequestedItemLabel} {this.RequestedItemId}; status {this.Status}"
-        : $"conversation step: {this.Summary}; topic {this.QuestionTopic}; status {this.Status}";
 }
 
 internal sealed class NpcConflictFact
@@ -374,9 +338,6 @@ internal sealed class NpcConflictFact
     public string LastRepairGiftName { get; set; } = string.Empty;
     public bool RepairGrowthGranted { get; set; }
     public int TimesReinforced { get; set; }
-
-    public string PromptLabel => $"{this.Status.ToLowerInvariant()} conflict, severity {this.Severity}/100, cause {this.CauseKind}, repair stage {this.RepairStage}: {this.Summary}";
-    public string ResolvedPromptLabel => $"resolved conflict from total day {this.CreatedTotalDays}, cause {this.CauseKind}: {this.Summary}";
 }
 
 internal sealed class ValleyTalkAmbientFollowUp

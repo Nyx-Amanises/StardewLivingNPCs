@@ -58,28 +58,6 @@ internal static class MemoryRecallService
             .ToList();
     }
 
-    public static string FormatLongTermMemoryPromptLabel(IReadOnlyList<LongTermMemorySelection> selections)
-    {
-        return selections.Count == 0
-            ? "no durable personal memory is especially relevant right now"
-            : string.Join("; ", selections.Select(selection => selection.Memory.Summary));
-    }
-
-    public static string FormatPlayerPreferencePromptLabel(IReadOnlyList<PlayerPreferenceSelection> selections)
-    {
-        return selections.Count == 0
-            ? "no durable farmer preference memory is especially relevant right now"
-            : string.Join("; ", selections.Select(selection => selection.Memory.Summary));
-    }
-
-    public static string FormatCommunityImpressionPromptLabel(NPC npc, IReadOnlyList<CommunityImpressionSelection> selections)
-    {
-        CommunityReactionCue reaction = CommunityReactionStyle.For(npc);
-        return selections.Count == 0
-            ? "no community impression is especially relevant right now"
-            : $"observer tendency: {reaction.PromptLabel}; retelling tendency: {reaction.RetellingPromptLabel}; {string.Join("; ", selections.Select(selection => selection.Memory.PromptLabel))}";
-    }
-
     public static string FormatLongTermMemoryDebugLabel(IReadOnlyList<LongTermMemorySelection> selections)
     {
         return selections.Count == 0
