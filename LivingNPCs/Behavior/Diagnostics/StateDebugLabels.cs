@@ -143,6 +143,14 @@ internal static class StateDebugLabels
             : string.Join("；", memories.Select(memory => $"{memory.Summary}（重要度 {memory.Importance}）"));
     }
 
+    public static string RelationshipImpression(LivingNpcState state)
+    {
+        string queueSuffix = $"（累计压缩 {state.RelationshipImpressionMemoryCount} 条，待压缩 {state.ImpressionBacklog.Count} 条，压缩中 {state.ImpressionInFlight.Count} 条）";
+        return string.IsNullOrWhiteSpace(state.RelationshipImpression)
+            ? $"尚未生成{queueSuffix}"
+            : $"{state.RelationshipImpression}{queueSuffix}";
+    }
+
     public static string PlayerPreferences(LivingNpcState state)
     {
         var preferences = state.GetTopPlayerPreferences(6).ToList();

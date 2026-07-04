@@ -45,6 +45,7 @@ internal sealed class BehaviorEngine
     private readonly DialogueBehaviorInfluenceRuntime dialogueBehaviorInfluences;
     private readonly DelayedTravelActionRuntime delayedTravelActions;
     private readonly BehaviorMailService mailService;
+    private readonly MemoryImpressionService memoryImpressions;
     private readonly GiftActionRuntime giftActions;
     private readonly DirectWorldActionRuntime directWorldActions;
     private readonly CompanionOutingRuntime companionOutings;
@@ -81,6 +82,7 @@ internal sealed class BehaviorEngine
         this.dialogueBehaviorInfluences = this.services.DialogueBehaviorInfluences;
         this.delayedTravelActions = this.services.DelayedTravelActions;
         this.mailService = this.services.MailService;
+        this.memoryImpressions = this.services.MemoryImpressions;
         this.giftActions = this.services.GiftActions;
         this.directWorldActions = this.services.DirectWorldActions;
         this.companionOutings = this.services.CompanionOutings;
@@ -192,6 +194,7 @@ internal sealed class BehaviorEngine
             this.delayedTravelActions.Clear();
             this.communityRipples.TryPropagate();
             this.mailService.ResolvePendingGiftMailGenerations();
+            this.memoryImpressions.ProcessDayStart();
             this.mailService.QueueDueGiftMailsForTomorrow();
             this.mailService.InvalidateMailCache();
             this.helpRequestQuestLog.Sync();
@@ -330,6 +333,7 @@ internal sealed class BehaviorEngine
             }
 
             this.helpRequests.UpdateTimers();
+            this.memoryImpressions.PollPending();
 
             if (!this.config.EnablePassiveBehaviors || Game1.activeClickableMenu != null)
             {

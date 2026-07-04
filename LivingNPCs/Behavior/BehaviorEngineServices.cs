@@ -22,6 +22,7 @@ internal sealed class BehaviorEngineServices
     public BehaviorFeedbackService Feedback { get; }
     public CommunityRippleRuntime CommunityRipples { get; }
     public BehaviorMailService MailService { get; }
+    public MemoryImpressionService MemoryImpressions { get; }
     public BehaviorDebugCommandHandler DebugCommands { get; }
     public NpcLocator Locator { get; }
     public NpcScheduleReturnService ScheduleReturn { get; }
@@ -50,6 +51,7 @@ internal sealed class BehaviorEngineServices
         this.Feedback = new BehaviorFeedbackService(config, monitor);
         this.CommunityRipples = new CommunityRippleRuntime(config, monitor, this.Memory, this.Random);
         this.MailService = new BehaviorMailService(helper, this.Memory, this.Random, config, this.ValleyTalkBridge);
+        this.MemoryImpressions = new MemoryImpressionService(config, monitor, this.Memory, this.ValleyTalkBridge);
         this.DebugCommands = new BehaviorDebugCommandHandler(
             helper,
             monitor,

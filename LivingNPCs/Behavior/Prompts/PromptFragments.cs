@@ -361,6 +361,7 @@ internal static class PromptFragments
         public static string GiftContextLine(LivingNpcState state) => $"- Recent gift context: {State.LastGift(state)}.";
         public static string EventContextLine(LivingNpcState state) => $"- Recent event context: {State.LastEvent(state)}.";
         public static string MemoryStoreLine(int longTermCount, string recallFocus) => $"- Durable memory store: {longTermCount} long-term memories tracked; recall focus for this reply: {recallFocus}.";
+        public static string RelationshipImpressionLine(string impression) => $"- Long-term relationship impression (older memories compressed into background; treat as settled history, not recent events): {impression}";
         public static string KnownPreferencesLine(string recallFocus) => $"- Known farmer preferences: {recallFocus}.";
         public static string BehaviorTendenciesLine(LivingNpcState state) => $"- Conversation-driven behavior tendencies: {State.DialogueBehaviorInfluences(state)}.";
         public static string SharedExperiencesLine(LivingNpcState state) => $"- Shared experiences with the farmer: {State.SharedExperiences(state)}.";
@@ -390,6 +391,7 @@ internal static class PromptFragments
 
         // ---- concise-mode field labels (rendered as "- {label}: {value}") ----
         public const string LabelRecallFocus = "Recall focus";
+        public const string LabelRelationshipImpression = "Long-term relationship impression";
         public const string LabelKnownPreferences = "Known farmer preferences";
         public const string LabelBehaviorTendencies = "Behavior tendencies";
         public const string LabelRecentGift = "Recent gift";

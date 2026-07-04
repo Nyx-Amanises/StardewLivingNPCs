@@ -7,22 +7,28 @@ internal static class LongTermMemoryStore
 {
     public const int MaxMemoriesPerNpc = 24;
 
+    // 被 24 条上限挤掉的记忆先进 backlog 等待 LLM 压缩成"关系印象"，而不是直接丢弃。
+    // backlog 自身也有上限兜底：模型持续失败时按重要度丢最低的，等价于旧行为、只是更晚发生。
+    public const int MaxImpressionBacklog = 48;
+    public const int MaxImpressionBatch = 16;
+
     public static void Refresh(LivingNpcState state, int currentTotalDays)
     {
         state.LongTermMemories ??= new List<LongTermMemoryFact>();
-        state.LongTermMemories = state.LongTermMemories
-            .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
-            .Select(NormalizeForStore)
-            .Where(memory => !string.IsNullOrWhiteSpace(BuildKey(memory.Kind, memory.Subject, memory.Summary)))
-            .GroupBy(
-                memory => BuildKey(memory.Kind, memory.Subject, memory.Summary),
-                System.StringComparer.OrdinalIgnoreCase)
-            .Select(MergeGroup)
-            .OrderByDescending(memory => GetRetentionScore(memory, currentTotalDays))
-            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
-            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
-            .Take(MaxMemoriesPerNpc)
-            .ToList();
+        ApplyCapacity(
+            state,
+            state.LongTermMemories
+                .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
+                .Select(NormalizeForStore)
+                .Where(memory => !string.IsNullOrWhiteSpace(BuildKey(memory.Kind, memory.Subject, memory.Summary)))
+                .GroupBy(
+                    memory => BuildKey(memory.Kind, memory.Subject, memory.Summary),
+                    System.StringComparer.OrdinalIgnoreCase)
+                .Select(MergeGroup)
+                .OrderByDescending(memory => GetRetentionScore(memory, currentTotalDays))
+                .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+                .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+                .ToList());
     }
 
     public static bool Store(
@@ -78,16 +84,86 @@ internal static class LongTermMemoryStore
             TimesReinforced = 1
         });
 
-        state.LongTermMemories = state.LongTermMemories
-            .OrderByDescending(memory => GetRetentionScore(memory, currentTotalDays))
-            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
-            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
-            .Take(MaxMemoriesPerNpc)
-            .ToList();
+        ApplyCapacity(
+            state,
+            state.LongTermMemories
+                .OrderByDescending(memory => GetRetentionScore(memory, currentTotalDays))
+                .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+                .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+                .ToList());
 
         storedMemory = state.LongTermMemories.LastOrDefault(memory =>
             BuildKey(memory.Kind, memory.Subject, memory.Summary) == normalizedKey);
         return true;
+    }
+
+    /// <summary>
+    /// Applies the per-NPC capacity to an already-ordered memory list; entries that fall off the
+    /// end are moved into the impression backlog (for later LLM compression) instead of dropped.
+    /// </summary>
+    public static void ApplyCapacity(LivingNpcState state, List<LongTermMemoryFact> orderedMemories)
+    {
+        if (orderedMemories.Count > MaxMemoriesPerNpc)
+        {
+            AddToImpressionBacklog(state, orderedMemories.Skip(MaxMemoriesPerNpc));
+            orderedMemories = orderedMemories.Take(MaxMemoriesPerNpc).ToList();
+        }
+
+        state.LongTermMemories = orderedMemories;
+    }
+
+    public static void AddToImpressionBacklog(LivingNpcState state, IEnumerable<LongTermMemoryFact> evicted)
+    {
+        state.ImpressionBacklog ??= new List<LongTermMemoryFact>();
+        state.ImpressionInFlight ??= new List<LongTermMemoryFact>();
+        foreach (var memory in evicted)
+        {
+            if (memory == null || string.IsNullOrWhiteSpace(memory.Summary))
+            {
+                continue;
+            }
+
+            string key = BuildKey(memory.Kind, memory.Subject, memory.Summary);
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                continue;
+            }
+
+            bool duplicate = state.ImpressionBacklog
+                .Concat(state.ImpressionInFlight)
+                .Any(existing => string.Equals(
+                    BuildKey(existing.Kind, existing.Subject, existing.Summary),
+                    key,
+                    System.StringComparison.OrdinalIgnoreCase));
+            if (!duplicate)
+            {
+                state.ImpressionBacklog.Add(memory);
+            }
+        }
+
+        TrimImpressionQueue(state.ImpressionBacklog, MaxImpressionBacklog);
+    }
+
+    public static List<LongTermMemoryFact> NormalizeImpressionQueue(List<LongTermMemoryFact> queue, int maxEntries)
+    {
+        var normalized = (queue ?? new List<LongTermMemoryFact>())
+            .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
+            .Select(NormalizeForStore)
+            .ToList();
+        TrimImpressionQueue(normalized, maxEntries);
+        return normalized;
+    }
+
+    private static void TrimImpressionQueue(List<LongTermMemoryFact> queue, int maxEntries)
+    {
+        while (queue.Count > maxEntries)
+        {
+            LongTermMemoryFact weakest = queue
+                .OrderBy(memory => memory.Importance)
+                .ThenBy(memory => memory.CreatedTotalDays)
+                .First();
+            queue.Remove(weakest);
+        }
     }
 
     public static LongTermMemoryFact NormalizeForStore(LongTermMemoryFact memory)

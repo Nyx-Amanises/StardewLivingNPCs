@@ -75,6 +75,11 @@ internal static class BehaviorPromptContextBuilder
             prompt.AppendLine(PromptFragments.Context.RhythmComfortLine(state));
             prompt.AppendLine(PromptFragments.Context.GiftContextLine(state));
             prompt.AppendLine(PromptFragments.Context.EventContextLine(state));
+            if (!string.IsNullOrWhiteSpace(state.RelationshipImpression))
+            {
+                prompt.AppendLine(PromptFragments.Context.RelationshipImpressionLine(state.RelationshipImpression));
+            }
+
             prompt.AppendLine(PromptFragments.Context.MemoryStoreLine(
                 state.LongTermMemories.Count,
                 PromptFragments.Recall.LongTermMemories(recallPlan.LongTermMemories)));
@@ -160,6 +165,7 @@ internal static class BehaviorPromptContextBuilder
         prompt.AppendLine(PromptFragments.Context.MoodLineConcise(state));
         prompt.AppendLine(PromptFragments.Context.ExpressionStyleLine(emotionalStyle.PromptLabel));
         prompt.AppendLine(PromptFragments.Context.FamiliarityTrustRhythmLineConcise(state));
+        AppendIfMeaningful(prompt, PromptFragments.Context.LabelRelationshipImpression, state.RelationshipImpression);
         AppendIfMeaningful(prompt, PromptFragments.Context.LabelRecallFocus, PromptFragments.Recall.LongTermMemories(recallPlan.LongTermMemories));
         AppendIfMeaningful(prompt, PromptFragments.Context.LabelKnownPreferences, PromptFragments.Recall.PlayerPreferences(recallPlan.PlayerPreferences));
         AppendIfMeaningful(prompt, PromptFragments.Context.LabelBehaviorTendencies, PromptFragments.State.DialogueBehaviorInfluences(state));
@@ -260,6 +266,7 @@ internal static class BehaviorPromptContextBuilder
             AppendDebugBullet(summary, "debug.label.lastGift", StateDebugLabels.LastGift(state));
             AppendDebugBullet(summary, "debug.label.lastEvent", StateDebugLabels.LastEvent(state));
             AppendDebugBullet(summary, "debug.label.longTermMemory", StateDebugLabels.LongTermMemories(state));
+            AppendDebugBullet(summary, "debug.label.relationshipImpression", StateDebugLabels.RelationshipImpression(state));
             AppendDebugBullet(summary, "debug.label.currentLongTermRecall", MemoryRecallService.FormatLongTermMemoryDebugLabel(recallPlan.LongTermMemories));
             AppendDebugBullet(summary, "debug.label.playerPreferenceMemory", StateDebugLabels.PlayerPreferences(state));
             AppendDebugBullet(summary, "debug.label.currentPreferenceRecall", MemoryRecallService.FormatPlayerPreferenceDebugLabel(recallPlan.PlayerPreferences));

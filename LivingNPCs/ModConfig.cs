@@ -67,6 +67,12 @@ internal sealed class ModConfig
     public bool EnableAiGiftMail { get; set; } = true;
     public int AiGiftMailTimeoutSeconds { get; set; } = 30;
 
+    // Compress long-term memories evicted by the 24-entry cap into a biographical "relationship
+    // impression" with one LLM call through the ValleyTalk bridge; the impression is injected as
+    // fixed relationship background. Hand-edit in config.json (intentionally not surfaced in GMCM).
+    public bool EnableMemoryImpressions { get; set; } = true;
+    public int MemoryImpressionTimeoutSeconds { get; set; } = 45;
+
     public bool Migrate()
     {
         if (this.BehaviorHotkey.ToString().Equals("B", StringComparison.OrdinalIgnoreCase))
@@ -121,6 +127,7 @@ internal sealed class ModConfig
         this.MaxInteractionDistanceTiles = Clamp(this.MaxInteractionDistanceTiles, 1, 128);
         this.AiPlannerTimeoutSeconds = Clamp(this.AiPlannerTimeoutSeconds, 1, 120);
         this.AiGiftMailTimeoutSeconds = Clamp(this.AiGiftMailTimeoutSeconds, 5, 120);
+        this.MemoryImpressionTimeoutSeconds = Clamp(this.MemoryImpressionTimeoutSeconds, 10, 180);
 
         if (this.MinHelpRequestFriendshipReward > this.MaxHelpRequestFriendshipReward)
         {
@@ -195,5 +202,7 @@ internal sealed class ModConfig
         this.ShowHudMessages = defaults.ShowHudMessages;
         this.EnableAiGiftMail = defaults.EnableAiGiftMail;
         this.AiGiftMailTimeoutSeconds = defaults.AiGiftMailTimeoutSeconds;
+        this.EnableMemoryImpressions = defaults.EnableMemoryImpressions;
+        this.MemoryImpressionTimeoutSeconds = defaults.MemoryImpressionTimeoutSeconds;
     }
 }

@@ -12,4 +12,6 @@ public interface IValleyTalkInterface
     void ClearPromptOverrides(string characterName = "");
     void RequestGiftMailText(string requestId, string npcName, string payloadJson);
     string TryGetGiftMailText(string requestId);
+    void RequestMemoryImpression(string requestId, string npcName, string payloadJson);
+    string TryGetMemoryImpression(string requestId);
 }

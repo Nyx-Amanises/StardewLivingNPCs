@@ -40,6 +40,15 @@ internal sealed class LivingNpcState
     public int LastEventTotalDays { get; set; } = -1;
     public int LastEventTimeOfDay { get; set; }
     public List<LongTermMemoryFact> LongTermMemories { get; set; } = new();
+    public string RelationshipImpression { get; set; } = string.Empty;
+    public int RelationshipImpressionUpdatedTotalDays { get; set; } = -1;
+    public int RelationshipImpressionMemoryCount { get; set; }
+    public List<LongTermMemoryFact> ImpressionBacklog { get; set; } = new();
+    public List<LongTermMemoryFact> ImpressionInFlight { get; set; } = new();
+    public string ImpressionRequestId { get; set; } = string.Empty;
+    public int ImpressionRequestTotalDays { get; set; } = -1;
+    public int ImpressionRequestAttempts { get; set; }
+    public int LastImpressionFailureTotalDays { get; set; } = -1;
     public List<PlayerPreferenceFact> PlayerPreferenceMemories { get; set; } = new();
     public List<CommunityImpressionFact> CommunityImpressions { get; set; } = new();
     public List<SharedExperienceFact> SharedExperiences { get; set; } = new();
@@ -134,14 +143,21 @@ internal sealed class LivingNpcState
         this.LastFriendshipHearts = System.Math.Clamp(this.LastFriendshipHearts, 0, 14);
         this.GiftsToday = System.Math.Max(0, this.GiftsToday);
         this.LongTermMemories ??= new List<LongTermMemoryFact>();
-        this.LongTermMemories = this.LongTermMemories
-            .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
-            .Select(LongTermMemoryStore.NormalizeForStore)
-            .OrderByDescending(LongTermMemoryStore.GetRetentionScore)
-            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
-            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
-            .Take(LongTermMemoryStore.MaxMemoriesPerNpc)
-            .ToList();
+        LongTermMemoryStore.ApplyCapacity(
+            this,
+            this.LongTermMemories
+                .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
+                .Select(LongTermMemoryStore.NormalizeForStore)
+                .OrderByDescending(LongTermMemoryStore.GetRetentionScore)
+                .ThenByDescending(memory => memory.LastUpdatedTotalDays)
+                .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+                .ToList());
+        this.RelationshipImpression = this.RelationshipImpression?.Trim() ?? string.Empty;
+        this.RelationshipImpressionMemoryCount = System.Math.Max(0, this.RelationshipImpressionMemoryCount);
+        this.ImpressionBacklog = LongTermMemoryStore.NormalizeImpressionQueue(this.ImpressionBacklog, LongTermMemoryStore.MaxImpressionBacklog);
+        this.ImpressionInFlight = LongTermMemoryStore.NormalizeImpressionQueue(this.ImpressionInFlight, LongTermMemoryStore.MaxImpressionBatch);
+        this.ImpressionRequestId ??= string.Empty;
+        this.ImpressionRequestAttempts = System.Math.Max(0, this.ImpressionRequestAttempts);
         this.PlayerPreferenceMemories ??= new List<PlayerPreferenceFact>();
         this.PlayerPreferenceMemories = this.PlayerPreferenceMemories
             .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
@@ -531,23 +547,21 @@ internal sealed class LivingNpcState
             LastEventTotalDays = this.LastEventTotalDays,
             LastEventTimeOfDay = this.LastEventTimeOfDay,
             LongTermMemories = this.LongTermMemories
-                .Select(memory => new LongTermMemoryFact
-                {
-                    Kind = memory.Kind,
-                    Subject = memory.Subject,
-                    Summary = memory.Summary,
-                    Tags = memory.Tags.ToList(),
-                    Importance = memory.Importance,
-                    CreatedTotalDays = memory.CreatedTotalDays,
-                    CreatedTimeOfDay = memory.CreatedTimeOfDay,
-                    LastUpdatedTotalDays = memory.LastUpdatedTotalDays,
-                    LastUpdatedTimeOfDay = memory.LastUpdatedTimeOfDay,
-                    LastRecalledTotalDays = memory.LastRecalledTotalDays,
-                    LastRecalledTimeOfDay = memory.LastRecalledTimeOfDay,
-                    RecallCount = memory.RecallCount,
-                    TimesReinforced = memory.TimesReinforced
-                })
+                .Select(CloneLongTermMemoryFact)
                 .ToList(),
+            RelationshipImpression = this.RelationshipImpression,
+            RelationshipImpressionUpdatedTotalDays = this.RelationshipImpressionUpdatedTotalDays,
+            RelationshipImpressionMemoryCount = this.RelationshipImpressionMemoryCount,
+            ImpressionBacklog = this.ImpressionBacklog
+                .Select(CloneLongTermMemoryFact)
+                .ToList(),
+            ImpressionInFlight = this.ImpressionInFlight
+                .Select(CloneLongTermMemoryFact)
+                .ToList(),
+            ImpressionRequestId = this.ImpressionRequestId,
+            ImpressionRequestTotalDays = this.ImpressionRequestTotalDays,
+            ImpressionRequestAttempts = this.ImpressionRequestAttempts,
+            LastImpressionFailureTotalDays = this.LastImpressionFailureTotalDays,
             PlayerPreferenceMemories = this.PlayerPreferenceMemories
                 .Select(memory => new PlayerPreferenceFact
                 {
@@ -778,6 +792,26 @@ internal sealed class LivingNpcState
             FarmerNicknameTimeOfDay = this.FarmerNicknameTimeOfDay,
             LastUpdatedTotalDays = this.LastUpdatedTotalDays,
             LastUpdatedTimeOfDay = this.LastUpdatedTimeOfDay
+        };
+    }
+
+    private static LongTermMemoryFact CloneLongTermMemoryFact(LongTermMemoryFact memory)
+    {
+        return new LongTermMemoryFact
+        {
+            Kind = memory.Kind,
+            Subject = memory.Subject,
+            Summary = memory.Summary,
+            Tags = memory.Tags.ToList(),
+            Importance = memory.Importance,
+            CreatedTotalDays = memory.CreatedTotalDays,
+            CreatedTimeOfDay = memory.CreatedTimeOfDay,
+            LastUpdatedTotalDays = memory.LastUpdatedTotalDays,
+            LastUpdatedTimeOfDay = memory.LastUpdatedTimeOfDay,
+            LastRecalledTotalDays = memory.LastRecalledTotalDays,
+            LastRecalledTimeOfDay = memory.LastRecalledTimeOfDay,
+            RecallCount = memory.RecallCount,
+            TimesReinforced = memory.TimesReinforced
         };
     }
 

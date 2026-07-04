@@ -84,4 +84,19 @@ public class ValleyTalkInterface : IValleyTalkInterface
     {
         return GiftMailGenerator.Instance.TryGet(requestId);
     }
+
+    public void RequestMemoryImpression(string requestId, string npcName, string payloadJson)
+    {
+        if (string.IsNullOrWhiteSpace(npcName) || RsvAiPolicy.IsBlockedNpcName(npcName))
+        {
+            return;
+        }
+
+        MemoryImpressionGenerator.Instance.Request(requestId, npcName, payloadJson);
+    }
+
+    public string TryGetMemoryImpression(string requestId)
+    {
+        return MemoryImpressionGenerator.Instance.TryGet(requestId);
+    }
 }

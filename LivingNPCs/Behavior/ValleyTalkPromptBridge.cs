@@ -123,6 +123,41 @@ internal sealed class ValleyTalkPromptBridge
         }
     }
 
+    public void RequestMemoryImpression(string requestId, string npcName, string payloadJson)
+    {
+        if (this.api == null || string.IsNullOrWhiteSpace(requestId) || string.IsNullOrWhiteSpace(npcName))
+        {
+            return;
+        }
+
+        try
+        {
+            this.api.RequestMemoryImpression(requestId, npcName, payloadJson);
+        }
+        catch (System.Exception ex)
+        {
+            this.monitor.Log(I18n.Get("log.bridge.requestImpressionFailed", new { npc = npcName, error = ex.Message }), LogLevel.Debug);
+        }
+    }
+
+    public string TryGetMemoryImpression(string requestId)
+    {
+        if (this.api == null || string.IsNullOrWhiteSpace(requestId))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            return this.api.TryGetMemoryImpression(requestId) ?? string.Empty;
+        }
+        catch (System.Exception ex)
+        {
+            this.monitor.Log(I18n.Get("log.bridge.getImpressionFailed", new { error = ex.Message }), LogLevel.Debug);
+            return string.Empty;
+        }
+    }
+
     public void ClearAll()
     {
         if (this.api == null)

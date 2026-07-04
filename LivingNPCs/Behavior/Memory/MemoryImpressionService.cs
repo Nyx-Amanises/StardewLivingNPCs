@@ -1,0 +1,228 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text.Json;
+using StardewModdingAPI;
+using StardewValley;
+
+namespace LivingNPCs.Behavior;
+
+/// <summary>
+/// Turns evicted long-term memories into a biographical "relationship impression" via one LLM
+/// call through the ValleyTalk bridge. Requests are asynchronous: a batch is moved from the
+/// backlog to <see cref="LivingNpcState.ImpressionInFlight"/> when requested, and only cleared
+/// after a validated result is applied — a failed or lost call keeps every memory queued, so
+/// model failures never lose data. Attempts are counted per request; after
+/// <see cref="MaxAttempts"/> day-start polls without a result the batch returns to the backlog
+/// and the NPC backs off for <see cref="FailureCooldownDays"/> days.
+/// </summary>
+internal sealed class MemoryImpressionService
+{
+    public const int TriggerBacklogCount = 8;
+    public const int StaleBacklogAgeDays = 28;
+    public const int MaxAttempts = 3;
+    public const int FailureCooldownDays = 3;
+    private const int MaxRequestsPerDay = 2;
+
+    private readonly ModConfig config;
+    private readonly IMonitor monitor;
+    private readonly BehaviorMemory memory;
+    private readonly ValleyTalkPromptBridge bridge;
+
+    public MemoryImpressionService(ModConfig config, IMonitor monitor, BehaviorMemory memory, ValleyTalkPromptBridge bridge)
+    {
+        this.config = config;
+        this.monitor = monitor;
+        this.memory = memory;
+        this.bridge = bridge;
+    }
+
+    private bool Enabled => this.config.EnableMemoryImpressions && this.bridge != null && this.bridge.IsConnected;
+
+    /// <summary>Day-start pass: poll in-flight requests (with retry accounting) and start new ones.</summary>
+    public void ProcessDayStart()
+    {
+        if (!this.Enabled)
+        {
+            return;
+        }
+
+        int today = Game1.Date.TotalDays;
+        int started = 0;
+        foreach (LivingNpcState state in this.memory.GetTrackedStates().ToList())
+        {
+            if (HasInFlightRequest(state))
+            {
+                this.PollState(state, today, countAttempt: true);
+                continue;
+            }
+
+            if (started < MaxRequestsPerDay && ShouldRequest(state, today))
+            {
+                this.StartRequest(state, today);
+                started++;
+            }
+        }
+    }
+
+    /// <summary>Cheap in-day poll (time-changed): apply results as soon as they are ready.</summary>
+    public void PollPending()
+    {
+        if (!this.Enabled)
+        {
+            return;
+        }
+
+        int today = Game1.Date.TotalDays;
+        foreach (LivingNpcState state in this.memory.GetTrackedStates().ToList())
+        {
+            if (HasInFlightRequest(state))
+            {
+                this.PollState(state, today, countAttempt: false);
+            }
+        }
+    }
+
+    internal static bool HasInFlightRequest(LivingNpcState state)
+    {
+        return !string.IsNullOrWhiteSpace(state.ImpressionRequestId)
+            && state.ImpressionInFlight is { Count: > 0 };
+    }
+
+    /// <summary>
+    /// A compression is worth a model call once enough memories piled up, or once a small backlog
+    /// has been sitting for a whole season; failed requests back off for a few days first.
+    /// </summary>
+    internal static bool ShouldRequest(LivingNpcState state, int today)
+    {
+        List<LongTermMemoryFact> backlog = state.ImpressionBacklog ?? new List<LongTermMemoryFact>();
+        if (backlog.Count == 0)
+        {
+            return false;
+        }
+
+        if (state.LastImpressionFailureTotalDays >= 0
+            && today - state.LastImpressionFailureTotalDays < FailureCooldownDays)
+        {
+            return false;
+        }
+
+        if (backlog.Count >= TriggerBacklogCount)
+        {
+            return true;
+        }
+
+        int oldestCreated = backlog
+            .Where(memoryFact => memoryFact.CreatedTotalDays >= 0)
+            .Select(memoryFact => memoryFact.CreatedTotalDays)
+            .DefaultIfEmpty(today)
+            .Min();
+        return today - oldestCreated >= StaleBacklogAgeDays;
+    }
+
+    private void StartRequest(LivingNpcState state, int today)
+    {
+        List<LongTermMemoryFact> batch = state.ImpressionBacklog
+            .Take(LongTermMemoryStore.MaxImpressionBatch)
+            .ToList();
+        if (batch.Count == 0)
+        {
+            return;
+        }
+
+        state.ImpressionBacklog.RemoveRange(0, batch.Count);
+        state.ImpressionInFlight = batch;
+        state.ImpressionRequestId = $"impression-{state.NpcName}-{Guid.NewGuid():N}";
+        state.ImpressionRequestTotalDays = today;
+        state.ImpressionRequestAttempts = 0;
+
+        this.SendRequest(state, today);
+    }
+
+    private void SendRequest(LivingNpcState state, int today)
+    {
+        this.bridge.RequestMemoryImpression(
+            state.ImpressionRequestId,
+            state.NpcName,
+            BuildPayload(state, today, this.config.MemoryImpressionTimeoutSeconds));
+    }
+
+    private void PollState(LivingNpcState state, int today, bool countAttempt)
+    {
+        string text = this.bridge.TryGetMemoryImpression(state.ImpressionRequestId);
+        if (!string.IsNullOrWhiteSpace(text))
+        {
+            ApplyResult(state, text, today);
+            this.monitor.Log(
+                I18n.Get("log.impression.applied", new { npc = state.NpcName, total = state.RelationshipImpressionMemoryCount }),
+                LogLevel.Trace);
+            return;
+        }
+
+        if (!countAttempt)
+        {
+            return;
+        }
+
+        state.ImpressionRequestAttempts++;
+        if (state.ImpressionRequestAttempts >= MaxAttempts)
+        {
+            FailRequest(state, today);
+            this.monitor.Log(I18n.Get("log.impression.gaveUp", new { npc = state.NpcName }), LogLevel.Trace);
+            return;
+        }
+
+        // ValleyTalk may have restarted (its result cache is in-memory only) or the previous call
+        // failed on its side; issue a fresh request id covering the same in-flight batch.
+        state.ImpressionRequestId = $"impression-{state.NpcName}-{Guid.NewGuid():N}";
+        state.ImpressionRequestTotalDays = today;
+        this.SendRequest(state, today);
+    }
+
+    /// <summary>Applies a successful compression: only now is the in-flight batch discarded.</summary>
+    internal static void ApplyResult(LivingNpcState state, string impressionText, int today)
+    {
+        state.RelationshipImpression = impressionText.Trim();
+        state.RelationshipImpressionUpdatedTotalDays = today;
+        state.RelationshipImpressionMemoryCount += state.ImpressionInFlight.Count;
+        state.ImpressionInFlight = new List<LongTermMemoryFact>();
+        state.ImpressionRequestId = string.Empty;
+        state.ImpressionRequestTotalDays = -1;
+        state.ImpressionRequestAttempts = 0;
+        state.LastImpressionFailureTotalDays = -1;
+    }
+
+    /// <summary>Gives up on the current request: the batch returns to the backlog untouched.</summary>
+    internal static void FailRequest(LivingNpcState state, int today)
+    {
+        state.ImpressionBacklog.InsertRange(0, state.ImpressionInFlight);
+        state.ImpressionInFlight = new List<LongTermMemoryFact>();
+        state.ImpressionRequestId = string.Empty;
+        state.ImpressionRequestTotalDays = -1;
+        state.ImpressionRequestAttempts = 0;
+        state.LastImpressionFailureTotalDays = today;
+    }
+
+    internal static string BuildPayload(LivingNpcState state, int today, int timeoutSeconds)
+    {
+        string displayName = Game1.getCharacterFromName(state.NpcName)?.displayName ?? state.NpcName;
+        return JsonSerializer.Serialize(new
+        {
+            npcDisplayName = displayName,
+            existingImpression = state.RelationshipImpression,
+            memories = state.ImpressionInFlight.Select(memoryFact => FormatMemory(memoryFact, today)).ToList(),
+            timeoutSeconds
+        });
+    }
+
+    private static string FormatMemory(LongTermMemoryFact memoryFact, int today)
+    {
+        if (memoryFact.CreatedTotalDays < 0)
+        {
+            return memoryFact.Summary;
+        }
+
+        int age = Math.Max(0, today - memoryFact.CreatedTotalDays);
+        return $"[-{age}d] {memoryFact.Summary}";
+    }
+}

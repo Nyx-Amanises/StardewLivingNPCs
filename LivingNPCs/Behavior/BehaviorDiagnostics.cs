@@ -73,6 +73,7 @@ internal static class BehaviorDiagnostics
         report.AppendLine(I18n.Get("debug.report.relationshipMemoryHeading"));
         report.AppendLine();
         AppendBullet(report, "debug.label.longTermMemory", StateDebugLabels.LongTermMemories(state));
+        AppendBullet(report, "debug.label.relationshipImpression", StateDebugLabels.RelationshipImpression(state));
         AppendBullet(report, "debug.label.playerPreferenceMemory", StateDebugLabels.PlayerPreferences(state));
         AppendBullet(report, "debug.label.communityImpression", StateDebugLabels.CommunityImpressions(state));
         AppendBullet(report, "debug.label.dialogueBehavior", StateDebugLabels.DialogueBehaviorInfluences(state));
