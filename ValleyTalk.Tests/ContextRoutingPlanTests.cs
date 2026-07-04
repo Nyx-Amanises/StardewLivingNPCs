@@ -1,6 +1,7 @@
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using StardewValley;
 using Xunit;
 using ValleyTalk;
 
@@ -240,6 +241,34 @@ public sealed class ContextRoutingPlanTests
         bool refresh = ContextRoutingDecisionPass.ShouldRefreshCachedPlanForTopicShift(context, cached, out _);
 
         Assert.False(refresh);
+    }
+
+    [Fact]
+    public void TopicShiftGuardCoversOnlyChineseAndEnglish()
+    {
+        Assert.True(ContextRoutingDecisionPass.TopicShiftGuardCoversLanguage(LocalizedContentManager.LanguageCode.en));
+        Assert.True(ContextRoutingDecisionPass.TopicShiftGuardCoversLanguage(LocalizedContentManager.LanguageCode.zh));
+
+        Assert.False(ContextRoutingDecisionPass.TopicShiftGuardCoversLanguage(LocalizedContentManager.LanguageCode.fr));
+        Assert.False(ContextRoutingDecisionPass.TopicShiftGuardCoversLanguage(LocalizedContentManager.LanguageCode.ja));
+        Assert.False(ContextRoutingDecisionPass.TopicShiftGuardCoversLanguage(LocalizedContentManager.LanguageCode.ru));
+        Assert.False(ContextRoutingDecisionPass.TopicShiftGuardCoversLanguage(LocalizedContentManager.LanguageCode.mod));
+    }
+
+    [Fact]
+    public void CachedRoutingCannotSeeTopicShiftsOutsideChineseAndEnglish()
+    {
+        // The same world-lore question as the zh test above, but in French: the zh/en fragment
+        // tables cannot match it, so no refresh triggers. This is the documented boundary that
+        // the language guard exists for — on non-zh/en game languages BuildPlanAsync bypasses the
+        // conversation cache entirely, so this heuristic is only trusted where it can read the text.
+        var context = BuildConversationContext("Pourquoi le centre communautaire est-il devenu comme ça ?");
+        var cached = ContextRoutingPlan.ConservativeBrief();
+
+        bool refresh = ContextRoutingDecisionPass.ShouldRefreshCachedPlanForTopicShift(context, cached, out string reason);
+
+        Assert.False(refresh);
+        Assert.Equal(string.Empty, reason);
     }
     private static DialogueContext BuildConversationContext(string latestPlayerText)
     {

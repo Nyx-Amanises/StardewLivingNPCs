@@ -542,6 +542,8 @@ ValleyTalk 当前最多会选 20 条样例对白放进 prompt，用来模仿角�
 
 LivingNPCs 侧仍保留 `ConcisePromptContext`（默认关闭）：开启后，LivingNPCs 注入的那份隐藏连续性上下文会改用精简版，从源头进一步压低 prompt 体积。ValleyTalk 还默认启用语义上下文路由（`EnableSemanticContextRouting`），在主请求前用一次轻量判断挑选需要简版或完整版的上下文模块；LivingNPCs 动作二次判定默认启用但不显示在配置菜单中，用来避免隐藏动作和可见对白不一致。
 
+语义路由的**语言边界**：路由本身由小模型做语义判断，不依赖语言；但"同一场对话内话题转移时刷新缓存方案"和"地点/同行话题的确定性提升"这两个廉价启发式，用的是**只认中英文**的关键词表（`ContextRoutingDecisionPass.cs` / `ConversationCues.cs`）。因此：游戏语言为中文或英文以外的语种时，mod 会自动跳过会话内路由缓存、每轮重新做轻量路由——功能不受损，只是每轮多一次小请求；若游戏语言是中英但玩家用第三方语言输入，话题转移检测可能失效，缓存的模块选择会偏保守地沿用到本场对话结束（安全，最多损失一点上下文相关性）。想支持新语言，给上述两个文件的关键词表补词即可。
+
 配合调试日志里的 `promptSections={system, game, npc, core, instructions, command, responseStart}`，可以更清楚地看出一次请求到底是世界设定、角色资料、LivingNPCs 指令，还是当前对话上下文占了主要体积。
 
 ### 11. 聊天记录与可观察性

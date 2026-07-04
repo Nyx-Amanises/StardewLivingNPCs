@@ -7,6 +7,9 @@ namespace ValleyTalk;
 /// Shared conversational-cue vocabulary. The semantic routing fallback and the future-schedule
 /// heuristic both need to spot "where are you going" style player lines; keeping the overlapping
 /// terms here stops the two call sites from drifting apart when one is edited.
+/// Language boundary: these cues cover Chinese/English only, by design. For other game languages
+/// the routing layer compensates by re-routing every turn (see ContextRoutingDecisionPass), and a
+/// missed cue only skips an additive promotion/heuristic — it never blocks a feature.
 /// </summary>
 public static class ConversationCues
 {

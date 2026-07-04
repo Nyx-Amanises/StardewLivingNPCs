@@ -23,6 +23,17 @@ internal static class ContextRoutingDecisionPass
     private static string cachedConversationKey;
     private static ContextRoutingPlan cachedRawPlan;
 
+    // ---- Language boundary ----
+    // The fragment tables below (and ConversationCues) are deliberately Chinese/English only.
+    // They do NOT decide routing itself — that is the router model, which judges meaning in any
+    // language. The tables only gate the cheap deterministic heuristics: refreshing the cached
+    // per-conversation plan on a topic shift, and the per-turn location promotion.
+    // When the game language is neither zh nor en, BuildPlanAsync skips the conversation cache
+    // entirely and routes fresh every turn (see TopicShiftGuardCoversLanguage), so other-language
+    // players lose only the one-router-call-per-conversation optimization, never routing quality.
+    // Remaining gap: a player typing a third language while the game runs in zh/en keeps the
+    // cache, so mid-conversation topic shifts may reuse a stale (safe but narrow) plan until the
+    // next conversation starts. Documented in README「提示词体积」/ "Prompt size" sections.
     private static readonly string[] TopicShiftInquiryFragments =
     [
         "为什么",
@@ -224,7 +235,17 @@ internal static class ContextRoutingDecisionPass
             return deterministic;
         }
 
-        string conversationKey = BuildConversationKey(character, context);
+        // The cached-plan topic-shift guard only reads Chinese/English (fragment tables above).
+        // For any other game language, skip the per-conversation cache and route fresh every turn:
+        // one extra lightweight router call per turn buys correct mid-conversation topic handling.
+        StardewValley.LocalizedContentManager.LanguageCode gameLanguage = GetCurrentLanguageCodeSafe();
+        bool topicGuardCoversLanguage = TopicShiftGuardCoversLanguage(gameLanguage);
+        if (!topicGuardCoversLanguage && ModEntry.Config.Debug)
+        {
+            ModEntry.SMonitor.Log($"Semantic context routing bypasses the conversation cache for {character.Name}: game language '{gameLanguage}' is outside the zh/en topic-shift guard; routing fresh each turn.", StardewModdingAPI.LogLevel.Debug);
+        }
+
+        string conversationKey = topicGuardCoversLanguage ? BuildConversationKey(character, context) : null;
         string cacheBypassReason = string.Empty;
         if (conversationKey != null && TryReuseCachedPlan(conversationKey, context, out ContextRoutingPlan cachedPlan, out cacheBypassReason))
         {
@@ -331,6 +352,31 @@ internal static class ContextRoutingDecisionPass
 
         ExportLog(character.Name, context, "success", routeWatch.ElapsedMilliseconds, timeoutSeconds, parseDetail, plan.DebugLabel(), prompt, response.Text, response.ErrorMessage);
         return plan;
+    }
+
+    /// <summary>
+    /// Whether the zh/en fragment tables at the top of this file can assess player text for this
+    /// game language. All other official languages and custom language packs (LanguageCode.mod)
+    /// return false, which makes <see cref="BuildPlanAsync"/> skip the conversation cache and
+    /// route fresh every turn instead of trusting a stale cached plan it cannot re-check.
+    /// </summary>
+    internal static bool TopicShiftGuardCoversLanguage(StardewValley.LocalizedContentManager.LanguageCode languageCode)
+    {
+        return languageCode is StardewValley.LocalizedContentManager.LanguageCode.en
+            or StardewValley.LocalizedContentManager.LanguageCode.zh;
+    }
+
+    private static StardewValley.LocalizedContentManager.LanguageCode GetCurrentLanguageCodeSafe()
+    {
+        try
+        {
+            return StardewValley.LocalizedContentManager.CurrentLanguageCode;
+        }
+        catch
+        {
+            // Fail open to the historical zh/en cache behavior if game state is unavailable.
+            return StardewValley.LocalizedContentManager.LanguageCode.en;
+        }
     }
 
     private static string BuildConversationKey(Character character, DialogueContext context)
@@ -564,7 +610,7 @@ internal static class ContextRoutingDecisionPass
         string playerText = context.ChatHistory?.LastOrDefault(line => line.IsPlayerLine)?.Text ?? string.Empty;
         string recentHistory = FormatRecentHistory(context);
         var prompt = new StringBuilder();
-        prompt.AppendLine("Choose which context modules are needed for the next NPC reply. The dialogue may be Chinese or English; judge meaning, not keywords.");
+        prompt.AppendLine("Choose which context modules are needed for the next NPC reply. The dialogue may be in any language; judge meaning, not keywords.");
         prompt.AppendLine("Prefer brief unless full context is needed. Never omit safety/core modules by trying to be clever; code will apply hard dependencies after your decision.");
         prompt.AppendLine();
         prompt.AppendLine("Facts:");
