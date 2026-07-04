@@ -101,6 +101,7 @@ internal sealed class BehaviorEngineServices
         companionOutings = new CompanionOutingRuntime(
             config,
             monitor,
+            GameOutingWorldView.Instance,
             this.Memory,
             this.Feedback,
             this.CommunityRipples,

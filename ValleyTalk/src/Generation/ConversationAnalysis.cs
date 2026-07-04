@@ -108,6 +108,7 @@ internal sealed class ConversationAnalysis
         int objectStart = remainder.IndexOf('{');
         if (objectStart < 0)
         {
+            LogParseFailure("no JSON object after marker", remainder);
             return Empty;
         }
 
@@ -116,6 +117,7 @@ internal sealed class ConversationAnalysis
             string jsonText = ExtractBalancedJsonObject(remainder[objectStart..]);
             if (string.IsNullOrWhiteSpace(jsonText))
             {
+                LogParseFailure("unbalanced JSON object after marker", remainder);
                 return Empty;
             }
 
@@ -243,10 +245,30 @@ internal sealed class ConversationAnalysis
                 .ToList();
             return analysis;
         }
-        catch
+        catch (Exception ex)
         {
+            LogParseFailure($"JSON parse error: {ex.Message}", remainder);
             return Empty;
         }
+    }
+
+    /// <summary>
+    /// The metadata marker was present but its payload could not be used. Without this log the
+    /// failure is indistinguishable from "the model sent no metadata at all", which makes prompt
+    /// regressions invisible. Trace level: always in the SMAPI log file, never console noise.
+    /// SMonitor is null under unit tests, where staying silent is fine.
+    /// </summary>
+    private static void LogParseFailure(string reason, string snippet)
+    {
+        string cleaned = (snippet ?? string.Empty).Replace("\r", " ").Replace("\n", " ").Trim();
+        if (cleaned.Length > 200)
+        {
+            cleaned = cleaned[..200] + "...";
+        }
+
+        ModEntry.SMonitor?.Log(
+            $"LivingNPCs metadata block found but not parsed ({reason}). Snippet: {cleaned}",
+            StardewModdingAPI.LogLevel.Trace);
     }
 
     private static string ExtractBalancedJsonObject(string text)

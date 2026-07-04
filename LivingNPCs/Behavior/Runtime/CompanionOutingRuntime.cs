@@ -23,6 +23,7 @@ internal sealed class CompanionOutingRuntime
 
     private readonly ModConfig config;
     private readonly IMonitor monitor;
+    private readonly IOutingWorldView world;
     private readonly BehaviorMemory memory;
     private readonly BehaviorFeedbackService feedback;
     private readonly CommunityRippleRuntime communityRipples;
@@ -36,6 +37,7 @@ internal sealed class CompanionOutingRuntime
     public CompanionOutingRuntime(
         ModConfig config,
         IMonitor monitor,
+        IOutingWorldView world,
         BehaviorMemory memory,
         BehaviorFeedbackService feedback,
         CommunityRippleRuntime communityRipples,
@@ -47,6 +49,7 @@ internal sealed class CompanionOutingRuntime
     {
         this.config = config;
         this.monitor = monitor;
+        this.world = world;
         this.memory = memory;
         this.feedback = feedback;
         this.communityRipples = communityRipples;
@@ -110,7 +113,7 @@ internal sealed class CompanionOutingRuntime
             return false;
         }
 
-        if (!Game1.IsMasterGame)
+        if (!this.world.IsMasterGame)
         {
             // Farmhands cannot drive NPC pathfinding (controller.update only runs on the host),
             // so an outing started there would hang in the traveling phase forever.
@@ -123,7 +126,7 @@ internal sealed class CompanionOutingRuntime
             return false;
         }
 
-        if (Utility.isFestivalDay(Game1.dayOfMonth, Game1.season))
+        if (this.world.IsFestivalToday)
         {
             // Festival-day schedules all lead to the event, and entering the festival would
             // force-stop the outing mid-way; better to decline up front with a clear reason.
@@ -131,7 +134,7 @@ internal sealed class CompanionOutingRuntime
             return false;
         }
 
-        if (Game1.isLightning)
+        if (this.world.IsLightning)
         {
             reason = "a thunderstorm is raging outside";
             return false;
@@ -151,7 +154,7 @@ internal sealed class CompanionOutingRuntime
             return false;
         }
 
-        if (state.LastAiWalkTogetherTotalDays == Game1.Date.TotalDays)
+        if (state.LastAiWalkTogetherTotalDays == this.world.TotalDays)
         {
             reason = "a companion outing was already used today";
             return false;
@@ -167,7 +170,7 @@ internal sealed class CompanionOutingRuntime
             );
         }
 
-        if (!CompanionOutingRules.CanFitMinimumStay(Game1.timeOfDay, plannedStayMinutes))
+        if (!CompanionOutingRules.CanFitMinimumStay(this.world.TimeOfDay, plannedStayMinutes))
         {
             reason = CompanionOutingRules.IsShortVisit(plannedStayMinutes)
                 ? "there is not enough time left today for a short outing"
@@ -203,7 +206,7 @@ internal sealed class CompanionOutingRuntime
                 sourceLocation,
                 activityStyle,
                 action.Reason,
-                Game1.Date.TotalDays,
+                this.world.TotalDays,
                 reservedTiles,
                 out CompanionOutingAnchor? anchor)
             || anchor == null)
@@ -220,7 +223,7 @@ internal sealed class CompanionOutingRuntime
 
         var outing = new PendingCompanionOuting(
             npc.Name,
-            Game1.Date.TotalDays,
+            this.world.TotalDays,
             targetLocation,
             TravelLocationRules.GetLocalizedLabel(targetLocation),
             activityStyle,
@@ -266,7 +269,7 @@ internal sealed class CompanionOutingRuntime
             return false;
         }
 
-        state.LastAiWalkTogetherTotalDays = Game1.Date.TotalDays;
+        state.LastAiWalkTogetherTotalDays = this.world.TotalDays;
         this.memory.RecordNpcWorldAction(
             npc,
             "StartedCompanionOuting",
@@ -311,7 +314,8 @@ internal sealed class CompanionOutingRuntime
             try
             {
                 NPC? npc = Game1.getCharacterFromName(outing.NpcName);
-                if (outing.TotalDays != Game1.Date.TotalDays || npc == null)
+                var plan = CompanionOutingRules.PlanTick(this.world, outing.TotalDays, npc != null, outing.Phase);
+                if (plan == CompanionOutingTickPlan.DropStaleOuting)
                 {
                     // Defensive only: FinalizeForDayEnd clears outings on DayEnding, and vanilla
                     // dayUpdate reloads schedules at dawn anyway. This branch just drops strays.
@@ -328,41 +332,28 @@ internal sealed class CompanionOutingRuntime
                     continue;
                 }
 
-                if (Game1.eventUp || Game1.currentLocation?.currentEvent != null)
+                if (plan is CompanionOutingTickPlan.StopForEventScene or CompanionOutingTickPlan.StopForLateTravel)
                 {
-                    this.Stop(outing, npc, returnToSchedule: true);
+                    this.Stop(outing, npc!, returnToSchedule: true);
                     continue;
                 }
 
-                if (Game1.timeOfDay >= CompanionOutingRules.LatestPlannedStayEndTime
-                    && IsTravelingPhase(outing.Phase))
-                {
-                    // Too late in the day to still be walking there; give up so the NPC can
-                    // head home instead of standing in transit until the forced bedtime.
-                    this.Stop(outing, npc, returnToSchedule: true);
-                    continue;
-                }
-
-                if (Game1.activeClickableMenu != null)
+                if (plan == CompanionOutingTickPlan.WaitForMenu)
                 {
                     continue;
                 }
 
-                NpcTravelRuntime.SuppressSchedule(npc);
-                switch (outing.Phase)
+                NpcTravelRuntime.SuppressSchedule(npc!);
+                switch (plan)
                 {
-                    case CompanionOutingPhase.Traveling:
-                    case CompanionOutingPhase.TravelingToFarmBoundary:
-                    case CompanionOutingPhase.TravelingFromFarmBoundary:
-                        this.UpdateTraveling(npc, outing);
+                    case CompanionOutingTickPlan.AdvanceTravel:
+                        this.UpdateTraveling(npc!, outing);
                         break;
-                    case CompanionOutingPhase.AtDestination:
-                        this.UpdateStay(npc, outing);
+                    case CompanionOutingTickPlan.AdvanceStay:
+                        this.UpdateStay(npc!, outing);
                         break;
-                    case CompanionOutingPhase.Returning:
-                    case CompanionOutingPhase.ReturningToFarmBoundary:
-                    case CompanionOutingPhase.ReturningFromFarmBoundary:
-                        this.UpdateReturning(npc, outing);
+                    default:
+                        this.UpdateReturning(npc!, outing);
                         break;
                 }
             }
@@ -575,14 +566,14 @@ internal sealed class CompanionOutingRuntime
         npc.Halt();
         npc.faceDirection(outing.AnchorFacingDirection);
         outing.Phase = CompanionOutingPhase.AtDestination;
-        outing.ArrivalTimeOfDay = Game1.timeOfDay;
+        outing.ArrivalTimeOfDay = this.world.TimeOfDay;
         // Cap the stay end so a late arrival never pushes it past a reachable time of day
         // (times beyond the latest planned end would otherwise never trigger the return leg).
         outing.StayUntilTimeOfDay = Math.Min(
-            BehaviorTimeMath.AddMinutesToTime(Game1.timeOfDay, outing.PlannedStayMinutes),
+            BehaviorTimeMath.AddMinutesToTime(this.world.TimeOfDay, outing.PlannedStayMinutes),
             CompanionOutingRules.LatestPlannedStayEndTime
         );
-        outing.LastObservedTimeOfDay = Game1.timeOfDay;
+        outing.LastObservedTimeOfDay = this.world.TimeOfDay;
         outing.RouteRetryCount = 0;
 
         var state = this.memory.GetState(npc);
@@ -609,7 +600,7 @@ internal sealed class CompanionOutingRuntime
             return;
         }
 
-        if (Game1.timeOfDay >= outing.StayUntilTimeOfDay)
+        if (this.world.TimeOfDay >= outing.StayUntilTimeOfDay)
         {
             this.BeginReturn(npc, outing);
             return;
@@ -660,21 +651,21 @@ internal sealed class CompanionOutingRuntime
 
     private void AccumulateSharedTime(PendingCompanionOuting outing)
     {
-        if (outing.LastObservedTimeOfDay == Game1.timeOfDay)
+        if (outing.LastObservedTimeOfDay == this.world.TimeOfDay)
         {
             return;
         }
 
         int elapsedMinutes = BehaviorTimeMath.GetElapsedMinutes(
             outing.LastObservedTimeOfDay,
-            Game1.timeOfDay
+            this.world.TimeOfDay
         );
         if (IsPlayerAtLocation(outing.TargetLocation))
         {
             outing.SharedMinutesAtDestination += elapsedMinutes;
         }
 
-        outing.LastObservedTimeOfDay = Game1.timeOfDay;
+        outing.LastObservedTimeOfDay = this.world.TimeOfDay;
     }
 
     private void BeginReturn(NPC npc, PendingCompanionOuting outing)
@@ -959,7 +950,7 @@ internal sealed class CompanionOutingRuntime
     private void PlanSettledEmote(PendingCompanionOuting outing, LivingNpcState? state)
     {
         outing.SettledEmoteNotBeforeTimeOfDay = BehaviorTimeMath.AddMinutesToTime(
-            Game1.timeOfDay,
+            this.world.TimeOfDay,
             CompanionOutingRules.SettledEmoteDelayMinutes
         );
         if (state == null)
@@ -994,9 +985,9 @@ internal sealed class CompanionOutingRuntime
             || outing.SettledEmoteId <= 0
             || !outing.ArrivalRemarkShown
             || !this.config.AllowEmotes
-            || Game1.timeOfDay < outing.SettledEmoteNotBeforeTimeOfDay
-            || Game1.activeClickableMenu != null
-            || Game1.eventUp
+            || this.world.TimeOfDay < outing.SettledEmoteNotBeforeTimeOfDay
+            || this.world.IsMenuOpen
+            || this.world.IsEventActive
             || Game1.player == null
             || Game1.currentLocation != destination
             || Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles + 2)
@@ -1390,9 +1381,9 @@ internal sealed class CompanionOutingRuntime
             && Vector2.Distance(npc.Tile, new Vector2(tile.X, tile.Y)) <= 0.75f;
     }
 
-    private static bool IsPlayerAtLocation(string targetLocation)
+    private bool IsPlayerAtLocation(string targetLocation)
     {
-        string current = BehaviorMemory.NormalizeTravelLocation(Game1.currentLocation?.Name ?? string.Empty, string.Empty);
+        string current = BehaviorMemory.NormalizeTravelLocation(this.world.CurrentLocationName, string.Empty);
         return string.Equals(current, targetLocation, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -1426,9 +1417,9 @@ internal sealed class CompanionOutingRuntime
         }
     }
 
-    private static bool IsProtectedScene(NPC npc, out string reason)
+    private bool IsProtectedScene(NPC npc, out string reason)
     {
-        if (Game1.eventUp || Game1.currentLocation?.currentEvent != null)
+        if (this.world.IsEventActive)
         {
             reason = "companion outings are blocked during events or festivals";
             return true;
@@ -1463,9 +1454,9 @@ internal sealed class CompanionOutingRuntime
         };
     }
 
-    private static string BuildArrivalRemark(string targetLocation, string activityStyle)
+    private string BuildArrivalRemark(string targetLocation, string activityStyle)
     {
-        var tokens = new { time = GetSceneTimePrefix(Game1.timeOfDay) };
+        var tokens = new { time = GetSceneTimePrefix(this.world.TimeOfDay) };
         return targetLocation switch
         {
             "Beach" or "Custom_GrampletonCoast" => I18n.Get("outing.arrival.beach", tokens),
@@ -1486,9 +1477,9 @@ internal sealed class CompanionOutingRuntime
         };
     }
 
-    private static string BuildReturnRemark(string targetLocation, string activityStyle)
+    private string BuildReturnRemark(string targetLocation, string activityStyle)
     {
-        var tokens = new { opening = GetReturnOpening(Game1.timeOfDay) };
+        var tokens = new { opening = GetReturnOpening(this.world.TimeOfDay) };
         return targetLocation switch
         {
             "Beach" or "Custom_GrampletonCoast" => I18n.Get("outing.return.beach", tokens),
@@ -1527,13 +1518,6 @@ internal sealed class CompanionOutingRuntime
             < 2200 => I18n.Get("outing.returnOpening.evening"),
             _ => I18n.Get("outing.returnOpening.lateNight")
         };
-    }
-
-    private static bool IsTravelingPhase(CompanionOutingPhase phase)
-    {
-        return phase is CompanionOutingPhase.Traveling
-            or CompanionOutingPhase.TravelingToFarmBoundary
-            or CompanionOutingPhase.TravelingFromFarmBoundary;
     }
 
     private static bool IsFarmTarget(string locationName)

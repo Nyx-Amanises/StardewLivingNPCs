@@ -19,6 +19,15 @@ internal static class ConversationTranscriptExporter
     private const string ArchiveMarkerPrefix = "<!-- valleytalk:archive ";
     private const string ArchiveEndMarker = "<!-- valleytalk:archive-end -->";
 
+    // Export runs after every recorded conversation line, but only the live tail actually
+    // changes; the archive above it is append-only and unbounded. Remember where the live
+    // section starts (byte offset just past the archive-end marker line and its blank line)
+    // and how many conversations the archive holds, so an ordinary export can truncate and
+    // rewrite the bounded tail without re-reading or re-writing the whole file. Entries are
+    // seeded by full writes and dropped whenever the file is rebuilt or fails validation.
+    private static readonly object LiveSectionGate = new();
+    private static readonly Dictionary<string, (long Offset, int ArchivedCount)> LiveSectionOffsets = new(StringComparer.OrdinalIgnoreCase);
+
     public static string CurrentSaveFolderPath => Path.Combine(
         ModEntry.SHelper.DirectoryPath,
         RootFolderName,
@@ -50,8 +59,13 @@ internal static class ConversationTranscriptExporter
         {
             Directory.CreateDirectory(CurrentSaveFolderPath);
             string filePath = GetTranscriptPath(npcName);
+            if (TryRewriteLiveSectionOnly(filePath, npcName, history))
+            {
+                return;
+            }
+
             var archive = ReadArchiveBlock(filePath);
-            File.WriteAllText(filePath, BuildMarkdown(npcName, history, archive), Encoding.UTF8);
+            WriteFullTranscript(filePath, npcName, history, archive);
         }
         catch (Exception ex)
         {
@@ -73,7 +87,7 @@ internal static class ConversationTranscriptExporter
         try
         {
             Directory.CreateDirectory(CurrentSaveFolderPath);
-            File.WriteAllText(GetTranscriptPath(npcName), BuildMarkdown(npcName, new StardewEventHistory(), new ArchiveBlock()), Encoding.UTF8);
+            WriteFullTranscript(GetTranscriptPath(npcName), npcName, new StardewEventHistory(), new ArchiveBlock());
         }
         catch (Exception ex)
         {
@@ -149,6 +163,9 @@ internal static class ConversationTranscriptExporter
             }
 
             File.WriteAllText(filePath, builder.ToString(), Encoding.UTF8);
+            // The archive grew, so the cached live-section offset is stale; the next Export does
+            // one full pass and re-seeds it.
+            InvalidateLiveSectionOffset(filePath);
         }
         catch (Exception ex)
         {
@@ -161,20 +178,26 @@ internal static class ConversationTranscriptExporter
         return Path.Combine(CurrentSaveFolderPath, $"{GetSafeFileName(npcName)}.md");
     }
 
-    private static string BuildMarkdown(string npcName, StardewEventHistory history, ArchiveBlock archive)
+    /// <summary>
+    /// Rebuild and write the whole transcript file (header, archive block, live section), then
+    /// remember where the live section starts so subsequent exports can rewrite only the tail.
+    /// </summary>
+    private static void WriteFullTranscript(string filePath, string npcName, StardewEventHistory history, ArchiveBlock archive)
     {
-        var builder = new StringBuilder();
-        AppendHeader(builder, npcName);
-
+        bool hasArchive = archive.HasMarkers && archive.Count > 0 && !string.IsNullOrWhiteSpace(archive.Content);
         var transcriptEntries = BuildTranscriptEntries(history)
             .OrderBy(entry => entry.Time)
             .ToList();
 
-        bool hasArchive = archive.HasMarkers && archive.Count > 0 && !string.IsNullOrWhiteSpace(archive.Content);
+        var builder = new StringBuilder();
+        AppendHeader(builder, npcName);
+
         if (!hasArchive && transcriptEntries.Count == 0)
         {
             builder.AppendLine(T("transcriptNoConversations", "No AI conversation records yet."));
-            return builder.ToString();
+            InvalidateLiveSectionOffset(filePath);
+            File.WriteAllText(filePath, builder.ToString(), Encoding.UTF8);
+            return;
         }
 
         builder.AppendLine(BuildArchiveMarker(
@@ -190,6 +213,112 @@ internal static class ConversationTranscriptExporter
         builder.AppendLine();
 
         int archivedCount = hasArchive ? archive.Count : 0;
+        string liveSection = BuildLiveSection(npcName, transcriptEntries, archivedCount);
+        File.WriteAllText(filePath, builder.ToString() + liveSection, Encoding.UTF8);
+
+        long liveOffset = new FileInfo(filePath).Length - Encoding.UTF8.GetByteCount(liveSection);
+        lock (LiveSectionGate)
+        {
+            LiveSectionOffsets[filePath] = (liveOffset, archivedCount);
+        }
+    }
+
+    /// <summary>
+    /// The per-line fast path: truncate the file at the remembered live-section offset and write a
+    /// fresh live section, leaving the unbounded archive bytes above it untouched. Returns false
+    /// (after invalidating the cached offset) whenever the file does not look like what we last
+    /// wrote, in which case the caller falls back to a full rebuild.
+    /// </summary>
+    private static bool TryRewriteLiveSectionOnly(string filePath, string npcName, StardewEventHistory history)
+    {
+        long liveOffset;
+        int archivedCount;
+        lock (LiveSectionGate)
+        {
+            if (!LiveSectionOffsets.TryGetValue(filePath, out var cached))
+            {
+                return false;
+            }
+
+            (liveOffset, archivedCount) = cached;
+        }
+
+        try
+        {
+            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.ReadWrite, FileShare.Read);
+            if (!LiveSectionOffsetIsValid(stream, liveOffset))
+            {
+                InvalidateLiveSectionOffset(filePath);
+                return false;
+            }
+
+            var transcriptEntries = BuildTranscriptEntries(history)
+                .OrderBy(entry => entry.Time)
+                .ToList();
+            string liveSection = BuildLiveSection(npcName, transcriptEntries, archivedCount);
+            stream.SetLength(liveOffset);
+            stream.Seek(0, SeekOrigin.End);
+            using var writer = new StreamWriter(stream, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            writer.Write(liveSection);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            ModEntry.SMonitor?.Log($"Transcript live-section rewrite failed for {npcName}; falling back to a full export: {ex.Message}", StardewModdingAPI.LogLevel.Trace);
+            InvalidateLiveSectionOffset(filePath);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// The cached offset is only trusted when the bytes immediately before it are exactly the
+    /// archive-end marker line plus the blank line we wrote last time. Anything else (external
+    /// edit, different newline convention, truncated file) fails validation and forces a full
+    /// rebuild, which can never lose data.
+    /// </summary>
+    private static bool LiveSectionOffsetIsValid(FileStream stream, long liveOffset)
+    {
+        byte[] expected = Encoding.UTF8.GetBytes(ArchiveEndMarker + Environment.NewLine + Environment.NewLine);
+        if (liveOffset < expected.Length || stream.Length < liveOffset)
+        {
+            return false;
+        }
+
+        stream.Seek(liveOffset - expected.Length, SeekOrigin.Begin);
+        byte[] actual = new byte[expected.Length];
+        int read = 0;
+        while (read < actual.Length)
+        {
+            int chunk = stream.Read(actual, read, actual.Length - read);
+            if (chunk <= 0)
+            {
+                return false;
+            }
+
+            read += chunk;
+        }
+
+        return actual.AsSpan().SequenceEqual(expected);
+    }
+
+    private static void InvalidateLiveSectionOffset(string filePath)
+    {
+        lock (LiveSectionGate)
+        {
+            LiveSectionOffsets.Remove(filePath);
+        }
+    }
+
+    /// <summary>
+    /// The rebuilt-every-export tail: the export stamp plus every conversation still in memory.
+    /// The stamp lives here rather than in the header so the bytes before the live section stay
+    /// stable and the tail-only rewrite can work.
+    /// </summary>
+    private static string BuildLiveSection(string npcName, List<TranscriptEntry> transcriptEntries, int archivedCount)
+    {
+        var builder = new StringBuilder();
+        builder.AppendLine(T("transcriptExportTime", "- Export time: Day {{day}} {{time}}", new { day = Game1.Date.TotalDays, time = Game1.timeOfDay.ToString("0000") }));
+        builder.AppendLine();
         for (int i = 0; i < transcriptEntries.Count; i++)
         {
             AppendConversationSection(builder, transcriptEntries[i], archivedCount + i + 1, npcName);
@@ -203,7 +332,6 @@ internal static class ConversationTranscriptExporter
         builder.AppendLine($"# {npcName}");
         builder.AppendLine();
         builder.AppendLine(T("transcriptSave", "- Save: {{save}}", new { save = Constants.SaveFolderName }));
-        builder.AppendLine(T("transcriptExportTime", "- Export time: Day {{day}} {{time}}", new { day = Game1.Date.TotalDays, time = Game1.timeOfDay.ToString("0000") }));
         builder.AppendLine();
     }
 

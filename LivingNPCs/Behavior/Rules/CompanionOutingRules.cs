@@ -2,6 +2,26 @@ using System;
 
 namespace LivingNPCs.Behavior;
 
+/// <summary>What the outing state machine should do with one pending outing on this tick.</summary>
+internal enum CompanionOutingTickPlan
+{
+    /// <summary>The outing is from another day or its NPC vanished; drop it (restoring the schedule if possible).</summary>
+    DropStaleOuting,
+
+    /// <summary>An event scene started; stop the outing and return the NPC to its schedule.</summary>
+    StopForEventScene,
+
+    /// <summary>Too late in the day to still be walking there; stop so the NPC can head home.</summary>
+    StopForLateTravel,
+
+    /// <summary>A menu is open; leave the outing untouched this tick.</summary>
+    WaitForMenu,
+
+    AdvanceTravel,
+    AdvanceStay,
+    AdvanceReturn
+}
+
 internal static class CompanionOutingRules
 {
     public const int MinimumStayMinutes = 60;
@@ -15,6 +35,55 @@ internal static class CompanionOutingRules
     public const int SettledEmoteDelayMinutes = 20;
     public const int ExclamationEmoteId = 16;
     public const int HeartEmoteId = 20;
+
+    /// <summary>
+    /// The per-tick decision core of the outing state machine, pulled out of
+    /// CompanionOutingRuntime so it can be tested with a fake <see cref="IOutingWorldView"/>.
+    /// Order matters and mirrors the runtime's historical checks: staleness first, then event
+    /// interruption, then the too-late-to-travel abort, then menu pause, then phase dispatch.
+    /// </summary>
+    public static CompanionOutingTickPlan PlanTick(
+        IOutingWorldView world,
+        int outingTotalDays,
+        bool npcExists,
+        CompanionOutingPhase phase)
+    {
+        if (!npcExists || outingTotalDays != world.TotalDays)
+        {
+            return CompanionOutingTickPlan.DropStaleOuting;
+        }
+
+        if (world.IsEventActive)
+        {
+            return CompanionOutingTickPlan.StopForEventScene;
+        }
+
+        if (world.TimeOfDay >= LatestPlannedStayEndTime && IsTravelingPhase(phase))
+        {
+            return CompanionOutingTickPlan.StopForLateTravel;
+        }
+
+        if (world.IsMenuOpen)
+        {
+            return CompanionOutingTickPlan.WaitForMenu;
+        }
+
+        return phase switch
+        {
+            CompanionOutingPhase.Traveling
+                or CompanionOutingPhase.TravelingToFarmBoundary
+                or CompanionOutingPhase.TravelingFromFarmBoundary => CompanionOutingTickPlan.AdvanceTravel,
+            CompanionOutingPhase.AtDestination => CompanionOutingTickPlan.AdvanceStay,
+            _ => CompanionOutingTickPlan.AdvanceReturn
+        };
+    }
+
+    public static bool IsTravelingPhase(CompanionOutingPhase phase)
+    {
+        return phase is CompanionOutingPhase.Traveling
+            or CompanionOutingPhase.TravelingToFarmBoundary
+            or CompanionOutingPhase.TravelingFromFarmBoundary;
+    }
 
     public static string DetermineActivityStyle(string targetLocation, string reason)
     {

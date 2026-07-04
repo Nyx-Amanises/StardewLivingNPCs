@@ -5,6 +5,15 @@ namespace LivingNPCs.Behavior;
 
 internal sealed class BehaviorMemorySaveData
 {
+    /// <summary>
+    /// Version of this save blob's layout. The current format tolerates unknown string values and
+    /// missing fields on its own, so nothing reads this yet — it exists so a future breaking
+    /// layout change has something to migrate on. Blobs written before the field was introduced
+    /// deserialize with the initializer value, which is correct: their layout is version 1.
+    /// </summary>
+    public const int CurrentSchemaVersion = 1;
+
+    public int SchemaVersion { get; set; } = CurrentSchemaVersion;
     public Dictionary<string, List<BehaviorMemoryEntry>> EntriesByNpc { get; set; } = new();
     public Dictionary<string, LivingNpcState> StatesByNpc { get; set; } = new();
     public int LastStateDecayTotalDays { get; set; } = -1;

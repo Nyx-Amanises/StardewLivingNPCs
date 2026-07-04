@@ -379,6 +379,12 @@ internal sealed class BehaviorEngine
 
     private void ProcessPendingBehaviorRequests()
     {
+        // Runs every update tick; skip the LINQ allocation entirely in the common empty case.
+        if (this.pendingRequests.Count == 0)
+        {
+            return;
+        }
+
         foreach (var request in this.pendingRequests.Where(request => request.Task.IsCompleted).ToList())
         {
             this.pendingRequests.Remove(request);

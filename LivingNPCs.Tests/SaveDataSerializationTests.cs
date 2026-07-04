@@ -77,6 +77,20 @@ public sealed class SaveDataSerializationTests
     }
 
     [Fact]
+    public void SaveDataCarriesSchemaVersionAndTreatsLegacyBlobsAsVersionOne()
+    {
+        string json = JsonSerializer.Serialize(new BehaviorMemorySaveData());
+        Assert.Contains("\"SchemaVersion\":1", json);
+
+        // Blobs written before the field existed have exactly the version-1 layout, so a missing
+        // field must deserialize as version 1 rather than 0.
+        var legacy = JsonSerializer.Deserialize<BehaviorMemorySaveData>("{\"LastStateDecayTotalDays\":5}");
+        Assert.NotNull(legacy);
+        Assert.Equal(BehaviorMemorySaveData.CurrentSchemaVersion, legacy!.SchemaVersion);
+        Assert.Equal(5, legacy.LastStateDecayTotalDays);
+    }
+
+    [Fact]
     public void CloneCopiesEveryGiftMailField()
     {
         // Save data is produced via LivingNpcState.Clone(), so any NpcGiftMailFact property the
