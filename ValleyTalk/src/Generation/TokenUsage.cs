@@ -12,7 +12,11 @@ internal sealed class TokenUsage
 
     public int TotalTokens { get; init; }
 
+    /// <summary>Prompt tokens served from the provider's prompt cache (billed at the discounted cache-read rate).</summary>
     public int CachedPromptTokens { get; init; }
+
+    /// <summary>Prompt tokens written into the provider's prompt cache this request (Claude bills these at a premium; other providers report 0).</summary>
+    public int CacheWritePromptTokens { get; init; }
 
     public int ReasoningTokens { get; init; }
 
@@ -47,7 +51,10 @@ internal sealed class TokenUsage
         int promptTokens = usage.Value<int?>("prompt_tokens") ?? 0;
         int completionTokens = usage.Value<int?>("completion_tokens") ?? 0;
         int totalTokens = usage.Value<int?>("total_tokens") ?? promptTokens + completionTokens;
-        int cachedPromptTokens = usage["prompt_tokens_details"]?.Value<int?>("cached_tokens") ?? 0;
+        // OpenAI 系报 prompt_tokens_details.cached_tokens；DeepSeek 旧字段是 prompt_cache_hit_tokens。
+        int cachedPromptTokens = usage["prompt_tokens_details"]?.Value<int?>("cached_tokens")
+            ?? usage.Value<int?>("prompt_cache_hit_tokens")
+            ?? 0;
         int reasoningTokens = usage["completion_tokens_details"]?.Value<int?>("reasoning_tokens") ?? 0;
 
         return new TokenUsage
@@ -73,12 +80,16 @@ internal sealed class TokenUsage
         int cacheCreationTokens = usage.Value<int?>("cache_creation_input_tokens") ?? 0;
         int cacheReadTokens = usage.Value<int?>("cache_read_input_tokens") ?? 0;
 
+        // Claude 的 input_tokens 只含未走缓存的余量；真实 prompt 规模 = 未缓存 + 缓存写入 + 缓存命中。
+        int promptTokens = inputTokens + cacheCreationTokens + cacheReadTokens;
+
         return new TokenUsage
         {
-            PromptTokens = inputTokens,
+            PromptTokens = promptTokens,
             CompletionTokens = outputTokens,
-            TotalTokens = inputTokens + outputTokens,
-            CachedPromptTokens = cacheCreationTokens + cacheReadTokens,
+            TotalTokens = promptTokens + outputTokens,
+            CachedPromptTokens = cacheReadTokens,
+            CacheWritePromptTokens = cacheCreationTokens,
             Source = "provider usage"
         };
     }
@@ -94,6 +105,8 @@ internal sealed class TokenUsage
         int completionTokens = usage.Value<int?>("candidatesTokenCount") ?? 0;
         int totalTokens = usage.Value<int?>("totalTokenCount") ?? promptTokens + completionTokens;
         int reasoningTokens = usage.Value<int?>("thoughtsTokenCount") ?? 0;
+        // Gemini 2.5 系隐式缓存命中时报告 cachedContentTokenCount（已含在 promptTokenCount 内）。
+        int cachedPromptTokens = usage.Value<int?>("cachedContentTokenCount") ?? 0;
 
         return new TokenUsage
         {
@@ -101,6 +114,7 @@ internal sealed class TokenUsage
             CompletionTokens = completionTokens,
             TotalTokens = totalTokens,
             ReasoningTokens = reasoningTokens,
+            CachedPromptTokens = cachedPromptTokens,
             Source = "provider usage"
         };
     }

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq; // Added
 using System.IO;
 using System.Net.Http;
+using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json; // Changed
 using Newtonsoft.Json.Linq; // Added
@@ -33,6 +34,22 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
 
     protected virtual bool AllowInstructionsRequestFallback => false;
 
+    // OpenAI/DeepSeek 等对稳定前缀自动做 prompt caching，无需请求侧声明断点；下面两个开关
+    // 是锦上添花项，且并非所有 OpenAI 兼容端点都认识这些参数，默认关闭、由子类按支持情况开启。
+    // prompt_cache_key：官方 OpenAI 端点按它路由缓存分片——所有 NPC 请求的开头（system+世界摘要）
+    // 完全相同，默认按前缀路由会挤到同一分片，按 NPC 前缀哈希分键可提升命中率。
+    protected virtual bool SendPromptCacheKey => false;
+    // stream_options.include_usage：让流式回包附带真实 usage（含 cached_tokens），替代本地估算。
+    protected virtual bool SendStreamUsageOptions => false;
+
+    private static string BuildPromptCacheKey(string systemPromptString, string gameCacheString, string npcCacheString)
+    {
+        using var sha = SHA256.Create();
+        byte[] hash = sha.ComputeHash(Encoding.UTF8.GetBytes(
+            string.Concat(systemPromptString, "\u0001", gameCacheString, "\u0001", npcCacheString)));
+        return $"valleytalk-{Convert.ToHexString(hash, 0, 8)}";
+    }
+
     private IEnumerable<ChatRequestBody> BuildChatRequestBodies(
         string systemPromptString,
         string gameCacheString,
@@ -43,12 +60,15 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
     {
         string userPrompt = gameCacheString + npcCacheString + promptString;
         string thinkingLevel = LlmThinking.ForCall(disableThinking);
+        string promptCacheKey = SendPromptCacheKey
+            ? BuildPromptCacheKey(systemPromptString, gameCacheString, npcCacheString)
+            : null;
 
         foreach (bool useInstructionsRequest in AllowInstructionsRequestFallback ? new[] { false, true } : new[] { false })
         {
             if (!LlmThinking.IsAuto(thinkingLevel))
             {
-                JObject body = BuildChatRequestBody(systemPromptString, userPrompt, n_predict, thinkingLevel, useInstructionsRequest);
+                JObject body = BuildChatRequestBody(systemPromptString, userPrompt, n_predict, thinkingLevel, useInstructionsRequest, promptCacheKey);
                 string thinkingParameters = LlmThinking.DescribeThinkingParameters(body);
                 yield return new ChatRequestBody(
                     body.ToString(Formatting.None),
@@ -58,7 +78,7 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
                 );
             }
 
-            JObject fallbackBody = BuildChatRequestBody(systemPromptString, userPrompt, n_predict, LlmThinking.Auto, useInstructionsRequest);
+            JObject fallbackBody = BuildChatRequestBody(systemPromptString, userPrompt, n_predict, LlmThinking.Auto, useInstructionsRequest, promptCacheKey);
             yield return new ChatRequestBody(
                 fallbackBody.ToString(Formatting.None),
                 false,
@@ -73,13 +93,19 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         string userPrompt,
         int n_predict,
         string thinkingLevel,
-        bool useInstructionsRequest)
+        bool useInstructionsRequest,
+        string promptCacheKey = null)
     {
         var body = new JObject
         {
             ["model"] = modelName,
             ["max_tokens"] = n_predict
         };
+
+        if (!string.IsNullOrEmpty(promptCacheKey))
+        {
+            body["prompt_cache_key"] = promptCacheKey;
+        }
 
         LlmThinking.AddOpenAiCompatibleThinkingParameters(body, modelName, thinkingLevel);
 
@@ -236,6 +262,14 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
                 BuildMessage("system", systemPromptString),
                 BuildMessage("user", gameCacheString + npcCacheString + promptString))
         };
+        if (SendPromptCacheKey)
+        {
+            requestBody["prompt_cache_key"] = BuildPromptCacheKey(systemPromptString, gameCacheString, npcCacheString);
+        }
+        if (SendStreamUsageOptions)
+        {
+            requestBody["stream_options"] = new JObject { ["include_usage"] = true };
+        }
         LlmThinking.AddOpenAiCompatibleThinkingParameters(
             requestBody,
             modelName,
@@ -268,6 +302,7 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
                 using var reader = new StreamReader(stream);
                 var fullText = new StringBuilder();
                 var rawResponse = new StringBuilder();
+                TokenUsage streamUsage = null;
 
                 while (!reader.EndOfStream)
                 {
@@ -288,7 +323,17 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
                         break;
                     }
 
-                    if (!TryExtractStreamingContent(payload, out string token))
+                    if (!TryExtractStreamingChunk(payload, out string token, out TokenUsage chunkUsage))
+                    {
+                        continue;
+                    }
+
+                    if (chunkUsage != null)
+                    {
+                        streamUsage = chunkUsage;
+                    }
+
+                    if (string.IsNullOrEmpty(token))
                     {
                         continue;
                     }
@@ -301,7 +346,7 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
                 {
                     return new LlmResponse(
                         fullText.ToString(),
-                        usage: TokenUsage.Estimate(
+                        usage: streamUsage ?? TokenUsage.Estimate(
                             string.Concat(systemPromptString, gameCacheString, npcCacheString, promptString, responseStart),
                             fullText.ToString(),
                             "stream estimate"
@@ -370,9 +415,10 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         return new LlmResponse(lastResponse, apiResponseCode);
     }
 
-    private static bool TryExtractStreamingContent(string payload, out string token)
+    private static bool TryExtractStreamingChunk(string payload, out string token, out TokenUsage usage)
     {
         token = string.Empty;
+        usage = null;
         if (string.IsNullOrWhiteSpace(payload))
         {
             return false;
@@ -382,7 +428,17 @@ internal abstract class LlmOpenAiBase : Llm, IStreamingLlm
         {
             var json = JObject.Parse(payload);
             token = json["choices"]?[0]?["delta"]?["content"]?.ToString() ?? string.Empty;
-            return !string.IsNullOrEmpty(token);
+            // stream_options.include_usage 的收尾块（choices 为空）以及 DeepSeek/Mistral 默认的
+            // 末块会带真实 usage，取到后替代本地估算。
+            if (json["usage"] is JObject usageJson)
+            {
+                TokenUsage parsed = TokenUsage.FromOpenAiUsage(usageJson);
+                if (parsed.HasAnyTokens)
+                {
+                    usage = parsed;
+                }
+            }
+            return !string.IsNullOrEmpty(token) || usage != null;
         }
         catch
         {

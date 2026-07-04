@@ -49,6 +49,7 @@ internal sealed class TokenUsageTracker
             CompletionTokens = usage.CompletionTokens,
             TotalTokens = usage.TotalTokens,
             CachedPromptTokens = usage.CachedPromptTokens,
+            CacheWritePromptTokens = usage.CacheWritePromptTokens,
             ReasoningTokens = usage.ReasoningTokens,
             IsEstimated = usage.IsEstimated,
             Source = usage.Source,
@@ -192,15 +193,15 @@ internal sealed class TokenUsageTracker
         builder.AppendLine();
         builder.AppendLine("## Recent requests");
         builder.AppendLine();
-        builder.AppendLine("| Time | NPC | Model | Prompt | Output | Total | Kind |");
-        builder.AppendLine("| --- | --- | --- | ---: | ---: | ---: | --- |");
+        builder.AppendLine("| Time | NPC | Model | Prompt | Cached | Output | Total | Kind |");
+        builder.AppendLine("| --- | --- | --- | ---: | ---: | ---: | ---: | --- |");
         foreach (var entry in this.saveLedger.RecentEntries)
         {
             string time = entry.Year > 0
                 ? $"Y{entry.Year} {entry.Season} {entry.DayOfMonth} {entry.TimeOfDay}"
                 : entry.RecordedAtUtc.ToString("yyyy-MM-dd HH:mm:ss");
             string kind = entry.IsEstimated ? "estimated" : "official";
-            builder.AppendLine($"| {time} | {entry.NpcName} | {entry.Provider}/{entry.ModelName} | {entry.PromptTokens} | {entry.CompletionTokens} | {entry.TotalTokens} | {kind} |");
+            builder.AppendLine($"| {time} | {entry.NpcName} | {entry.Provider}/{entry.ModelName} | {entry.PromptTokens} | {entry.CachedPromptTokens} | {entry.CompletionTokens} | {entry.TotalTokens} | {kind} |");
         }
 
         return builder.ToString();
@@ -221,7 +222,10 @@ internal sealed class TokenUsageTracker
 
     private string FormatTotals(TokenUsageTotals totals)
     {
-        return $"{totals.TotalTokens} total ({totals.PromptTokens} prompt + {totals.CompletionTokens} output; {totals.OfficialTokens} official, {totals.EstimatedTokens} estimated; cached prompt {totals.CachedPromptTokens}; reasoning {totals.ReasoningTokens})";
+        string cacheHitRate = totals.PromptTokens > 0
+            ? $" ({totals.CachedPromptTokens * 100.0 / totals.PromptTokens:0.#}% hit)"
+            : string.Empty;
+        return $"{totals.TotalTokens} total ({totals.PromptTokens} prompt + {totals.CompletionTokens} output; {totals.OfficialTokens} official, {totals.EstimatedTokens} estimated; cache read {totals.CachedPromptTokens}{cacheHitRate}, cache write {totals.CacheWritePromptTokens}; reasoning {totals.ReasoningTokens})";
     }
 }
 
@@ -274,6 +278,8 @@ internal sealed class TokenUsageTotals
 
     public long CachedPromptTokens { get; set; }
 
+    public long CacheWritePromptTokens { get; set; }
+
     public long ReasoningTokens { get; set; }
 
     public long OfficialTokens { get; set; }
@@ -286,6 +292,7 @@ internal sealed class TokenUsageTotals
         this.CompletionTokens += entry.CompletionTokens;
         this.TotalTokens += entry.TotalTokens;
         this.CachedPromptTokens += entry.CachedPromptTokens;
+        this.CacheWritePromptTokens += entry.CacheWritePromptTokens;
         this.ReasoningTokens += entry.ReasoningTokens;
 
         if (entry.IsEstimated)
@@ -316,6 +323,8 @@ internal sealed class TokenUsageEntry
     public int TotalTokens { get; set; }
 
     public int CachedPromptTokens { get; set; }
+
+    public int CacheWritePromptTokens { get; set; }
 
     public int ReasoningTokens { get; set; }
 

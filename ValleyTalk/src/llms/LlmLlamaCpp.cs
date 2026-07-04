@@ -44,6 +44,8 @@ internal class LlmLlamaCpp : Llm
             prompt = fullPrompt,
             n_predict = n_predict,
             stream = false,
+            // 让 llama.cpp 服务端保留上次请求的 KV cache，前缀相同的部分免重算（老版本默认关闭）。
+            cache_prompt = true,
             temperature = n_predict == 1 ? 0 : 1.5,
             top_p = 0.88,
             min_p = 0.05,

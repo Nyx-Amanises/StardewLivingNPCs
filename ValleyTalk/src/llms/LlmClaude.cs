@@ -30,7 +30,8 @@ internal class LlmClaude : Llm, IGetModelNames
         url = "https://api.anthropic.com/v1/messages";
         
         this.apiKey = apiKey;
-        this.modelName = modelName ?? "claude-3-5-haiku-latest";
+        // claude-3-5-haiku 已于 2026-02 退役（404）；haiku-4-5 是当前最便宜的同档替代。
+        this.modelName = modelName ?? "claude-haiku-4-5";
     }
 
     public Dictionary<string,string> CacheContexts { get; private set; } = new Dictionary<string, string>();
@@ -44,6 +45,7 @@ internal class LlmClaude : Llm, IGetModelNames
         // Cache breakpoint 1: the static world summary (system). Breakpoint 2: the per-NPC
         // biography/samples, kept in the user turn but split into its own cache_control block so
         // repeated turns with the same NPC reuse it. The variable prompt tail stays uncached.
+        // 注意：低于模型最小可缓存前缀（Haiku 4.5 为 4096 token）的断点会被静默忽略，不报错。
         object userContent = string.IsNullOrEmpty(npcCacheString)
             ? promptString
             : new object[]
@@ -101,11 +103,11 @@ internal class LlmClaude : Llm, IGetModelNames
             try
             {
                 // Use Android-compatible network helper with Claude-specific headers
+                // Prompt caching 已 GA，无需 beta 头；缓存断点通过请求体里的 cache_control 声明。
                 var headers = new Dictionary<string, string>
                 {
                     { "x-api-key", apiKey },
-                    { "anthropic-version", "2023-06-01" },
-                    { "anthropic-beta", "prompt-caching-2024-07-31" }
+                    { "anthropic-version", "2023-06-01" }
                 };
                 responseString = await NetworkHelper.MakeRequestWithCustomHeadersAsync(fullUrl, inputString, headers);
                 var responseJson = JObject.Parse(responseString);
