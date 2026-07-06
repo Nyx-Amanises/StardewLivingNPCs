@@ -449,6 +449,19 @@ SVE 扩展包（`dandm1.ValleyTalkSVE`，文件夹 `ValleyTalk for SVE`）全部
    新世界转正为可配置项，还是维持内部常量？本文按"维持"编写。
 4. 旧 `BioData` 从 SMAPI Translation 取性别词但旧 mod 无 i18n 文件夹，
    实际是占位串（潜在 bug，`Gender` 资产字段的覆盖口从未真正生效）。
+
+### 裁决（2026-07-06，Yuki + 架构侧，全部落定）
+
+1. `GetPromptSkeleton` 已由 01 §2 裁决：增加 `PromptVariant variant = default`
+   参数（携带 NPC 性别与 optimized 开关），不再需要 NpcBio 重载。
+2. 三字段合并方案**照 §3.1 执行**（Yuki 授权架构侧拍板）：`EnableMod`→新字段
+   `EnableDialogueEngine`；`Debug` 合一取逻辑或；`EnableSveCompatibility` 合一
+   取逻辑与。
+3. `EnableLivingNpcActionDecisionPass` 两字段**维持内部常量**（按本文编写）。
+4. 性别词修复按正文钉死的新行为实现（真 i18n 化，`Gender` 覆盖口生效）。
+5. 增补（来自 WP11 裁决 6）：新装默认 `Provider = "OpenAiCompatible"`；
+   （来自 WP14 裁决 5）：新增 `LegacyConfigImported` bool 字段，不进 GMCM；
+   （来自 WP11 裁决 2）：熔断 i18n 键 `dialogue.breaker.auth`、`dialogue.breaker.rate`。
    新实现按 §3.4 改从提示词表取——行为变化已在文中钉死，请知悉。
 5. 01 §1 列了 `i18n/fr.json`，但旧 fr 译文属上游文本衍生不可搬运；
    fr 只能从新 en/zh 重新翻译（可后补），首发是否必须带 fr 请用户裁决。

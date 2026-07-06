@@ -518,6 +518,18 @@ GameLaunched 中：`helper.ModRegistry.IsLoaded("dandm1.ValleyTalk")` 为真 →
 7. `PermitAiUse` 白名单常量（旧代码有一个空的许可 ID 数组）是否保留硬编码白名单
    机制，还是纯 manifest 字段驱动。
 
+### 裁决（2026-07-06，Yuki + 架构侧，全部落定）
+
+1. P2 采用**方案 B（P11 集中拦截）**，弃栈帧探测；30 号验收冒烟 1/3 项须专门
+   验证旁听与事件台词记录不漏（此为方案 B 的已知风险点）。
+2. P14 **一律改异步占位**；冒烟发现清晨配偶排队台词效果差再回头议。
+3. 控制台命令改名 `livingnpcs_*`（Yuki 裁决），**不保留** `valleytalk_*` 别名。
+4. Android 本版**不加**新入口（非回归，0.2.0 范围外，记入 backlog）。
+5. 流式窗按 WP10 裁决（保持现状行为面：原生对话框流式；`StreamingDialogueWindow`
+   搬运保留但不接线）。
+6. `finishedLastDialogue` 反射：先省略，验收期发现 UI 异常再加回。
+7. 废除硬编码白名单，纯 manifest/内容字段驱动。
+
 ## 9. 审计索引（功能描述 ↔ 旧代码出处）
 
 | 本文档节 | 旧文件:行 |

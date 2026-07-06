@@ -320,6 +320,18 @@ config.json 字段的语义与新旧字段映射表属 WP15，本包只负责"�
 5. 旧 config 合入条件"新 config 从未配置过"用什么判据（ApiKey 为空？专门的 firstRun 标志？）
    ——与 WP15 联合裁决。
 
+### 裁决（2026-07-06，Yuki + 架构侧，全部落定）
+
+1. **旧存档键永不自动删除**（Yuki 裁决，支持回滚），仅提供 purge 控制台命令
+   （命令名按 WP12 裁决 3 用 `livingnpcs_` 前缀）。
+2. `valleytalk:archive` 归档标记**保留**（机器标记，零成本兼容旧转录）。
+3. `conversation_logs` 之外的诊断日志**不搬**。
+4. 未匹配 NPC 的旧历史键**留待补迁**，不做强行迁移命令。
+5. 判据裁决：新 config 增加 `LegacyConfigImported`（bool，默认 false，不进 GMCM）。
+   首次启动若为 false：尝试导入旧 config（仅填充仍等于默认值的字段），无论是否
+   找到旧文件均置 true 写回。避免以 ApiKey 为空做判据（用户可能故意留空）。
+   WP15 落表。
+
 ## 9. 审计索引（撰写本文档时核对过的位置）
 
 - ValleyTalk/src/EventHistoryReader.cs:20-44（主机缓存/farmhand 文件分流、Saving 落盘）、

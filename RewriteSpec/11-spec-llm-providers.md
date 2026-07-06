@@ -366,13 +366,14 @@ thinkingConfig（可能为 null）；`DescribeThinkingParameters(JObject)` 生�
 | 禁用引擎 | （现状）仅"引擎禁用"标志位，切换提供商时清除 | 生成入口检查该标志 | — |
 
 **永不重试**的场景：连接自检（避免启动期反复打端点）、流式链的非流式兜底
-（外层已有预算）。**没有任何 HTTP 状态码会自动禁用引擎**（含 401/429）——失败
-一律留给下次交互重试，这是现状语义，保留；是否对连续 401 做熔断见开放问题。
+（外层已有预算）。旧世界没有任何 HTTP 状态码会自动禁用引擎（含 401/429）；
+**新世界加熔断**，语义见 §8 裁决 2。
 
 ## 5. 新类型与接口建议
 
 实现 01 §2 的 `ILlmClient`（成员钉死：`ProviderId`、`CompleteAsync(LlmRequest, ct)`、
-`StreamAsync(LlmRequest, ct) → IAsyncEnumerable<string>`）。建议的配套类型
+`StreamAsync(LlmRequest, ct) → IAsyncEnumerable<LlmStreamEvent>`——事件流含文本增量
+与末尾 Usage 事件，01 §2 已裁决）。建议的配套类型
 （字段名可由 WP10 最终裁定，冲突以 WP10 为准）：
 
 - `LlmRequest`：`SystemPrompt`、`StableContext`（稳定世界段）、`NpcContext`、
@@ -386,9 +387,9 @@ thinkingConfig（可能为 null）；`DescribeThinkingParameters(JObject)` 生�
 - `LlmClientFactory`：静态注册表（键大小写不敏感）+ 显式构造 switch；对外
   `TryCreate(config) → ILlmClient?`。全局"当前客户端"的持有与切换（含自检触发、
   陈旧自检防护）建议放引擎侧一个 `LlmClientHost`，WP11 提供、WP10 消费。
-- **流式 usage 的传递**：`StreamAsync` 只产出文本增量，真实 usage 建议由
-  `LlmClientHost` 在流结束后通过事件/回调交给 WP14 的用量统计（旧世界流式方法
-  直接返回带 usage 的完整响应）。方案待用户裁决，见开放问题 3。
+- **流式 usage 的传递**：已裁决（01 §2）——`StreamAsync` 产出 `LlmStreamEvent`
+  事件流，文本增量之后以一条 Usage 事件收尾（携带流内真实 usage 或估算值，
+  `Source` 标注口径），WP10/WP14 直接消费，无需 Host 层旁路。
 - 无流式能力的提供商（Anthropic/Google/VolcEngine/LlamaCpp/Dummy）：`StreamAsync`
   内部调 `CompleteAsync`，把全文作为单个增量 yield 一次——调用方无需感知差异，
   搬运的 `IStreamingLlm` 即可删除。
@@ -453,6 +454,21 @@ thinkingConfig（可能为 null）；`DescribeThinkingParameters(JObject)` 生�
 6. `Provider` 配置默认值 `"Mistral"` + `ServerAddress` 默认 openrouter 地址是历史
    遗留组合（Mistral 客户端并不读 ServerAddress）。迁移期是否把默认 Provider 改为
    更合理的值由 WP15 与用户定，本包不动语义。
+
+### 裁决（2026-07-06，Yuki + 架构侧，全部落定）
+
+1. llama.cpp 改**有限 3 次重试**（采纳本文裁定）。
+2. **加熔断**（Yuki 裁决）：同一 provider 连续同类致命错误触发挂起——
+   **401/403 连续 2 次**：挂起引擎直至配置变更（GMCM 保存或 config 重载）才复位，
+   密钥不会自愈，不做定时恢复；**429 连续 5 次**：冷却 **10 分钟**（现实时间）后
+   自动恢复。挂起期间生成入口直接回退原版台词；触发时一次性 HUD 提示 + SMAPI
+   error 日志（i18n 键归 WP15：`dialogue.breaker.auth`、`dialogue.breaker.rate`）。
+   任何一次成功响应清零计数；连接自检不计入熔断统计。
+3. 流式 usage：01 §2 已裁决为 `LlmStreamEvent` 事件流，§5 已同步。
+4. Gemini 流式不补，保持行为面等价。
+5. User-Agent 与缓存键前缀**改名**（`LivingNPCs/<版本>`、`livingnpcs-` 前缀）。
+6. 新装默认 `Provider = "OpenAiCompatible"`（与默认 openrouter ServerAddress 组合
+   自洽）；迁移用户按 WP14 导入旧值不受影响。WP15 落表。
 
 ## 9. 审计索引（行为点 → 旧代码 file:line）
 

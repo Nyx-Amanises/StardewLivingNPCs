@@ -355,6 +355,14 @@ ConversationStartRecorder.cs:301-305）只进推送文本，`BuildPromptContext(
    （`EnableAiGiftMail`、`EnableMemoryImpressions`），只需把它们对桥连接的判定改为对
    引擎可用性的判定。
 
+### 裁决（2026-07-06，Yuki + 架构侧，全部落定）
+
+1. 即时线索：**下一次生成消费后即清 + 当日结束兜底清**（采纳建议）。
+2. `RecordExchange` 维持 `analysisJson` 字符串形态（采纳建议）。
+3. 0.2.0 **内化**，不发布公共 API；`LivingNPCsApi` 删除，设计意图已记录于此。
+4. `ValleyTalk*` 类型/文件名 0.2.0 **不改名**，发布后做一次纯重命名提交（采纳建议）。
+5. 拆为"行为上下文注入"单开关（采纳建议）；开关名与 GMCM 归属由 WP15 落表。
+
 ## 9. 审计索引（file:line，撰写时点）
 
 - ValleyTalk/src/Interop/IValleyTalkInterface.cs:3-15（接口全貌）
