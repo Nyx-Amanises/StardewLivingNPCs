@@ -18,6 +18,16 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(GamePath)\smapi-internal\0Harmony.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(GamePath)\smapi-internal\Newtonsoft.Json.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
     <!-- Metadata value-domain rules shared with the ValleyTalk fork (single source of truth for both parsers). -->
     <Compile Include="..\Shared\LivingNpcMetadataRules.cs" Link="Shared\LivingNpcMetadataRules.cs" />
   </ItemGroup>

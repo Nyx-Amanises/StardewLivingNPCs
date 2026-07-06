@@ -94,3 +94,21 @@ fr-FR/zh-CN 译文，属上游文本的衍生）、`ContentPack/i18n/default.jso
 - `grep -r "namespace ValleyTalk" LivingNPCs/` 零结果；
 - `LivingNPCs.Tests` 可运行（Skip 的测试有 WP 归属注释）；
 - 全程未打开清单外的 ValleyTalk 文件（对话记录可审计）。
+
+## 7. 实现记录（2026-07-06，Stage A）
+
+- 已按 §2/§3 将允许搬运的对话相关源码落位到 `LivingNPCs/Dialogue/{Engine,Llm,Ui,GameHooks,Persistence,Diagnostics}`，命名空间改为 `LivingNPCs.Dialogue.*`。
+- 已复制原创测试到 `LivingNPCs.Tests/Dialogue/` 并改为新命名空间；其中 `ContextRoutingPlanTests.PromptOptimizationAndRoutingConfigKeysAreLocalizedAndInjected` 标记为 `WP15-TODO` skip，因为提示词、配置与 i18n 资产会在 WP15 重写，Stage A 不读取旧内容资产。
+- 新增过渡门面 `DialogueServices` 以及 `LegacyStubs`/`LegacyLlmStubs`，用于替代旧静态入口并让后续 WP10/WP11/WP12 接管未实现接口。
+- `LivingNPCs/ModEntry.cs` 已初始化 `DialogueServices`；`LivingNPCs/LivingNPCs.csproj` 与测试工程已补齐本阶段编译所需的 SMAPI/Stardew/Harmony/Newtonsoft 引用。
+- 为满足 Stage A 命名空间验收，旧 LivingNPCs 互操作接口已从 `namespace ValleyTalk` 移到 `LivingNPCs.Interop`。旧桥接整体删除与进程内直连由 WP16 处理。
+- 新搬运模块中的用户可见/日志标题已从 `ValleyTalk` 改为 `LivingNPCs`；测试注释中保留的旧名仅用于标注 WP15 旧资产迁移来源。
+- `LlmThinking.DescribeThinkingParameters` 避免依赖运行时缺失的 Newtonsoft.Json `JToken.ToString(Formatting)`/`WriteTo(JsonWriter)` 重载，改用本地紧凑化辅助函数。
+
+验证：
+
+- `dotnet test LivingNPCs.Tests\LivingNPCs.Tests.csproj`：通过 262，跳过 1，失败 0；仍有搬运文件的 nullable 警告，后续工作包可逐步清理。
+- `rg -n "namespace ValleyTalk|using ValleyTalk|\[ValleyTalk\]" LivingNPCs LivingNPCs.Tests`：零结果。
+- `rg -n "ValleyTalk" LivingNPCs\Dialogue LivingNPCs.Tests\Dialogue`：仅剩测试注释/skip 测试中的旧资产路径说明，无新模块运行时代码命中。
+
+洁净室记录：本阶段实现未打开清单外的 `ValleyTalk/`、`ValleyTalk.Tests/`、`upstream-ValleyTalk/` 源文件；后续实现应继续只读取 RewriteSpec、LivingNPCs、Shared、LivingNPCs.Tests 与已经落位的新目录。

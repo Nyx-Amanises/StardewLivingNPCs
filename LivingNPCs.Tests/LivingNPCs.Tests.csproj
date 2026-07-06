@@ -5,6 +5,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <IsPackable>false</IsPackable>
+    <GamePath>D:\SteamLibrary\steamapps\common\Stardew Valley</GamePath>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,5 +19,24 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LivingNPCs\LivingNPCs.csproj" AdditionalProperties="EnableModDeploy=false;EnableModZip=false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Stardew Valley">
+      <HintPath>$(GamePath)\Stardew Valley.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="StardewValley.GameData">
+      <HintPath>$(GamePath)\StardewValley.GameData.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Newtonsoft.Json">
+      <HintPath>$(GamePath)\smapi-internal\Newtonsoft.Json.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="StardewModdingAPI">
+      <HintPath>$(GamePath)\StardewModdingAPI.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
   </ItemGroup>
 </Project>

@@ -1,4 +1,5 @@
 using LivingNPCs.Behavior;
+using LivingNPCs.Dialogue;
 using StardewModdingAPI;
 
 namespace LivingNPCs;
@@ -18,6 +19,7 @@ public sealed class ModEntry : Mod
     public override void Entry(IModHelper helper)
     {
         I18n.Init(helper.Translation);
+        DialogueServices.Initialize(helper, Monitor);
         this.config = helper.ReadConfig<ModConfig>();
         ActiveConfig = this.config;
         ModCompatibility.Initialize(helper.ModRegistry);

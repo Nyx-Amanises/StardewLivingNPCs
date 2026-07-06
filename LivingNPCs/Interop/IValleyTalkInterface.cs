@@ -1,6 +1,6 @@
 using StardewValley;
 
-namespace ValleyTalk;
+namespace LivingNPCs.Interop;
 
 public interface IValleyTalkInterface
 {

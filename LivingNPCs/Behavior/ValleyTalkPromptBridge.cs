@@ -1,3 +1,4 @@
+using LivingNPCs.Interop;
 using StardewModdingAPI;
 using StardewValley;
 using SObject = StardewValley.Object;
@@ -12,7 +13,7 @@ internal sealed class ValleyTalkPromptBridge
     private readonly IModHelper helper;
     private readonly IMonitor monitor;
     private readonly ModConfig config;
-    private ValleyTalk.IValleyTalkInterface? api;
+    private IValleyTalkInterface? api;
 
     public ValleyTalkPromptBridge(IModHelper helper, IMonitor monitor, ModConfig config)
     {
@@ -28,7 +29,7 @@ internal sealed class ValleyTalkPromptBridge
             return;
         }
 
-        this.api = this.helper.ModRegistry.GetApi<ValleyTalk.IValleyTalkInterface>(ValleyTalkUniqueId);
+        this.api = this.helper.ModRegistry.GetApi<IValleyTalkInterface>(ValleyTalkUniqueId);
         if (this.api == null)
         {
             this.monitor.Log(I18n.Get("log.bridge.valleyTalkMissing"), LogLevel.Info);
