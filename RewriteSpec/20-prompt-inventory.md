@@ -541,3 +541,20 @@ Gift Response / ## LivingNPCs Immediate Help Request Delivery / ## Active Compan
 2. 法语 = **仅 UI i18n 文案**（i18n/fr.json 只覆盖界面字符串）；提示词骨架与传记
    不做法语版，法语玩家走"翻译指令模式"（本文语言策略节）。
 3. 传记中文版按**平行目录**交付。
+
+## 实现记录（2026-07-06，WP20 提示词骨架 + 世界观）
+
+- 范围：完成提示词骨架英文/中文两套与世界观综述原版完整/精简、SVE 附加完整/精简；未做 NPC 传记（另一个 WP20 对话负责）。
+- 交付文件：
+  - `LivingNPCs/assets/dialogue/prompts/default.json`
+  - `LivingNPCs/assets/dialogue/prompts/zh.json`
+  - `LivingNPCs/assets/dialogue/prompts/key-map.json`
+  - `LivingNPCs/assets/dialogue/world/GameSummary.json`
+  - `LivingNPCs/assets/dialogue/world/GameSummaryOptimized.json`
+  - `LivingNPCs/assets/dialogue/world-sve/GameSummary.json`
+  - `LivingNPCs/assets/dialogue/world-sve/GameSummaryOptimized.json`
+  - `tools/generate_wp20_dialogue_assets.cjs`
+- SVE 世界观附加集：01/15 尚未给出明确磁盘名，本次按 `bios-sve/` 的并行约定暂放 `world-sve/`，供 WP15 接入时决定是否沿用或改名。
+- 键名更名：`nonSpouseFreindshipStrangers -> nonSpouseFriendshipStrangers`、`specialDatesWInter1 -> specialDatesWinter1`，映射写入 `prompts/key-map.json`；生成的 prompts 中不保留旧拼写键。
+- 自检：7 个 JSON 文件均可严格解析；英文/中文 prompts 均为 323 键且键集一致；6 个 `instructionsLivingNpc*Optimized` 均存在；世界观计数为原版 Locations=23、Villagers=32、Festivals=8、Seasons=4，精简版 Locations=17，SVE Locations=6、Villagers=23；关键隐藏格式锚点 `!LIVINGNPCS_META`、`#$b#`、`$h`、`% `、`@`、`travelConsent` 均存在。
+- 素材来源：Stardew Valley Wiki / Stardew Valley Expanded Wiki；未阅读 `ValleyTalk/`、`ValleyTalk.Tests/`、`upstream-ValleyTalk/` 旧源码或旧文本。

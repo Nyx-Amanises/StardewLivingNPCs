@@ -1,0 +1,167 @@
+{
+  "SectionOrder": {
+    "Locations": true,
+    "Villagers": true
+  },
+  "Locations": {
+    "Text": "SVE adds places that widen the valley beyond the original town.",
+    "Entries": {
+      "BlueMoonVineyard": {
+        "id": "BlueMoonVineyard",
+        "Name": "Blue Moon Vineyard",
+        "Description": "Sophia's vineyard home, with grape work, kegs, sewing, and quiet grief.",
+        "Region": "Pelican Town"
+      },
+      "CindersapForest": {
+        "id": "CindersapForest",
+        "Name": "Cindersap Forest",
+        "Description": "The forest expands with Fairhaven Farm, Aurora Vineyard, West Cindersap, and more magical routes.",
+        "Region": "Cindersap Forest"
+      },
+      "FairhavenFarm": {
+        "id": "FairhavenFarm",
+        "Name": "Fairhaven Farm",
+        "Description": "Andy's isolated Cindersap farm, marked by stubborn independence and loneliness.",
+        "Region": "Cindersap Forest"
+      },
+      "AuroraVineyard": {
+        "id": "AuroraVineyard",
+        "Name": "Aurora Vineyard",
+        "Description": "An abandoned, magical vineyard tied to Junimos and Apples.",
+        "Region": "Cindersap Forest"
+      },
+      "Grampleton": {
+        "id": "Grampleton",
+        "Name": "Grampleton",
+        "Description": "A larger neighboring region east of town, beyond everyday Pelican Town routines.",
+        "Region": "East of Pelican Town"
+      },
+      "Highlands": {
+        "id": "Highlands",
+        "Name": "Highlands",
+        "Description": "A remote, dangerous adventure region tied to Lance and late-game exploration.",
+        "Region": "Mountain"
+      }
+    }
+  },
+  "Villagers": {
+    "Text": "These residents belong to the SVE version of the valley.",
+    "Entries": {
+      "Alesia": {
+        "id": "Alesia",
+        "Name": "Alesia",
+        "Description": "A seasoned Castle Village adventurer tied to the wider dangerous world."
+      },
+      "Andy": {
+        "id": "Andy",
+        "Name": "Andy",
+        "Description": "A lonely Fairhaven farmer, stubborn, Joja-leaning, and often at the saloon."
+      },
+      "Apples": {
+        "id": "Apples",
+        "Name": "Apples",
+        "Description": "A Junimo tied to Aurora Vineyard and gentle forest magic."
+      },
+      "Camilla": {
+        "id": "Camilla",
+        "Name": "Camilla",
+        "Description": "A powerful witch whose concerns reach beyond ordinary Pelican Town routines."
+      },
+      "Claire": {
+        "id": "Claire",
+        "Name": "Claire",
+        "Description": "A reserved commuter cashier with dreams beyond retail, fond of books, dance, films, and birds."
+      },
+      "Gunther": {
+        "id": "Gunther",
+        "Name": "Gunther",
+        "Description": "The museum curator as an active resident, scholarly and patient."
+      },
+      "Hank": {
+        "id": "Hank",
+        "Name": "Hank",
+        "Description": "A side resident in the expanded town social web; use cautiously unless context adds detail."
+      },
+      "Henchman": {
+        "id": "Henchman",
+        "Name": "Henchman",
+        "Description": "A guarded figure around the Witch's Swamp and magical boundaries."
+      },
+      "Isaac": {
+        "id": "Isaac",
+        "Name": "Isaac",
+        "Description": "A hardened adventurer from the dangerous world beyond the valley."
+      },
+      "Jadu": {
+        "id": "Jadu",
+        "Name": "Jadu",
+        "Description": "A magical outsider connected to SVE's broader world."
+      },
+      "Jolyne": {
+        "id": "Jolyne",
+        "Name": "Jolyne",
+        "Description": "A Castle Village figure from the broader adventuring network."
+      },
+      "Lance": {
+        "id": "Lance",
+        "Name": "Lance",
+        "Description": "A disciplined adventurer and marriage candidate tied to distant expeditions."
+      },
+      "Marlon": {
+        "id": "Marlon",
+        "Name": "Marlon",
+        "Description": "The Adventurer's Guild leader, scarred, practical, and tied to the valley's dangers."
+      },
+      "Martin": {
+        "id": "Martin",
+        "Name": "Martin",
+        "Description": "A polite countryside teen employee who visits town for work and library books."
+      },
+      "Morgan": {
+        "id": "Morgan",
+        "Name": "Morgan",
+        "Description": "A young magic student connected to the Wizard, curious and still learning."
+      },
+      "Morris": {
+        "id": "Morris",
+        "Name": "Morris",
+        "Description": "JojaMart's ambitious manager, corporate and image-conscious."
+      },
+      "Olivia": {
+        "id": "Olivia",
+        "Name": "Olivia",
+        "Description": "A wealthy retiree and Victor's mother, fond of wine, food, painting, yoga, and status."
+      },
+      "Peaches": {
+        "id": "Peaches",
+        "Name": "Peaches",
+        "Description": "A minor magical-side character; mention only when context makes it natural."
+      },
+      "Scarlett": {
+        "id": "Scarlett",
+        "Name": "Scarlett",
+        "Description": "Sophia's close friend and a steady emotional support in her life."
+      },
+      "Sophia": {
+        "id": "Sophia",
+        "Name": "Sophia",
+        "Description": "The shy Blue Moon Vineyard owner, fond of anime, manga, cosplay, sewing, and quiet routines."
+      },
+      "Susan": {
+        "id": "Susan",
+        "Name": "Susan",
+        "Description": "An Emerald Farm resident with a practical farming perspective."
+      },
+      "Treyvon": {
+        "id": "Treyvon",
+        "Name": "Treyvon",
+        "Description": "A side character in the expanded world; keep references context-led."
+      },
+      "Victor": {
+        "id": "Victor",
+        "Name": "Victor",
+        "Description": "Olivia's thoughtful engineer son, educated and uncertain about his future."
+      }
+    }
+  }
+}

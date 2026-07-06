@@ -1,0 +1,10 @@
+{
+  "oldToNew": {
+    "nonSpouseFreindshipStrangers": "nonSpouseFriendshipStrangers",
+    "specialDatesWInter1": "specialDatesWinter1"
+  },
+  "notes": [
+    "WP20裁决要求借机修正旧键名拼写瑕疵；此表供 WP15/WP16/WP10 对账。",
+    "No old prompt text was used to create these values."
+  ]
+}

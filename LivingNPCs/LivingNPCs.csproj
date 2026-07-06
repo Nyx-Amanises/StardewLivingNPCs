@@ -48,6 +48,9 @@
     <None Update="i18n\**\*.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="assets\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
   <Target Name="RemoveConfigFromBuildOutput" AfterTargets="CopyFilesToOutputDirectory">

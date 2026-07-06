@@ -1,0 +1,167 @@
+{
+  "SectionOrder": {
+    "Locations": true,
+    "Villagers": true
+  },
+  "Locations": {
+    "Text": "Stardew Valley Expanded adds places that make the valley feel larger, with new farms, vineyards, magical routes, and dangerous regions beyond normal Pelican Town life.",
+    "Entries": {
+      "BlueMoonVineyard": {
+        "id": "BlueMoonVineyard",
+        "Name": "Blue Moon Vineyard",
+        "Description": "Blue Moon Vineyard is Sophia's home and working vineyard near Pelican Town. It is a place of grape trellises, kegs, shipments, grief, sewing, and quiet routines.",
+        "Region": "Pelican Town"
+      },
+      "CindersapForest": {
+        "id": "CindersapForest",
+        "Name": "Cindersap Forest",
+        "Description": "With SVE installed, Cindersap Forest feels wider and busier: it still holds Marnie's Ranch, Leah's cottage, and the Wizard's Tower, but also routes toward Fairhaven Farm, Aurora Vineyard, West Cindersap, and stranger forest magic.",
+        "Region": "Cindersap Forest"
+      },
+      "FairhavenFarm": {
+        "id": "FairhavenFarm",
+        "Name": "Fairhaven Farm",
+        "Description": "Fairhaven Farm is Andy's isolated farm in Cindersap Forest. It reflects his stubborn independence, Joja habits, Yoba faith, foraging routes, and lonely evenings.",
+        "Region": "Cindersap Forest"
+      },
+      "AuroraVineyard": {
+        "id": "AuroraVineyard",
+        "Name": "Aurora Vineyard",
+        "Description": "Aurora Vineyard is an abandoned vineyard tied to Junimos and Apples. It should feel old, magical, and half-remembered rather than like an ordinary commercial farm.",
+        "Region": "Cindersap Forest"
+      },
+      "Grampleton": {
+        "id": "Grampleton",
+        "Name": "Grampleton",
+        "Description": "Grampleton and its surrounding fields suggest a larger settled region east of Pelican Town. Villagers may treat it as the nearest bigger neighbor, reachable but outside daily farm-town life.",
+        "Region": "East of Pelican Town"
+      },
+      "Highlands": {
+        "id": "Highlands",
+        "Name": "Highlands",
+        "Description": "The Highlands are a dangerous expanded adventure region connected to Lance and late-game exploration. Mention them as remote, risky, and far from normal valley errands.",
+        "Region": "Mountain"
+      }
+    }
+  },
+  "Villagers": {
+    "Text": "These notes cover SVE residents and side characters. Use them as public context only; deeper personality and relationship detail belongs in each NPC biography.",
+    "Entries": {
+      "Alesia": {
+        "id": "Alesia",
+        "Name": "Alesia",
+        "Description": "Alesia is connected to Castle Village and the wider adventuring world beyond Pelican Town. Treat her as seasoned, capable, and more at home around danger than ordinary town life."
+      },
+      "Andy": {
+        "id": "Andy",
+        "Name": "Andy",
+        "Description": "Andy owns Fairhaven Farm in Cindersap Forest. He is a lonely, stubborn Joja supporter who farms, forages, visits the saloon, reads Yoba texts, and often clashes with local leadership."
+      },
+      "Apples": {
+        "id": "Apples",
+        "Name": "Apples",
+        "Description": "Apples is a Junimo connected to Aurora Vineyard and the magical side of the valley. Their presence should feel innocent, strange, and rooted in forest magic rather than ordinary town gossip."
+      },
+      "Camilla": {
+        "id": "Camilla",
+        "Name": "Camilla",
+        "Description": "Camilla is a powerful witch figure linked to magic far beyond Pelican Town. She should be treated as elegant, dangerous, knowledgeable, and only partly involved in ordinary village life."
+      },
+      "Claire": {
+        "id": "Claire",
+        "Name": "Claire",
+        "Description": "Claire lives outside Pelican Town and commutes by bus to work at JojaMart or later the movie theater. She is quiet and reserved, with dreams beyond retail, and enjoys reading, dancing, films, and birds."
+      },
+      "Gunther": {
+        "id": "Gunther",
+        "Name": "Gunther",
+        "Description": "Gunther curates the museum and library as a fuller town resident in SVE. He is scholarly, patient, and deeply invested in rebuilding the valley's historical collection."
+      },
+      "Hank": {
+        "id": "Hank",
+        "Name": "Hank",
+        "Description": "Hank is one of SVE's side residents connected to the expanded social web around Pelican Town. Keep references modest unless current context gives stronger facts."
+      },
+      "Henchman": {
+        "id": "Henchman",
+        "Name": "Henchman",
+        "Description": "The Henchman is tied to the Witch's Swamp and magical errands. He should feel like a guarded supernatural gatekeeper rather than a regular townsperson."
+      },
+      "Isaac": {
+        "id": "Isaac",
+        "Name": "Isaac",
+        "Description": "Isaac belongs to the remote adventuring side of SVE, connected to dangerous regions outside the valley. He is practical, hardened, and more military-adventurer than small-town neighbor."
+      },
+      "Jadu": {
+        "id": "Jadu",
+        "Name": "Jadu",
+        "Description": "Jadu is part of SVE's magical and distant-world cast. Use him as an otherworldly contact rather than a normal Pelican Town resident unless context says otherwise."
+      },
+      "Jolyne": {
+        "id": "Jolyne",
+        "Name": "Jolyne",
+        "Description": "Jolyne belongs to the Castle Village side of SVE's setting. She should be treated as part of a more martial, far-reaching network beyond the valley's farm-town routines."
+      },
+      "Lance": {
+        "id": "Lance",
+        "Name": "Lance",
+        "Description": "Lance is a marriage candidate and adventurer associated with the First Slash guild, Ginger Island, and dangerous expeditions. He is disciplined, capable, and more worldly than most villagers."
+      },
+      "Marlon": {
+        "id": "Marlon",
+        "Name": "Marlon",
+        "Description": "SVE makes Marlon a fuller resident: the Adventurer's Guild leader with old scars, monster knowledge, and connections to magic, Marnie, Krobus, and the wider danger around the valley."
+      },
+      "Martin": {
+        "id": "Martin",
+        "Name": "Martin",
+        "Description": "Martin is a polite countryside teenager who works at JojaMart or the movie theater and visits the museum library. He is hopeful, online-connected, and lonely outside work."
+      },
+      "Morgan": {
+        "id": "Morgan",
+        "Name": "Morgan",
+        "Description": "Morgan is a young magic student connected to the Wizard. They should come across as curious, developing, and still learning how the valley's magical rules work."
+      },
+      "Morris": {
+        "id": "Morris",
+        "Name": "Morris",
+        "Description": "SVE gives Morris more personal presence as JojaMart's manager. He is ambitious, corporate, and image-conscious, but can be written with more complexity than a simple villain."
+      },
+      "Olivia": {
+        "id": "Olivia",
+        "Name": "Olivia",
+        "Description": "Olivia Jenkins is a wealthy retiree living beside Pierre's with her son Victor. Formerly tied to Joja and stock-market success, she enjoys wine, refined food, painting, yoga, and social status."
+      },
+      "Peaches": {
+        "id": "Peaches",
+        "Name": "Peaches",
+        "Description": "Peaches is a non-giftable SVE character associated with the expanded magical side of the setting. Keep references light and context-dependent."
+      },
+      "Scarlett": {
+        "id": "Scarlett",
+        "Name": "Scarlett",
+        "Description": "Scarlett is Sophia's close friend and an important link to Sophia's life outside the vineyard. She brings steadiness, friendship, and emotional support into Sophia's social circle."
+      },
+      "Sophia": {
+        "id": "Sophia",
+        "Name": "Sophia",
+        "Description": "Sophia owns and works at Blue Moon Vineyard. She is shy, keeps to herself, enjoys anime, manga, cosplay, and sewing, and carries grief beneath a soft, anxious manner."
+      },
+      "Susan": {
+        "id": "Susan",
+        "Name": "Susan",
+        "Description": "Susan lives at Emerald Farm and becomes connected to town once the railroad area opens. She is a farmer with a practical, rural perspective on the valley's expanded north side."
+      },
+      "Treyvon": {
+        "id": "Treyvon",
+        "Name": "Treyvon",
+        "Description": "Treyvon is part of SVE's wider side cast around the expanded world. Avoid over-specific claims unless current context supplies them."
+      },
+      "Victor": {
+        "id": "Victor",
+        "Name": "Victor",
+        "Description": "Victor Jenkins lives with Olivia after graduating top of his engineering class. He is thoughtful, educated, uncertain about his future, and often found around books, the museum, the park, and the sea."
+      }
+    }
+  }
+}

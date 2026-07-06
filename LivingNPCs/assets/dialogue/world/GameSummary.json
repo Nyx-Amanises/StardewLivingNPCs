@@ -1,0 +1,468 @@
+{
+  "SectionOrder": {
+    "Intro": false,
+    "FarmerBackground": false,
+    "Seasons": true,
+    "Locations": true,
+    "Festivals": true,
+    "Villagers": true,
+    "Outro": false
+  },
+  "Intro": {
+    "Text": "Stardew Valley is a rural world centered on Pelican Town: a small, seasonal community where farm work, fishing, mining, festivals, friendships, and local mysteries all shape daily life.",
+    "Entries": {}
+  },
+  "FarmerBackground": {
+    "Text": "The farmer is a former city worker who left a draining Joja office life after inheriting their grandfather's neglected farm. In the valley, their days can include clearing land, planting crops, caring for animals, fishing, mining, foraging, cooking, crafting, donating artifacts, completing quests, and building friendships. Townspeople see the farmer as a newcomer whose choices can revive old places, reopen travel routes, deepen relationships, and gradually make Pelican Town feel more connected. The farmer is not a blank celebrity: most villagers first know them through ordinary labor, daily greetings, gifts, help with local problems, and the slow trust built by showing up.",
+    "Entries": {}
+  },
+  "Seasons": {
+    "Text": "Each season lasts 28 days and changes what grows, what can be found, what the weather feels like, and which festivals or routines people are thinking about.",
+    "Entries": {
+      "Spring": {
+        "id": "Spring",
+        "Name": "Spring",
+        "Description": "The valley wakes up with soft rain, new grass, and the first rush of planting. Townspeople talk about fresh starts, salmonberries, the Egg Festival, and the Flower Dance as everyone settles into the year.",
+        "Crops": [
+          "Parsnip",
+          "Potato",
+          "Cauliflower",
+          "Green Bean",
+          "Kale",
+          "Strawberry",
+          "Rhubarb",
+          "Garlic"
+        ],
+        "Forage": [
+          "Wild Horseradish",
+          "Daffodil",
+          "Leek",
+          "Dandelion",
+          "Spring Onion",
+          "Morel",
+          "Salmonberry"
+        ]
+      },
+      "Summer": {
+        "id": "Summer",
+        "Name": "Summer",
+        "Description": "Summer is bright, hot, and busy, with long crop days, storms, beach trips, and late evenings outside. The Luau and the Dance of the Moonlight Jellies give the season a public, festive rhythm.",
+        "Crops": [
+          "Blueberry",
+          "Melon",
+          "Tomato",
+          "Hot Pepper",
+          "Hops",
+          "Corn",
+          "Red Cabbage",
+          "Starfruit"
+        ],
+        "Forage": [
+          "Spice Berry",
+          "Grape",
+          "Sweet Pea",
+          "Fiddlehead Fern",
+          "Rainbow Shell",
+          "Nautilus Shell"
+        ]
+      },
+      "Fall": {
+        "id": "Fall",
+        "Name": "Fall",
+        "Description": "Fall is harvest season: richer colors, cooler mornings, mushrooms in the woods, and heavier work before winter. The Stardew Valley Fair and Spirit's Eve make it feel proud, competitive, and a little uncanny.",
+        "Crops": [
+          "Pumpkin",
+          "Cranberries",
+          "Eggplant",
+          "Yam",
+          "Amaranth",
+          "Grape",
+          "Artichoke",
+          "Rare Seed"
+        ],
+        "Forage": [
+          "Common Mushroom",
+          "Wild Plum",
+          "Hazelnut",
+          "Blackberry",
+          "Chanterelle",
+          "Red Mushroom"
+        ]
+      },
+      "Winter": {
+        "id": "Winter",
+        "Name": "Winter",
+        "Description": "Winter slows the farms down and pushes people indoors, toward fishing, mining, foraging, and visits. Snow makes the valley quieter, while the Festival of Ice and Feast of the Winter Star keep the town connected.",
+        "Crops": [
+          "Powdermelon",
+          "Winter Seeds"
+        ],
+        "Forage": [
+          "Crocus",
+          "Crystal Fruit",
+          "Snow Yam",
+          "Winter Root",
+          "Holly",
+          "Nautilus Shell"
+        ]
+      }
+    }
+  },
+  "Locations": {
+    "Text": "These are the common places villagers can mention naturally. A character should only dwell on a place when it fits their life, route, work, relationship, or the current conversation.",
+    "Entries": {
+      "TheFarm": {
+        "id": "TheFarm",
+        "Name": "The Farm",
+        "Description": "The inherited farm is the farmer's home and main workplace. Crops, animals, barns, machines, pet areas, and farm buildings make it a personal space that changes with the player's choices.",
+        "Region": "Farm"
+      },
+      "PelicanTown_SeedShop": {
+        "id": "PelicanTown_SeedShop",
+        "Name": "Pierre's General Store",
+        "Description": "Pierre runs the town seed shop from his family home with Caroline and Abigail. Villagers buy groceries here, and Caroline's aerobics class uses the back room on Tuesdays.",
+        "Region": "Pelican Town"
+      },
+      "PelicanTown_JojaMart": {
+        "id": "PelicanTown_JojaMart",
+        "Name": "JojaMart",
+        "Description": "JojaMart is the corporate supermarket on the east side of town, managed by Morris. It competes with Pierre and represents the same company the farmer escaped from.",
+        "Region": "Pelican Town"
+      },
+      "PelicanTown_StardropSaloon": {
+        "id": "PelicanTown_StardropSaloon",
+        "Name": "The Stardrop Saloon",
+        "Description": "Gus runs the saloon in the evening, serving food, drink, and a warm place to gather. Shane, Pam, Emily, Clint, and many others pass through depending on the day.",
+        "Region": "Pelican Town"
+      },
+      "PelicanTown_HarveysClinic": {
+        "id": "PelicanTown_HarveysClinic",
+        "Name": "Harvey's Clinic",
+        "Description": "Harvey's clinic is the valley's small medical office. Harvey treats injuries and checkups there, while Maru works part-time as his assistant.",
+        "Region": "Pelican Town"
+      },
+      "PelicanTown_Blacksmith": {
+        "id": "PelicanTown_Blacksmith",
+        "Name": "Blacksmith",
+        "Description": "Clint runs the blacksmith east of town, upgrading tools and breaking geodes. His shop sits near the museum and river, so miners and farmers both visit often.",
+        "Region": "Pelican Town"
+      },
+      "PelicanTown_LibraryMuseum": {
+        "id": "PelicanTown_LibraryMuseum",
+        "Name": "Museum and Library",
+        "Description": "Gunther curates the museum and library, asking for artifacts and minerals to rebuild the collection. Penny often brings Jas and Vincent here for lessons.",
+        "Region": "Pelican Town"
+      },
+      "PelicanTown_CommunityCenter": {
+        "id": "PelicanTown_CommunityCenter",
+        "Name": "Community Center",
+        "Description": "The old Community Center begins abandoned and overgrown, then can become a restored town landmark. Many villagers see its revival as proof that Pelican Town can recover together.",
+        "Region": "Pelican Town"
+      },
+      "CindersapForest": {
+        "id": "CindersapForest",
+        "Name": "Cindersap Forest",
+        "Description": "The forest south of the farm holds Marnie's Ranch, Leah's cottage, the Wizard's Tower, the Secret Woods entrance, the traveling cart, river fishing, spring onions, and many forage paths.",
+        "Region": "Cindersap Forest"
+      },
+      "CindersapForest_MarniesRanch": {
+        "id": "CindersapForest_MarniesRanch",
+        "Name": "Marnie's Ranch",
+        "Description": "Marnie sells livestock, hay, and animal supplies from her ranch, where Shane and Jas also live. It is the local point of contact for animal care.",
+        "Region": "Cindersap Forest"
+      },
+      "CindersapForest_WizardsTower": {
+        "id": "CindersapForest_WizardsTower",
+        "Name": "Wizard's Tower",
+        "Description": "The Wizard's Tower stands at the forest's western edge. Rasmodius studies arcane matters there and is connected to the valley's Junimos, magic, and hidden places.",
+        "Region": "Cindersap Forest"
+      },
+      "Mountain": {
+        "id": "Mountain",
+        "Name": "The Mountain",
+        "Description": "The mountain area north of town includes Robin's carpenter shop, the lake, Linus's tent, the mines, the Adventurer's Guild, the railroad, the spa, and the quarry route.",
+        "Region": "Mountain"
+      },
+      "Mountain_AdventurersGuild": {
+        "id": "Mountain_AdventurersGuild",
+        "Name": "Adventurer's Guild",
+        "Description": "The Adventurer's Guild is the fighters' outpost near the mines. Marlon and Gil handle monster-slaying work, rewards, and a practical view of danger.",
+        "Region": "Mountain"
+      },
+      "Mountain_TheMines": {
+        "id": "Mountain_TheMines",
+        "Name": "The Mines",
+        "Description": "The mines descend through ore, monsters, and old secrets. Miners, adventurers, and curious villagers treat them as useful but dangerous.",
+        "Region": "Mountain"
+      },
+      "Mountain_Spa": {
+        "id": "Mountain_Spa",
+        "Name": "Spa",
+        "Description": "The spa sits by the railroad and provides a quiet place to recover energy. Alex sometimes works out there, and villagers may mention it as a peaceful retreat.",
+        "Region": "Mountain"
+      },
+      "Mountain_TrainStation": {
+        "id": "Mountain_TrainStation",
+        "Name": "Train Station",
+        "Description": "The railroad opens after the summer earthquake. Trains may pass through, and the area feels like the valley's connection to places beyond the mountains.",
+        "Region": "Mountain"
+      },
+      "Mountain_Quarry": {
+        "id": "Mountain_Quarry",
+        "Name": "Quarry",
+        "Description": "The quarry lies across the repaired bridge east of the mines. Once accessible, it offers stone, ore, gems, and a sense that old routes are reopening.",
+        "Region": "Mountain"
+      },
+      "Beach_FishShop": {
+        "id": "Beach_FishShop",
+        "Name": "Willy's Fish Shop",
+        "Description": "Willy runs the fish shop on the beach pier, selling fishing supplies and talking shop with anyone who respects the sea. His back room later connects to larger travel.",
+        "Region": "Beach"
+      },
+      "GingerIsland": {
+        "id": "GingerIsland",
+        "Name": "Ginger Island",
+        "Description": "Ginger Island is a warm Fern Islands destination reached by Willy's repaired boat. It has jungle paths, a volcano dungeon, golden walnuts, and a different rhythm from Pelican Town.",
+        "Region": "Fern Islands"
+      },
+      "Beach_TidePools": {
+        "id": "Beach_TidePools",
+        "Name": "Tide Pools",
+        "Description": "The tide pools lie across the repaired beach bridge. Coral, sea urchins, shells, and quiet ocean views make it a small but memorable foraging spot.",
+        "Region": "Beach"
+      },
+      "Desert": {
+        "id": "Desert",
+        "Name": "Calico Desert",
+        "Description": "Calico Desert opens once bus service returns. It holds the Oasis shop, Sandy's warm welcome, desert forage, the Casino, and the path to Skull Cavern.",
+        "Region": "Calico Desert"
+      },
+      "Desert_Oasis": {
+        "id": "Desert_Oasis",
+        "Name": "Oasis",
+        "Description": "Sandy runs the Oasis shop in Calico Desert, selling desert seeds and goods. She is friendly and often lonely because visitors depend on the bus.",
+        "Region": "Calico Desert"
+      },
+      "Desert_SkullCavern": {
+        "id": "Desert_SkullCavern",
+        "Name": "Skull Cavern",
+        "Description": "Skull Cavern is the desert's far more dangerous mine, known for deep floors, stronger monsters, iridium, and serious adventuring risks.",
+        "Region": "Calico Desert"
+      }
+    }
+  },
+  "Festivals": {
+    "Text": "Festivals are public landmarks in the year. Villagers may look forward to them, dread them, remember their outcomes, or treat them as town obligations depending on personality.",
+    "Entries": {
+      "spring13": {
+        "id": "spring13",
+        "Name": "Egg Festival",
+        "Description": "Spring 13 brings the town together for an egg hunt in Pelican Town. It feels playful and competitive, especially for children and anyone who enjoys a small public contest."
+      },
+      "spring24": {
+        "id": "spring24",
+        "Name": "Flower Dance",
+        "Description": "The Flower Dance on Spring 24 is a formal forest gathering where couples dance, single villagers weigh invitations, and the season's social tensions become visible."
+      },
+      "summer11": {
+        "id": "summer11",
+        "Name": "Luau",
+        "Description": "At the Summer 11 Luau, everyone contributes to the governor's soup. Villagers care about the shared meal because it reflects town pride and the farmer's public judgment."
+      },
+      "summer28": {
+        "id": "summer28",
+        "Name": "Dance of the Moonlight Jellies",
+        "Description": "On Summer 28, townspeople gather quietly at the beach to watch glowing jellies drift by. The mood is reflective, gentle, and a little magical."
+      },
+      "fall16": {
+        "id": "fall16",
+        "Name": "Stardew Valley Fair",
+        "Description": "The Fall 16 fair fills town with games, displays, and friendly rivalry. Farmers show off produce, artisans bring goods, and villagers compare what the year has made."
+      },
+      "fall27": {
+        "id": "fall27",
+        "Name": "Spirit's Eve",
+        "Description": "Spirit's Eve on Fall 27 turns town into a spooky festival with costumes, a maze, and strange decorations. Villagers treat it as safe fun with a hint of real mystery."
+      },
+      "winter8": {
+        "id": "winter8",
+        "Name": "Festival of Ice",
+        "Description": "The Winter 8 festival gathers everyone by the frozen lake for ice fishing and snowbound cheer. It gives winter a public, competitive break."
+      },
+      "winter25": {
+        "id": "winter25",
+        "Name": "Feast of the Winter Star",
+        "Description": "The Winter Star feast is the town's gift exchange. People think about gratitude, family, old hurts, and whether they know one another well enough to choose wisely."
+      }
+    }
+  },
+  "Villagers": {
+    "Text": "These brief notes are public common knowledge about local residents. Use them for casual references, gossip, concern, or social context; private secrets belong in NPC-specific biographies or current context.",
+    "Entries": {
+      "Abigail": {
+        "id": "Abigail",
+        "Name": "Abigail",
+        "Description": "Pierre and Caroline's daughter, drawn to games, music, adventure, and the mines. She is curious, defiant, and hungry for a life larger than the shop upstairs."
+      },
+      "Alex": {
+        "id": "Alex",
+        "Name": "Alex",
+        "Description": "Evelyn and George's grandson, an athlete who dreams of gridball glory. His confidence covers grief, pressure, and a sincere need to prove himself."
+      },
+      "Caroline": {
+        "id": "Caroline",
+        "Name": "Caroline",
+        "Description": "Pierre's wife and Abigail's mother, friendly but often worried about family distance. She enjoys tea, aerobics, and the small routines that hold the household together."
+      },
+      "Clint": {
+        "id": "Clint",
+        "Name": "Clint",
+        "Description": "The town blacksmith is skilled, lonely, and socially anxious. He spends long hours with tools and geodes and has a hard time saying what he wants."
+      },
+      "Demetrius": {
+        "id": "Demetrius",
+        "Name": "Demetrius",
+        "Description": "Robin's husband and Maru's father, a scientist devoted to research and ecology. He is logical, protective, and sometimes misses emotional nuance."
+      },
+      "Elliott": {
+        "id": "Elliott",
+        "Name": "Elliott",
+        "Description": "A romantic writer living alone in the beach cabin. He speaks with polish, values beauty and art, and worries over whether his work will matter."
+      },
+      "Emily": {
+        "id": "Emily",
+        "Name": "Emily",
+        "Description": "Haley's older sister works at the saloon and follows a bright, spiritual, creative path. She is generous, unusual, and confident in her own sense of wonder."
+      },
+      "Evelyn": {
+        "id": "Evelyn",
+        "Name": "Evelyn",
+        "Description": "George's wife and Alex's grandmother is a gentle elder who gardens, bakes, and cares for town traditions. She often notices who needs kindness."
+      },
+      "George": {
+        "id": "George",
+        "Name": "George",
+        "Description": "An older man who uses a wheelchair and lives with Evelyn and Alex. He can be blunt and irritable, but his gruffness hides loyalty and vulnerability."
+      },
+      "Gus": {
+        "id": "Gus",
+        "Name": "Gus",
+        "Description": "The Stardrop Saloon's owner is warm, practical, and generous. He knows many people's routines and often feeds the town in more ways than one."
+      },
+      "Haley": {
+        "id": "Haley",
+        "Name": "Haley",
+        "Description": "Emily's younger sister begins vain and image-conscious, often focused on photography, clothes, and appearances. With trust, she shows warmth and curiosity."
+      },
+      "Harvey": {
+        "id": "Harvey",
+        "Name": "Harvey",
+        "Description": "Pelican Town's doctor is careful, anxious, and deeply responsible. He loves radios and planes, but his clinic work keeps him grounded in town life."
+      },
+      "Jas": {
+        "id": "Jas",
+        "Name": "Jas",
+        "Description": "A shy child living with Marnie and Shane. She studies with Penny, spends time with Vincent, and sees the adult world through a quiet, watchful lens."
+      },
+      "Jodi": {
+        "id": "Jodi",
+        "Name": "Jodi",
+        "Description": "Sam and Vincent's mother keeps the household running while Kent is away and after he returns. She is loving, tired, practical, and often stretched thin."
+      },
+      "Kent": {
+        "id": "Kent",
+        "Name": "Kent",
+        "Description": "Jodi's husband returns from military service in year two. He is trying to rejoin family and town life while carrying trauma from the war."
+      },
+      "Krobus": {
+        "id": "Krobus",
+        "Name": "Krobus",
+        "Description": "A shadow person living in the sewers, cautious but gentle once trusted. He knows hidden parts of the valley and treats sunlight and human customs carefully."
+      },
+      "Leah": {
+        "id": "Leah",
+        "Name": "Leah",
+        "Description": "An artist living in a forest cottage, carving a new life away from the city. She values nature, independence, good food, and honest creative work."
+      },
+      "Lewis": {
+        "id": "Lewis",
+        "Name": "Lewis",
+        "Description": "The long-serving mayor manages festivals, taxes, and town order. He cares about Pelican Town's image and keeps parts of his private life guarded."
+      },
+      "Linus": {
+        "id": "Linus",
+        "Name": "Linus",
+        "Description": "A self-sufficient mountain dweller living in a tent by choice. He values nature, simple living, and respect, while often facing suspicion from townspeople."
+      },
+      "Marnie": {
+        "id": "Marnie",
+        "Name": "Marnie",
+        "Description": "The ranch owner sells animals and cares for Shane and Jas. She is warm and social, but her private hopes are often more complicated than she admits."
+      },
+      "Maru": {
+        "id": "Maru",
+        "Name": "Maru",
+        "Description": "Robin and Demetrius's daughter is a nurse assistant and inventor. She is bright, methodical, and excited by science, machines, and space."
+      },
+      "Pam": {
+        "id": "Pam",
+        "Name": "Pam",
+        "Description": "Penny's mother and the valley's bus driver once service returns. She is loud, rough-edged, and struggling, but not without pride or affection."
+      },
+      "Penny": {
+        "id": "Penny",
+        "Name": "Penny",
+        "Description": "Pam's daughter teaches Jas and Vincent and wants a safe, kind home. She is gentle, bookish, and often carries more responsibility than she says."
+      },
+      "Pierre": {
+        "id": "Pierre",
+        "Name": "Pierre",
+        "Description": "The general store owner is ambitious, competitive, and protective of his business. He wants to provide for his family while beating Joja's pressure."
+      },
+      "Robin": {
+        "id": "Robin",
+        "Name": "Robin",
+        "Description": "The carpenter on the mountain is energetic, skilled, and direct. She builds farm structures, parents Sebastian and Maru, and keeps a busy household moving."
+      },
+      "Sam": {
+        "id": "Sam",
+        "Name": "Sam",
+        "Description": "Jodi and Kent's older son plays guitar, skateboards, and works part-time. He is upbeat and impulsive, but family pressure and his father's return affect him."
+      },
+      "Sandy": {
+        "id": "Sandy",
+        "Name": "Sandy",
+        "Description": "Sandy runs the Oasis in Calico Desert and loves visitors from the valley. She is cheerful and stylish, with loneliness beneath her bright welcome."
+      },
+      "Sebastian": {
+        "id": "Sebastian",
+        "Name": "Sebastian",
+        "Description": "Robin's son is a programmer who spends much of his time in the basement, online, or at the mountain lake. He is private, sardonic, and restless."
+      },
+      "Shane": {
+        "id": "Shane",
+        "Name": "Shane",
+        "Description": "Marnie's nephew works at JojaMart and struggles with depression and alcohol. He is abrasive at first, but his affection for Jas and chickens shows softness."
+      },
+      "Vincent": {
+        "id": "Vincent",
+        "Name": "Vincent",
+        "Description": "Sam's little brother is energetic, curious, and sometimes confused by adult problems. He studies with Penny and often plays with Jas."
+      },
+      "Willy": {
+        "id": "Willy",
+        "Name": "Willy",
+        "Description": "The beach fisherman runs the fish shop and knows the sea better than anyone in town. He is patient, plainspoken, and proud of good fishing."
+      },
+      "Wizard": {
+        "id": "Wizard",
+        "Name": "Wizard",
+        "Description": "Rasmodius is the valley's resident wizard, studying magical forces from his forest tower. He is formal, secretive, and connected to Junimos and strange boundaries."
+      }
+    }
+  },
+  "Outro": {
+    "Text": "This summary is shared background knowledge, not a script. NPCs should draw on it selectively, speak from their own perspective, and only reference facts that fit their personality, location, relationship to the farmer, and current situation.",
+    "Entries": {}
+  }
+}
