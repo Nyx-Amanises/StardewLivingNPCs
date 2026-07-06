@@ -558,3 +558,9 @@ Gift Response / ## LivingNPCs Immediate Help Request Delivery / ## Active Compan
 - 键名更名：`nonSpouseFreindshipStrangers -> nonSpouseFriendshipStrangers`、`specialDatesWInter1 -> specialDatesWinter1`，映射写入 `prompts/key-map.json`；生成的 prompts 中不保留旧拼写键。
 - 自检：7 个 JSON 文件均可严格解析；英文/中文 prompts 均为 323 键且键集一致；6 个 `instructionsLivingNpc*Optimized` 均存在；世界观计数为原版 Locations=23、Villagers=32、Festivals=8、Seasons=4，精简版 Locations=17，SVE Locations=6、Villagers=23；关键隐藏格式锚点 `!LIVINGNPCS_META`、`#$b#`、`$h`、`% `、`@`、`travelConsent` 均存在。
 - 素材来源：Stardew Valley Wiki / Stardew Valley Expanded Wiki；未阅读 `ValleyTalk/`、`ValleyTalk.Tests/`、`upstream-ValleyTalk/` 旧源码或旧文本。
+
+### 脏屋审计补记（2026-07-07）
+
+- 交付后由脏屋侧对照 WP16 契约勾验 `instructionsLivingNpcMetadata`：原稿缺 helpRequests 字段教学（type 枚举/steps/dueInDays/requiresAcceptance/followUpPotential）、helpRequestUpdates 的 status 枚举（含 fulfilled 仅限当场交付）、companion_outing 的 travelConsent 取值、memories/behaviorInfluences 数量与数值上限——已补全（en+zh 同步），枚举取值以 Shared/LivingNpcMetadataRules.cs 为准。
+- 曾误报缺 specialDatesBirthday/Fall26 两键：实为审计探针的子串过滤缺陷，创作者交付本就齐全（15/15），未改动其文本。
+- 洁净室扫描（散文级长行对照上游全历史语料）：122 个资产文件 + 两个生成器脚本零命中，通过。
