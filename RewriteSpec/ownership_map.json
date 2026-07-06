@@ -1,0 +1,1778 @@
+[
+ {
+  "file": ".vscode/launch.json",
+  "lines": 19,
+  "upstream_lines": 19,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": ".vscode/tasks.json",
+  "lines": 17,
+  "upstream_lines": 17,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/GameSummary.json",
+  "lines": 297,
+  "upstream_lines": 297,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Abigail.json",
+  "lines": 48,
+  "upstream_lines": 48,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Alex.json",
+  "lines": 50,
+  "upstream_lines": 50,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Caroline.json",
+  "lines": 43,
+  "upstream_lines": 43,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Clint.json",
+  "lines": 63,
+  "upstream_lines": 63,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Demetrius.json",
+  "lines": 41,
+  "upstream_lines": 41,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Dwarf.json",
+  "lines": 38,
+  "upstream_lines": 38,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Elliott.json",
+  "lines": 37,
+  "upstream_lines": 37,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Emily.json",
+  "lines": 57,
+  "upstream_lines": 57,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Evelyn.json",
+  "lines": 54,
+  "upstream_lines": 54,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/George.json",
+  "lines": 53,
+  "upstream_lines": 53,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Gus.json",
+  "lines": 49,
+  "upstream_lines": 49,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Haley.json",
+  "lines": 53,
+  "upstream_lines": 53,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Harvey.json",
+  "lines": 28,
+  "upstream_lines": 28,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Jas.json",
+  "lines": 50,
+  "upstream_lines": 50,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Jodi.json",
+  "lines": 59,
+  "upstream_lines": 59,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Kent.json",
+  "lines": 82,
+  "upstream_lines": 82,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Krobus.json",
+  "lines": 57,
+  "upstream_lines": 57,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Leah.json",
+  "lines": 60,
+  "upstream_lines": 60,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Lewis.json",
+  "lines": 71,
+  "upstream_lines": 71,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Linus.json",
+  "lines": 55,
+  "upstream_lines": 55,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Marnie.json",
+  "lines": 57,
+  "upstream_lines": 57,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Maru.json",
+  "lines": 65,
+  "upstream_lines": 65,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Pam.json",
+  "lines": 42,
+  "upstream_lines": 42,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Penny.json",
+  "lines": 61,
+  "upstream_lines": 61,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Pierre.json",
+  "lines": 50,
+  "upstream_lines": 50,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Robin.json",
+  "lines": 68,
+  "upstream_lines": 68,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Sam.json",
+  "lines": 70,
+  "upstream_lines": 70,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Sandy.json",
+  "lines": 53,
+  "upstream_lines": 53,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Sebastian.json",
+  "lines": 104,
+  "upstream_lines": 104,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Shane.json",
+  "lines": 68,
+  "upstream_lines": 68,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Vincent.json",
+  "lines": 61,
+  "upstream_lines": 61,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Willy.json",
+  "lines": 60,
+  "upstream_lines": 60,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/bio/Wizard.json",
+  "lines": 65,
+  "upstream_lines": 65,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/GameSummary.json",
+  "lines": 80,
+  "upstream_lines": 80,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/Locations.json",
+  "lines": 35,
+  "upstream_lines": 35,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Alesia.json",
+  "lines": 54,
+  "upstream_lines": 54,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Andy.json",
+  "lines": 56,
+  "upstream_lines": 56,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Apples.json",
+  "lines": 60,
+  "upstream_lines": 60,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Camilla.json",
+  "lines": 51,
+  "upstream_lines": 51,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Claire.json",
+  "lines": 60,
+  "upstream_lines": 60,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Gunther.json",
+  "lines": 84,
+  "upstream_lines": 84,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Hank.json",
+  "lines": 55,
+  "upstream_lines": 55,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Henchman.json",
+  "lines": 52,
+  "upstream_lines": 52,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Isaac.json",
+  "lines": 54,
+  "upstream_lines": 54,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Jadu.json",
+  "lines": 49,
+  "upstream_lines": 49,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Jolyne.json",
+  "lines": 50,
+  "upstream_lines": 50,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Lance.json",
+  "lines": 59,
+  "upstream_lines": 59,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Marlon.json",
+  "lines": 94,
+  "upstream_lines": 94,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Martin.json",
+  "lines": 54,
+  "upstream_lines": 54,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Morgan.json",
+  "lines": 65,
+  "upstream_lines": 65,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Morris.json",
+  "lines": 72,
+  "upstream_lines": 72,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Olivia.json",
+  "lines": 106,
+  "upstream_lines": 106,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Peaches.json",
+  "lines": 46,
+  "upstream_lines": 46,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Scarlett.json",
+  "lines": 67,
+  "upstream_lines": 67,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Sophia.json",
+  "lines": 85,
+  "upstream_lines": 85,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Susan.json",
+  "lines": 70,
+  "upstream_lines": 70,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Treyvon.json",
+  "lines": 55,
+  "upstream_lines": 55,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/bio/Victor.json",
+  "lines": 55,
+  "upstream_lines": 55,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "InputTextBox.cs",
+  "lines": 87,
+  "upstream_lines": 87,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "LICENSE.txt",
+  "lines": 410,
+  "upstream_lines": 410,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "docs/AuthorGuide.txt",
+  "lines": 5,
+  "upstream_lines": 5,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "docs/Install.txt",
+  "lines": 34,
+  "upstream_lines": 34,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "docs/ModelsMay25.txt",
+  "lines": 95,
+  "upstream_lines": 95,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "docs/NexusHome.txt",
+  "lines": 49,
+  "upstream_lines": 49,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "docs/OtherMods.txt",
+  "lines": 18,
+  "upstream_lines": 18,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/AppLogger.cs",
+  "lines": 71,
+  "upstream_lines": 71,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/DialogueFile.cs",
+  "lines": 144,
+  "upstream_lines": 144,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Extensions/StringExtensions.cs",
+  "lines": 5,
+  "upstream_lines": 5,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Generation/ConversationElement.cs",
+  "lines": 8,
+  "upstream_lines": 8,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Interop/ModInteropManager.cs",
+  "lines": 37,
+  "upstream_lines": 37,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Patches/Dialogue_ChooseResponse_Patch.cs",
+  "lines": 47,
+  "upstream_lines": 47,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Patches/NPC_AddMarriageDialogue_Patch.cs",
+  "lines": 23,
+  "upstream_lines": 23,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Patches/NPC_GetGiftReaction_Patch.cs",
+  "lines": 18,
+  "upstream_lines": 18,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Platform/AndroidFileHelper.cs",
+  "lines": 55,
+  "upstream_lines": 55,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Platform/AndroidHelper.cs",
+  "lines": 26,
+  "upstream_lines": 26,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Platform/NetworkAvailabilityChecker.cs",
+  "lines": 28,
+  "upstream_lines": 28,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/UI/DialogueTextInputMenuWrapper.cs",
+  "lines": 24,
+  "upstream_lines": 24,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/UI/ThinkingWindow.cs",
+  "lines": 52,
+  "upstream_lines": 52,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/config/IGenericModConfigMenuApi.cs",
+  "lines": 136,
+  "upstream_lines": 136,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/enums/RandomAction.cs",
+  "lines": 1,
+  "upstream_lines": 1,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/enums/Season.cs",
+  "lines": 1,
+  "upstream_lines": 1,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/enums/SldConstants.cs",
+  "lines": 20,
+  "upstream_lines": 20,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/enums/SpouseAction.cs",
+  "lines": 1,
+  "upstream_lines": 1,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/enums/Weekday.cs",
+  "lines": 1,
+  "upstream_lines": 1,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/llms/IGetModelNames.cs",
+  "lines": 2,
+  "upstream_lines": 2,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/llms/LlmMistral.cs",
+  "lines": 11,
+  "upstream_lines": 11,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/llms/PromptFormatter.cs",
+  "lines": 10,
+  "upstream_lines": 10,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/models/BioData.cs",
+  "lines": 58,
+  "upstream_lines": 58,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/models/ChildDescription.cs",
+  "lines": 7,
+  "upstream_lines": 7,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/models/history/ActivityHistory.cs",
+  "lines": 6,
+  "upstream_lines": 6,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/models/history/ConversationHistory.cs",
+  "lines": 24,
+  "upstream_lines": 24,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/models/history/DialogueEventHistory.cs",
+  "lines": 13,
+  "upstream_lines": 13,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/models/history/DialogueEventOverheard.cs",
+  "lines": 9,
+  "upstream_lines": 9,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/models/history/DialogueHistory.cs",
+  "lines": 10,
+  "upstream_lines": 10,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/models/history/IHistory.cs",
+  "lines": 2,
+  "upstream_lines": 2,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/models/history/ThirdPartyHistory.cs",
+  "lines": 12,
+  "upstream_lines": 12,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Abigail.fr-FR.txt",
+  "lines": 11,
+  "upstream_lines": 11,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Alex.fr-FR.txt",
+  "lines": 18,
+  "upstream_lines": 18,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Caroline.fr-FR.txt",
+  "lines": 10,
+  "upstream_lines": 10,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Clint.fr-FR.txt",
+  "lines": 11,
+  "upstream_lines": 11,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Demetrius.fr-FR.txt",
+  "lines": 14,
+  "upstream_lines": 14,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Dwarf.fr-FR.txt",
+  "lines": 10,
+  "upstream_lines": 10,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Elliott.fr-FR.txt",
+  "lines": 13,
+  "upstream_lines": 13,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Emily.fr-FR.txt",
+  "lines": 16,
+  "upstream_lines": 16,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Evelyn.fr-FR.txt",
+  "lines": 11,
+  "upstream_lines": 11,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/George.fr-FR.txt",
+  "lines": 15,
+  "upstream_lines": 15,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Gus.fr-FR.txt",
+  "lines": 13,
+  "upstream_lines": 13,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Haley.fr-FR.txt",
+  "lines": 21,
+  "upstream_lines": 21,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Harvey.fr-FR.txt",
+  "lines": 20,
+  "upstream_lines": 20,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Jas.fr-FR.txt",
+  "lines": 16,
+  "upstream_lines": 16,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Jodi.fr-FR.txt",
+  "lines": 14,
+  "upstream_lines": 14,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Kent.fr-FR.txt",
+  "lines": 18,
+  "upstream_lines": 18,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Krobus.fr-FR.txt",
+  "lines": 11,
+  "upstream_lines": 11,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Leah.fr-FR.txt",
+  "lines": 18,
+  "upstream_lines": 18,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Lewis.fr-FR.txt",
+  "lines": 17,
+  "upstream_lines": 17,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Linus.fr-FR.txt",
+  "lines": 13,
+  "upstream_lines": 13,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Marnie.fr-FR.txt",
+  "lines": 15,
+  "upstream_lines": 15,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Maru.fr-FR.txt",
+  "lines": 23,
+  "upstream_lines": 23,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Pam.fr-FR.txt",
+  "lines": 14,
+  "upstream_lines": 14,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Penny.fr-FR.txt",
+  "lines": 21,
+  "upstream_lines": 21,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Pierre.fr-FR.txt",
+  "lines": 19,
+  "upstream_lines": 19,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Robin.fr-FR.txt",
+  "lines": 26,
+  "upstream_lines": 26,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Sam.fr-FR.txt",
+  "lines": 28,
+  "upstream_lines": 28,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Sandy.fr-FR.txt",
+  "lines": 15,
+  "upstream_lines": 15,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Sebastian.fr-FR.txt",
+  "lines": 24,
+  "upstream_lines": 24,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Shane.fr-FR.txt",
+  "lines": 22,
+  "upstream_lines": 22,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Stardew.fr-FR.txt",
+  "lines": 1,
+  "upstream_lines": 1,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Vincent.fr-FR.txt",
+  "lines": 20,
+  "upstream_lines": 20,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Willy.fr-FR.txt",
+  "lines": 15,
+  "upstream_lines": 15,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/assets/bio/Wizard.fr-FR.txt",
+  "lines": 17,
+  "upstream_lines": 17,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/fr-FR/i18n/fr-FR.json",
+  "lines": 340,
+  "upstream_lines": 340,
+  "upstream_ratio": 1.0,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/content.json",
+  "lines": 74,
+  "upstream_lines": 73,
+  "upstream_ratio": 0.986,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "translations/zh-CN/i18n/zh-CN.json",
+  "lines": 363,
+  "upstream_lines": 358,
+  "upstream_ratio": 0.986,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/StardewTime.cs",
+  "lines": 107,
+  "upstream_lines": 105,
+  "upstream_ratio": 0.981,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Patches/MarriageDialogueReference_GetDialogue_Patch.cs",
+  "lines": 36,
+  "upstream_lines": 35,
+  "upstream_ratio": 0.972,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/content.json",
+  "lines": 56,
+  "upstream_lines": 54,
+  "upstream_ratio": 0.964,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Patches/NPC_PushTemporaryDialogue_Patch.cs",
+  "lines": 24,
+  "upstream_lines": 23,
+  "upstream_ratio": 0.958,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/TextInputHandler.cs",
+  "lines": 48,
+  "upstream_lines": 46,
+  "upstream_ratio": 0.958,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/llms/LlmLlamaCpp.cs",
+  "lines": 93,
+  "upstream_lines": 89,
+  "upstream_ratio": 0.957,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Generation/DialogueContext.cs",
+  "lines": 275,
+  "upstream_lines": 259,
+  "upstream_ratio": 0.942,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Patches/NPC_CurrentDialogue_Patch.cs",
+  "lines": 43,
+  "upstream_lines": 40,
+  "upstream_ratio": 0.93,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Patches/NPC_TryToGetMarriageSpecificDialogue_Patch.cs",
+  "lines": 14,
+  "upstream_lines": 13,
+  "upstream_ratio": 0.929,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/llms/LlmOAICompatible.cs",
+  "lines": 13,
+  "upstream_lines": 12,
+  "upstream_ratio": 0.923,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Patches/NPC_TryToRetrieveDialogue_Patch.cs",
+  "lines": 12,
+  "upstream_lines": 11,
+  "upstream_ratio": 0.917,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/llms/LlmDummy.cs",
+  "lines": 12,
+  "upstream_lines": 11,
+  "upstream_ratio": 0.917,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/Prompts.json",
+  "lines": 947,
+  "upstream_lines": 863,
+  "upstream_ratio": 0.911,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Patches/Dialogue_TryGetDialogue_Patch.cs",
+  "lines": 11,
+  "upstream_lines": 10,
+  "upstream_ratio": 0.909,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/PromptCache.cs",
+  "lines": 31,
+  "upstream_lines": 27,
+  "upstream_ratio": 0.871,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "README.md",
+  "lines": 85,
+  "upstream_lines": 72,
+  "upstream_ratio": 0.847,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Patches/NPC_CheckAction_Patch.cs",
+  "lines": 27,
+  "upstream_lines": 22,
+  "upstream_ratio": 0.815,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/LocationsOptimized.json",
+  "lines": 35,
+  "upstream_lines": 28,
+  "upstream_ratio": 0.8,
+  "path_in_upstream": false,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/llms/LlmDeepseek.cs",
+  "lines": 14,
+  "upstream_lines": 11,
+  "upstream_ratio": 0.786,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/llms/LlmOpenAI.cs",
+  "lines": 14,
+  "upstream_lines": 11,
+  "upstream_ratio": 0.786,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/UI/DialogueTextInputBox.cs",
+  "lines": 139,
+  "upstream_lines": 109,
+  "upstream_ratio": 0.784,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/GameSummaryBuilder.cs",
+  "lines": 116,
+  "upstream_lines": 84,
+  "upstream_ratio": 0.724,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/llms/LlmClaude.cs",
+  "lines": 104,
+  "upstream_lines": 74,
+  "upstream_ratio": 0.712,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/assets/GameSummaryOptimized.json",
+  "lines": 267,
+  "upstream_lines": 187,
+  "upstream_ratio": 0.7,
+  "path_in_upstream": false,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/assets/GameSummaryOptimized.json",
+  "lines": 80,
+  "upstream_lines": 56,
+  "upstream_ratio": 0.7,
+  "path_in_upstream": false,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Patches/Game1_DrawDialogue_Patch.cs",
+  "lines": 13,
+  "upstream_lines": 9,
+  "upstream_ratio": 0.692,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Prompts.cs",
+  "lines": 833,
+  "upstream_lines": 567,
+  "upstream_ratio": 0.681,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/llms/LlmVolcEngine.cs",
+  "lines": 111,
+  "upstream_lines": 75,
+  "upstream_ratio": 0.676,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/EventHistoryReader.cs",
+  "lines": 105,
+  "upstream_lines": 70,
+  "upstream_ratio": 0.667,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Generation/LlmResponse.cs",
+  "lines": 15,
+  "upstream_lines": 10,
+  "upstream_ratio": 0.667,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/config/ModConfig.cs",
+  "lines": 39,
+  "upstream_lines": 25,
+  "upstream_ratio": 0.641,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Util.cs",
+  "lines": 94,
+  "upstream_lines": 59,
+  "upstream_ratio": 0.628,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/VtConstants.cs",
+  "lines": 8,
+  "upstream_lines": 5,
+  "upstream_ratio": 0.625,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/manifest.json",
+  "lines": 8,
+  "upstream_lines": 5,
+  "upstream_ratio": 0.625,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "ContentPack/manifest.json",
+  "lines": 10,
+  "upstream_lines": 6,
+  "upstream_ratio": 0.6,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "Extensions/ValleyTalk for SVE/manifest.json",
+  "lines": 10,
+  "upstream_lines": 6,
+  "upstream_ratio": 0.6,
+  "path_in_upstream": true,
+  "class": "UPSTREAM"
+ },
+ {
+  "file": "src/Generation/DialogueBuilder.cs",
+  "lines": 380,
+  "upstream_lines": 224,
+  "upstream_ratio": 0.589,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/models/history/StardewEventHistory.cs",
+  "lines": 126,
+  "upstream_lines": 72,
+  "upstream_ratio": 0.571,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/Interop/IValleyTalkInterface.cs",
+  "lines": 11,
+  "upstream_lines": 6,
+  "upstream_ratio": 0.545,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/config.json",
+  "lines": 24,
+  "upstream_lines": 13,
+  "upstream_ratio": 0.542,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/llms/Llm.cs",
+  "lines": 141,
+  "upstream_lines": 76,
+  "upstream_ratio": 0.539,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/Platform/NetworkHelper.cs",
+  "lines": 85,
+  "upstream_lines": 45,
+  "upstream_ratio": 0.529,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/Interop/ValleyTalkInterface.cs",
+  "lines": 36,
+  "upstream_lines": 19,
+  "upstream_ratio": 0.528,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/Character.cs",
+  "lines": 762,
+  "upstream_lines": 390,
+  "upstream_ratio": 0.512,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/Generation/AsyncBuilder.cs",
+  "lines": 224,
+  "upstream_lines": 112,
+  "upstream_ratio": 0.5,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/ModEntry.cs",
+  "lines": 180,
+  "upstream_lines": 89,
+  "upstream_ratio": 0.494,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/UI/DialogueTextInputMenu.cs",
+  "lines": 80,
+  "upstream_lines": 37,
+  "upstream_ratio": 0.463,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/config/ModConfigMenu.cs",
+  "lines": 315,
+  "upstream_lines": 134,
+  "upstream_ratio": 0.425,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/llms/LlmGemini.cs",
+  "lines": 134,
+  "upstream_lines": 57,
+  "upstream_ratio": 0.425,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/Patches/GameLocation_GetLocationOverrideDialogue_Patch.cs",
+  "lines": 28,
+  "upstream_lines": 11,
+  "upstream_ratio": 0.393,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "ContentPack/i18n/default.json",
+  "lines": 950,
+  "upstream_lines": 259,
+  "upstream_ratio": 0.273,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/Patches/NPC_CheckForNewCurrentDialogue_Patch.cs",
+  "lines": 30,
+  "upstream_lines": 8,
+  "upstream_ratio": 0.267,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/llms/LlmOpenAiBase.cs",
+  "lines": 301,
+  "upstream_lines": 73,
+  "upstream_ratio": 0.243,
+  "path_in_upstream": true,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/Patches/DialogueBox_ThinkingDialogue_Patch.cs",
+  "lines": 33,
+  "upstream_lines": 8,
+  "upstream_ratio": 0.242,
+  "path_in_upstream": false,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/Interop/LivingNpcConversationBridge.cs",
+  "lines": 42,
+  "upstream_lines": 9,
+  "upstream_ratio": 0.214,
+  "path_in_upstream": false,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/Patches/Event_CheckAction_Patch.cs",
+  "lines": 26,
+  "upstream_lines": 5,
+  "upstream_ratio": 0.192,
+  "path_in_upstream": false,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/Generation/GiftMailContentValidator.cs",
+  "lines": 80,
+  "upstream_lines": 13,
+  "upstream_ratio": 0.163,
+  "path_in_upstream": false,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/UI/NativeDialogueTextInputController.cs",
+  "lines": 198,
+  "upstream_lines": 32,
+  "upstream_ratio": 0.162,
+  "path_in_upstream": false,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/UI/ThinkingDialogueController.cs",
+  "lines": 84,
+  "upstream_lines": 11,
+  "upstream_ratio": 0.131,
+  "path_in_upstream": false,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/ConversationCues.cs",
+  "lines": 24,
+  "upstream_lines": 3,
+  "upstream_ratio": 0.125,
+  "path_in_upstream": false,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/ConversationTranscriptExporter.cs",
+  "lines": 375,
+  "upstream_lines": 42,
+  "upstream_ratio": 0.112,
+  "path_in_upstream": false,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/Generation/ConversationTextPostProcessor.cs",
+  "lines": 97,
+  "upstream_lines": 10,
+  "upstream_ratio": 0.103,
+  "path_in_upstream": false,
+  "class": "MIXED"
+ },
+ {
+  "file": "src/Generation/ContextRoutingDecisionPass.cs",
+  "lines": 365,
+  "upstream_lines": 32,
+  "upstream_ratio": 0.088,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/Generation/LivingNpcActionDecisionPass.cs",
+  "lines": 488,
+  "upstream_lines": 42,
+  "upstream_ratio": 0.086,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/UI/StreamingDialogueWindow.cs",
+  "lines": 240,
+  "upstream_lines": 20,
+  "upstream_ratio": 0.083,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/Generation/GiftMailGenerator.cs",
+  "lines": 124,
+  "upstream_lines": 9,
+  "upstream_ratio": 0.073,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/UI/DialogueUiStateGuard.cs",
+  "lines": 69,
+  "upstream_lines": 5,
+  "upstream_ratio": 0.072,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/Generation/StreamingDialoguePreview.cs",
+  "lines": 63,
+  "upstream_lines": 4,
+  "upstream_ratio": 0.063,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/Generation/MemoryImpressionGenerator.cs",
+  "lines": 128,
+  "upstream_lines": 8,
+  "upstream_ratio": 0.062,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/ContextRoutingLogExporter.cs",
+  "lines": 83,
+  "upstream_lines": 5,
+  "upstream_ratio": 0.06,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/RsvAiPolicy.cs",
+  "lines": 21,
+  "upstream_lines": 1,
+  "upstream_ratio": 0.048,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/AiResponseLogExporter.cs",
+  "lines": 119,
+  "upstream_lines": 5,
+  "upstream_ratio": 0.042,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/PromptLogExporter.cs",
+  "lines": 123,
+  "upstream_lines": 5,
+  "upstream_ratio": 0.041,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/Generation/LivingNpcContextCompressor.cs",
+  "lines": 99,
+  "upstream_lines": 4,
+  "upstream_ratio": 0.04,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/TokenUsageTracker.cs",
+  "lines": 184,
+  "upstream_lines": 5,
+  "upstream_ratio": 0.027,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/Generation/ContextRoutingPlan.cs",
+  "lines": 86,
+  "upstream_lines": 2,
+  "upstream_ratio": 0.023,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/Generation/ConversationAnalysis.cs",
+  "lines": 323,
+  "upstream_lines": 6,
+  "upstream_ratio": 0.019,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/llms/LlmThinking.cs",
+  "lines": 174,
+  "upstream_lines": 2,
+  "upstream_ratio": 0.011,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "ContentPack/i18n/zh.json",
+  "lines": 950,
+  "upstream_lines": 2,
+  "upstream_ratio": 0.002,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "README-FORK.txt",
+  "lines": 26,
+  "upstream_lines": 0,
+  "upstream_ratio": 0.0,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/AssemblyInfo.cs",
+  "lines": 1,
+  "upstream_lines": 0,
+  "upstream_ratio": 0.0,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/Generation/GeneratedResponse.cs",
+  "lines": 3,
+  "upstream_lines": 0,
+  "upstream_ratio": 0.0,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/Generation/StreamingResponseOption.cs",
+  "lines": 2,
+  "upstream_lines": 0,
+  "upstream_ratio": 0.0,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/Generation/TokenUsage.cs",
+  "lines": 91,
+  "upstream_lines": 0,
+  "upstream_ratio": 0.0,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/Interop/ILivingNPCsApi.cs",
+  "lines": 15,
+  "upstream_lines": 0,
+  "upstream_ratio": 0.0,
+  "path_in_upstream": false,
+  "class": "MINE"
+ },
+ {
+  "file": "src/llms/IStreamingLlm.cs",
+  "lines": 12,
+  "upstream_lines": 0,
+  "upstream_ratio": 0.0,
+  "path_in_upstream": false,
+  "class": "MINE"
+ }
+]
