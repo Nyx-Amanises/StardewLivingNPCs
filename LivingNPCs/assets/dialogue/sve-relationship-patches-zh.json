@@ -1,0 +1,139 @@
+{
+  "Marlon": {
+    "Alesia": {
+      "id": "Alesia",
+      "Heading": "阿莱西亚",
+      "Description": "同为公会老练战士，其外勤纪律让马龙在鹈鹕镇之外有可信联系。"
+    }
+  },
+  "Lewis": {
+    "Andy": {
+      "id": "Andy",
+      "Heading": "安迪",
+      "Description": "处境艰难的本地农场主，其抱怨迫使刘易斯面对镇上决定的实际代价。"
+    },
+    "Morris": {
+      "id": "Morris",
+      "Heading": "莫里斯",
+      "Description": "Joja经理既是政治问题，也是对刘易斯治理小镇的考验。"
+    },
+    "Susan": {
+      "id": "Susan",
+      "Heading": "苏珊",
+      "Description": "她隔绝的农场让刘易斯必须面对道路、通行和重新融入小镇的问题。"
+    }
+  },
+  "Pierre": {
+    "Andy": {
+      "id": "Andy",
+      "Heading": "安迪",
+      "Description": "传统农场主，与种子价格、作物销售和皮埃尔的本地商户世界观相连。"
+    },
+    "Morris": {
+      "id": "Morris",
+      "Heading": "莫里斯",
+      "Description": "企业竞争者威胁皮埃尔的店、自尊和本地身份感。"
+    }
+  },
+  "Shane": {
+    "Claire": {
+      "id": "Claire",
+      "Heading": "克莱尔",
+      "Description": "Joja同事，其安静疲惫映照同一工作场所的代价。"
+    },
+    "Morris": {
+      "id": "Morris",
+      "Heading": "莫里斯",
+      "Description": "经理体现谢恩既怨恨又依赖的工作压力。"
+    }
+  },
+  "Penny": {
+    "Gunther": {
+      "id": "Gunther",
+      "Heading": "冈瑟",
+      "Description": "博物馆馆长维持潘妮带孩子学习和上课的图书馆空间。"
+    }
+  },
+  "Willy": {
+    "Gunther": {
+      "id": "Gunther",
+      "Heading": "冈瑟",
+      "Description": "海上旧物和本地历史让馆长与威利的海岸知识相关。"
+    }
+  },
+  "Robin": {
+    "Gunther": {
+      "id": "Gunther",
+      "Heading": "冈瑟",
+      "Description": "保护旧空间和古物会让馆长与罗宾的手艺产生交集。"
+    }
+  },
+  "Wizard": {
+    "Marlon": {
+      "id": "Marlon",
+      "Heading": "马龙",
+      "Description": "公会领袖掌握的怪物和隐藏威胁知识与法师的奥术关切重叠。"
+    }
+  },
+  "Marnie": {
+    "Marlon": {
+      "id": "Marlon",
+      "Heading": "马龙",
+      "Description": "SVE 让二人的联系带有建立在旧日信任和乡村邻近上的克制情意。"
+    },
+    "Susan": {
+      "id": "Susan",
+      "Heading": "苏珊",
+      "Description": "乡村邻居，理解动物、补给和被隔绝的孤独。"
+    }
+  },
+  "Krobus": {
+    "Marlon": {
+      "id": "Marlon",
+      "Heading": "马龙",
+      "Description": "马龙对隐藏族群和矿井危险的了解让他成为谨慎但相关的联系人。"
+    }
+  },
+  "Caroline": {
+    "Olivia": {
+      "id": "Olivia",
+      "Heading": "奥利维亚",
+      "Description": "精致的镇上熟人，其社交习惯与卡洛琳更安静的家庭世界形成对照。"
+    }
+  },
+  "Jodi": {
+    "Olivia": {
+      "id": "Olivia",
+      "Heading": "奥利维亚",
+      "Description": "社交精致的邻居，其阶层舒适与乔迪的家庭劳动形成对照。"
+    }
+  },
+  "Pam": {
+    "Olivia": {
+      "id": "Olivia",
+      "Heading": "奥利维亚",
+      "Description": "二人的阶层对照会围绕体面产生紧张、好奇或不自在时刻。"
+    }
+  },
+  "Leah": {
+    "Olivia": {
+      "id": "Olivia",
+      "Heading": "奥利维亚",
+      "Description": "奥利维亚的精致品味能与莉亚的艺术交汇，同时仍带阶层张力。"
+    }
+  },
+  "Emily": {
+    "Sophia": {
+      "id": "Sophia",
+      "Heading": "索菲亚",
+      "Description": "索菲亚对可爱风格、衣服和真诚善意的喜爱让艾米丽很容易与她连接。"
+    }
+  },
+  "Haley": {
+    "Sophia": {
+      "id": "Sophia",
+      "Heading": "索菲亚",
+      "Description": "索菲亚的审美和脆弱能与海莉逐渐看见外表之外关怀的眼光相遇。"
+    }
+  }
+}

@@ -1,0 +1,139 @@
+{
+  "Marlon": {
+    "Alesia": {
+      "id": "Alesia",
+      "Heading": "Alesia",
+      "Description": "A fellow guild veteran whose field discipline gives Marlon a trusted point of contact beyond Pelican Town."
+    }
+  },
+  "Lewis": {
+    "Andy": {
+      "id": "Andy",
+      "Heading": "Andy",
+      "Description": "A struggling local farmer whose complaints force Lewis to face the practical cost of town decisions."
+    },
+    "Morris": {
+      "id": "Morris",
+      "Heading": "Morris",
+      "Description": "Joja's manager is both a political problem and a test of Lewis's stewardship of the town."
+    },
+    "Susan": {
+      "id": "Susan",
+      "Heading": "Susan",
+      "Description": "Her isolated farm makes Lewis responsible for roads, access, and reintegration with town life."
+    }
+  },
+  "Pierre": {
+    "Andy": {
+      "id": "Andy",
+      "Heading": "Andy",
+      "Description": "A traditional farmer tied to seed prices, crop sales, and Pierre's local-business worldview."
+    },
+    "Morris": {
+      "id": "Morris",
+      "Heading": "Morris",
+      "Description": "His corporate rival threatens Pierre's store, pride, and sense of local identity."
+    }
+  },
+  "Shane": {
+    "Claire": {
+      "id": "Claire",
+      "Heading": "Claire",
+      "Description": "A Joja coworker whose quiet exhaustion mirrors the cost of the same workplace."
+    },
+    "Morris": {
+      "id": "Morris",
+      "Heading": "Morris",
+      "Description": "His manager embodies the workplace pressure Shane resents and depends on."
+    }
+  },
+  "Penny": {
+    "Gunther": {
+      "id": "Gunther",
+      "Heading": "Gunther",
+      "Description": "The museum curator supports the library space where Penny teaches and studies with children."
+    }
+  },
+  "Willy": {
+    "Gunther": {
+      "id": "Gunther",
+      "Heading": "Gunther",
+      "Description": "Old sea finds and local history make the curator relevant to Willy's coastal knowledge."
+    }
+  },
+  "Robin": {
+    "Gunther": {
+      "id": "Gunther",
+      "Heading": "Gunther",
+      "Description": "Preserving old spaces and artifacts can bring the curator into contact with Robin's craft."
+    }
+  },
+  "Wizard": {
+    "Marlon": {
+      "id": "Marlon",
+      "Heading": "Marlon",
+      "Description": "The guild leader shares knowledge of monsters and hidden threats that overlap with the Wizard's arcane concerns."
+    }
+  },
+  "Marnie": {
+    "Marlon": {
+      "id": "Marlon",
+      "Heading": "Marlon",
+      "Description": "SVE gives their connection a guarded affection rooted in old trust and rural proximity."
+    },
+    "Susan": {
+      "id": "Susan",
+      "Heading": "Susan",
+      "Description": "A rural neighbor who understands animals, supplies, and the loneliness of being cut off."
+    }
+  },
+  "Krobus": {
+    "Marlon": {
+      "id": "Marlon",
+      "Heading": "Marlon",
+      "Description": "Marlon's knowledge of hidden peoples and mine danger makes him a cautious but relevant contact."
+    }
+  },
+  "Caroline": {
+    "Olivia": {
+      "id": "Olivia",
+      "Heading": "Olivia",
+      "Description": "A refined town acquaintance whose social habits contrast Caroline's quieter domestic world."
+    }
+  },
+  "Jodi": {
+    "Olivia": {
+      "id": "Olivia",
+      "Heading": "Olivia",
+      "Description": "A socially polished neighbor whose class comfort contrasts Jodi's domestic workload."
+    }
+  },
+  "Pam": {
+    "Olivia": {
+      "id": "Olivia",
+      "Heading": "Olivia",
+      "Description": "Their class contrast can create tension, curiosity, or uneasy moments around dignity."
+    }
+  },
+  "Leah": {
+    "Olivia": {
+      "id": "Olivia",
+      "Heading": "Olivia",
+      "Description": "Olivia's refined taste can intersect with Leah's art while still carrying class tension."
+    }
+  },
+  "Emily": {
+    "Sophia": {
+      "id": "Sophia",
+      "Heading": "Sophia",
+      "Description": "Sophia's love of cute style, clothing, and sincere kindness gives Emily an easy point of connection."
+    }
+  },
+  "Haley": {
+    "Sophia": {
+      "id": "Sophia",
+      "Heading": "Sophia",
+      "Description": "Sophia's aesthetics and vulnerability can meet Haley's growing eye for care beyond appearances."
+    }
+  }
+}
