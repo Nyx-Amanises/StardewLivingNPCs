@@ -12,7 +12,8 @@ namespace LivingNPCs.Dialogue.Persistence;
 
 internal sealed class TokenUsageTracker
 {
-    private const string SaveDataKey = "TokenUsageLedger";
+    // 新契约存档键（WP14 §5.1）；仅主机读写存档，远程 farmhand 只保留会话内统计（§3.1.2）。
+    internal const string SaveDataKey = "dialogue.tokens.v1";
     private const string ExportRootFolderName = "token_usage";
     private const int RecentEntryLimit = 20;
 
@@ -22,9 +23,13 @@ internal sealed class TokenUsageTracker
     private TokenUsageLedger saveLedger = new();
     private bool hasLoadedSaveLedger;
 
-    private TokenUsageTracker()
+    // 常规代码走 Instance；internal 构造仅供测试与迁移器注入独立实例。
+    internal TokenUsageTracker()
     {
     }
+
+    /// <summary>测试断言用：当前存档账本。</summary>
+    internal TokenUsageLedger SaveLedgerForTests => this.saveLedger;
 
     public void RegisterEvents()
     {
@@ -69,12 +74,32 @@ internal sealed class TokenUsageTracker
         }
     }
 
+    /// <summary>迁移器导入旧账本（§4.2.2）：替换内存中的存档账本；新键的落盘由迁移器/Saving 负责。</summary>
+    public void ImportMigratedLedger(TokenUsageLedger ledger)
+    {
+        if (ledger == null)
+        {
+            return;
+        }
+
+        this.saveLedger = ledger;
+        this.hasLoadedSaveLedger = true;
+    }
+
     public string BuildConsoleSummary()
     {
         this.EnsureSaveLedgerLoaded();
 
         var builder = new StringBuilder();
         builder.AppendLine("LivingNPCs token usage");
+        if (Context.IsWorldReady && !Context.IsMainPlayer)
+        {
+            builder.AppendLine(Util.GetConsoleString(
+                "dialogue.tokens.hostOnly",
+                null,
+                "Note: the token usage ledger is persisted by the host only; these are session stats."));
+        }
+
         builder.AppendLine(this.BuildTotalsLine("Session", this.sessionLedger.Totals));
         builder.AppendLine(this.BuildTotalsLine("Current save", this.saveLedger.Totals));
 
@@ -131,26 +156,30 @@ internal sealed class TokenUsageTracker
     {
         this.saveLedger = new TokenUsageLedger();
         this.hasLoadedSaveLedger = true;
-        if (Context.IsWorldReady)
+        if (Context.IsWorldReady && Context.IsMainPlayer)
         {
             DialogueServices.Helper.Data.WriteSaveData(SaveDataKey, this.saveLedger);
         }
     }
 
-    private void OnSaveLoaded(object sender, SaveLoadedEventArgs e)
+    private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
     {
         this.hasLoadedSaveLedger = false;
         this.EnsureSaveLedgerLoaded();
     }
 
-    private void OnSaving(object sender, SavingEventArgs e)
+    private void OnSaving(object? sender, SavingEventArgs e)
     {
         this.EnsureSaveLedgerLoaded();
-        DialogueServices.Helper.Data.WriteSaveData(SaveDataKey, this.saveLedger);
+        if (Context.IsMainPlayer)
+        {
+            DialogueServices.Helper.Data.WriteSaveData(SaveDataKey, this.saveLedger);
+        }
+
         this.ExportCurrentSave();
     }
 
-    private void OnReturnedToTitle(object sender, ReturnedToTitleEventArgs e)
+    private void OnReturnedToTitle(object? sender, ReturnedToTitleEventArgs e)
     {
         this.saveLedger = new TokenUsageLedger();
         this.hasLoadedSaveLedger = false;
@@ -163,7 +192,10 @@ internal sealed class TokenUsageTracker
             return;
         }
 
-        this.saveLedger = DialogueServices.Helper.Data.ReadSaveData<TokenUsageLedger>(SaveDataKey) ?? new TokenUsageLedger();
+        // 远程 farmhand 调用 ReadSaveData 会被 SMAPI 拒绝：不读存档，只保留会话内统计。
+        this.saveLedger = Context.IsMainPlayer
+            ? DialogueServices.Helper.Data.ReadSaveData<TokenUsageLedger>(SaveDataKey) ?? new TokenUsageLedger()
+            : new TokenUsageLedger();
         this.hasLoadedSaveLedger = true;
     }
 

@@ -365,3 +365,123 @@ config.json 字段的语义与新旧字段映射表属 WP15，本包只负责"�
   四数组 JSON、DialogueLine 的 `Text/SideEffects/HasText`、ConversationElement 的
   `Text/IsPlayerLine/Id`、账本新旧字段差异（CacheWritePromptTokens 仅最新存档有）、
   EventHistory 全空、chatHistory 旧形态未出现
+
+## 10. 实现记录（2026-07-07，WP14）
+
+### 落位
+
+`LivingNPCs/Dialogue/Persistence/` 新增 9 个文件 + 改写搬运件 `TokenUsageTracker.cs`；
+跨包契约 `LivingNPCs/Dialogue/IDialogueHistory.cs` 与 `StardewTime.cs`；
+测试在 `LivingNPCs.Tests/Dialogue/Persistence/`（5 个文件、42 项）。
+
+- **历史模型**（`HistoryModels.cs`，按 §3.1.1 契约重做）：四桶 `StardewEventHistory`
+  （Conversation/Dialogue/Event/Overheard，元素形态沿用 `{"Item1","Item2"}` 的 Tuple 序列化产物，
+  使迁移解析与新数据读写共用一套代码）+ 顶层 `schemaVersion`/`npcName`（§5.2）。台词行只有
+  `Text`；事件在场者只存内部名字符串（杜绝 Listeners 序列化 NPC 对象事故）；第三方目击记录
+  `[JsonIgnore]` 仅内存（WP10 §4.14）。修剪按 WP10 §4.15 契约实现：容量 事件40/旁听40/台词60/会话30、
+  112 天年龄上限（事件除外）、当日条目保护、幂等；被修剪会话时间正序返回供归档。
+  `RemoveAfter` 承载回档保护。阶段 A 桩里的占位模型（上限 20、无旁听桶）已删除，
+  `LegacyStubs` 的 `EventHistoryReader` 桩一并移除。
+- **容错解析**（`HistoryJson.cs`，§4.4 迁移与日常读取共用）：JToken 逐条解析，四数组独立、
+  坏元素丢弃不连坐；季节大小写不敏感、非法季节/负数日期丢弃；`ConversationElements` 优先、
+  `chatHistory` 回退（偶 NPC 奇玩家）；`Listeners` 容忍任意内容（字符串收名、对象取 Name、其余弃）；
+  `Id` 不还原、未知字段忽略。
+- **名字净化**（`SaveNameSanitizer.cs`，§3.1.1 逐字）：合法集合过滤 → 全非法转 byte 大写十六进制
+  （`X2` 定宽；文档未注明宽度，若真实旧存档出现低于 0x10 的字节且反查失败，会落入"留待补迁"而非丢失）
+  → 50 截断；新键用 `SanitizeLower`。
+- **存取通道**（`DialogueHistoryStore.cs`，实现 01 §2 `IDialogueHistory`）：写进内存缓存、Saving 统一
+  落盘、遗忘立即写空历史（`Forget`/`ForgetAll` 返回是否确有清除，供 WP10 §4.14 清除接口）、
+  SaveLoaded/ReturnedToTitle 清缓存、读取时回档删除、读失败记 Error 按空历史。主机走 IDataHelper
+  存档键 `dialogue.history.v1_<净化名小写>`（斜杠禁用，`.`/`_` 组合，§5.1）；远程 farmhand 走
+  `multiplayer/<SaveFolderName>.json`（键为内部名原大小写，文件名按当前存档每次计算，修正了 §3.2.1
+  记载的旧怪癖；旧格式文件同一解析器接住）。护栏（§5.3）：单 NPC 序列化 >256KB 先触发
+  `ForcePruneCallback`（WP10 注入，缺省契约修剪），仍超限丢最老条目直至达标并 Warn；
+  全 mod 键（`smapi/mod-data/yuki.livingnpcs/` 前缀）总体积 >4MB Warn 一次。被修剪会话经
+  `ArchiveSink`（缺省接转录导出器 `ArchivePrunedConversations`，归档标记按裁决 2 保留
+  `valleytalk:archive` 字面量）。全部操作单锁保护（00 §3 线程模型：LLM 回调线程只进缓存）。
+- **契约类型**：`ExchangeRecord`（Kind=Conversation/DialogueLines/EventLines/Overheard + Time/
+  ConversationId/SpeakerName/EventName/ListenerNames/Lines）为 WP14 初版定义，字段最终裁定权
+  在 WP10（01 §2）；Conversation 按 ConversationId 同 ID 覆盖（upsert），`Recent` 四桶按时间合并
+  取最近 N 条、正序返回。`StardewTime` 从阶段 A 桩提升到 `LivingNPCs.Dialogue` 根命名空间
+  （JSON 形态即 §3.1.1 契约），绝对天数公式与转录水位共用。
+- **存档迁移**（`LegacySaveDataMigrator.cs`，§4.2）：SaveLoaded 主机执行；直接枚举
+  `Game1.CustomData` 取 `smapi/mod-data/dandm1.valleytalk/` 前缀；账本 → 新键 `dialogue.tokens.v1`
+  并写穿（缺失字段缺省 0，§7.4）；历史键对 `Game1.characterData` 建"净化小写名 → 原名"反查，
+  未匹配键保留待补迁（裁决 4，装回 NPC mod 后下次载入自动拾起）；写前跑同一容错清洗 + 回档删除。
+  幂等标记 `dialogue.migration.v1` 存已迁移/失败键集合；仅剩 pending 的一轮不算执行过（不写标记
+  不出日志）。旧键永不自动删除（裁决 1）；全程零写旧前缀。HUD 一次性提示（迁移数 >0 时）+
+  失败时"部分数据未能迁移"提示，走 `LlmHudNotifier` 主线程泵。
+- **文件夹迁移**（`LegacyFolderMigrator.cs` + `LegacyValleyTalkConfig.cs`，§4.3）：GameLaunched 执行
+  （farmhand 机器同样跑）；Mods 根两层扫描 manifest 认 `dandm1.ValleyTalk`（大小写不敏感；标准解析
+  失败退精确正则以兼容 SMAPI 宽松 manifest），内容包 ID 不处理；复制 `multiplayer/*.json` 与
+  `conversation_logs/` 全目录（不覆盖已存在文件），诊断日志目录不搬（裁决 3）；幂等标记
+  `data/migration-state.json`（completedAtUtc/来源/条数/错误）。config.json 读为 §3.2.2 全字段模型
+  （含 Raw JObject 与 Provider 合法值校验）后交 `LegacyFolderMigrator.ConfigImporter` 钩子——
+  **WP15-TODO**：由 WP15 注册映射器并落 `LegacyConfigImported`（裁决 5；没找到旧 config 也会以
+  null 通知，WP15 仍应置 true）。找不到旧文件夹静默结束且不写标记（用户从备份恢复旧文件夹可再触发，
+  作为 §4.3 数据丢失场景的补救通道）。绝不删除旧文件夹任何文件。
+- **TokenUsageTracker**（搬运件改写）：存档键 `TokenUsageLedger` → `dialogue.tokens.v1`（§5.1）；
+  Read/Write/Reset 仅主机（§3.1.2 farmhand 只留会话统计，控制台摘要在 farmhand 上加"仅主机保存"
+  提示行）；新增 `ImportMigratedLedger`（只改内存，落盘由迁移器写穿 + Saving 兜底）。
+- **接线**（`DialoguePersistence.cs` 门面）：注册四个 GameLoop 事件与
+  `livingnpcs_purge_valleytalk` 命令（无 confirm 参数时只报旧键数量与用法；confirm 后从
+  `Game1.CustomData`/`SaveGame.loaded.CustomData` 移除旧键，下次存档生效）；暴露
+  `LegacyValleyTalkLoaded` 供 WP12 做 HUD 警告与引擎禁用（检测到时本包记 Error 日志并跳过全部迁移）。
+  `ModEntry` 在启用路径调用 `RegisterEvents`（WP12-TODO：最终收编到游戏集成层）。
+- **可测性**：`IPersistenceEnvironment` 把 SMAPI/游戏静态收敛为唯一出口
+  （`SmapiPersistenceEnvironment` 生产实现）；测试假环境按 SMAPI 真实行为模拟（slug 校验、
+  StringEnumConverter 序列化为单字符串、物理键整体小写）。发现并绕开：单测进程里
+  `StardewModdingAPI.Context` 类型初始化会抛异常，故迁移路径不直接触碰 Context（tracker 的
+  Context 分支仅在游戏进程走到）。
+
+### 实现判断点（规格留白处的裁定，供审计）
+
+- 十六进制回退用 `X2` 定宽（§3.1.1 只写"强转 byte 的大写十六进制串"未注明宽度）。两种写法仅在
+  字节 <0x10 时有别且只影响全非法名的反查；反查不中会落入补迁名单而非丢失，风险受控。
+- 修剪的"当日保护"应用于全部四桶（规格针对会话表述，扩展到其余桶只会更保守）；会话的 112 天
+  年龄修剪结果同样交归档（它们也是被修剪的会话记忆）。
+- 迁移标记里的失败键不自动重试（数据不会自愈，重试只会每次载入刷 Warn）；`pendingKeys` 仅在
+  标记写入时随手记录，权威判断始终按"旧键 − 已迁移 − 已失败"现算。
+- 护栏强制修剪后仍超限的"丢最老条目"跨四桶按时间统一取最老，其中丢掉的会话同样归档。
+- `Recent` 未纳入第三方目击记录（不持久化，WP10 经 `GetHistory` 直接采样内存桶）。
+- 新键写入走 `WriteSaveData(key, model)` 由 SMAPI 序列化；护栏测量用等价设置
+  （Newtonsoft + StringEnumConverter + Formatting.None）自行序列化，两者字段名由 JsonProperty 钉死。
+
+### 供下游工作包对接
+
+- **WP10**：`DialogueHistoryStore.Instance` 实现 `IDialogueHistory`（Append/Recent）；直接变更用
+  `GetHistory(npc)` + `MarkDirty(npc)`；修剪入口 `PruneAndArchive(npc)`（契约修剪 + 自动归档）；
+  强制修剪回调挂 `ForcePruneCallback`；清除接口 `Forget`/`ForgetAll`（转录档案重置请另调
+  `ConversationTranscriptExporter.ResetTranscript`，本包不越俎）。`ExchangeRecord` 字段如需扩展改
+  `IDialogueHistory.cs` 一个文件。
+- **WP11**：`TokenUsageTracker.Instance.Record(npc, usage, provider, model, outcome)` 签名未动。
+- **WP12**：事件已由门面自行注册，收编时把 `DialoguePersistence.RegisterEvents()` 挪走即可；
+  旧 mod 检测结果读 `DialoguePersistence.LegacyValleyTalkLoaded`（HUD 警告与引擎禁用由 WP12 接线）。
+- **WP15**：注册 `LegacyFolderMigrator.ConfigImporter`（参数 `LegacyValleyTalkConfig?`，含全部
+  §3.2.2 字段 + `Raw`；null 表示没找到旧 config，仍须置 `LegacyConfigImported=true`）。i18n 需落表：
+  `dialogue.migration.save.summary`（tokens: npcCount/ledger/pendingCount/failedCount）、
+  `dialogue.migration.save.hud`（npcCount）、`dialogue.migration.save.hudPartial`、
+  `dialogue.migration.folder.summary`（source/multiplayer/transcripts/config）、
+  `dialogue.tokens.hostOnly`、`dialogue.purge.hostOnly`、`dialogue.purge.usage`（count/command）、
+  `dialogue.purge.done`（count）；英文兜底文案已内置。
+- **WP16**：`behavior-memory` 未触碰（§1 范围外）。
+
+### 验证
+
+- `dotnet test LivingNPCs.Tests`：**通过 399，失败 0，跳过 1**（唯一 skip 仍为阶段 A 遗留的
+  WP15-TODO）；本包新增 42 项，覆盖 §7 验收 3–8（净化规则中文名/十六进制/50 截断/合法字符、
+  四数组容错解析与 chatHistory 回退与非法季节丢弃与 Listeners 任意内容、老账本缺字段为 0、
+  新键 slug 全小写（假环境按 SMAPI 规则校验）、farmhand 零 SaveData 调用与按存档命名换档跟随、
+  256KB 强制修剪 + Warn、旧 mod 在加载/farmhand 全跳过、迁移幂等/补迁/坏键不重试/旧键保留、
+  purge 只删旧前缀、嵌套文件夹定位/内容包忽略/诊断不搬/标记幂等/config 钩子）；修剪契约测试
+  更新为 WP10 §4.15 容量（40/40/60/30）并补旁听桶/年龄归档/RemoveAfter 用例。
+- 主工程 Debug 与 Release（`-p:EnableModDeploy=false`）双配置 0 错误；`Persistence/` 目录 0 警告
+  （顺手修掉搬运件 TokenUsageTracker 的三个事件处理器可空性警告）。
+- 验收 1、2、6、7 的真机部分（真实旧存档载入、旧嵌套文件夹、联机 farmhand、游戏内体积护栏）
+  留给 30 号验收的用户冒烟；单测已覆盖其可自动化面。
+
+### 洁净室声明
+
+本包实现全程未打开 `ValleyTalk/`、`ValleyTalk.Tests/`、`upstream-ValleyTalk/` 下任何文件
+（rewrite worktree 中前两者已物理删除），未以任何方式检索上游源码；仅阅读 RewriteSpec、
+`LivingNPCs/`、`LivingNPCs.Tests/`、阶段 A 已落位的搬运件与 WP11 成果。

@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
-using LivingNPCs.Dialogue.Engine;
-using LivingNPCs.Dialogue.Llm;
-using LivingNPCs.Dialogue.Diagnostics;
+using LivingNPCs.Dialogue;
+using LivingNPCs.Dialogue.Persistence;
 
 namespace LivingNPCs.Tests.Dialogue;
 
@@ -55,15 +54,29 @@ public sealed class StardewEventHistoryPruneTests
     }
 
     [Fact]
+    public void ConversationsBeyondAgeLimitArePrunedAndReturnedForArchiving()
+    {
+        var history = new StardewEventHistory();
+        history.Add(DaysAgo(StardewEventHistory.MaxAgeDays + 5), MakeConversation("ancient"));
+        history.Add(DaysAgo(3), MakeConversation("recent"));
+
+        var dropped = history.Prune(Now);
+
+        Assert.Single(dropped);
+        Assert.Equal("ancient", dropped[0].Item2.ConversationElements[0].Text);
+        Assert.Single(history.ConversationHistory);
+    }
+
+    [Fact]
     public void DialogueEntriesOlderThanOneYearArePruned()
     {
         var history = new StardewEventHistory();
         for (int i = 0; i < 3; i++)
         {
-            history.Add(DaysAgo(StardewEventHistory.MaxAgeDays + 10 + i), new DialogueHistory(new List<StardewValley.DialogueLine>()));
+            history.Add(DaysAgo(StardewEventHistory.MaxAgeDays + 10 + i), new DialogueHistory(new List<HistoryLine>()));
         }
-        history.Add(DaysAgo(10), new DialogueHistory(new List<StardewValley.DialogueLine>()));
-        history.Add(DaysAgo(5), new DialogueHistory(new List<StardewValley.DialogueLine>()));
+        history.Add(DaysAgo(10), new DialogueHistory(new List<HistoryLine>()));
+        history.Add(DaysAgo(5), new DialogueHistory(new List<HistoryLine>()));
 
         history.Prune(Now);
 
@@ -71,19 +84,40 @@ public sealed class StardewEventHistoryPruneTests
     }
 
     [Fact]
-    public void EventEntriesIgnoreTheAgeLimit()
+    public void EventEntriesIgnoreTheAgeLimitButHonorTheCap()
     {
         var history = new StardewEventHistory();
-        for (int i = 0; i < 3; i++)
+        int total = StardewEventHistory.MaxEventEntries + 2;
+        for (int i = 0; i < total; i++)
         {
             history.Add(
-                DaysAgo(400 + i),
-                new DialogueEventHistory(new List<StardewValley.NPC>(), new List<StardewValley.DialogueLine>(), "FlowerDance"));
+                DaysAgo(400 + total - i),
+                new DialogueEventHistory(new List<string>(), new List<HistoryLine>(), $"Festival {i}"));
         }
 
         history.Prune(Now);
 
-        Assert.Equal(3, history.EventHistory.Count);
+        Assert.Equal(StardewEventHistory.MaxEventEntries, history.EventHistory.Count);
+        // Age alone never removes event entries; only the cap dropped the two oldest.
+        Assert.DoesNotContain(history.EventHistory, entry => entry.Item2.EventName == "Festival 0");
+        Assert.Contains(history.EventHistory, entry => entry.Item2.EventName == $"Festival {total - 1}");
+    }
+
+    [Fact]
+    public void OverheardEntriesHonorCapAndAgeLimit()
+    {
+        var history = new StardewEventHistory();
+        history.Add(DaysAgo(StardewEventHistory.MaxAgeDays + 1), new OverheardHistory("Abigail", new List<HistoryLine> { new("old line") }));
+        int total = StardewEventHistory.MaxOverheardEntries + 3;
+        for (int i = 0; i < total; i++)
+        {
+            history.Add(DaysAgo(total - i), new OverheardHistory("Sam", new List<HistoryLine> { new($"line {i}") }));
+        }
+
+        history.Prune(Now);
+
+        Assert.Equal(StardewEventHistory.MaxOverheardEntries, history.OverheardHistory.Count);
+        Assert.DoesNotContain(history.OverheardHistory, entry => entry.Item2.SpeakerName == "Abigail");
     }
 
     [Fact]
@@ -122,14 +156,30 @@ public sealed class StardewEventHistoryPruneTests
     }
 
     [Fact]
-    public void AddIgnoresThirdPartyHistoryInsteadOfThrowing()
+    public void AddKeepsThirdPartyHistoryInMemoryOnlyWithoutAffectingPersistableBuckets()
     {
         var history = new StardewEventHistory();
 
-        // ThirdPartyHistory has no persistable bucket; recording it used to throw from inside the
-        // dialogue pipeline. It must now be dropped silently.
-        history.Add(DaysAgo(1), new ThirdPartyHistory(null, new List<StardewValley.DialogueLine>(), "FairFestival"));
+        // Third-party sightings have no persistable bucket (WP10 §4.14): they stay in memory for
+        // same-day sampling and never count as persistable history.
+        history.Add(DaysAgo(1), new ThirdPartyHistory("Sam", new List<HistoryLine>(), "FairFestival"));
 
         Assert.False(history.Any());
+        Assert.Single(history.ThirdPartyHistory);
+    }
+
+    [Fact]
+    public void RemoveAfterDropsEntriesLaterThanTheCurrentTime()
+    {
+        var history = new StardewEventHistory();
+        history.Add(DaysAgo(2), MakeConversation("past"));
+        history.Add(new StardewTime(Now.year, Now.season, Now.dayOfMonth, Now.timeOfDay + 100), MakeConversation("future same day"));
+        history.Add(Now.AddDays(3), new DialogueHistory(new List<HistoryLine> { new("future line") }));
+
+        int removed = history.RemoveAfter(Now);
+
+        Assert.Equal(2, removed);
+        Assert.Single(history.ConversationHistory);
+        Assert.Empty(history.DialogueHistory);
     }
 }

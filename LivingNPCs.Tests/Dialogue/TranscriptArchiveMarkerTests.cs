@@ -1,6 +1,6 @@
 using System;
 using Xunit;
-using LivingNPCs.Dialogue.Engine;
+using LivingNPCs.Dialogue;
 using LivingNPCs.Dialogue.Llm;
 using LivingNPCs.Dialogue.Diagnostics;
 

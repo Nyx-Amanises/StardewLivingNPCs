@@ -6,6 +6,7 @@ using Xunit;
 using LivingNPCs.Dialogue.Engine;
 using LivingNPCs.Dialogue.Llm;
 using LivingNPCs.Dialogue.Diagnostics;
+using LivingNPCs.Dialogue.Persistence;
 
 namespace LivingNPCs.Tests.Dialogue;
 

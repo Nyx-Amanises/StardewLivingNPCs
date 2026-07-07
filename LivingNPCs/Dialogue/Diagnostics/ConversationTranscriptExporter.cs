@@ -6,8 +6,8 @@ using System.Text;
 using StardewModdingAPI;
 using StardewValley;
 
-using LivingNPCs.Dialogue.Engine;
 using LivingNPCs.Dialogue.Llm;
+using LivingNPCs.Dialogue.Persistence;
 namespace LivingNPCs.Dialogue.Diagnostics;
 
 internal static class ConversationTranscriptExporter
@@ -45,7 +45,7 @@ internal static class ConversationTranscriptExporter
 
         foreach (string npcName in Game1.characterData.Keys.OrderBy(name => name))
         {
-            var history = EventHistoryReader.Instance.GetEventHistory(npcName);
+            var history = DialogueHistoryStore.Instance.GetHistory(npcName);
             Export(npcName, history);
         }
     }

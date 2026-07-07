@@ -42,6 +42,9 @@ public sealed class ModEntry : Mod
         this.engine = new BehaviorEngine(helper, Monitor, this.config);
         this.engine.RegisterEvents();
 
+        // WP14 持久化与旧数据迁移接线；WP12-TODO: 事件接线最终收编到游戏集成层。
+        Dialogue.Persistence.DialoguePersistence.RegisterEvents();
+
         Monitor.Log(I18n.Get("log.mod.loaded"), LogLevel.Info);
     }
 
