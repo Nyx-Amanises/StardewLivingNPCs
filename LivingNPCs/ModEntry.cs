@@ -30,6 +30,9 @@ public sealed class ModEntry : Mod
             helper.WriteConfig(this.config);
         }
 
+        // 对话引擎的运行时配置视图（WP15 §3.1）：无论行为系统开关如何都保持同步。
+        DialogueServices.Config.SyncFrom(this.config);
+
         helper.Events.GameLoop.GameLaunched += this.OnGameLaunched;
 
         if (!this.config.EnableMod)
@@ -44,6 +47,9 @@ public sealed class ModEntry : Mod
 
         // WP14 持久化与旧数据迁移接线；WP12-TODO: 事件接线最终收编到游戏集成层。
         Dialogue.Persistence.DialoguePersistence.RegisterEvents();
+
+        // WP15 内容/配置装配（注册顺序在持久化层之后：先导入旧 config 再建 LLM 客户端）。
+        Dialogue.Content.DialogueContentSetup.Register(helper, this.config);
 
         Monitor.Log(I18n.Get("log.mod.loaded"), LogLevel.Info);
     }

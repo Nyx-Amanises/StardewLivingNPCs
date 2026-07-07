@@ -38,5 +38,13 @@
       <HintPath>$(GamePath)\StardewModdingAPI.dll</HintPath>
       <Private>true</Private>
     </Reference>
+    <Reference Include="SMAPI.Toolkit">
+      <HintPath>$(GamePath)\smapi-internal\SMAPI.Toolkit.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="SMAPI.Toolkit.CoreInterfaces">
+      <HintPath>$(GamePath)\smapi-internal\SMAPI.Toolkit.CoreInterfaces.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
   </ItemGroup>
 </Project>

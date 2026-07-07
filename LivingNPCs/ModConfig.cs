@@ -1,4 +1,8 @@
 using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Linq;
+using StardewModdingAPI;
 using StardewModdingAPI.Utilities;
 
 namespace LivingNPCs;
@@ -7,6 +11,9 @@ internal sealed class ModConfig
 {
     public const int MaxHelpRequestDailyOfferChancePercent = 60;
     public const int MaxAiDailyGiftChancePercent = 25;
+
+    /// <summary>TypedResponses 的合法值（WP15 §3.1，兼容契约按原样保留）。</summary>
+    public static readonly string[] TypedResponsesValues = { "Always", "With Generated", "Never" };
 
     public bool EnableMod { get; set; } = true;
     public bool Debug { get; set; } = false;
@@ -73,6 +80,63 @@ internal sealed class ModConfig
     public bool EnableMemoryImpressions { get; set; } = true;
     public int MemoryImpressionTimeoutSeconds { get; set; } = 45;
 
+    // —— 对话引擎字段（WP15 §3.1；平铺进现有类，旧 ValleyTalk config.json 由 WP14 迁移）——
+
+    /// <summary>旧 EnableMod（引擎总开关）改名而来：与 LivingNPCs 的 EnableMod（全 mod 总开关）区分。关→开需重启。</summary>
+    public bool EnableDialogueEngine { get; set; } = true;
+    public bool ExportAiResponseLogs { get; set; } = true;
+
+    /// <summary>LLM 提供商 ID（合法值见 WP11 提供商注册表，大小写不敏感）。新装默认 OpenAiCompatible（WP11 裁决 6）。</summary>
+    public string Provider { get; set; } = "OpenAiCompatible";
+
+    /// <summary>敏感：不得写入任何日志/导出文件。</summary>
+    public string ApiKey { get; set; } = string.Empty;
+    public string ModelName { get; set; } = string.Empty;
+    public string ServerAddress { get; set; } = "https://openrouter.ai/api";
+    public string PromptFormat { get; set; } = "[INST] {system}\n{prompt}[/INST]\n{response_start}";
+    public int QueryTimeout { get; set; } = 85;
+    public bool ApplyTranslation { get; set; } = true;
+    public int GeneralFrequency { get; set; } = 4;
+    public int MarriageFrequency { get; set; } = 4;
+    public int GiftFrequency { get; set; } = 4;
+    public bool GenerateAiForNormalRightClick { get; set; } = false;
+    public string TypedResponses { get; set; } = "With Generated";
+    public SButton InitiateTypedDialogueKey { get; set; } = SButton.LeftAlt;
+    public bool UseOptimizedPrompts { get; set; } = false;
+    public bool EnableSemanticContextRouting { get; set; } = true;
+    public int SemanticContextRoutingTimeoutSeconds { get; set; } = 8;
+    public string RoutingThinkingLevel { get; set; } = "Off";
+    public string ChatThinkingLevel { get; set; } = "Auto";
+    public bool SuppressConnectionCheck { get; set; } = false;
+
+    /// <summary>旧 config.json 是否已迁移（WP14 裁决 5）。不进 GMCM。</summary>
+    public bool LegacyConfigImported { get; set; } = false;
+
+    private string disableCharacters = string.Empty;
+
+    /// <summary>禁用 AI 对话的 NPC 名单，逗号/空格分隔；setter 同步解析成 Title Case 内部列表。</summary>
+    public string DisableCharacters
+    {
+        get => this.disableCharacters;
+        set
+        {
+            this.disableCharacters = value ?? string.Empty;
+            this.DisabledCharacterList = ParseDisabledCharacters(this.disableCharacters);
+        }
+    }
+
+    [Newtonsoft.Json.JsonIgnore]
+    public IReadOnlyList<string> DisabledCharacterList { get; private set; } = Array.Empty<string>();
+
+    internal static IReadOnlyList<string> ParseDisabledCharacters(string raw)
+    {
+        TextInfo textInfo = CultureInfo.InvariantCulture.TextInfo;
+        return raw
+            .Split(new[] { ',', ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(name => textInfo.ToTitleCase(name.ToLowerInvariant()))
+            .ToList();
+    }
+
     public bool Migrate()
     {
         if (this.BehaviorHotkey.ToString().Equals("B", StringComparison.OrdinalIgnoreCase))
@@ -128,6 +192,34 @@ internal sealed class ModConfig
         this.AiPlannerTimeoutSeconds = Clamp(this.AiPlannerTimeoutSeconds, 1, 120);
         this.AiGiftMailTimeoutSeconds = Clamp(this.AiGiftMailTimeoutSeconds, 5, 120);
         this.MemoryImpressionTimeoutSeconds = Clamp(this.MemoryImpressionTimeoutSeconds, 10, 180);
+
+        // 对话引擎字段（WP15 §3.1/§4.9：超时与档位钳制、思考档位归一、TypedResponses 归一）。
+        this.QueryTimeout = Clamp(this.QueryTimeout, 5, 180);
+        this.SemanticContextRoutingTimeoutSeconds = Clamp(this.SemanticContextRoutingTimeoutSeconds, 2, 30);
+        this.GeneralFrequency = Clamp(this.GeneralFrequency, 0, 4);
+        this.MarriageFrequency = Clamp(this.MarriageFrequency, 0, 4);
+        this.GiftFrequency = Clamp(this.GiftFrequency, 0, 4);
+
+        string routing = Dialogue.Llm.LlmThinking.Normalize(this.RoutingThinkingLevel, Dialogue.Llm.LlmThinking.Off);
+        if (!string.Equals(routing, this.RoutingThinkingLevel, StringComparison.Ordinal))
+        {
+            this.RoutingThinkingLevel = routing;
+            changed = true;
+        }
+
+        string chat = Dialogue.Llm.LlmThinking.Normalize(this.ChatThinkingLevel, Dialogue.Llm.LlmThinking.Auto);
+        if (!string.Equals(chat, this.ChatThinkingLevel, StringComparison.Ordinal))
+        {
+            this.ChatThinkingLevel = chat;
+            changed = true;
+        }
+
+        string typed = Dialogue.Content.LegacyConfigImporter.NormalizeTypedResponses(this.TypedResponses) ?? "With Generated";
+        if (!string.Equals(typed, this.TypedResponses, StringComparison.Ordinal))
+        {
+            this.TypedResponses = typed;
+            changed = true;
+        }
 
         if (this.MinHelpRequestFriendshipReward > this.MaxHelpRequestFriendshipReward)
         {
@@ -204,5 +296,38 @@ internal sealed class ModConfig
         this.AiGiftMailTimeoutSeconds = defaults.AiGiftMailTimeoutSeconds;
         this.EnableMemoryImpressions = defaults.EnableMemoryImpressions;
         this.MemoryImpressionTimeoutSeconds = defaults.MemoryImpressionTimeoutSeconds;
+    }
+
+    /// <summary>
+    /// 仅重置对话引擎字段（WP15 §4.9：引擎段 reset 不得动行为系统字段）。
+    /// 有意保留 LegacyConfigImported（迁移只做一次）与 ApiKey 之外的一切敏感语义——
+    /// ApiKey 属引擎字段，重置即清空。
+    /// </summary>
+    public void ResetDialogueEngineDefaults()
+    {
+        var defaults = new ModConfig();
+
+        this.EnableDialogueEngine = defaults.EnableDialogueEngine;
+        this.ExportAiResponseLogs = defaults.ExportAiResponseLogs;
+        this.Provider = defaults.Provider;
+        this.ApiKey = defaults.ApiKey;
+        this.ModelName = defaults.ModelName;
+        this.ServerAddress = defaults.ServerAddress;
+        this.PromptFormat = defaults.PromptFormat;
+        this.QueryTimeout = defaults.QueryTimeout;
+        this.ApplyTranslation = defaults.ApplyTranslation;
+        this.GeneralFrequency = defaults.GeneralFrequency;
+        this.MarriageFrequency = defaults.MarriageFrequency;
+        this.GiftFrequency = defaults.GiftFrequency;
+        this.GenerateAiForNormalRightClick = defaults.GenerateAiForNormalRightClick;
+        this.TypedResponses = defaults.TypedResponses;
+        this.InitiateTypedDialogueKey = defaults.InitiateTypedDialogueKey;
+        this.UseOptimizedPrompts = defaults.UseOptimizedPrompts;
+        this.EnableSemanticContextRouting = defaults.EnableSemanticContextRouting;
+        this.SemanticContextRoutingTimeoutSeconds = defaults.SemanticContextRoutingTimeoutSeconds;
+        this.RoutingThinkingLevel = defaults.RoutingThinkingLevel;
+        this.ChatThinkingLevel = defaults.ChatThinkingLevel;
+        this.SuppressConnectionCheck = defaults.SuppressConnectionCheck;
+        this.DisableCharacters = defaults.DisableCharacters;
     }
 }

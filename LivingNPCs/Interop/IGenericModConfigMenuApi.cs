@@ -8,6 +8,12 @@ public interface IGenericModConfigMenuApi
 {
     void Register(IManifest mod, Action reset, Action save, bool titleScreenOnly = false);
 
+    void Unregister(IManifest mod);
+
+    void OpenModMenu(IManifest mod);
+
+    void OnFieldChanged(IManifest mod, Action<string, object> onChange);
+
     void AddSectionTitle(IManifest mod, Func<string> text, Func<string>? tooltip = null);
 
     void AddParagraph(IManifest mod, Func<string> text);

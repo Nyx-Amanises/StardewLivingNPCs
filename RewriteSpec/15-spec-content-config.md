@@ -489,3 +489,75 @@ SVE 扩展包（`dandm1.ValleyTalkSVE`，文件夹 `ValleyTalk for SVE`）全部
 - i18n 键集：ContentPack/i18n/default.json、zh.json（各 950 键；8 个 command 键 + locationBed.npcFemale 无 Prompts 映射）
 - LivingNPCs 侧撞名字段：LivingNPCs/ModConfig.cs:11-12, 54
 - 上游译文（不可搬）：ValleyTalk/translations/fr-FR/assets/bio/*.txt、translations/zh-CN/i18n/zh-CN.json
+
+## 10. 实现记录（2026-07-08，WP15 实现对话）
+
+洁净室声明：实现全程未打开 ValleyTalk/、ValleyTalk.Tests/、upstream-ValleyTalk/ 下任何文件
+（rewrite 分支中前两者已删除），未检索其源码镜像。全部行为依据本文档 + 00/01 + 各裁决块。
+
+### 交付物
+
+**新增 `LivingNPCs/Dialogue/Content/`（全部原创）**：
+
+| 文件 | 职责（对应节） |
+|---|---|
+| `ContentAssetNames.cs` | 四个资产名 + `assets/dialogue/` 磁盘路径唯一定义点（§3.2/§5） |
+| `NpcBio.cs` | `NpcBio`/`BioListEntry`/`ChildDescription` 资产模型 + 派生字段（§3.4/§5） |
+| `WorldSummary.cs` | 世界摘要七节模型，条目统一类型（Crops/Forage/Region 可缺席）（§3.3） |
+| `WorldSummaryRenderer.cs` | 渲染成 WP10 消费的最终字符串：节序/标题开关/季节列表/Region 分组/翻译尾行（§3.3） |
+| `PromptTable.cs` | 提示词表：locale×玩家性别缓存、"(no translation" 过滤、预处理、三层查找、每键一次警告、{{Token}} 替换、加载失败双错误日志+运行时关闸（§4.2）；`DialogueEngineGate` 即"运行时关闭引擎"标志（WP10/WP12 生成入口须检查）；`KeysReferencedByContentCode` 为 §3.6 本包直接消费键 |
+| `SveContentRules.cs` | 名字规整+SVE 别名表、SVE 兼容名单、扩展兼容判定、世界增量合并（冲突 SVE 胜）、关系增补（§4.3.1/§4.4） |
+| `BioFallbackBuilder.cs` | Data/Characters 轻量回退传记：概括句/三特质/前8关系/话题池/固定免责收尾（§4.3.3） |
+| `DialogueContentService.cs` | `IDialogueContent` 实现与唯一门面：传记全链+缓存（记 SVE 开关戳）、四变体摘要缓存、性别派生（`Gender` 覆盖口对 generalMale/Female 生效，裁决 4）、代词组、失效入口；内部富接口 `LookupPrompt`（带 PromptOverrides/tokens）与 `GetWorldSummaryText` 供 WP10 |
+| `IContentPipeline.cs` + `GameContentPipeline.cs` | 游戏耦合缝：SMAPI 内容 API、Game1 数据、礼物段解析（<8 段跳过）、磁盘 JSON。除此薄层全链可单测 |
+| `ThirdPartyContentPolicy.cs` | 内容包 `PermitAiUse` 扫描 + 未授权标志（§4.5；无硬编码白名单，WP12 裁决 7） |
+| `DialogueSampleLoader.cs` | 净版对话样本：独立 ContentManager、语言后缀链、婚后 M_ 前缀、传记 Dialogue 无条件覆盖（§4.5） |
+| `LegacyConfigImporter.cs` | 旧 config 字段映射（§3.1 全表：改名/或/与/钳制/归一/SButton 解析）；幂等靠 `LegacyConfigImported`（找没找到都置 true，WP14 裁决 5） |
+| `DialogueConfigMenuSection.cs` | GMCM 引擎段：元数据驱动动态字段、OnFieldChanged 即时响应 Provider 切换（清 ApiKey+写盘+下一 tick Unregister→重注册→OpenModMenu，双标志防重入）、频率下拉三级解析容错、Gemini 系剔 XHigh、模型列表段落（按连接参数缓存）（§4.9） |
+| `DialogueContentSetup.cs` | 装配：AssetRequested/AssetsInvalidated（一次静态注册，§4.1）、Prompts=default+zh 逐键合并、Bios 按 SVE×locale 择目录、挂 WP14 ConfigImporter、GameLaunched 内容包扫描+建 LLM 客户端（§4.10） |
+
+**改动现有文件**：`ModConfig.cs`（§3.1 引擎字段平铺 + `LegacyConfigImported` + `DisableCharacters` setter 解析 Title Case + Validate 钳制/归一 + `ResetDialogueEngineDefaults` 只动引擎字段）；`Dialogue/DialogueServices.cs`（`DialogueConfig` 扩为完整运行时视图 + `SyncFrom`；`Util.GetString` 家族重写：`dialogue.` 前缀 SMAPI i18n 优先→提示词表回退，`UsePlaceholder(false)` 杜绝占位串泄漏）；`ModConfigMenu.cs`（一次 Register，reset/save 合并）；`Interop/IGenericModConfigMenuApi.cs`（增补官方 `Unregister`/`OpenModMenu`/`OnFieldChanged`）；`ModEntry.cs`（读配置后同步运行时视图；装配注册在持久化层之后，保证先导入旧配置再建客户端）；`IDialogueContent.cs`（新建：01 §2 接口 + `PromptVariant`/`PromptGender`）。
+
+**i18n**：`i18n/default.json` + `zh.json` 各 +110 键（748→858）：熔断 2、迁移/purge/用量 8、自检 9、思考回退警告 1、转录 10、UI 4、控制台命令 9（含 `dialogue.command.forget.*` 7 键——修复旧世界 8 个不可达中文键的对应物，供 WP12 按 `livingnpcs_forget/tokens` 消费）、GMCM 全套 67。en/zh 均为新写（旧内容包 i18n 未搬入本 worktree；zh 为实现对话原创中文，非上游译文）。
+
+**测试**（`LivingNPCs.Tests/Dialogue/Content/`，新增 61 项，全套 489 通过/1 预存跳过）：
+`SveContentRulesTests`、`WorldSummaryRendererTests`、`PromptTableTests`、`DialogueContentServiceTests`
+（传记全链/回退/RSV/SVE 强制回退/关系增补/缓存戳/四变体摘要/代词）、`LegacyConfigImporterTests`、
+`DialogueConfigMenuSectionTests`（频率解析/思考选项/引擎 reset 不动行为字段）、
+`ContentAssetValidationTests`（§6.2 最小校验：33+33+23+23 传记非空白、世界摘要七节齐全、
+SVE 增量、关系补丁；`PromptKeyAudit`：源码键字面量+§3.6 集合 ⊆ prompts/default.json，
+default/zh 键集一致，性别变体成对；i18n 键集一致 + 源码引用键可达）。
+`LivingNPCs.Tests.csproj` 增补 SMAPI.Toolkit 引用（ModConfig 的 KeybindList 初始化需要）。
+
+### 实现决定与偏差（供审阅）
+
+1. **世界摘要渲染归属**：01 §2 的 `GetWorldSummary()` 返回数据对象，本包同时提供
+   `GetWorldSummaryText(optimized)`（四变体字符串缓存，§4.4）；WP10 落地时选用其一，
+   若其文档签名不同以 WP10 为准。
+2. **SVE 增量合并在服务层**（资产层始终提供纯默认数据）：开关翻转无需失效资产即切换
+   摘要变体；代价是第三方 CP 无法 EditData SVE 增量条目（可 EditData 基础资产）。
+3. **`PromptVariant.Optimized`**：骨架查找时先试 `<key>.Optimized` 变体（缺失静默回落）；
+   WP20 当前未交付任何 `.Optimized` 键，此路径纯为前向扩展。
+4. **`EnableSveCompatibility` 在 GMCM 只展示一处**（现有"兼容"段），引擎段不按 §4.9
+   次序重复列出——同一字段两个控件在 GMCM 里会显示不同步。其余控件次序照 §4.9。
+5. **WP20 交付的 zh 变体**（`bios-zh/`、`bios-sve-zh/`、`prompts/zh.json`、
+   `sve-relationship-patches-zh.json`）超出本文原设计（裁决 6 只保留 CP 挂载点）：
+   已接入——zh locale 下 Bios 资产直接择 zh 目录、Prompts 逐键合并、关系补丁取 zh 版；
+   `LoadLocalized` 挂载点（LocalizedContentManager 的 locale 后缀回退）依然保留。
+6. **行为决策 pass 常量**（裁决 3）：`DialogueConfig` 保留字段但每次 SyncFrom 固定回
+   常量（true / 12 秒，消费点已有 [2, QueryTimeout] 运行时钳制），不持久化、不进 GMCM。
+7. **回退传记文案为英文常量**：与 WP20 英文骨架同语言；zh 玩家看到的回退传记进入
+   提示词后由 `ApplyTranslation` 兜底输出中文。如需中文回退传记文本，后续可挂到提示词表。
+8. **模型列表段落**为同步阻塞调用（IModelNameSource 内部 1 分钟超时），按
+   （Provider,ApiKey,ModelName,ServerAddress）四元组缓存，仅菜单打开/刷新时触发。
+9. `README-WP20-bios.md`、`prompts/key-map.json` 为 WP20 交付说明，随包保留不入构建。
+
+### 遗留给后续工作包
+
+- **WP10**：消费 `DialogueContentService.Instance`（`LookupPrompt`/`GetWorldSummaryText`/
+  `GetBio` 派生字段）与 `DialogueSampleLoader.GetSamples`；生成入口须检查
+  `DialogueEngineGate.RuntimeDisabled` 与 `LlmClientHost.CanGenerate`。
+- **WP12**：控制台命令 `livingnpcs_forget`/`livingnpcs_tokens` 的 i18n 键已备
+  （`dialogue.command.*`）；频率档位/`TypedResponses`/热键/`DisabledCharacters` 从
+  `DialogueServices.Config` 读取；引擎开关为关时跳过打补丁（§4.10）。
+- **WP16**：`PromptOverrides` 的 interop 运行时口；`ChildDescription` 转换。

@@ -772,5 +772,147 @@
   "gmcm.manualMode.approachPlayer": "只测试：走近玩家",
   "gmcm.manualMode.pause": "只测试：停下看向玩家",
   "gmcm.manualMode.lookAround": "只测试：环顾四周",
-  "gmcm.manualMode.stepAway": "只测试：后退一步"
+  "gmcm.manualMode.stepAway": "只测试：后退一步",
+
+  "dialogue.breaker.auth": "AI 对话已暂停：LLM 提供商连续两次拒绝了凭据（HTTP 401/403）。请在模组设置中修正 API 密钥后继续。",
+  "dialogue.breaker.rate": "AI 对话暂停 10 分钟：LLM 提供商连续报告限流错误（HTTP 429）。",
+
+  "dialogue.migration.folder.summary": "已从「{{source}}」迁移 ValleyTalk 文件夹数据：联机历史 {{multiplayer}} 个文件、对话回忆录 {{transcripts}} 个文件，找到旧配置：{{config}}。",
+  "dialogue.migration.save.summary": "已迁移 ValleyTalk 存档数据：{{npcCount}} 位 NPC 的对话历史，用量账本：{{ledger}}，待迁移：{{pendingCount}}，失败：{{failedCount}}。",
+  "dialogue.migration.save.hud": "LivingNPCs：已从 ValleyTalk 迁移 {{npcCount}} 位 NPC 的对话记忆。",
+  "dialogue.migration.save.hudPartial": "LivingNPCs：部分 ValleyTalk 数据未能迁移，详见 SMAPI 日志。",
+
+  "dialogue.purge.hostOnly": "此命令需要已加载的存档，且只能由主机执行。",
+  "dialogue.purge.usage": "当前存档还保留着 {{count}} 个旧 ValleyTalk 键（为回滚安全而保留）。要永久删除请运行：{{command}} confirm",
+  "dialogue.purge.done": "已删除 {{count}} 个旧 ValleyTalk 键。下次游戏存档后即永久生效。",
+
+  "dialogue.tokens.hostOnly": "注意：用量账本仅由主机持久化；以下为本次会话统计。",
+
+  "dialogue.modelCheckSuccess": "LLM 连接自检通过：模型 {{Model}}（{{Provider}}）。",
+
+  "dialogue.modelCheckCantGenerate": "LLM 连接自检失败：模型 {{Model}}（{{Provider}}）。",
+
+  "dialogue.modelCheckApiKey": "未配置 API 密钥。请在模组设置中填写提供商的 API 密钥。",
+
+  "dialogue.modelCheckModelName": "请检查所配置的模型名：为空，或不在提供商的模型列表中。",
+
+  "dialogue.modelCheckValidModelName": "提供商的模型列表里有所配置的模型，连接设置看起来正确。可能该模型不是文本模型、端点不安全，或 API 密钥无生成权限。",
+
+  "dialogue.modelCheckGetNames": "提供商没有返回模型列表。请检查 API 密钥。",
+
+  "dialogue.modelCheckGenericError": "请检查服务器地址与连接设置。",
+
+  "dialogue.modelCheckInsecure": "服务器地址未使用 HTTPS，连接不安全。",
+
+  "dialogue.modelCheckNonBlocking": "LLM 连接自检失败，但对话引擎保持开启，下次真实对话时会重试。",
+
+  "dialogue.warningThinkingParametersRejected": "模型 {{Model}} 携带思考参数的请求失败（{{Parameters}}，档位 {{Level}}），正在去掉思考控制重试。提供商响应：{{Error}}",
+
+  "dialogue.transcriptNoConversations": "还没有 AI 对话记录。",
+
+  "dialogue.transcriptExportTime": "- 导出时间：第 {{day}} 天 {{time}}",
+
+  "dialogue.transcriptSave": "- 存档：{{save}}",
+
+  "dialogue.transcriptPlayer": "玩家",
+
+  "dialogue.transcriptConversationHeading": "## 对话 {{index}}：第 {{year}} 年 {{season}} {{day}} 日 {{time}}",
+
+  "dialogue.transcriptLine": "- **{{speaker}}：** {{text}}",
+
+  "dialogue.transcriptSeasonSpring": "春",
+
+  "dialogue.transcriptSeasonSummer": "夏",
+
+  "dialogue.transcriptSeasonFall": "秋",
+
+  "dialogue.transcriptSeasonWinter": "冬",
+
+  "dialogue.uiThinking": "{{Name}}正在思考…",
+
+  "dialogue.uiStartConversation": "你想对{{Name}}说什么？",
+
+  "dialogue.uiYourResponse": "你的回应",
+
+  "dialogue.uiTypeYourResponse": "输入你的回应",
+
+  "dialogue.command.forget.description": "让 NPC 忘记 AI 对话历史。用法：livingnpcs_forget [near|all|<NPC 名>]",
+  "dialogue.command.forget.needSave": "此命令需要先加载存档。",
+  "dialogue.command.forget.noNearby": "附近没有可以遗忘的 NPC。",
+  "dialogue.command.forget.confirmAll": "这会清除所有 NPC 的 AI 对话历史。请再次运行并加上 'all confirm' 确认。",
+  "dialogue.command.forget.allDone": "所有 NPC 都已忘记 AI 对话历史。",
+  "dialogue.command.forget.npcNotFound": "找不到名为「{{npc}}」的 NPC。",
+  "dialogue.command.forget.npcNoHistory": "{{npc}}没有 AI 对话历史。",
+  "dialogue.command.forget.npcDone": "{{npc}}已忘记 AI 对话历史。",
+  "dialogue.command.tokens.description": "查看 LLM 用量统计。用法：livingnpcs_tokens [export|reset]",
+
+  "dialogue.config.section": "AI 对话引擎",
+  "dialogue.config.enableEngine.name": "启用 AI 对话",
+  "dialogue.config.enableEngine.tooltip": "AI 对话引擎总开关。从关到开需要重启游戏。",
+  "dialogue.config.debug.name": "对话调试日志",
+  "dialogue.config.debug.tooltip": "输出对话引擎的详细日志（调试构建）。",
+  "dialogue.config.provider.name": "LLM 提供商",
+  "dialogue.config.provider.tooltip": "由哪家 AI 服务生成对话。切换会清空 API 密钥并刷新菜单。",
+  "dialogue.config.provider.openai": "OpenAI",
+  "dialogue.config.provider.openaicompatible": "OpenAI 兼容（OpenRouter 等）",
+  "dialogue.config.provider.anthropic": "Anthropic（Claude）",
+  "dialogue.config.provider.google": "Google（Gemini）",
+  "dialogue.config.provider.deepseek": "DeepSeek（深度求索）",
+  "dialogue.config.provider.mistral": "Mistral",
+  "dialogue.config.provider.volcengine": "火山引擎（豆包）",
+  "dialogue.config.provider.llamacpp": "llama.cpp（本地）",
+  "dialogue.config.provider.dummy": "Dummy（调试）",
+  "dialogue.config.apiKey.name": "API 密钥",
+  "dialogue.config.apiKey.tooltip": "提供商的 API 密钥。只保存在 config.json，绝不写入日志。",
+  "dialogue.config.modelName.name": "模型名",
+  "dialogue.config.modelName.tooltip": "留空使用提供商的默认模型。",
+  "dialogue.config.serverAddress.name": "服务器地址",
+  "dialogue.config.serverAddress.tooltip": "自定义端点地址（OpenAI 兼容与 llama.cpp 使用）。",
+  "dialogue.config.queryTimeout.name": "请求超时（秒）",
+  "dialogue.config.queryTimeout.tooltip": "等待 LLM 回复的时长，超时后回落原版台词。",
+  "dialogue.config.typedResponses.name": "自由输入回复",
+  "dialogue.config.typedResponses.tooltip": "什么时候可以对 NPC 输入自由文本回复。",
+  "dialogue.config.typedResponses.always": "总是",
+  "dialogue.config.typedResponses.withGenerated": "随 AI 台词",
+  "dialogue.config.typedResponses.never": "从不",
+  "dialogue.config.useOptimizedPrompts.name": "精简世界摘要",
+  "dialogue.config.useOptimizedPrompts.tooltip": "使用精简版世界摘要以节省 token。",
+  "dialogue.config.enableRouting.name": "语义上下文路由",
+  "dialogue.config.enableRouting.tooltip": "正式生成前先跑一次小的路由请求，决定各上下文模块的详略。",
+  "dialogue.config.routingTimeout.name": "路由超时（秒）",
+  "dialogue.config.routingTimeout.tooltip": "语义路由请求的超时（2–30 秒）。",
+  "dialogue.config.routingThinking.name": "路由思考档位",
+  "dialogue.config.routingThinking.tooltip": "路由/分类等小请求的思考力度。",
+  "dialogue.config.chatThinking.name": "对话思考档位",
+  "dialogue.config.chatThinking.tooltip": "正式对话回复的思考力度。",
+  "dialogue.config.thinking.auto": "自动",
+  "dialogue.config.thinking.off": "关闭",
+  "dialogue.config.thinking.minimal": "最少",
+  "dialogue.config.thinking.low": "低",
+  "dialogue.config.thinking.medium": "中",
+  "dialogue.config.thinking.high": "高",
+  "dialogue.config.thinking.xhigh": "特高",
+  "dialogue.config.normalRightClick.name": "普通右键也用 AI 对话",
+  "dialogue.config.normalRightClick.tooltip": "关闭时普通右键保持原版对话，按住输入热键点击 NPC 才进入 AI 对话。",
+  "dialogue.config.typedDialogueKey.name": "输入对话热键",
+  "dialogue.config.typedDialogueKey.tooltip": "按住此键并点击 NPC，发起打字对话。",
+  "dialogue.config.applyTranslation.name": "用游戏语言回复",
+  "dialogue.config.applyTranslation.tooltip": "要求模型使用游戏当前语言输出。",
+  "dialogue.config.generalFrequency.name": "普通台词 AI 频率",
+  "dialogue.config.generalFrequency.tooltip": "普通台词由 AI 生成的频率。",
+  "dialogue.config.giftFrequency.name": "送礼反应 AI 频率",
+  "dialogue.config.giftFrequency.tooltip": "送礼反应由 AI 生成的频率。",
+  "dialogue.config.marriageFrequency.name": "婚后台词 AI 频率",
+  "dialogue.config.marriageFrequency.tooltip": "婚后台词由 AI 生成的频率。",
+  "dialogue.config.freq.0": "从不",
+  "dialogue.config.freq.1": "很少",
+  "dialogue.config.freq.2": "偶尔",
+  "dialogue.config.freq.3": "经常",
+  "dialogue.config.freq.4": "总是",
+  "dialogue.config.disableCharacters.name": "禁用 AI 的 NPC",
+  "dialogue.config.disableCharacters.tooltip": "这些 NPC 永远不用 AI 对话（逗号或空格分隔名字）。",
+
+  "dialogue.configNoModels": "拿不到模型列表。API 密钥可能未填或有误。",
+
+  "dialogue.configModels": "{{Provider}} 可用的模型：\n{{Models}}"
 }

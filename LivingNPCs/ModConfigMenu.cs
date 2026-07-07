@@ -1,4 +1,5 @@
 using GenericModConfigMenu;
+using LivingNPCs.Dialogue.Content;
 using StardewModdingAPI;
 
 namespace LivingNPCs;
@@ -17,10 +18,15 @@ internal static class ModConfigMenu
         var manifest = modEntry.ModManifest;
         configMenu.Register(
             mod: manifest,
-            reset: config.ResetToDefaults,
+            reset: () =>
+            {
+                config.ResetToDefaults();
+                DialogueConfigMenuSection.ResetEngineDefaults(config);
+            },
             save: () =>
             {
                 config.Validate();
+                DialogueConfigMenuSection.OnSave(modEntry, config);
                 modEntry.Helper.WriteConfig(config);
             }
         );
@@ -170,6 +176,9 @@ internal static class ModConfigMenu
             getValue: () => config.ConcisePromptContext,
             setValue: value => config.ConcisePromptContext = value
         );
+
+        // 对话引擎段（WP15 §4.9）：并入同一次 Register，reset/save 回调已合并处理。
+        DialogueConfigMenuSection.Append(configMenu, modEntry, config);
     }
 
     private static string FormatPercent(int value)
