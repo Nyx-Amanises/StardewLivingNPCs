@@ -525,3 +525,55 @@ thinkingConfig（可能为 null）；`DescribeThinkingParameters(JObject)` 生�
 | PromptFormatter/CacheContexts 死代码认定 | ValleyTalk/src/llms/PromptFormatter.cs、LlmClaude.cs:37、LlmGemini.cs:36,80-86 |
 | 失败响应默认 500 + 状态码提取 | ValleyTalk/src/llms/LlmOpenAiBase.cs:210-228 |
 | 响应对象形态 | ValleyTalk/src/Generation/LlmResponse.cs |
+
+## 10. 实现记录（2026-07-07，WP11）
+
+### 落位
+
+`LivingNPCs/Dialogue/Llm/` 新增 24 个文件；测试在 `LivingNPCs.Tests/Dialogue/Llm/`（6 个文件、95 项）。
+
+- **跨包契约**（namespace `LivingNPCs.Dialogue`）：`ILlmClient`、`LlmStreamEvent`(+Kind)、`LlmRequest`、`LlmReply`，与 01 §2 逐字一致。可见性用 `internal`（搬运件 `TokenUsage` 是 internal，公开契约会连坐编译失败；测试经既有 `InternalsVisibleTo` 访问）。
+- **能力标志**：01 钉死了 `ILlmClient` 成员表，故采纳本文 §6 备选中的"能力接口"方案：`ILlmCapabilities`（`IsHighlySensoredModel`/`ExtraInstructions`），基类实现、熔断装饰器透传。
+- **网络层**：`LlmHttp`（进程级单例、无限 Timeout、请求级链接 CTS、异常翻译、流式 ResponseHeadersRead、测试可注入 Handler）；`AndroidPlatform`（含假平台开关）；`NetworkAvailability`（推理入口即抛 + 钩子侧 5×1s 预检 + 同步包装）。
+- **提供商**：`LlmClientBase`（候选序列×重试预算、状态码提取、默认流包装、思考回退一次性警告）→ `OpenAiChatClientBase`（缓存键、SSE 流式+三级降级链、instructions 回退、模型列表）→ OpenAI/DeepSeek/Mistral/OpenAiCompatible；another 分支 Claude/Gemini/VolcEngine/LlamaCpp/Dummy。概率归并算法独立为 `TokenProbabilityMath`，能力接口 `ITokenProbabilities` 仅 LlamaCpp 实现。
+- **编排**：`LlmClientFactory`（大小写不敏感注册表 + 显式 switch 委托 + `LlmProviderMetadata` 供 WP15 驱动 GMCM 显隐/下拉）；`LlmCircuitBreaker` + `BreakerGuardedLlmClient`；`LlmClientHost`（切换语义、引擎禁用标志、CanGenerate）；`ConnectionSelfCheck`；`LlmHudNotifier`（并发队列 + 主线程 UpdateTicked 泵）。
+- **过渡**：`IStreamingLlm.cs` 按 §2/§5 删除（03 §2 授权本包裁决，全仓无引用）；`LegacyLlmStubs.cs` 新增 `LegacyLlmBridge`——`Host.ReplaceClient` 时把 `LegacyLlm.Instance` 指向当前客户端（带熔断防护），礼物邮件/记忆印象/语义路由/行动判定四个搬运件调用点在 WP10 重写前即恢复可用；`cacheContext` 参数按 §2 死代码认定忽略。过渡 `DialogueConfig` 补齐 `ApiKey`/`ServerAddress`/`PromptFormat`/`SuppressConnectionCheck` 四字段并把 `QueryTimeout` 默认对齐 §4.5 的 85（最终落表归 WP15）。
+
+### 裁决落实
+
+1. llama.cpp 有限 3 次重试（间隔 1s），测试断言恰好 3 发后放弃。
+2. 熔断：401/403 连续 2 次挂起至配置变更（`ReplaceClient` 复位，不做定时恢复）；429 连续 5 次冷却 10 分钟（可注入时钟）自动恢复；任何成功清零；自检走原始客户端、天然不计入；触发时一次性 HUD + SMAPI error（i18n 键 `dialogue.breaker.auth`/`dialogue.breaker.rate`，英文兜底已内置）。挂起期间非流式即回失败响应、流式即抛异常，均零网络。
+3. 流式 usage 走 `LlmStreamEvent` 事件流（TextDelta… → Usage → Done），Source 区分 `provider usage`/`stream estimate`/`stream fallback estimate`。
+4. Gemini 不补流式（经基类默认包装走非流式）。
+5. UA 改 `LivingNPCs/<程序集版本> (Android; Stardew Valley Mod)`；缓存键前缀改 `livingnpcs-`（哈希输入三段与 U+0001 分隔符不变）。
+6. `LlmConnectionSettings` 默认 `Provider="OpenAiCompatible"`（WP15 落表时沿用）。
+
+### 实现判断点（规格留白处的裁定，供审计）
+
+- **json_object/responseMimeType 门控**：§3.1/§3.3 字面为"档位 off 时"，实现收紧为 `DisableThinking && IsOff(档位)` 两条件同时成立——与 §3.4 VolcEngine"仅 disableThinking 路径"的语义对齐；否则用户把聊天档位设 Off 会把正常对话请求错标为 JSON 输出。测试覆盖两侧。
+- **流式失败语义**：事件流没有错误事件位（01 钉死三种 Kind），终态失败以 `LlmStreamException`（含 HttpStatus）抛出，取消异常原样传播；WP10 §4.9 本就把异常归为重试触发条件，语义自洽。
+- **Claude 空块防护**：系统段/稳定段/尾段为空时不发对应 text 块（Anthropic 拒绝空文本块；连接自检的稳定段就是空）。NPC 段空 → user content 退化为纯字符串（规格明示）。
+- **自检诊断细化**：ApiKey 为空的提示按提供商元数据 `RequiresApiKey` 门控（LlamaCpp 无 key 不误报"配 key"）；"地址不含 https"提示对能列模型与不能列模型两分支都追加（llama.cpp 走 ③ 也能收到）。文案九键全部主线程预解析后交后台，键缺失用英文兜底。
+- **熔断"连续"的解释**：非致命错误（超时、5xx、解析失败）与另一类致命错误都会打断连击并清零对应计数；玩家/系统取消不计入任何统计；计数按"回复"（一次调用的最终结果）而非内部尝试。
+- **概率归并语义**：忽略大小写与首部空白；累计文本一旦覆盖某选项（含 token 超出选项尾部，如 "Yes."）把路径概率计入该桶；仍是选项前缀则下钻下一位置；对不上任何选项即剪枝；纯空白前缀（引导空格 token）无信息、继续下钻。
+- **一次性调用超时**：`LlmRequest` 增加 internal `TimeoutOverride`（自检与模型列表显式 1 分钟），未动 01 契约面；常规请求经 `LlmHttp.DefaultTimeout` 实时读配置，改 `QueryTimeout` 下一请求即生效（有测试）。
+- **流式超时切分**：请求头阶段受统一超时约束，响应体读取只受调用方令牌限界（net6 `ReadLineAsync` 无令牌重载，用"取消即掐断响应流 + 异常翻译回取消"的方式实现）。
+- **HUD 线程安全**：熔断触发可能在后台线程，`Game1.addHUDMessage` 非线程安全——消息进并发队列，由 `ReplaceClient`（主线程）挂接的 UpdateTicked 泵取出后再上屏；无 SMAPI 事件环境（单元测试）自动降级为仅日志。WP12 无需额外接线。
+- **llama.cpp "会话级性能统计"**：timings 折算的 usage 随响应交给调用方、经 WP10 上报 WP14 的 `TokenUsageTracker`，不另建统计子系统。
+
+### 供下游工作包对接
+
+- **WP10**：`LlmClientHost.Instance.Current`（带熔断）/`CanGenerate`/`Suspension`；`ILlmCapabilities` 类型探测取两个能力标志；流式按"异常=本次尝试失败"处理。
+- **WP12**：生成前调 `NetworkAvailability.EnsureAvailableForGenerationAsync()`（或同步包装）；取消令牌传入 Complete/Stream。
+- **WP15**：`LlmClientFactory.Providers`（有序元数据：RequiresApiKey/RequiresModelName/RequiresServerAddress/RequiresPromptFormat/SupportsModelList/SupportsThinkingLevels）驱动 GMCM 动态字段与下拉；模型列表对**原始客户端**做 `IModelNameSource` 类型探测（临时建客户端即为原始实例；不要探测熔断装饰器）；GMCM 保存调 `LlmClientHost.Instance.ReplaceClient(LlmConnectionSettings.FromConfig(...))`（主线程）；i18n 需落表 `modelCheck*` 九键 + `dialogue.breaker.auth`/`dialogue.breaker.rate`（英文兜底文案见 `ConnectionSelfCheck`/`LlmClientHost`）。
+- **WP14**：每次响应的 `LlmReply.Usage`/Usage 事件即搬运件 `TokenUsage`，Source 口径已按 §4 全部落实。
+
+### 验证
+
+- `dotnet test LivingNPCs.Tests`：**通过 357，失败 0，跳过 1**（唯一 skip 为阶段 A 遗留的 WP15-TODO）；本包新增 95 项，覆盖 §7 全部九条验收要点（各家解析样本、Claude 请求体快照与三组 usage、缓存键同异与家族开关、流式降级链顺序与 usage 口径、超时配置即时生效、自检抑制/陈旧防护/永不禁用、llama.cpp 恰好 3 次、Android 假开关两挂载点、熔断全语义、概率归并、注册表大小写/非法值、地址规整、候选序列次序）。
+- 主工程 Debug 与 Release（`-p:EnableModDeploy=false`）双配置 0 错误；新增代码 0 警告（残余警告均为阶段 A 搬运件既有 nullable 警告）。
+- 验收 9 复查：`new HttpClient(` 全目录仅 `LlmHttp` 单例一处。
+
+### 洁净室声明
+
+本包实现全程未打开 `ValleyTalk/`、`ValleyTalk.Tests/`、`upstream-ValleyTalk/` 下任何文件（rewrite worktree 中前两者已物理删除），未以任何方式检索上游源码；仅阅读 RewriteSpec、`LivingNPCs/`、`LivingNPCs.Tests/`、阶段 A 已落位的搬运件。

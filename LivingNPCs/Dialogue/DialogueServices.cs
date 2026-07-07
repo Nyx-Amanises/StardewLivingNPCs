@@ -27,7 +27,11 @@ internal sealed class DialogueConfig
     public bool EnableLivingNpcActionDecisionPass { get; set; }
     public string Provider { get; set; } = "unset";
     public string ModelName { get; set; } = "unset";
-    public int QueryTimeout { get; set; } = 30;
+    public string ApiKey { get; set; } = "";
+    public string ServerAddress { get; set; } = "https://openrouter.ai/api";
+    public string PromptFormat { get; set; } = "[INST] {system}\n{prompt}[/INST]\n{response_start}";
+    public bool SuppressConnectionCheck { get; set; }
+    public int QueryTimeout { get; set; } = 85;
     public int SemanticContextRoutingTimeoutSeconds { get; set; } = 8;
     public int LivingNpcActionDecisionTimeoutSeconds { get; set; } = 8;
     public string RoutingThinkingLevel { get; set; } = "off";
