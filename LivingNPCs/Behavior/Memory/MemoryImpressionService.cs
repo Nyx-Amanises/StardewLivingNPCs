@@ -1,20 +1,26 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using StardewModdingAPI;
 using StardewValley;
+
+using LivingNPCs.Dialogue.Engine;
 
 namespace LivingNPCs.Behavior;
 
 /// <summary>
 /// Turns evicted long-term memories into a biographical "relationship impression" via one LLM
-/// call through the ValleyTalk bridge. Requests are asynchronous: a batch is moved from the
-/// backlog to <see cref="LivingNpcState.ImpressionInFlight"/> when requested, and only cleared
-/// after a validated result is applied — a failed or lost call keeps every memory queued, so
-/// model failures never lose data. Attempts are counted per request; after
-/// <see cref="MaxAttempts"/> day-start polls without a result the batch returns to the backlog
-/// and the NPC backs off for <see cref="FailureCooldownDays"/> days.
+/// call through the in-process dialogue engine link (WP16: true async, no more request-id
+/// polling). A batch is moved from the backlog to <see cref="LivingNpcState.ImpressionInFlight"/>
+/// when requested, and only cleared after a validated result is applied — a failed or lost call
+/// keeps every memory queued, so model failures never lose data. Attempts are counted per
+/// completed-but-failed generation; after <see cref="MaxAttempts"/> failures the batch returns to
+/// the backlog and the NPC backs off for <see cref="FailureCooldownDays"/> days. If the game
+/// exits while a task is in flight, the persisted in-flight batch is re-initiated at the next
+/// day start. <see cref="LivingNpcState.ImpressionRequestId"/> is kept for save compatibility
+/// and as a log identifier.
 /// </summary>
 internal sealed class MemoryImpressionService
 {
@@ -27,19 +33,22 @@ internal sealed class MemoryImpressionService
     private readonly ModConfig config;
     private readonly IMonitor monitor;
     private readonly BehaviorMemory memory;
-    private readonly ValleyTalkPromptBridge bridge;
+    private readonly DialogueEngineLink dialogueLink;
 
-    public MemoryImpressionService(ModConfig config, IMonitor monitor, BehaviorMemory memory, ValleyTalkPromptBridge bridge)
+    /// <summary>NPC names with a live generation task; only touched on the main thread.</summary>
+    private readonly HashSet<string> generationsInFlight = new(StringComparer.OrdinalIgnoreCase);
+
+    public MemoryImpressionService(ModConfig config, IMonitor monitor, BehaviorMemory memory, DialogueEngineLink dialogueLink)
     {
         this.config = config;
         this.monitor = monitor;
         this.memory = memory;
-        this.bridge = bridge;
+        this.dialogueLink = dialogueLink;
     }
 
-    private bool Enabled => this.config.EnableMemoryImpressions && this.bridge != null && this.bridge.IsConnected;
+    private bool Enabled => this.config.EnableMemoryImpressions && this.dialogueLink != null && this.dialogueLink.IsConnected;
 
-    /// <summary>Day-start pass: poll in-flight requests (with retry accounting) and start new ones.</summary>
+    /// <summary>Day-start pass: re-initiate orphaned in-flight batches (lost tasks) and start new ones.</summary>
     public void ProcessDayStart()
     {
         if (!this.Enabled)
@@ -53,7 +62,21 @@ internal sealed class MemoryImpressionService
         {
             if (HasInFlightRequest(state))
             {
-                this.PollState(state, today, countAttempt: true);
+                // A live task will apply or fail on its own; an orphaned batch (game restarted
+                // mid-generation) is re-sent with its attempt count intact.
+                if (!this.generationsInFlight.Contains(state.NpcName))
+                {
+                    if (state.ImpressionRequestAttempts >= MaxAttempts)
+                    {
+                        FailRequest(state, today);
+                        this.monitor.Log(I18n.Get("log.impression.gaveUp", new { npc = state.NpcName }), LogLevel.Trace);
+                    }
+                    else
+                    {
+                        this.SendRequest(state, today);
+                    }
+                }
+
                 continue;
             }
 
@@ -61,24 +84,6 @@ internal sealed class MemoryImpressionService
             {
                 this.StartRequest(state, today);
                 started++;
-            }
-        }
-    }
-
-    /// <summary>Cheap in-day poll (time-changed): apply results as soon as they are ready.</summary>
-    public void PollPending()
-    {
-        if (!this.Enabled)
-        {
-            return;
-        }
-
-        int today = Game1.Date.TotalDays;
-        foreach (LivingNpcState state in this.memory.GetTrackedStates().ToList())
-        {
-            if (HasInFlightRequest(state))
-            {
-                this.PollState(state, today, countAttempt: false);
             }
         }
     }
@@ -139,28 +144,55 @@ internal sealed class MemoryImpressionService
         this.SendRequest(state, today);
     }
 
+    /// <summary>Launches one generation task for the current in-flight batch (main thread only).</summary>
     private void SendRequest(LivingNpcState state, int today)
     {
-        this.bridge.RequestMemoryImpression(
-            state.ImpressionRequestId,
-            state.NpcName,
-            BuildPayload(state, today, this.config.MemoryImpressionTimeoutSeconds));
+        if (!this.generationsInFlight.Add(state.NpcName))
+        {
+            return;
+        }
+
+        state.ImpressionRequestTotalDays = today;
+        string requestId = state.ImpressionRequestId;
+        MemoryImpressionRequest request = BuildRequest(state, today, this.config.MemoryImpressionTimeoutSeconds);
+        _ = this.RunGenerationAsync(state.NpcName, requestId, request);
     }
 
-    private void PollState(LivingNpcState state, int today, bool countAttempt)
+    private async Task RunGenerationAsync(string npcName, string requestId, MemoryImpressionRequest request)
     {
-        string text = this.bridge.TryGetMemoryImpression(state.ImpressionRequestId);
+        string? text = null;
+        try
+        {
+            text = await this.dialogueLink.GenerateMemoryImpressionAsync(request, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            // The link already logs; a null result is a failed attempt below.
+        }
+
+        MainThreadDispatcher.Post(() => this.ApplyGenerationResult(npcName, requestId, text));
+    }
+
+    private void ApplyGenerationResult(string npcName, string requestId, string? text)
+    {
+        this.generationsInFlight.Remove(npcName);
+        LivingNpcState? state = this.memory.GetTrackedStates()
+            .FirstOrDefault(tracked => string.Equals(tracked.NpcName, npcName, StringComparison.OrdinalIgnoreCase));
+        if (state == null
+            || !HasInFlightRequest(state)
+            || !string.Equals(state.ImpressionRequestId, requestId, StringComparison.Ordinal))
+        {
+            // The batch was cleared or superseded (manual memory wipe, save switch); drop silently.
+            return;
+        }
+
+        int today = Context.IsWorldReady ? Game1.Date.TotalDays : state.ImpressionRequestTotalDays;
         if (!string.IsNullOrWhiteSpace(text))
         {
             ApplyResult(state, text, today);
             this.monitor.Log(
                 I18n.Get("log.impression.applied", new { npc = state.NpcName, total = state.RelationshipImpressionMemoryCount }),
                 LogLevel.Trace);
-            return;
-        }
-
-        if (!countAttempt)
-        {
             return;
         }
 
@@ -172,10 +204,8 @@ internal sealed class MemoryImpressionService
             return;
         }
 
-        // ValleyTalk may have restarted (its result cache is in-memory only) or the previous call
-        // failed on its side; issue a fresh request id covering the same in-flight batch.
+        // Retry the same batch right away under a fresh log id (attempt count carries over).
         state.ImpressionRequestId = $"impression-{state.NpcName}-{Guid.NewGuid():N}";
-        state.ImpressionRequestTotalDays = today;
         this.SendRequest(state, today);
     }
 
@@ -203,16 +233,15 @@ internal sealed class MemoryImpressionService
         state.LastImpressionFailureTotalDays = today;
     }
 
-    internal static string BuildPayload(LivingNpcState state, int today, int timeoutSeconds)
+    internal static MemoryImpressionRequest BuildRequest(LivingNpcState state, int today, int timeoutSeconds)
     {
         string displayName = Game1.getCharacterFromName(state.NpcName)?.displayName ?? state.NpcName;
-        return JsonSerializer.Serialize(new
-        {
-            npcDisplayName = displayName,
-            existingImpression = state.RelationshipImpression,
-            memories = state.ImpressionInFlight.Select(memoryFact => FormatMemory(memoryFact, today)).ToList(),
-            timeoutSeconds
-        });
+        return new MemoryImpressionRequest(
+            state.NpcName,
+            displayName,
+            state.RelationshipImpression,
+            state.ImpressionInFlight.Select(memoryFact => FormatMemory(memoryFact, today)).ToList(),
+            timeoutSeconds);
     }
 
     private static string FormatMemory(LongTermMemoryFact memoryFact, int today)

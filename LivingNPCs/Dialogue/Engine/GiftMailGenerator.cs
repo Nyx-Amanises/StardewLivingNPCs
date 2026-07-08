@@ -1,118 +1,74 @@
 using System;
-using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
 using StardewModdingAPI;
 
-using LivingNPCs.Dialogue.Diagnostics;
 using LivingNPCs.Dialogue.Llm;
-using LivingNPCs.Dialogue.Persistence;
 namespace LivingNPCs.Dialogue.Engine;
 
+/// <summary>一次礼物邮件正文生成的强类型请求（WP16 §4.1：废除 requestId 与 JSON 往返）。</summary>
+internal sealed record GiftMailRequest(
+    string NpcName,
+    string NpcDisplayName,
+    string Motive,
+    string ItemLabel,
+    string SourceGift,
+    string Tier,
+    int TimeoutSeconds);
+
 /// <summary>
-/// Generates gift-mail letter bodies with the LLM on demand and caches them by request id so the
-/// LivingNPCs side can poll for the result later (the letter is delivered a day or more after the
-/// gift is given, and the mail asset is assembled synchronously, so generation must be detached).
-/// On any failure the cache simply never reports a body and the caller keeps its template.
+/// Generates gift-mail letter bodies with the LLM on demand (the letter is delivered a day or
+/// more after the gift is given, and the mail asset is assembled synchronously, so generation
+/// runs detached from the mail build). True-async API (WP16): the caller awaits the task and a
+/// null result means failure — it keeps its template fallback. Call from the game thread: the
+/// NPC persona is captured before the first await, only the network call runs in the background.
 /// </summary>
 internal sealed class GiftMailGenerator
 {
-    private enum Status { Pending, Ready, Failed }
-
-    private sealed class Entry
-    {
-        public Status Status;
-        public string Text = string.Empty;
-    }
-
-    private const int MaxEntries = 64;
     private const int MaxConcurrent = 2;
     private const int PromptTokens = 220;
 
     private static readonly GiftMailGenerator _instance = new();
     public static GiftMailGenerator Instance => _instance;
 
-    private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _gate = new(MaxConcurrent, MaxConcurrent);
 
     private GiftMailGenerator()
     {
     }
 
-    /// <summary>
-    /// Starts (once) an asynchronous generation for the given request. Safe to call from the game
-    /// thread: the NPC persona is captured here, and only the network call runs in the background.
-    /// </summary>
-    public void Request(string requestId, string npcName, string payloadJson)
+    /// <summary>Generates a validated mail body, or null on any failure (caller keeps its template).</summary>
+    public async Task<string?> GenerateAsync(GiftMailRequest request, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(requestId) || _entries.ContainsKey(requestId))
+        if (request == null || string.IsNullOrWhiteSpace(request.NpcName))
         {
-            return;
+            return null;
         }
 
-        string motive = "reciprocal";
-        string itemLabel = string.Empty;
-        string sourceGift = string.Empty;
-        string displayName = npcName;
-        int timeoutSeconds = 30;
-        try
-        {
-            var json = JObject.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
-            motive = NullIfBlank(json.Value<string>("motive")) ?? motive;
-            itemLabel = json.Value<string>("itemLabel") ?? string.Empty;
-            sourceGift = json.Value<string>("sourceGift") ?? string.Empty;
-            displayName = NullIfBlank(json.Value<string>("npcDisplayName")) ?? npcName;
-            timeoutSeconds = json.Value<int?>("timeoutSeconds") ?? timeoutSeconds;
-        }
-        catch
-        {
-            // Malformed payload: fall through with defaults; validation/template fallback still applies.
-        }
-
-        timeoutSeconds = Math.Clamp(timeoutSeconds, 5, 120);
+        string motive = string.IsNullOrWhiteSpace(request.Motive) ? "reciprocal" : request.Motive;
+        int timeoutSeconds = Math.Clamp(request.TimeoutSeconds, 5, 120);
 
         if (LegacyLlm.Instance == null || LegacyLlm.Instance is LegacyLlmDummy)
         {
-            Fail(requestId, displayName, motive, "no-model");
-            return;
+            return Fail(request.NpcName, motive, "no-model");
         }
 
-        // Capture persona on the calling (game) thread; never touch game state in the background task.
-        Character character = DialogueBuilder.Instance.GetCharacterByName(npcName);
-        string display = character?.StardewNpc?.displayName ?? displayName;
+        // Capture persona on the calling (game) thread; never touch game state past the first await.
+        Character character = DialogueBuilder.Instance.GetCharacterByName(request.NpcName);
+        string display = character?.StardewNpc?.displayName
+            ?? (string.IsNullOrWhiteSpace(request.NpcDisplayName) ? request.NpcName : request.NpcDisplayName);
         string persona = BuildPersona(character);
         bool zh = IsChineseLocale();
         string system = BuildSystemPrompt(zh);
-        string user = BuildUserPrompt(zh, display, persona, motive, itemLabel, sourceGift);
+        string user = BuildUserPrompt(zh, display, persona, motive, request.ItemLabel, request.SourceGift);
 
-        Prune();
-        _entries[requestId] = new Entry { Status = Status.Pending };
-        _ = Task.Run(() => GenerateAsync(requestId, display, motive, system, user, zh, timeoutSeconds));
-    }
-
-    /// <summary>Returns the validated mail body if ready, otherwise an empty string.</summary>
-    public string TryGet(string requestId)
-    {
-        if (!string.IsNullOrWhiteSpace(requestId)
-            && _entries.TryGetValue(requestId, out Entry entry)
-            && entry.Status == Status.Ready)
-        {
-            return entry.Text;
-        }
-
-        return string.Empty;
-    }
-
-    private async Task GenerateAsync(string requestId, string display, string motive, string system, string user, bool zh, int timeoutSeconds)
-    {
-        await _gate.WaitAsync().ConfigureAwait(false);
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
             LlmResponse response = await LegacyLlm.Instance
                 .RunInference(system, string.Empty, $"NPC: {display}", user, string.Empty, n_predict: PromptTokens, allowRetry: false, disableThinking: true)
                 .WaitAsync(cts.Token)
@@ -120,32 +76,29 @@ internal sealed class GiftMailGenerator
 
             if (response == null || !response.IsSuccess || string.IsNullOrWhiteSpace(response.Text))
             {
-                Fail(requestId, display, motive, "model-failed");
-                return;
+                return Fail(display, motive, "model-failed");
             }
 
             if (!GiftMailContentValidator.TryNormalize(response.Text, out string body, out string reason))
             {
-                Fail(requestId, display, motive, reason);
-                return;
+                return Fail(display, motive, reason);
             }
 
             // Language check lives here (not in the pure validator) because it depends on the
             // configured game locale via SMAPI.
             if (ConversationTextPostProcessor.LooksLikeWrongLanguage(body))
             {
-                Fail(requestId, display, motive, "wrong-language");
-                return;
+                return Fail(display, motive, "wrong-language");
             }
 
             body = EnsureSalutation(body, zh);
-            _entries[requestId] = new Entry { Status = Status.Ready, Text = body };
             DialogueServices.Monitor?.Log($"AI gift mail generated for {display} ({motive}, {body.Length} chars).", LogLevel.Info);
+            return body;
         }
         catch (Exception ex)
         {
             string reason = ex is OperationCanceledException or TimeoutException ? "timeout" : ex.GetType().Name;
-            Fail(requestId, display, motive, reason);
+            return Fail(display, motive, reason);
         }
         finally
         {
@@ -153,26 +106,10 @@ internal sealed class GiftMailGenerator
         }
     }
 
-    private void Fail(string requestId, string display, string motive, string reason)
+    private static string? Fail(string display, string motive, string reason)
     {
-        _entries[requestId] = new Entry { Status = Status.Failed };
         DialogueServices.Monitor?.Log($"AI gift mail generation failed for {display} ({motive}): {reason}; template will be used.", LogLevel.Info);
-    }
-
-    private void Prune()
-    {
-        if (_entries.Count <= MaxEntries)
-        {
-            return;
-        }
-
-        foreach (KeyValuePair<string, Entry> pair in _entries)
-        {
-            if (pair.Value.Status != Status.Pending)
-            {
-                _entries.TryRemove(pair.Key, out _);
-            }
-        }
+        return null;
     }
 
     private static string BuildPersona(Character character)
@@ -253,10 +190,5 @@ internal sealed class GiftMailGenerator
     private static bool IsChineseLocale()
     {
         return DialogueServices.Helper?.Translation.Locale?.StartsWith("zh", StringComparison.OrdinalIgnoreCase) == true;
-    }
-
-    private static string NullIfBlank(string value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 }

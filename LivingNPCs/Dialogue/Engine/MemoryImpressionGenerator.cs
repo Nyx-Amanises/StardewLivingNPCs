@@ -1,35 +1,32 @@
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json.Linq;
 using StardewModdingAPI;
 
-using LivingNPCs.Dialogue.Diagnostics;
 using LivingNPCs.Dialogue.Llm;
-using LivingNPCs.Dialogue.Persistence;
 namespace LivingNPCs.Dialogue.Engine;
+
+/// <summary>一次记忆印象压缩的强类型请求（WP16 §4.1：废除 requestId 与 JSON 往返）。
+/// 每条记忆可带 "[-Nd]" 前缀 = 约 N 游戏日前。</summary>
+internal sealed record MemoryImpressionRequest(
+    string NpcName,
+    string NpcDisplayName,
+    string ExistingImpression,
+    IReadOnlyList<string> Memories,
+    int TimeoutSeconds);
 
 /// <summary>
 /// Compresses a batch of evicted long-term memories (supplied by LivingNPCs) plus the existing
-/// relationship impression into an updated biographical impression, using one LLM call. Results
-/// are cached by request id so the LivingNPCs side can poll later. On any failure the cache never
-/// reports a body; the caller keeps its backlog and retries another day, so no memory is lost.
+/// relationship impression into an updated biographical impression, using one LLM call.
+/// True-async API (WP16): the caller awaits the task; null means failure, so it keeps its backlog
+/// and retries another day — no memory is lost. Everything needed is captured before the first
+/// await, only the network call runs in the background.
 /// </summary>
 internal sealed class MemoryImpressionGenerator
 {
-    private enum Status { Pending, Ready, Failed }
-
-    private sealed class Entry
-    {
-        public Status Status;
-        public string Text = string.Empty;
-    }
-
-    private const int MaxEntries = 64;
     private const int MaxConcurrent = 1;
     private const int ResponseTokens = 500;
     private const int MaxImpressionCharacters = 1200;
@@ -37,89 +34,45 @@ internal sealed class MemoryImpressionGenerator
     private static readonly MemoryImpressionGenerator _instance = new();
     public static MemoryImpressionGenerator Instance => _instance;
 
-    private readonly ConcurrentDictionary<string, Entry> _entries = new(StringComparer.Ordinal);
     private readonly SemaphoreSlim _gate = new(MaxConcurrent, MaxConcurrent);
 
     private MemoryImpressionGenerator()
     {
     }
 
-    /// <summary>
-    /// Starts (once) an asynchronous compression for the given request. Safe to call from the game
-    /// thread: everything needed is captured here, only the network call runs in the background.
-    /// </summary>
-    public void Request(string requestId, string npcName, string payloadJson)
+    /// <summary>Generates the updated impression paragraph, or null on any failure.</summary>
+    public async Task<string?> GenerateAsync(MemoryImpressionRequest request, CancellationToken ct)
     {
-        if (string.IsNullOrWhiteSpace(requestId) || _entries.ContainsKey(requestId))
+        if (request == null || string.IsNullOrWhiteSpace(request.NpcName))
         {
-            return;
+            return null;
         }
 
-        string displayName = npcName;
-        string existingImpression = string.Empty;
-        var memories = new List<string>();
-        int timeoutSeconds = 45;
-        try
-        {
-            var json = JObject.Parse(string.IsNullOrWhiteSpace(payloadJson) ? "{}" : payloadJson);
-            displayName = NullIfBlank(json.Value<string>("npcDisplayName")) ?? npcName;
-            existingImpression = json.Value<string>("existingImpression") ?? string.Empty;
-            if (json["memories"] is JArray memoryArray)
-            {
-                memories.AddRange(memoryArray
-                    .Select(token => token?.ToString() ?? string.Empty)
-                    .Where(text => !string.IsNullOrWhiteSpace(text)));
-            }
-
-            timeoutSeconds = json.Value<int?>("timeoutSeconds") ?? timeoutSeconds;
-        }
-        catch
-        {
-            // Malformed payload: fall through with defaults; an empty memory list fails below.
-        }
-
-        timeoutSeconds = Math.Clamp(timeoutSeconds, 10, 180);
+        string display = string.IsNullOrWhiteSpace(request.NpcDisplayName) ? request.NpcName : request.NpcDisplayName;
+        var memories = (request.Memories ?? Array.Empty<string>())
+            .Where(text => !string.IsNullOrWhiteSpace(text))
+            .ToList();
+        int timeoutSeconds = Math.Clamp(request.TimeoutSeconds, 10, 180);
 
         if (memories.Count == 0)
         {
-            Fail(requestId, displayName, "no-memories");
-            return;
+            return Fail(display, "no-memories");
         }
 
         if (LegacyLlm.Instance == null || LegacyLlm.Instance is LegacyLlmDummy)
         {
-            Fail(requestId, displayName, "no-model");
-            return;
+            return Fail(display, "no-model");
         }
 
         bool zh = IsChineseLocale();
         string system = BuildSystemPrompt(zh);
-        string user = BuildUserPrompt(zh, displayName, existingImpression, memories);
+        string user = BuildUserPrompt(zh, display, request.ExistingImpression ?? string.Empty, memories);
 
-        Prune();
-        _entries[requestId] = new Entry { Status = Status.Pending };
-        _ = Task.Run(() => GenerateAsync(requestId, displayName, system, user, timeoutSeconds));
-    }
-
-    /// <summary>Returns the validated impression text if ready, otherwise an empty string.</summary>
-    public string TryGet(string requestId)
-    {
-        if (!string.IsNullOrWhiteSpace(requestId)
-            && _entries.TryGetValue(requestId, out Entry entry)
-            && entry.Status == Status.Ready)
-        {
-            return entry.Text;
-        }
-
-        return string.Empty;
-    }
-
-    private async Task GenerateAsync(string requestId, string display, string system, string user, int timeoutSeconds)
-    {
-        await _gate.WaitAsync().ConfigureAwait(false);
+        await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
             LlmResponse response = await LegacyLlm.Instance
                 .RunInference(system, string.Empty, $"NPC: {display}", user, string.Empty, n_predict: ResponseTokens, allowRetry: false, disableThinking: true)
                 .WaitAsync(cts.Token)
@@ -127,29 +80,26 @@ internal sealed class MemoryImpressionGenerator
 
             if (response == null || !response.IsSuccess || string.IsNullOrWhiteSpace(response.Text))
             {
-                Fail(requestId, display, "model-failed");
-                return;
+                return Fail(display, "model-failed");
             }
 
             if (!TryNormalize(response.Text, out string impression))
             {
-                Fail(requestId, display, "empty-after-normalize");
-                return;
+                return Fail(display, "empty-after-normalize");
             }
 
             if (ConversationTextPostProcessor.LooksLikeWrongLanguage(impression))
             {
-                Fail(requestId, display, "wrong-language");
-                return;
+                return Fail(display, "wrong-language");
             }
 
-            _entries[requestId] = new Entry { Status = Status.Ready, Text = impression };
             DialogueServices.Monitor?.Log($"Memory impression compressed for {display} ({impression.Length} chars).", LogLevel.Info);
+            return impression;
         }
         catch (Exception ex)
         {
             string reason = ex is OperationCanceledException or TimeoutException ? "timeout" : ex.GetType().Name;
-            Fail(requestId, display, reason);
+            return Fail(display, reason);
         }
         finally
         {
@@ -157,26 +107,10 @@ internal sealed class MemoryImpressionGenerator
         }
     }
 
-    private void Fail(string requestId, string display, string reason)
+    private static string? Fail(string display, string reason)
     {
-        _entries[requestId] = new Entry { Status = Status.Failed };
         DialogueServices.Monitor?.Log($"Memory impression compression failed for {display}: {reason}; memories stay queued for a later retry.", LogLevel.Info);
-    }
-
-    private void Prune()
-    {
-        if (_entries.Count <= MaxEntries)
-        {
-            return;
-        }
-
-        foreach (KeyValuePair<string, Entry> pair in _entries)
-        {
-            if (pair.Value.Status != Status.Pending)
-            {
-                _entries.TryRemove(pair.Key, out _);
-            }
-        }
+        return null;
     }
 
     private static bool TryNormalize(string raw, out string impression)
@@ -259,10 +193,5 @@ internal sealed class MemoryImpressionGenerator
     private static bool IsChineseLocale()
     {
         return DialogueServices.Helper?.Translation.Locale?.StartsWith("zh", StringComparison.OrdinalIgnoreCase) == true;
-    }
-
-    private static string NullIfBlank(string value)
-    {
-        return string.IsNullOrWhiteSpace(value) ? null : value;
     }
 }

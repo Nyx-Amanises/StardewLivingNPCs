@@ -405,3 +405,80 @@ ConversationStartRecorder.cs:301-305）只进推送文本，`BuildPromptContext(
 - LivingNPCs/ModConfig.cs:60（EnableValleyTalkPromptBridge）
 - LivingNPCs.Tests/MetadataParsingTests.cs:85,121、CompanionOutingRulesTests.cs:19-45
   （测试仅依赖解析器与模型，不依赖桥接）
+
+## 10. 实现记录（2026-07-08，WP16 实现对话）
+
+按 §4 映射表全量落地，编译零错误，`LivingNPCs.Tests` 全绿（577 通过 / 1 既有跳过，
+含新增 9 条 DialogueEngineLink 降级测试）。要点与偏差说明：
+
+### 已实现
+
+1. **桥接层解散**：删除 `LivingNPCs/Interop/IValleyTalkInterface.cs`；
+   `ValleyTalkPromptBridge` 删除，改写为 `Behavior/DialogueEngineLink.cs`——薄适配层，
+   构造注入四个委托（可用性探测 / 礼物对话请求 / 邮件生成 / 印象生成），默认接
+   WP12 `PatchGuards.EngineReady`、`GenerationRequests.BuildGift+Enqueue`（确定性判定、
+   无概率门；忙/网络不可用→false）与 WP10 两个生成器；任一委托为 null 或引擎不可用时
+   全部方法降级为旧"未连接"行为（false / null），行为系统照常（§6 降级语义保留，
+   测试注入 null 即得旧桩行为）。`Interop/` 目录删除（GMCM 接口副本
+   `IGenericModConfigMenuApi.cs` 与 ValleyTalk 无关，移至 `LivingNPCs/` 根）。
+2. **上下文方向反转收尾**：WP12 已在 `DialogueEngineBootstrapper.Attach` 留好两个
+   Provider 注入点，本包在 `ModEntry` 接上 `BehaviorEngine.GetConversationContext /
+   GetGiftResponseContext`，并按裁决 5 以 `EnableBehaviorContextInDialogue` 单开关门控
+   （关闭时注入空串，AI 邮件/印象不受此开关影响、只看引擎可用性）。
+3. **推送通道废除 + 即时线索暂存（裁决 1）**：`ValleyTalkContextService` 删除 bridge
+   依赖；新增 per-NPC `immediateContexts` 字典，`PushInteractionContext` 只暂存
+   immediate 参数（其余推送内容与拉取同源，直接丢弃）；`BuildPromptContext` 末尾
+   consume-once 合并；新增 `ClearImmediateContexts()`，在 DayStarted / ReturnedToTitle /
+   手动清记忆三处调用（沿用原 `ClearAll()` 调用点）。行为执行后的整段
+   `PushBehaviorContext`（BehaviorEngine 原 :826）随推送通道删除——记忆已入库，
+   拉取通道自然覆盖；`hud.behaviorDone` 去掉 `{{bridge}}` token。
+4. **交换记录直调（裁决 2）**：`ModEntry` 把 WP10 的静态钩子
+   `DialogueEngine.RecordExchangeCallback`（后台线程回调）接到
+   `BehaviorEngine.RecordValleyTalkExchange`，签名不变、`analysisJson` 维持字符串；
+   ConcurrentQueue + UpdateTicked 主线程应用模型原样保留。display name 参数以 npcName
+   传入（行为侧仅用它做 RSV 名单校验，应用阶段自行按 npc 对象取显示名）。
+5. **礼物邮件真异步**：`GiftMailGenerator` 改造为
+   `Task<string?> GenerateAsync(GiftMailRequest, CancellationToken)`（强类型 record，
+   废除 requestId、payload JSON、ConcurrentDictionary 缓存与轮询；并发信号量 2、
+   超时钳制 [5,120]、persona 在首个 await 前捕获等语义全保留）。`BehaviorMailService`
+   发起 Task、完成后经 `MainThreadDispatcher.Post`（一次性 UpdateTicked，§4.2 轻量
+   dispatcher；无 SMAPI 环境时同步执行，供测试）回主线程写
+   `GeneratedBody/GenerationStatus`；本地双重校验（`%`/`[`/`]`/语言）保留。
+   `GenerationStatus=="pending"` 仍入存档；`ResolvePendingGiftMailGenerations`
+   改为"对 pending 且无在途 Task 的邮件重新发起"（返回值 bool→void，缓存失效改由
+   结果回调触发），失败一次计一次 attempts，满 3 次标 failed 回落模板。
+6. **记忆印象真异步**：`MemoryImpressionGenerator` 同样改
+   `Task<string?> GenerateAsync(MemoryImpressionRequest, ct)`。`MemoryImpressionService`
+   的 backlog / ImpressionInFlight / attempts / 冷却存档结构与状态机不变（WP14 契约）；
+   Task 成功→主线程 `ApplyResult`，失败→attempts+1，未满 3 次立即换新 requestId 重发
+   同一批次、满 3 次 `FailRequest`（backlog 无损 + 3 天冷却）；重启丢失在途 Task 时
+   日始按持久化的 in-flight 批次重新发起（attempts 保留）。`ImpressionRequestId`
+   字段保留作存档兼容与日志标识。`PollPending`（TimeChanged 免费轮询）随轮询模式
+   消亡，一并删除其调用点。
+7. **API/manifest/配置/i18n**：`LivingNPCsApi` 与 `GetApi()` override 删除（裁决 3，
+   0.2.0 内化）；manifest 删除 `dandm1.ValleyTalk` 依赖、Description 改写（版本号仍
+   0.1.5，升 0.2.0 归发版流程）；`EnableValleyTalkPromptBridge` 改名
+   `EnableBehaviorContextInDialogue`，旧键经私有 `[JsonProperty]` 字段在 `Migrate()`
+   中搬值后清空（该开关本就不进 GMCM，无 GMCM 改动）；i18n 删除 `log.bridge.*`、
+   `bridge.pushed/notPushed`、`gmcm.bridge.*`、`log.context.primed/debugNotPushed`、
+   `log.behavior.contextPushed/NotPushed`，新增 `log.link.*` 三条（中英）。
+8. **不动项核对**：`ValleyTalkExchangeParser`、`BehaviorMemoryModels`（`ValleyTalk*`
+   类型名，裁决 4 不改名）、`Shared/LivingNpcMetadataRules.cs`（链接编译方式保留）
+   均未触碰。
+
+### 验收自查（对照 §7）
+
+- §7.1：全仓 `IValleyTalkInterface` / `ILivingNPCsApi` / `LivingNPCsApi` /
+  `RegisterPromptOverride` 零残留；`GetApi<` 仅剩 GMCM 两处；`"dandm1.ValleyTalk"`
+  仅剩共存检测与 WP14 迁移（允许项）；`Interop/` 目录已删。
+- §7.2/§7.3：结构上双通道已消亡、即时线索 consume-once + 当日兜底清——进游戏冒烟
+  归 30 号验收。
+- §7.7：577 绿 + 新增 `DialogueEngineLinkTests`（9 条降级/透传/吞异常用例）。
+- §7.4–7.6/7.8：依赖真机与断网环境，留给 30 号验收与用户冒烟。
+
+### 遗留说明
+
+- `BehaviorEngine.GetConversationContext/GetGiftResponseContext` 未显式降 internal：
+  类本身即 `internal sealed`，成员实际可见性已是 internal。
+- `MainThreadDispatcher` 放在 `Behavior/`，邮件与印象两处共用；WP10 引擎自身的
+  主线程交接（GenerationScheduler）未动。

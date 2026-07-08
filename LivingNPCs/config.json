@@ -49,7 +49,7 @@
   "AiPlannerApiKey": "",
   "AiPlannerModel": "",
   "AiPlannerTimeoutSeconds": 8,
-  "EnableValleyTalkPromptBridge": true,
+  "EnableBehaviorContextInDialogue": true,
   "ConcisePromptContext": false,
   "ShowHudMessages": true
 }

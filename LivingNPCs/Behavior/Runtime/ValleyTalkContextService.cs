@@ -7,10 +7,13 @@ using StardewValley;
 namespace LivingNPCs.Behavior;
 
 /// <summary>
-/// Assembles the hidden LivingNPCs context that gets pushed to ValleyTalk before a conversation:
+/// Assembles the hidden LivingNPCs context that the dialogue engine pulls at generation time
+/// (via <see cref="BuildPromptContext"/>, wired into GenerationRequest.BehaviorContext by WP12):
 /// the base continuity summary from memory, plus the situational sections (gift opportunity,
 /// help-request opportunity, companion outing, immediate cues) and the gift-response prompts.
 /// This class decides which sections apply; their wording lives in <see cref="PromptFragments"/>.
+/// Immediate cues ("the player just handed over the requested item") are staged per NPC by
+/// <see cref="PushInteractionContext"/> and consumed by the next build (day end clears leftovers).
 /// </summary>
 internal sealed class ValleyTalkContextService
 {
@@ -19,8 +22,10 @@ internal sealed class ValleyTalkContextService
     private readonly BehaviorMemory memory;
     private readonly GiftSelector giftSelector;
     private readonly BehaviorMailService mailService;
-    private readonly ValleyTalkPromptBridge bridge;
     private readonly Func<NPC, string> buildCompanionOutingContext;
+
+    /// <summary>Per-NPC one-shot immediate cues; consumed by the next BuildPromptContext.</summary>
+    private readonly Dictionary<string, string> immediateContexts = new(StringComparer.OrdinalIgnoreCase);
 
     public ValleyTalkContextService(
         IMonitor monitor,
@@ -28,7 +33,6 @@ internal sealed class ValleyTalkContextService
         BehaviorMemory memory,
         GiftSelector giftSelector,
         BehaviorMailService mailService,
-        ValleyTalkPromptBridge bridge,
         Func<NPC, string> buildCompanionOutingContext)
     {
         this.monitor = monitor;
@@ -36,7 +40,6 @@ internal sealed class ValleyTalkContextService
         this.memory = memory;
         this.giftSelector = giftSelector;
         this.mailService = mailService;
-        this.bridge = bridge;
         this.buildCompanionOutingContext = buildCompanionOutingContext;
     }
 
@@ -47,25 +50,24 @@ internal sealed class ValleyTalkContextService
             return;
         }
 
-        string promptContext = this.BuildPromptContext(npc, immediatePromptContext);
-        bool pushedToValleyTalk = this.bridge.PushBehaviorContext(npc, promptContext);
+        if (!string.IsNullOrWhiteSpace(immediatePromptContext))
+        {
+            this.immediateContexts[npc.Name] = immediatePromptContext;
+        }
 
         if (this.config.Debug)
         {
-            this.monitor.Log(
-                pushedToValleyTalk
-                    ? debugMessage
-                    : I18n.Get("log.context.debugNotPushed", new { message = debugMessage }),
-                LogLevel.Debug
-            );
-            if (pushedToValleyTalk)
-            {
-                this.monitor.Log(I18n.Get("log.context.primed", new { npc = npc.Name, context = promptContext }), LogLevel.Trace);
-            }
+            this.monitor.Log(debugMessage, LogLevel.Debug);
         }
     }
 
-    public string BuildPromptContext(NPC npc, string immediatePromptContext = "")
+    /// <summary>Drops all staged immediate cues (day start / returned to title / manual memory clear).</summary>
+    public void ClearImmediateContexts()
+    {
+        this.immediateContexts.Clear();
+    }
+
+    public string BuildPromptContext(NPC npc)
     {
         string promptContext = this.memory.BuildPromptContext(
             npc,
@@ -92,7 +94,10 @@ internal sealed class ValleyTalkContextService
             promptContext = $"{promptContext}\n{companionOutingContext}";
         }
 
-        if (!string.IsNullOrWhiteSpace(immediatePromptContext))
+        // Consume-once (WP16 ruling 1): the staged immediate cue only colors the very next
+        // generation; day end clears leftovers via ClearImmediateContexts.
+        if (this.immediateContexts.Remove(npc.Name, out string? immediatePromptContext)
+            && !string.IsNullOrWhiteSpace(immediatePromptContext))
         {
             promptContext = $"{promptContext}\n{immediatePromptContext}";
         }

@@ -15,7 +15,7 @@ internal sealed class BehaviorEngineServices
 {
     public Random Random { get; } = new();
     public BehaviorMemory Memory { get; } = new();
-    public ValleyTalkPromptBridge ValleyTalkBridge { get; }
+    public DialogueEngineLink DialogueLink { get; }
     public GiftSelector GiftSelector { get; }
     public IBehaviorPlanner Planner { get; }
     public AiBehaviorClient AiBehaviorClient { get; }
@@ -44,14 +44,14 @@ internal sealed class BehaviorEngineServices
 
     public BehaviorEngineServices(IModHelper helper, IMonitor monitor, ModConfig config)
     {
-        this.ValleyTalkBridge = new ValleyTalkPromptBridge(helper, monitor, config);
+        this.DialogueLink = new DialogueEngineLink(monitor);
         this.GiftSelector = new GiftSelector(this.Random);
         this.Planner = new AiBehaviorPlanner(new RuleBasedBehaviorPlanner(config, this.Random, this.Memory));
         this.AiBehaviorClient = new AiBehaviorClient(config, monitor);
         this.Feedback = new BehaviorFeedbackService(config, monitor);
         this.CommunityRipples = new CommunityRippleRuntime(config, monitor, this.Memory, this.Random);
-        this.MailService = new BehaviorMailService(helper, this.Memory, this.Random, config, this.ValleyTalkBridge);
-        this.MemoryImpressions = new MemoryImpressionService(config, monitor, this.Memory, this.ValleyTalkBridge);
+        this.MailService = new BehaviorMailService(helper, this.Memory, this.Random, config, this.DialogueLink);
+        this.MemoryImpressions = new MemoryImpressionService(config, monitor, this.Memory, this.DialogueLink);
         this.DebugCommands = new BehaviorDebugCommandHandler(
             helper,
             monitor,
@@ -74,7 +74,6 @@ internal sealed class BehaviorEngineServices
             this.Memory,
             this.GiftSelector,
             this.MailService,
-            this.ValleyTalkBridge,
             npc => companionOutings?.BuildPromptContext(npc) ?? string.Empty
         );
 
@@ -129,7 +128,7 @@ internal sealed class BehaviorEngineServices
             monitor,
             config,
             this.Memory,
-            this.ValleyTalkBridge,
+            this.DialogueLink,
             this.Feedback,
             this.CommunityRipples,
             this.GiftOpportunities,

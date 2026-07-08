@@ -2,7 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
+using System.Threading;
+using System.Threading.Tasks;
 using StardewModdingAPI;
 using StardewValley;
 using SObject = StardewValley.Object;
@@ -24,15 +25,18 @@ internal sealed class BehaviorMailService
     private readonly BehaviorMemory memory;
     private readonly Random random;
     private readonly ModConfig config;
-    private readonly ValleyTalkPromptBridge valleyTalkBridge;
+    private readonly DialogueEngineLink dialogueLink;
 
-    public BehaviorMailService(IModHelper helper, BehaviorMemory memory, Random random, ModConfig config, ValleyTalkPromptBridge valleyTalkBridge)
+    /// <summary>Mail keys with a live generation task; only touched on the main thread.</summary>
+    private readonly HashSet<string> generationsInFlight = new(StringComparer.OrdinalIgnoreCase);
+
+    public BehaviorMailService(IModHelper helper, BehaviorMemory memory, Random random, ModConfig config, DialogueEngineLink dialogueLink)
     {
         this.helper = helper;
         this.memory = memory;
         this.random = random;
         this.config = config;
-        this.valleyTalkBridge = valleyTalkBridge;
+        this.dialogueLink = dialogueLink;
     }
 
     public void ApplyMailData(IDictionary<string, string> data)
@@ -196,7 +200,7 @@ internal sealed class BehaviorMailService
 
     private void TryStartGiftMailGeneration(NpcGiftMailFact mail, NPC npc)
     {
-        if (!this.config.EnableAiGiftMail || this.valleyTalkBridge == null || !this.valleyTalkBridge.IsConnected || npc == null)
+        if (!this.config.EnableAiGiftMail || this.dialogueLink == null || !this.dialogueLink.IsConnected || npc == null)
         {
             return;
         }
@@ -208,77 +212,107 @@ internal sealed class BehaviorMailService
 
         mail.GenerationStatus = "pending";
         mail.GenerationAttempts = 0;
-        this.valleyTalkBridge.RequestGiftMailText(mail.MailKey, npc, this.BuildGenerationPayload(mail));
+        this.StartGiftMailGeneration(mail);
     }
 
     /// <summary>
-    /// Polls ValleyTalk for any pending AI gift-mail bodies and stores the result on the fact.
-    /// Called at save-load and day-start before the mail asset is rebuilt. Returns true if any mail
-    /// became ready, so the caller can invalidate the mail cache.
+    /// Launches the true-async generation task (WP16): the persona snapshot happens inside the
+    /// generator before its first await, so this must be called on the main thread. The result is
+    /// applied back on the main thread; a null body counts one attempt against
+    /// <see cref="MaxGenerationAttempts"/> and a later save-load/day-start pass re-initiates.
     /// </summary>
-    public bool ResolvePendingGiftMailGenerations()
+    private void StartGiftMailGeneration(NpcGiftMailFact mail)
     {
-        if (!this.config.EnableAiGiftMail || this.valleyTalkBridge == null || !this.valleyTalkBridge.IsConnected)
+        if (!this.generationsInFlight.Add(mail.MailKey))
         {
-            return false;
+            return;
         }
 
-        bool changed = false;
+        var request = new Dialogue.Engine.GiftMailRequest(
+            mail.NpcName,
+            mail.NpcDisplayName,
+            mail.Motive,
+            mail.ItemLabel,
+            mail.SourceGiftName,
+            mail.Tier,
+            this.config.AiGiftMailTimeoutSeconds);
+        _ = this.RunGiftMailGenerationAsync(mail.MailKey, request);
+    }
+
+    private async Task RunGiftMailGenerationAsync(string mailKey, Dialogue.Engine.GiftMailRequest request)
+    {
+        string? body = null;
+        try
+        {
+            body = await this.dialogueLink.GenerateGiftMailAsync(request, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            // The link already logs; a null body is handled as a failed attempt below.
+        }
+
+        MainThreadDispatcher.Post(() => this.ApplyGiftMailGenerationResult(mailKey, body));
+    }
+
+    private void ApplyGiftMailGenerationResult(string mailKey, string? body)
+    {
+        this.generationsInFlight.Remove(mailKey);
+        if (!this.TryGetGiftMail(mailKey, out NpcGiftMailFact? mail)
+            || mail == null
+            || mail.Claimed
+            || !string.Equals(mail.GenerationStatus, "pending", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        // Local re-validation on top of the generator's own checks (defense in depth, kept from
+        // the bridge era): no mail command characters and the right language.
+        if (!string.IsNullOrWhiteSpace(body) && IsUsableGeneratedBody(body))
+        {
+            mail.GeneratedBody = body;
+            mail.GenerationStatus = "ready";
+            this.InvalidateMailCache();
+            return;
+        }
+
+        mail.GenerationAttempts++;
+        if (mail.GenerationAttempts >= MaxGenerationAttempts)
+        {
+            mail.GenerationStatus = "failed";
+        }
+    }
+
+    /// <summary>
+    /// Re-initiates generation for AI gift mails that are still "pending" without a live task
+    /// (typically because the game was closed mid-generation; the status is persisted). Called at
+    /// save-load and day-start before the mail asset is rebuilt. Attempt accounting and the
+    /// template fallback after <see cref="MaxGenerationAttempts"/> failures are preserved.
+    /// </summary>
+    public void ResolvePendingGiftMailGenerations()
+    {
+        if (!this.config.EnableAiGiftMail || this.dialogueLink == null || !this.dialogueLink.IsConnected)
+        {
+            return;
+        }
+
         foreach (var state in this.memory.GetTrackedStates())
         {
             var pending = (state.GiftMails ?? new List<NpcGiftMailFact>())
-                .Where(m => string.Equals(m.GenerationStatus, "pending", StringComparison.OrdinalIgnoreCase) && !m.Claimed)
+                .Where(m => string.Equals(m.GenerationStatus, "pending", StringComparison.OrdinalIgnoreCase)
+                    && !m.Claimed
+                    && !this.generationsInFlight.Contains(m.MailKey))
                 .ToList();
             foreach (var mail in pending)
             {
-                string text = this.valleyTalkBridge.TryGetGiftMailText(mail.MailKey);
-                if (!string.IsNullOrWhiteSpace(text))
-                {
-                    if (IsUsableGeneratedBody(text))
-                    {
-                        mail.GeneratedBody = text;
-                        mail.GenerationStatus = "ready";
-                        changed = true;
-                    }
-                    else
-                    {
-                        mail.GenerationStatus = "failed";
-                    }
-
-                    continue;
-                }
-
-                mail.GenerationAttempts++;
                 if (mail.GenerationAttempts >= MaxGenerationAttempts)
                 {
                     mail.GenerationStatus = "failed";
+                    continue;
                 }
-                else
-                {
-                    // ValleyTalk may have restarted and lost its in-memory result; ask again.
-                    NPC npc = Game1.getCharacterFromName(mail.NpcName);
-                    if (npc != null)
-                    {
-                        this.valleyTalkBridge.RequestGiftMailText(mail.MailKey, npc, this.BuildGenerationPayload(mail));
-                    }
-                }
+
+                this.StartGiftMailGeneration(mail);
             }
         }
-
-        return changed;
-    }
-
-    private string BuildGenerationPayload(NpcGiftMailFact mail)
-    {
-        return JsonSerializer.Serialize(new
-        {
-            motive = mail.Motive,
-            itemLabel = mail.ItemLabel,
-            sourceGift = mail.SourceGiftName,
-            npcDisplayName = mail.NpcDisplayName,
-            tier = mail.Tier,
-            timeoutSeconds = this.config.AiGiftMailTimeoutSeconds
-        });
     }
 
     private static bool TryGetUsableGeneratedBody(NpcGiftMailFact mail, out string body)

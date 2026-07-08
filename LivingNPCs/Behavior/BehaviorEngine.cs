@@ -36,7 +36,6 @@ internal sealed class BehaviorEngine
     private readonly BehaviorEngineServices services;
     private readonly Random random;
     private readonly BehaviorMemory memory;
-    private readonly ValleyTalkPromptBridge valleyTalkBridge;
     private readonly IBehaviorPlanner planner;
     private readonly AiBehaviorClient aiBehaviorClient;
     private readonly BehaviorDebugCommandHandler debugCommands;
@@ -73,7 +72,6 @@ internal sealed class BehaviorEngine
 
         this.random = this.services.Random;
         this.memory = this.services.Memory;
-        this.valleyTalkBridge = this.services.ValleyTalkBridge;
         this.planner = this.services.Planner;
         this.aiBehaviorClient = this.services.AiBehaviorClient;
         this.debugCommands = this.services.DebugCommands;
@@ -129,7 +127,6 @@ internal sealed class BehaviorEngine
 
             this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
             this.conversationStartRecorder.Clear();
-            this.valleyTalkBridge.TryInitialize();
             this.mailService.ResolvePendingGiftMailGenerations();
             this.mailService.QueueDueGiftMailsForTomorrow();
             this.mailService.InvalidateMailCache();
@@ -158,7 +155,7 @@ internal sealed class BehaviorEngine
     private void AfterManualMemoryClear()
     {
         this.helper.Data.WriteSaveData(SaveDataKey, this.memory.ToSaveData());
-        this.valleyTalkBridge.ClearAll();
+        this.contextService.ClearImmediateContexts();
         this.helpRequestQuestLog.Sync();
         this.mailService.InvalidateMailCache();
         this.pendingRequests.Clear();
@@ -185,7 +182,7 @@ internal sealed class BehaviorEngine
             }
 
             this.memory.ResetDaily();
-            this.valleyTalkBridge.ClearAll();
+            this.contextService.ClearImmediateContexts();
             this.pendingRequests.Clear();
             this.ClearGiftMailTracking();
             this.companionOutings.Clear();
@@ -239,7 +236,7 @@ internal sealed class BehaviorEngine
         {
             this.memory.ResetDaily();
             this.pendingValleyTalkExchanges.Clear();
-            this.valleyTalkBridge.ClearAll();
+            this.contextService.ClearImmediateContexts();
             this.pendingRequests.Clear();
             this.ClearGiftMailTracking();
             this.companionOutings.Clear();
@@ -333,7 +330,6 @@ internal sealed class BehaviorEngine
             }
 
             this.helpRequests.UpdateTimers();
-            this.memoryImpressions.PollPending();
 
             if (!this.config.EnablePassiveBehaviors || Game1.activeClickableMenu != null)
             {
@@ -816,32 +812,16 @@ internal sealed class BehaviorEngine
             this.memory.UpdateStateForBehavior(npc, intent, source);
         }
 
-        string promptContext = this.memory.BuildPromptContext(
-            npc,
-            this.config.PromptMemoryEntries,
-            this.config.EnableNpcState,
-            this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
-            this.config.HelpRequestCooldownDays
-        );
-        bool pushedToValleyTalk = this.valleyTalkBridge.PushBehaviorContext(npc, promptContext);
-
+        // No push channel anymore (WP16): the dialogue engine pulls the behavior context at
+        // generation time, so recording the behavior above is all the priming needed.
         if (this.config.Debug)
         {
             this.monitor.Log(I18n.Get("log.behavior.executed", new { type = intent.Type, npc = npc.Name, source }), LogLevel.Debug);
-            if (pushedToValleyTalk)
-            {
-                this.monitor.Log(I18n.Get("log.behavior.contextPushed", new { npc = npc.Name, context = promptContext }), LogLevel.Trace);
-            }
-            else
-            {
-                this.monitor.Log(I18n.Get("log.behavior.contextNotPushed", new { npc = npc.Name }), LogLevel.Debug);
-            }
         }
 
         if (source == "hotkey")
         {
-            string bridge = I18n.Get(pushedToValleyTalk ? "bridge.pushed" : "bridge.notPushed");
-            this.feedback.Show(I18n.Get("hud.behaviorDone", new { npc = npc.displayName, behavior = this.DescribeIntent(intent.Type), bridge }));
+            this.feedback.Show(I18n.Get("hud.behaviorDone", new { npc = npc.displayName, behavior = this.DescribeIntent(intent.Type) }));
         }
 
         return true;

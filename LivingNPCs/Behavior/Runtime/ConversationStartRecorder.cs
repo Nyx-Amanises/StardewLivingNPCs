@@ -32,7 +32,7 @@ internal sealed class ConversationStartRecorder
     private readonly IMonitor monitor;
     private readonly ModConfig config;
     private readonly BehaviorMemory memory;
-    private readonly ValleyTalkPromptBridge valleyTalkBridge;
+    private readonly DialogueEngineLink dialogueLink;
     private readonly BehaviorFeedbackService feedback;
     private readonly CommunityRippleRuntime communityRipples;
     private readonly GiftOpportunityService giftOpportunities;
@@ -48,7 +48,7 @@ internal sealed class ConversationStartRecorder
         IMonitor monitor,
         ModConfig config,
         BehaviorMemory memory,
-        ValleyTalkPromptBridge valleyTalkBridge,
+        DialogueEngineLink dialogueLink,
         BehaviorFeedbackService feedback,
         CommunityRippleRuntime communityRipples,
         GiftOpportunityService giftOpportunities,
@@ -61,7 +61,7 @@ internal sealed class ConversationStartRecorder
         this.monitor = monitor;
         this.config = config;
         this.memory = memory;
-        this.valleyTalkBridge = valleyTalkBridge;
+        this.dialogueLink = dialogueLink;
         this.feedback = feedback;
         this.communityRipples = communityRipples;
         this.giftOpportunities = giftOpportunities;
@@ -304,7 +304,7 @@ internal sealed class ConversationStartRecorder
             BuildHelpRequestDeliveryPrompt(npc, gift, changedHelpRequests)
         );
 
-        if (!this.valleyTalkBridge.TryRequestGiftDialogue(npc, deliveredItem, gift.TasteScore))
+        if (!this.dialogueLink.TryRequestGiftDialogue(npc, deliveredItem, gift.TasteScore))
         {
             this.feedback.QueueAmbientRemark(
                 npc,

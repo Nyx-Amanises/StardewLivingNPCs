@@ -64,19 +64,27 @@ internal sealed class ModConfig
     public string AiPlannerApiKey { get; set; } = string.Empty;
     public string AiPlannerModel { get; set; } = string.Empty;
     public int AiPlannerTimeoutSeconds { get; set; } = 8;
-    public bool EnableValleyTalkPromptBridge { get; set; } = true;
+    /// <summary>把行为系统上下文（记忆摘要/礼物机会/求助机会/出游段）注入 AI 对话生成
+    /// （WP16 裁决 5：原 EnableValleyTalkPromptBridge 改名，Migrate 搬旧键值）。</summary>
+    public bool EnableBehaviorContextInDialogue { get; set; } = true;
+
+    /// <summary>旧配置键（0.1.x）：仅用于反序列化迁移，Migrate 后清空、不再写出。</summary>
+    [Newtonsoft.Json.JsonProperty("EnableValleyTalkPromptBridge", NullValueHandling = Newtonsoft.Json.NullValueHandling.Ignore)]
+    private bool? legacyEnableValleyTalkPromptBridge;
+
     public bool ConcisePromptContext { get; set; } = false;
     public bool ShowHudMessages { get; set; } = true;
 
-    // AI-written gift mail (reciprocal / birthday / help-request reward). Generated through ValleyTalk
-    // when the mail is triggered; the i18n templates remain the fallback. Hand-edit in config.json
-    // (intentionally not surfaced in GMCM).
+    // AI-written gift mail (reciprocal / birthday / help-request reward). Generated through the
+    // built-in dialogue engine when the mail is triggered; the i18n templates remain the fallback.
+    // Hand-edit in config.json (intentionally not surfaced in GMCM).
     public bool EnableAiGiftMail { get; set; } = true;
     public int AiGiftMailTimeoutSeconds { get; set; } = 30;
 
     // Compress long-term memories evicted by the 24-entry cap into a biographical "relationship
-    // impression" with one LLM call through the ValleyTalk bridge; the impression is injected as
-    // fixed relationship background. Hand-edit in config.json (intentionally not surfaced in GMCM).
+    // impression" with one LLM call through the built-in dialogue engine; the impression is
+    // injected as fixed relationship background. Hand-edit in config.json (intentionally not
+    // surfaced in GMCM).
     public bool EnableMemoryImpressions { get; set; } = true;
     public int MemoryImpressionTimeoutSeconds { get; set; } = 45;
 
@@ -139,13 +147,21 @@ internal sealed class ModConfig
 
     public bool Migrate()
     {
+        bool changed = false;
         if (this.BehaviorHotkey.ToString().Equals("B", StringComparison.OrdinalIgnoreCase))
         {
             this.BehaviorHotkey = KeybindList.Parse("LeftShift + H");
-            return true;
+            changed = true;
         }
 
-        return false;
+        if (this.legacyEnableValleyTalkPromptBridge.HasValue)
+        {
+            this.EnableBehaviorContextInDialogue = this.legacyEnableValleyTalkPromptBridge.Value;
+            this.legacyEnableValleyTalkPromptBridge = null;
+            changed = true;
+        }
+
+        return changed;
     }
 
     /// <summary>
@@ -289,7 +305,7 @@ internal sealed class ModConfig
         this.AiPlannerApiKey = defaults.AiPlannerApiKey;
         this.AiPlannerModel = defaults.AiPlannerModel;
         this.AiPlannerTimeoutSeconds = defaults.AiPlannerTimeoutSeconds;
-        this.EnableValleyTalkPromptBridge = defaults.EnableValleyTalkPromptBridge;
+        this.EnableBehaviorContextInDialogue = defaults.EnableBehaviorContextInDialogue;
         this.ConcisePromptContext = defaults.ConcisePromptContext;
         this.ShowHudMessages = defaults.ShowHudMessages;
         this.EnableAiGiftMail = defaults.EnableAiGiftMail;
