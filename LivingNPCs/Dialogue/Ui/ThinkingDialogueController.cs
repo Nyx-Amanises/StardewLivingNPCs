@@ -16,7 +16,7 @@ internal static class ThinkingDialogueController
     private static string baseText;
     private static DialogueBox activeBox;
     private static GameDialogue activeDialogue;
-    private static string ThinkingDialogueKey => $"{SldConstants.DialogueKeyPrefix}Thinking";
+    private static string ThinkingDialogueKey => EngineConstants.KeyThinking;
 
     public static void Start(NPC npc)
     {

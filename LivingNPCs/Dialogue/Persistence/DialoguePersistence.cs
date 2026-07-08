@@ -6,7 +6,7 @@ namespace LivingNPCs.Dialogue.Persistence;
 
 /// <summary>
 /// 持久化层的接线门面：SaveLoaded/Saving/ReturnedToTitle/GameLaunched 事件、purge 控制台命令。
-/// WP12-TODO: 事件接线最终由 WP12 统一收编到游戏集成层；届时把 RegisterEvents 的调用点挪过去即可。
+/// 调用点已由 WP12 收编：<see cref="GameHooks.DialogueEngineBootstrapper.Attach"/> 统一调用 RegisterEvents。
 /// </summary>
 internal static class DialoguePersistence
 {

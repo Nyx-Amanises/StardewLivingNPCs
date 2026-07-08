@@ -565,3 +565,102 @@ GameLaunched 中：`helper.ModRegistry.IsLoaded("dandm1.ValleyTalk")` 为真 →
 | 标记/键前缀/常量 | ValleyTalk/src/enums/SldConstants.cs:9-13; src/VtConstants.cs:5-11 |
 | 枚举字面 | ValleyTalk/src/enums/{Weekday,Season,SpouseAction,RandomAction}.cs |
 | 废弃 UI 件（零引用佐证） | ValleyTalk/src/UI/{ThinkingWindow,DialogueTextInputMenu,DialogueTextInputBox,DialogueTextInputMenuWrapper}.cs；InputTextBox.cs（StackSplitRedux 残片，位于 csproj 之外） |
+
+## 实现记录（2026-07-08，WP12 实现对话）
+
+洁净室声明：全程未打开 ValleyTalk/、ValleyTalk.Tests/、upstream-ValleyTalk/ 下任何文件
+（本 worktree 中前两者已物理删除），未检索其源码镜像；输入仅为本说明书包、LivingNPCs/、
+LivingNPCs.Tests/、已搬运件，以及官方 Stardew Valley 程序集的反射签名核对
+（00 §2.3 允许的官方来源；核对脚本为一次性临时件，未入库）。
+
+### 新增文件
+
+| 文件 | 覆盖条目 |
+|---|---|
+| GameHooks/PatchGuards.cs | §4.1 通用跳过条件集中实现（总门控/启用链转发/三档频率+当日记忆/被动门控/网络门控）；频率档位映射为纯函数供单测 |
+| GameHooks/NetworkGate.cs | §4.6.2 非阻塞网络门控：即时查失败**立即**放行原版，后台跑 WP11 重试探测刷新缓存标志；SuppressConnectionCheck 绕过 |
+| GameHooks/GenerationRequests.cs | 补丁→引擎请求装配：快照主线程采集；BehaviorContext 经注入委托在触发时刻装入（WP16 方向反转的 WP12 侧）；单飞行判定与入队转发 |
+| GameHooks/DialoguePatchHelpers.cs | 触发键查询、主动搭话共通动作、占位文本/键解析（键透传：temporaryDialogueKey → TranslationKey → default） |
+| GameHooks/NpcDialoguePatches.cs | P1（checkAction 输入入口）、P2（仅清栈守卫，见裁决 1）、P3（常规台词占位替换，键构造纯函数） |
+| GameHooks/NpcGeneratedDialoguePatches.cs | P4（送礼异步+跳过标记对白）、P6（临时台词占位，Resort_Marriage 重映射，异常抑制原方法）、P7（funReturn_/jobReturn_ 占位）、P8（检索台词占位） |
+| GameHooks/MarriageDialoguePatches.cs | P5（六键晨间播报过滤+暂存缓冲；未启用放行原版的修正）、P14（一律异步占位，见裁决 2；消费缓冲拼参考台词）、MarriageChoreBuffer |
+| GameHooks/DialogueResponsePatches.cs | P9（全 SLD_ 选项组接管：Silent/TypedResponse/文本选项；两步清理；可并入行提取为纯函数）、P10（雨天台词占位） |
+| GameHooks/Game1_DrawDialogue_Patch.cs | P11（方案 B 集中拦截：吞显/占位改道/记录分发）、P12（空栈守卫转调搬运件） |
+| GameHooks/DisplayedDialogueRecorder.cs | 台词展示记录：日常/事件分流 + 4.5 格内可收礼旁听；（NPC×游戏日×文本组）去重（等效替代旧 IL 偏移启发式） |
+| GameHooks/DialogueEngineBootstrapper.cs | §4.7 单入口：收编 WP14/WP15 注册调用、引擎/调度器装配、输入泵订阅、命令注册；GameLaunched 共存检测（§4.8）→ PatchAll；SaveLoaded/ReturnedToTitle 存档作用域重置 + 转录全量导出 + 共存 HUD |
+| GameHooks/DialogueConsoleCommands.cs | livingnpcs_tokens（空/export/reset → WP14 TokenUsageTracker）；对话遗忘经挂钩并入行为系统 livingnpcs_forget（见下"撞名裁定"） |
+| Ui/TypedInputRequestQueue.cs | §4.4 输入请求队列：只保留最后一个；无菜单时消费→原生输入控制器；空白提交零副作用；非空→好感+会话生成 |
+
+### 修改文件
+
+- EngineConstants.cs：补 §3 保留键 KeyInput（SLD_Input）/KeyThinking（SLD_Thinking）。
+- LegacyStubs.cs：删除 SldConstants（其 "LivingNPCs_" 前缀与 §3 SLD_ 兼容契约不符）；
+  TextInputManager.RequestTextInput → 输入队列；DialogueBuilder.PatchNpc → PatchGuards
+  （P15 搬运件由此激活）。
+- Ui 三搬运件：键改用 EngineConstants（SLD_Input/SLD_Thinking/SLD_Streaming），其余未动。
+- ModEntry.cs：两处直接注册调用收编为 Bootstrapper.Attach 单入口；行为上下文（对话/送礼）
+  以委托传入（BehaviorEngine.GetConversationContext / GetGiftResponseContext），WP16 重构时
+  只需换委托实现，不动本包。
+- DialoguePersistence.cs：头注释的 WP12-TODO 移除（调用点已收编）。
+- BehaviorDebugCommandHandler.cs：加两个静态挂钩 DialogueForgetNpc/DialogueForgetAll
+  并在 ClearNpcMemory 与 all confirm 分支调用（最小增量，详见撞名裁定）。
+- i18n default+zh：+3 键（dialogue.coexistenceHud、dialogue.command.tokens.exported/reset）。
+
+### 裁决落实
+
+1. 裁决 1：P2 弃栈帧探测，只留清栈守卫；拦截/记录集中到 P11（DrawDialogue prefix）。
+   事件台词以"当前处于事件中"状态替代旧的 Speak 栈帧判定；30 号验收冒烟须专门验证
+   旁听与事件记录不漏（已在 §7.1/7.3 注明的既知风险点）。
+2. 裁决 2：P14 一律异步占位（返回占位对白，经 P11 与 P2 路径合流），无同步 .Result 分支。
+3. 裁决 3：命令名 livingnpcs_tokens / livingnpcs_forget，无 valleytalk_* 别名。
+4. 裁决 4：Android 未加新入口（仅对话内 Typed 选项，与旧版一致）。
+5. 裁决 5：流式窗保持搬运未接线（键常量已修正为 SLD_Streaming）。
+6. 裁决 6：P9 未写 finishedLastDialogue 反射；验收期发现 UI 异常再加回。
+7. 裁决 7：无硬编码白名单（PermitAiUse 扫描归 WP15，本包只消费启用链）。
+
+### 实现裁定与偏差（供审计与验收关注）
+
+- **撞名裁定（forget 命令）**：行为系统既有 livingnpcs_forget（清行为记忆），SMAPI 禁止
+  重名注册，而裁决 3 与 WP15 已备文案均指定对话遗忘走同名命令。裁定为**合并语义**：
+  livingnpcs_forget 的 near/NPC 名/all confirm 各分支在清行为记忆的同时经静态挂钩清对话
+  历史（对话侧先清，行为侧无记忆也不影响对话遗忘），输出各自的 i18n 文案。
+  dialogue.command.forget.description/needSave/noNearby/confirmAll/npcNotFound 五键由行为侧
+  等价文案覆盖、暂未消费。
+- **P12 目标签名**：程序集中无参 drawDialogueBox() 实为**私有实例方法**（§3 表注"静态"
+  与实际不符），按实际打补丁；签名单测已按程序集断言。
+- **占位键透传**：P2 文字稿的"键 default"实现为空键兜底——P3/P7/P8/P10/P14 构造的
+  对话键（heart_x/funReturn_*/rainy 等）经 temporaryDialogueKey→TranslationKey 顺序透传给
+  引擎键文法（WP10 §5.4 的消费方），否则那些键构造成为死代码。
+- **P11 记录范围**：思考中/输入框 UI 壳与引擎错误兜底（SLD_Error 的 "..."）不入历史；
+  会话生成的台词由引擎 UpsertConversation 记录，P11 补记的展示行由其覆盖删除语义收敛
+  （与旧世界时序一致）。
+- **共存时序**：调度器/输入泵在 Entry 装配、共存检测在 GameLaunched——检测命中时
+  EnableGate.EngineDisabledByCoexistence 置位 + 跳过 PatchAll，泵订阅虽存在但因无补丁、
+  总门控为假而恒空转（语义等同"调度器不启动"）。HUD 警告每次进档提示一次。
+- **P6 Resort 重映射**：按 §4.2.6 字面实现（StartsWith("Resort")）；若实际传入键为
+  资产限定全名则该分支惰性无害，冒烟时以度假村已婚台词验证。
+- **GiftItemId**：送礼请求携带 QualifiedItemId（ItemRegistry 可解析，供引擎取显示名；
+  呈现键 Accept_{id} 为临时展示键，不入存档契约）。
+- §5 的 GenerationUiCoordinator 未另立类：思考窗生命周期在搬运件 ThinkingDialogueController
+  （WP12 侧），代际号/取消/回主线程在 WP10 GenerationScheduler，职责边界与 §5 要求一致，
+  缝合点为 AsyncBuilder.Instance.Scheduler 与 ThinkingDialogueController 静态接口。
+- StardewTime/枚举：WP10 已提供（Dialogue/StardewTime.cs、DialogueKeyGrammar 的
+  SpouseAction/RandomAction；Season 直用游戏枚举，Weekday 无消费方未重建），本包未重复出件。
+- Android 安全文件 IO 助手：Diagnostics/WP14 搬运件已自带容错落盘（限制在 mod 目录下、
+  IO 异常降级日志），未再出独立 AndroidEnv 文件 IO 件；平台检测用 WP11 AndroidPlatform。
+
+### 测试
+
+LivingNPCs.Tests/Dialogue/GameHooks/Wp12GameHooksTests.cs（24 项）：
+§3 签名表 19 目标 + 消费成员反射断言（游戏升级破坏契约时先红）；SLD_ 保留键契约；
+PatchGuards 总门控五闸/频率映射/0-4 档/当日记忆；NetworkGate 桌面恒真/配置绕过/
+失败立即返回+后台探测；输入队列只留最后/菜单等待/空白零副作用/提交装配会话请求；
+P3 键构造、P5 六键清单、P9 可并入行过滤、P11 可记录行过滤与当日去重、婚后缓冲语义。
+全套 dotnet test：**568 通过 / 0 失败 / 1 跳过（既有）**，基线 544 → 568。
+
+### 留给 WP16 的接线点
+
+- GenerationRequests.ConversationContextProvider / GiftContextProvider：现由 ModEntry 以
+  BehaviorEngine 两个既有方法装配；WP16 重构 ValleyTalkContextService 后换委托即可。
+- DialogueEngine.RecordExchangeCallback / PromptOverrides / SpouseGiftPicker（WP10 留白）
+  本包未触碰。

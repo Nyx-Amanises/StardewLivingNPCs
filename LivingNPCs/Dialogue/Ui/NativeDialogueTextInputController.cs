@@ -50,7 +50,7 @@ internal static class NativeDialogueTextInputController
         caretPosition = 0;
         onSubmitted = callback;
 
-        var dialogue = new GameDialogue(npc, $"{SldConstants.DialogueKeyPrefix}Input", prompt);
+        var dialogue = new GameDialogue(npc, EngineConstants.KeyInput, prompt);
         activeDialogue = dialogue;
         npc.CurrentDialogue.Push(dialogue);
         Game1.currentSpeaker = npc;

@@ -45,11 +45,16 @@ public sealed class ModEntry : Mod
         this.engine = new BehaviorEngine(helper, Monitor, this.config);
         this.engine.RegisterEvents();
 
-        // WP14 持久化与旧数据迁移接线；WP12-TODO: 事件接线最终收编到游戏集成层。
-        Dialogue.Persistence.DialoguePersistence.RegisterEvents();
-
-        // WP15 内容/配置装配（注册顺序在持久化层之后：先导入旧 config 再建 LLM 客户端）。
-        Dialogue.Content.DialogueContentSetup.Register(helper, this.config);
+        // 对话引擎接线单入口（WP12 §4.7）：收编 WP14 持久化与 WP15 内容装配的注册调用，
+        // 装配引擎/调度器/补丁/输入队列/命令；行为上下文经委托在触发时刻注入（WP16 方向反转）。
+        Dialogue.GameHooks.DialogueEngineBootstrapper.Attach(
+            helper,
+            Monitor,
+            this.config,
+            this.ModManifest.UniqueID,
+            npc => this.engine?.GetConversationContext(npc.Name, npc.displayName) ?? string.Empty,
+            (npc, itemId, itemName, taste) =>
+                this.engine?.GetGiftResponseContext(npc.Name, npc.displayName, itemId, itemName, taste) ?? string.Empty);
 
         Monitor.Log(I18n.Get("log.mod.loaded"), LogLevel.Info);
     }

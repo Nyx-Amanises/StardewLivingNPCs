@@ -4,15 +4,10 @@ using System.Linq;
 using StardewValley;
 
 using LivingNPCs.Dialogue.Diagnostics;
+using LivingNPCs.Dialogue.GameHooks;
 using LivingNPCs.Dialogue.Llm;
 using LivingNPCs.Dialogue.Persistence;
 namespace LivingNPCs.Dialogue.Engine;
-
-internal static class SldConstants
-{
-    // WP12-TODO: replace with the final dialogue key namespace.
-    public const string DialogueKeyPrefix = "LivingNPCs_";
-}
 
 internal sealed class Character
 {
@@ -60,10 +55,10 @@ internal sealed class DialogueBuilder
     {
     }
 
+    /// <summary>搬运件补丁的启用判定入口：引擎就绪且该 NPC 启用（主动路径不抽签，WP12 §4.1）。</summary>
     public bool PatchNpc(NPC npc)
     {
-        // WP10-TODO: route through IDialogueEngine once WP10/WP12 own the dialogue entrypoint.
-        return false;
+        return PatchGuards.AllowInteractiveInput(npc);
     }
 
     public void ClearContext()
@@ -110,9 +105,10 @@ internal sealed class AsyncBuilder
 
 internal static class TextInputManager
 {
+    /// <summary>搬运件补丁的输入入口：转发到 WP12 输入请求队列（§4.4）。</summary>
     public static void RequestTextInput(string prompt, NPC npc)
     {
-        // WP12-TODO: wire typed dialogue input to the new game hook entrypoint.
+        Ui.TypedInputRequestQueue.Submit(prompt, npc, dialogueKey: string.Empty, conversation: null);
     }
 }
 

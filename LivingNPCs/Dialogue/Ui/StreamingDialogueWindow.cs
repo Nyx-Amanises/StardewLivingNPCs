@@ -392,7 +392,7 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
         if (this.dialogueShell == null || viewportWidth != this.lastViewportWidth || viewportHeight != this.lastViewportHeight)
         {
             this.dialogueShell = this.npc != null
-                ? new DialogueBox(new GameDialogue(this.npc, $"{SldConstants.DialogueKeyPrefix}Streaming", " "))
+                ? new DialogueBox(new GameDialogue(this.npc, EngineConstants.KeyStreaming, " "))
                 : new DialogueBox(" ");
             this.lastViewportWidth = viewportWidth;
             this.lastViewportHeight = viewportHeight;

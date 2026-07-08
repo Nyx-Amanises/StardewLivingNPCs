@@ -9,6 +9,13 @@ namespace LivingNPCs.Behavior;
 
 internal sealed class BehaviorDebugCommandHandler
 {
+    /// <summary>WP12 挂接：对话引擎的遗忘处理并入本命令（与 livingnpcs_forget 同名合并，
+    /// 见 RewriteSpec/12 实现记录）。(npcName, displayName)。</summary>
+    internal static Action<string, string>? DialogueForgetNpc { get; set; }
+
+    /// <summary>WP12 挂接：all confirm 分支连带清全部对话历史。</summary>
+    internal static Action? DialogueForgetAll { get; set; }
+
     private readonly IModHelper helper;
     private readonly IMonitor monitor;
     private readonly ModConfig config;
@@ -114,6 +121,7 @@ internal sealed class BehaviorDebugCommandHandler
         {
             int count = this.memory.ClearAllMemory();
             this.afterMemoryCleared();
+            DialogueForgetAll?.Invoke();
             this.monitor.Log(I18n.Get("debug.forgetAllDone", new { count }), LogLevel.Info);
             this.showFeedback(I18n.Get("debug.forgetAllHud", new { count }));
             return;
@@ -130,6 +138,8 @@ internal sealed class BehaviorDebugCommandHandler
 
     private void ClearNpcMemory(string npcName, string displayName)
     {
+        // 对话历史先于行为记忆清理：即使行为侧无记忆，对话历史也应被遗忘（WP12 合并语义）。
+        DialogueForgetNpc?.Invoke(npcName, displayName);
         if (!this.memory.ClearNpcMemory(npcName))
         {
             this.monitor.Log(I18n.Get("debug.forgetNpcNoMemory", new { npc = displayName }), LogLevel.Info);

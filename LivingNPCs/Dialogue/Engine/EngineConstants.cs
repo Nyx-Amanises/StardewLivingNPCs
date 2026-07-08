@@ -19,6 +19,10 @@ internal static class EngineConstants
     public const string KeyError = KeyPrefix + "Error";
     public const string KeyStreaming = KeyPrefix + "Streaming";
 
+    /// <summary>UI 壳对白键（WP12 §3 保留键：输入框与思考中占位）。</summary>
+    public const string KeyInput = KeyPrefix + "Input";
+    public const string KeyThinking = KeyPrefix + "Thinking";
+
     /// <summary>送礼应答键前缀：Accept_{礼物内部名}。</summary>
     public const string GiftKeyPrefix = "Accept_";
 
