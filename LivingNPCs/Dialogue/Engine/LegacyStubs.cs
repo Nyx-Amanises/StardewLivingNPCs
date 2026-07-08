@@ -68,7 +68,7 @@ internal sealed class DialogueBuilder
 
     public void ClearContext()
     {
-        // WP10-TODO: replace with the new dialogue session/context lifecycle.
+        DialogueEngineHost.Instance?.History.ClearContext();
     }
 
     public Character GetCharacter(NPC npc)
@@ -86,10 +86,7 @@ internal static class Prompts
 {
     public static bool IsLivingNpcThirdPartyOverride(string text)
     {
-        // WP10-TODO: move this helper into the new prompt assembly path.
-        return !string.IsNullOrWhiteSpace(text)
-            && (text.Contains("LivingNPCs", StringComparison.OrdinalIgnoreCase)
-                || text.Contains("Active Companion Outing", StringComparison.OrdinalIgnoreCase));
+        return PromptAssembler.IsLivingNpcOverride(text);
     }
 }
 
@@ -102,9 +99,12 @@ internal sealed class AsyncBuilder
     {
     }
 
+    /// <summary>WP12 的 Esc 挂点；调度器装配后转发（§4.2）。</summary>
+    public GenerationScheduler? Scheduler { get; set; }
+
     public void CancelActiveGeneration()
     {
-        // WP10-TODO: cancellation moves to IDialogueEngine generation tokens.
+        this.Scheduler?.CancelActiveGeneration();
     }
 }
 

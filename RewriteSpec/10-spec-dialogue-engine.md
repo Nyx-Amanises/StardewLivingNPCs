@@ -642,3 +642,69 @@ SVE 兼容关闭时改从原版内容管线加载台词（跳过内容包补丁�
   路由/行动决策挂载点：Character.cs:475-476,689-696 与 Prompts.cs:83-103；
   常量：enums/SldConstants.cs、VtConstants.cs；配置默认值：
   config/ModConfig.cs:21-56；BlockModdedContent：ModEntry.cs:309-324。
+
+## 实现记录（2026-07-08，WP10 实现对话）
+
+洁净室声明：全程未打开 ValleyTalk/、ValleyTalk.Tests/、upstream-ValleyTalk/ 下任何文件，
+未检索其源码镜像；输入仅为本说明书包、LivingNPCs/、LivingNPCs.Tests/ 与已搬运件。
+
+### 新增文件（LivingNPCs/Dialogue/）
+
+| 文件 | 覆盖条目 |
+|---|---|
+| IDialogueEngine.cs | 01 §2 接口 + GenerationRequest/GenerationResult/ConversationTurn/IStreamSink（§5.1/§5.2） |
+| Engine/EngineConstants.cs | §3.2 契约常量（SLD_ 键、skip#、$$$%%%、$$%%、20000 计数器种子、... 回退） |
+| Engine/GameStateSnapshot.cs | §4.3 快照（纯数据，含心数 0→-1、时间桶、入住天数、财富四档等派生） |
+| Engine/GameStateSnapshotCollector.cs | 快照的 Game1 采集（逐组容错）+ 日程活动归一化 |
+| Engine/DialogueKeyGrammar.cs | §5.4 对话键文法（RandomAction/SpouseAction 枚举、特殊键贪心匹配） |
+| Engine/SampleSelector.cs | §5.4 差异分（含 0–9 抖动）+ 前 20 选择 |
+| Engine/HistorySampler.cs | §4.15 采样：四类 + 第三方目击 + 活动事件合成、最近 20 条、4000 字符预算 |
+| Engine/EngineHistoryWriter.cs | §4.14 四类写入/去重/Respond: 剔除/旁听替换/会话 GUID 续接缓存/清除 |
+| Engine/PromptAssembler.cs | §4.6 六段装配（构造即 ApplyDependencies）、§4.8 优化键探测回退、小节 Override、长度表 |
+| Engine/ResponseParser.cs | §4.10 归一化/元数据行剔除/宽容恢复/清洗/超长句界拆分/选项校验（200/90/160） |
+| Engine/ResponseFormatter.cs | §3.2 $q/$r 菜单（id/键逐字）、§4.13 流式选项、§4.11 结束判定 |
+| Engine/EnableGate.cs | §4.4 启用链 + 概率门（NPC×游戏日记忆） |
+| Engine/DialogueEngine.cs | §4.5 决策通道挂载、§4.9 重试/超时/用量、§4.12 收尾、§4.13 流式、Preoccupation 当日粘滞 |
+| Engine/GenerationScheduler.cs | §4.2 单飞行/延迟启动/代际号取消/主线程 tick 交接/异常回退呈现 |
+
+测试：LivingNPCs.Tests/Dialogue/Engine/Wp10ParsingTests.cs、Wp10EngineTests.cs（53 个，
+含引擎端到端：假客户端下 Conversation/Gift/回退/流式四路径）。基线 489 → 542 全绿。
+
+### 裁决落实
+
+- 裁决 3（宽松校验死代码）：删除宽松分支，重试上限维持 2 次（ResponseParser 无三试放宽路径）。
+- 裁决 4（回退行送礼标记）：修正——仅成功生成的首行追加 `[物品ID]`，回退 `...` 不再送礼。
+- 开放问题 5：概率门 -1 档不实现（照旧）。
+- 开放问题 1（流式接线）：两条路径均已实现；是否默认启用流式窗归 WP12 配置。
+- 开放问题 2（skip#）：保留字符串协议（FormattedLine 前缀），未改进程内标志。
+
+### 与其他工作包的接线点（待 WP12/WP16 调用）
+
+- 装配：`DialogueEngineHost.CreateDefault(DialogueContentService)`（游戏启动时调用一次），
+  调度器 `new GenerationScheduler(engine)`，并把 `AsyncBuilder.Instance.Scheduler` 指向它。
+- WP12：入口 `GenerationScheduler.Enqueue`；Esc → `CancelActiveGeneration`；概率门
+  `engine.Gate.PassProbability`；台词展示后 `engine.History.AddDialogueLine/AddEventLine/
+  AddOverheardLine`；事件结束 `DialogueBuilder.Instance.ClearContext()`（已接 History.ClearContext）。
+- WP16：`DialogueEngine.RecordExchangeCallback`（3.3 JSON 回传）、`DialogueEngine.PromptOverrides`
+  （第三方小节 Override 注册表）、`DialogueEngine.SpouseGiftPicker`（配偶主动送礼抽取策略，
+  见下"留白"）。
+- 旧版共存：`EnableGate.EngineDisabledByCoexistence`（01 §5 检测方置位）。
+
+### WP20 键依赖
+
+本包按 §4.6 引用的全部键已在代码中落名（gameState*Yes/No、dateTime*、weather*、otherNpcs*、
+marriage*、children*、farmContents*、wealthTier0–3、location*、trinkets*、recentEvents_<键>、
+specialDates_<季节日>、gift*、spouseAction*、friendship*、relationship*、preoccupation、
+currentConversation*、instructions*、command*、responseStart、activity*（日程活动归一化）、
+history*Format、historyActiveEvent_<事件键>）。键缺失时行级静默缺席、结构不变；
+WP20 交付时如统一改名，改 PromptAssembler/HistorySampler 中的字面量即可（有测试审计护栏）。
+另向 i18n（default+zh）补了 5 个 UI/转录键：outputRespond、outputStaySilent、
+generalFarmerLabel、transcriptGiftPlayerLine、activityGeneric。
+
+### 留白（说明书未给出行为细节，保守处理）
+
+- 配偶主动送礼的抽取概率与物品池旧行为未在说明书量化（审计索引 Prompts.cs:152-170），
+  默认经 `SpouseGiftPicker` 挂钩且缺省为 null（不送礼）；`[物品ID]` 追加与呈现契约已就位，
+  策略由用户/WP16 定夺后一行接入。
+- 约会"公开/低调"与性向词游戏内无直接数据源，快照字段已留（DatingPublicly 默认公开、
+  OrientationWord 默认空），文案参数可空。

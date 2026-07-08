@@ -4,17 +4,14 @@
   "hud.behaviorSkipped": "LivingNPCs：{{npc}} 未执行 {{behavior}}：{{reason}}",
   "hud.behaviorFailed": "LivingNPCs：{{npc}} 未能执行 {{behavior}}。",
   "hud.behaviorDone": "LivingNPCs：{{npc}} 已执行 {{behavior}}，{{bridge}}。",
-
   "bridge.pushed": "已推送 ValleyTalk 上下文",
   "bridge.notPushed": "未推送 ValleyTalk 上下文",
-
   "behavior.facePlayer": "转向玩家",
   "behavior.emote": "显示表情",
   "behavior.approachPlayer": "走近玩家",
   "behavior.pause": "停下看向玩家",
   "behavior.lookAround": "环顾四周",
   "behavior.stepAway": "后退一步",
-
   "skip.eventActive": "当前正在事件中",
   "skip.notInLocation": "NPC 不在当前地图",
   "skip.dailyBudget": "今天该 NPC 的触发次数已达上限",
@@ -23,7 +20,6 @@
   "skip.approachDisabled": "走近玩家行为已关闭",
   "skip.movementDisabled": "移动类行为已关闭",
   "skip.attentionDisabled": "小型注意力行为已关闭",
-
   "help.thanksFulfilled": "谢谢你，真的帮上忙了。",
   "help.thanksReceived": "谢谢你，我先收下这个。",
   "hud.itemDelivered": "LivingNPCs：已把 {{item}} 交给 {{npc}}。",
@@ -52,7 +48,6 @@
   "dialogueInfluence.location.forest": "刚才聊到森林，我就想来走走。",
   "dialogueInfluence.location.mountain": "你提到山上后，我也有点在意这里。",
   "dialogueInfluence.location.default": "你刚才提到{{location}}，我后来还想着这件事。",
-
   "location.farm": "农场",
   "location.town": "鹈鹕镇",
   "location.mountain": "山上",
@@ -85,7 +80,6 @@
   "location.grandpasShed": "爷爷的棚屋",
   "location.junimoWoods": "祝尼魔森林",
   "location.enchantedGrove": "魔法林地",
-
   "gift.mailWhenInventoryFull": "LivingNPCs：你的背包满了，{{npc}} 会把 {{item}} 明天寄给你。",
   "gift.gaveMoney": "LivingNPCs：{{npc}} 给了你 {{amount}}g。",
   "gift.hud.preference": "LivingNPCs：{{npc}} 记得你的喜好，送给你了 {{item}}。",
@@ -420,7 +414,6 @@
   "gift.mail.title.help_request_reward": "{{npc}}寄来的求助谢礼",
   "gift.mail.title.birthday": "{{npc}}寄来的生日谢礼",
   "gift.mail.title.default": "{{npc}}的礼物",
-
   "outing.start.beach": "走吧，去海边透透气。",
   "outing.start.seedShop": "走吧，去店里看看。",
   "outing.start.archaeologyHouse": "走吧，去里面慢慢看看。",
@@ -433,13 +426,11 @@
   "outing.start.browse": "走吧，去逛一会儿。",
   "outing.start.quiet": "走吧，找个安静点的地方。",
   "outing.start.default": "走吧。",
-
   "outing.timeOfDay.earlyMorning": "清晨的",
   "outing.timeOfDay.morning": "上午的",
   "outing.timeOfDay.afternoon": "午后的",
   "outing.timeOfDay.evening": "傍晚的",
   "outing.timeOfDay.night": "夜里的",
-
   "outing.arrival.beach": "{{time}}海边挺舒服的。",
   "outing.arrival.seedShop": "这会儿店里正好可以慢慢看看。",
   "outing.arrival.archaeologyHouse": "这里安静下来以后，很适合慢慢看。",
@@ -455,12 +446,10 @@
   "outing.arrival.browse": "这里可以慢慢看看。",
   "outing.arrival.quiet": "这里安静得刚刚好。",
   "outing.arrival.default": "这里还挺适合待一会儿。",
-
   "outing.returnOpening.beforeNoon": "差不多该回去了，",
   "outing.returnOpening.afternoon": "时间差不多了，",
   "outing.returnOpening.evening": "天色不早了，",
   "outing.returnOpening.lateNight": "夜深了，",
-
   "outing.return.beach": "{{opening}}海风也吹够啦。",
   "outing.return.seedShop": "{{opening}}东西也看得差不多了。",
   "outing.return.archaeologyHouse": "{{opening}}书和展品下次再慢慢看。",
@@ -473,7 +462,6 @@
   "outing.return.browse": "{{opening}}这边也逛得差不多了。",
   "outing.return.quiet": "{{opening}}这段安静时间刚刚好。",
   "outing.return.default": "{{opening}}我们回去吧。",
-
   "log.mod.disabled": "LivingNPCs 已在 config.json 中禁用。",
   "log.mod.loaded": "LivingNPCs 已加载。",
   "log.gmcm.missing": "未安装 Generic Mod Config Menu。LivingNPCs 仍会正常运行，但不会显示游戏内配置菜单。",
@@ -530,14 +518,12 @@
   "log.travel.rejected": "出行动作请求被拒绝",
   "log.gift.selectedSmall": "已为 {{npc}} 选择 AI 小礼物：{{gift}}（{{item}}）；{{reason}}。",
   "log.gift.selectedMeaningful": "已为 {{npc}} 选择 AI 有意义礼物：{{gift}}（{{item}}）；{{reason}}。",
-
   "command.livingnpcs_debug.description": "输出 NPC 当前状态、最近行为选择原因、求助生成适配和记忆召回摘要。用法：livingnpcs_debug [near|NPC名字]",
   "command.livingnpcs_prompt.description": "输出 LivingNPCs 即将注入 ValleyTalk 的完整隐藏上下文。用法：livingnpcs_prompt [near|NPC名字]",
   "command.livingnpcs_export.description": "导出 Markdown 调试报告。用法：livingnpcs_export [near|all|NPC名字]",
   "command.livingnpcs_eval.description": "运行一组轻量运行时诊断，检查关键人格化规则是否还在。",
   "command.livingnpcs_giftmail.description": "诊断 LivingNPCs 礼物信：追踪状态、邮箱位置、Data/mail 条目、生成文本和孤儿死信。",
   "command.livingnpcs_forget.description": "清除 LivingNPCs 行为记忆/状态。用法：livingnpcs_forget [near|NPC名字|all confirm]",
-
   "debug.needSaveLoaded": "需要先进入存档再运行。",
   "debug.needSaveLoadedDebug": "LivingNPCs：请先载入存档后再使用调试命令。",
   "debug.needSaveLoadedPrompt": "LivingNPCs：请先载入存档后再使用 prompt 调试命令。",
@@ -639,10 +625,8 @@
   "debug.eval.expectedActual": "预期 {{expected}}，实际 {{actual}}",
   "debug.pending.helpRequests": "求助 {{count}}",
   "debug.pending.conflicts": "冲突 {{count}}",
-
   "gmcm.para.loaded": "LivingNPCs 已加载。能看到这个页面，就说明 Mod 正在运行。",
   "gmcm.para.commands": "SMAPI 调试命令：livingnpcs_debug、livingnpcs_prompt、livingnpcs_export、livingnpcs_eval、livingnpcs_forget。",
-
   "gmcm.section.basic": "基础设置",
   "gmcm.section.manualTest": "手动测试",
   "gmcm.section.memory": "记忆设置",
@@ -652,7 +636,6 @@
   "gmcm.section.compat": "Mod 兼容",
   "gmcm.section.valleyTalk": "ValleyTalk 集成",
   "gmcm.section.aiPlanner": "AI 行为规划",
-
   "gmcm.enableMod.name": "启用 LivingNPCs",
   "gmcm.enableMod.tooltip": "修改后需要重启游戏才会完全生效。",
   "gmcm.behaviorHotkey.name": "行为快捷键",
@@ -663,12 +646,10 @@
   "gmcm.debug.tooltip": "在 SMAPI 控制台输出更多 LivingNPCs 调试信息。",
   "gmcm.showHud.name": "显示触发提示",
   "gmcm.showHud.tooltip": "手动触发后在左下角显示执行结果或失败原因，方便判断是否生效。",
-
   "gmcm.manualMode.name": "手动行为模式",
   "gmcm.manualMode.tooltip": "选择按快捷键时固定测试哪种行为。自动模式会按规则选择。",
   "gmcm.manualEmote.name": "手动表情编号",
   "gmcm.manualEmote.tooltip": "当手动行为模式为显示表情时使用。16 通常是感叹号。",
-
   "gmcm.maxMemory.name": "每个 NPC 保留记忆数",
   "gmcm.maxMemory.tooltip": "每个 NPC 最多保存多少条 LivingNPCs 行为记忆到存档。",
   "gmcm.promptMemory.name": "发送给 ValleyTalk 的记忆数",
@@ -699,7 +680,6 @@
   "gmcm.dialogueDrivenBehaviors.tooltip": "允许 AI 对话在严格限制下影响 NPC 之后几分钟到几天内的小行为，例如更愿意靠近、保持距离或在目标地点自然回应。",
   "gmcm.behaviorInfluenceDays.name": "行为影响最长天数",
   "gmcm.behaviorInfluenceDays.tooltip": "对话产生的行为影响最多保留多少天。过期后不会继续影响 NPC 行为。",
-
   "gmcm.aiWorldActions.name": "允许 AI 触发世界动作",
   "gmcm.aiWorldActions.tooltip": "允许 AI 在严格限制下触发少量实际效果，例如小礼物、少量金钱、陪伴出游、节日互动或轻量任务协助。",
   "gmcm.smallGifts.name": "允许 NPC 送小礼物",
@@ -724,7 +704,6 @@
   "gmcm.festival.tooltip": "允许 AI 在节日或事件场景中触发轻量特殊互动。",
   "gmcm.questAssist.name": "允许任务协助",
   "gmcm.questAssist.tooltip": "允许 AI 围绕玩家当前任务做轻量协助，但不会直接完成任务或改任务状态。",
-
   "gmcm.npcState.name": "启用 NPC 状态",
   "gmcm.npcState.tooltip": "记录每个 NPC 的轻量当前状态，例如心情、注意度和回应倾向。",
   "gmcm.stateDecay.name": "每日状态衰减",
@@ -733,7 +712,6 @@
   "gmcm.emotionDecay.tooltip": "每天开始时，长期人际情绪向平静回落的幅度。",
   "gmcm.conflictDecay.name": "每日冲突衰减",
   "gmcm.conflictDecay.tooltip": "每天开始时，未解决冲突严重度自然下降的幅度；道歉和合适礼物会额外加快恢复。",
-
   "gmcm.passive.name": "被动行为",
   "gmcm.passive.tooltip": "允许附近 NPC 在不按快捷键时偶尔自然反应。",
   "gmcm.passiveChance.name": "被动触发概率",
@@ -748,15 +726,12 @@
   "gmcm.allowEmote.tooltip": "允许 NPC 显示表情气泡。",
   "gmcm.allowApproach.name": "允许走近玩家",
   "gmcm.allowApproach.tooltip": "允许 NPC 短距离寻路到玩家旁边的安全格子。",
-
   "gmcm.sve.name": "启用 SVE 兼容",
   "gmcm.sve.tooltip": "关闭后，LivingNPCs 不再使用 SVE 专用人设、扩展进度和扩展 NPC 上下文。",
-
   "gmcm.bridge.name": "发送行为上下文到 ValleyTalk",
   "gmcm.bridge.tooltip": "让 ValleyTalk 的对话生成参考 NPC 最近的 LivingNPCs 行为。",
   "gmcm.concisePrompt.name": "精简提示上下文",
   "gmcm.concisePrompt.tooltip": "给 ValleyTalk 发送更精简的隐藏上下文：保留心情、记忆、关系和情境提示（送礼/求助/出游），但去掉重复的世界进度段和冗长的回复指引以省 token。不影响 AI 的返回格式。默认关闭。",
-
   "gmcm.aiPlanner.name": "启用 AI 行为规划",
   "gmcm.aiPlanner.tooltip": "可选功能。使用 OpenAI-compatible 接口来选择 NPC 行为意图。",
   "gmcm.plannerEndpoint.name": "规划接口地址",
@@ -765,7 +740,6 @@
   "gmcm.plannerModel.tooltip": "用于选择 NPC 行为意图的模型名称。",
   "gmcm.plannerTimeout.name": "规划超时时间",
   "gmcm.plannerTimeout.tooltip": "AI 行为规划超时后，会回退到规则行为。单位：秒。",
-
   "gmcm.manualMode.auto": "自动选择",
   "gmcm.manualMode.facePlayer": "只测试：转向玩家",
   "gmcm.manualMode.emote": "只测试：显示表情",
@@ -773,69 +747,40 @@
   "gmcm.manualMode.pause": "只测试：停下看向玩家",
   "gmcm.manualMode.lookAround": "只测试：环顾四周",
   "gmcm.manualMode.stepAway": "只测试：后退一步",
-
   "dialogue.breaker.auth": "AI 对话已暂停：LLM 提供商连续两次拒绝了凭据（HTTP 401/403）。请在模组设置中修正 API 密钥后继续。",
   "dialogue.breaker.rate": "AI 对话暂停 10 分钟：LLM 提供商连续报告限流错误（HTTP 429）。",
-
   "dialogue.migration.folder.summary": "已从「{{source}}」迁移 ValleyTalk 文件夹数据：联机历史 {{multiplayer}} 个文件、对话回忆录 {{transcripts}} 个文件，找到旧配置：{{config}}。",
   "dialogue.migration.save.summary": "已迁移 ValleyTalk 存档数据：{{npcCount}} 位 NPC 的对话历史，用量账本：{{ledger}}，待迁移：{{pendingCount}}，失败：{{failedCount}}。",
   "dialogue.migration.save.hud": "LivingNPCs：已从 ValleyTalk 迁移 {{npcCount}} 位 NPC 的对话记忆。",
   "dialogue.migration.save.hudPartial": "LivingNPCs：部分 ValleyTalk 数据未能迁移，详见 SMAPI 日志。",
-
   "dialogue.purge.hostOnly": "此命令需要已加载的存档，且只能由主机执行。",
   "dialogue.purge.usage": "当前存档还保留着 {{count}} 个旧 ValleyTalk 键（为回滚安全而保留）。要永久删除请运行：{{command}} confirm",
   "dialogue.purge.done": "已删除 {{count}} 个旧 ValleyTalk 键。下次游戏存档后即永久生效。",
-
   "dialogue.tokens.hostOnly": "注意：用量账本仅由主机持久化；以下为本次会话统计。",
-
   "dialogue.modelCheckSuccess": "LLM 连接自检通过：模型 {{Model}}（{{Provider}}）。",
-
   "dialogue.modelCheckCantGenerate": "LLM 连接自检失败：模型 {{Model}}（{{Provider}}）。",
-
   "dialogue.modelCheckApiKey": "未配置 API 密钥。请在模组设置中填写提供商的 API 密钥。",
-
   "dialogue.modelCheckModelName": "请检查所配置的模型名：为空，或不在提供商的模型列表中。",
-
   "dialogue.modelCheckValidModelName": "提供商的模型列表里有所配置的模型，连接设置看起来正确。可能该模型不是文本模型、端点不安全，或 API 密钥无生成权限。",
-
   "dialogue.modelCheckGetNames": "提供商没有返回模型列表。请检查 API 密钥。",
-
   "dialogue.modelCheckGenericError": "请检查服务器地址与连接设置。",
-
   "dialogue.modelCheckInsecure": "服务器地址未使用 HTTPS，连接不安全。",
-
   "dialogue.modelCheckNonBlocking": "LLM 连接自检失败，但对话引擎保持开启，下次真实对话时会重试。",
-
   "dialogue.warningThinkingParametersRejected": "模型 {{Model}} 携带思考参数的请求失败（{{Parameters}}，档位 {{Level}}），正在去掉思考控制重试。提供商响应：{{Error}}",
-
   "dialogue.transcriptNoConversations": "还没有 AI 对话记录。",
-
   "dialogue.transcriptExportTime": "- 导出时间：第 {{day}} 天 {{time}}",
-
   "dialogue.transcriptSave": "- 存档：{{save}}",
-
   "dialogue.transcriptPlayer": "玩家",
-
   "dialogue.transcriptConversationHeading": "## 对话 {{index}}：第 {{year}} 年 {{season}} {{day}} 日 {{time}}",
-
   "dialogue.transcriptLine": "- **{{speaker}}：** {{text}}",
-
   "dialogue.transcriptSeasonSpring": "春",
-
   "dialogue.transcriptSeasonSummer": "夏",
-
   "dialogue.transcriptSeasonFall": "秋",
-
   "dialogue.transcriptSeasonWinter": "冬",
-
   "dialogue.uiThinking": "{{Name}}正在思考…",
-
   "dialogue.uiStartConversation": "你想对{{Name}}说什么？",
-
   "dialogue.uiYourResponse": "你的回应",
-
   "dialogue.uiTypeYourResponse": "输入你的回应",
-
   "dialogue.command.forget.description": "让 NPC 忘记 AI 对话历史。用法：livingnpcs_forget [near|all|<NPC 名>]",
   "dialogue.command.forget.needSave": "此命令需要先加载存档。",
   "dialogue.command.forget.noNearby": "附近没有可以遗忘的 NPC。",
@@ -845,7 +790,6 @@
   "dialogue.command.forget.npcNoHistory": "{{npc}}没有 AI 对话历史。",
   "dialogue.command.forget.npcDone": "{{npc}}已忘记 AI 对话历史。",
   "dialogue.command.tokens.description": "查看 LLM 用量统计。用法：livingnpcs_tokens [export|reset]",
-
   "dialogue.config.section": "AI 对话引擎",
   "dialogue.config.enableEngine.name": "启用 AI 对话",
   "dialogue.config.enableEngine.tooltip": "AI 对话引擎总开关。从关到开需要重启游戏。",
@@ -911,8 +855,11 @@
   "dialogue.config.freq.4": "总是",
   "dialogue.config.disableCharacters.name": "禁用 AI 的 NPC",
   "dialogue.config.disableCharacters.tooltip": "这些 NPC 永远不用 AI 对话（逗号或空格分隔名字）。",
-
   "dialogue.configNoModels": "拿不到模型列表。API 密钥可能未填或有误。",
-
-  "dialogue.configModels": "{{Provider}} 可用的模型：\n{{Models}}"
+  "dialogue.configModels": "{{Provider}} 可用的模型：\n{{Models}}",
+  "dialogue.outputRespond": "回应",
+  "dialogue.outputStaySilent": "保持沉默",
+  "dialogue.generalFarmerLabel": "农夫",
+  "dialogue.transcriptGiftPlayerLine": "农夫送给{{npcName}}一份{{giftName}}。",
+  "dialogue.activityGeneric": "此刻正忙于：{{hint}}。"
 }

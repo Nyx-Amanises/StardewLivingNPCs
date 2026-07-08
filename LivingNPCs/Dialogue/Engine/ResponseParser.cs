@@ -1,0 +1,348 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Text.RegularExpressions;
+
+using LivingNPCs.Dialogue.Diagnostics;
+using LivingNPCs.Dialogue.Llm;
+using LivingNPCs.Dialogue.Persistence;
+namespace LivingNPCs.Dialogue.Engine;
+
+/// <summary>解析产物：首行台词（净文本，含合法 Stardew 记号）+ 选项（净文本）。</summary>
+internal sealed class ParsedResponse
+{
+    public bool Success { get; init; }
+    public string DialogueLine { get; init; } = string.Empty;
+    public List<string> Options { get; init; } = new();
+    /// <summary>失败原因（诊断用）：empty / no-dialogue-line / overlong-segment。</summary>
+    public string FailureReason { get; init; } = string.Empty;
+}
+
+/// <summary>
+/// LLM 响应解析与校验（WP10 §4.10）。纯文本逻辑，可单测。
+/// 长度限制：段 200 / 选项 90 / 选项候选 160。超长段句界拆分后仍超长 → 整行作废
+/// （开放问题 3 裁决：采纳建议，删除永不可达的宽松校验分支，重试上限维持 2 次）。
+/// </summary>
+internal static class ResponseParser
+{
+    public const int MaxSegmentLength = 200;
+    public const int MaxOptionLength = 90;
+    public const int MaxOptionCandidateLength = 160;
+
+    private static readonly string[] MetadataFieldNames =
+    {
+        "rapportDelta", "endConversation", "memories", "ambientFollowUp", "emotionImpact",
+        "actions", "behaviorInfluences", "helpRequests", "helpRequestUpdates", "conflicts"
+    };
+
+    private static readonly Regex MetadataMarkerPattern = new(@"!+LIVINGNPCS_META", RegexOptions.Compiled);
+    private static readonly Regex MidLineOptionPattern = new(@"(?<=\S)[ \t]+(?=%{1,2}[^\s%\d])", RegexOptions.Compiled);
+    private static readonly Regex EmotionCommandFixPattern = new(@"#\$(?<token>[A-Za-z0-9]+)", RegexOptions.Compiled);
+    private static readonly Regex DollarTokenPattern = new(@"\$(?<token>[A-Za-z0-9_]+)", RegexOptions.Compiled);
+    private static readonly Regex OptionPrefixPattern = new(
+        @"^(?:[-*•\d.、)）\s]*)?(?:玩家回应|玩家回复|回应|回复|选项|response|reply|option)\s*\d*\s*[:：.、\-]?\s*",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex ListBulletPattern = new(@"^[\s*•\d]+[.、)）]?\s*", RegexOptions.Compiled);
+    private static readonly string[] PleasantryOpeners = { "Here is", "Here's", "Sure", "以下", "当然" };
+
+    public static ParsedResponse Parse(
+        string rawText,
+        IReadOnlySet<string> validPortraits,
+        string farmerName,
+        bool fixPunctuation,
+        bool debug = false)
+    {
+        if (string.IsNullOrWhiteSpace(rawText))
+        {
+            return new ParsedResponse { FailureReason = "empty" };
+        }
+
+        // 1. 原始归一化。
+        string normalized = ConversationTextPostProcessor.RemoveInvisibleCharacters(rawText).Replace("\r", string.Empty);
+        normalized = MetadataMarkerPattern.Replace(normalized, "\n!LIVINGNPCS_META");
+        normalized = MidLineOptionPattern.Replace(normalized, "\n");
+
+        // 2. 拆行、去空、剔除疑似元数据行。
+        var lines = normalized
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.Length > 0)
+            .Where(line => !IsMetadataLine(line))
+            .ToList();
+
+        // 3. 首行定位（找不到时宽容恢复）。
+        int dialogueIndex = lines.FindIndex(line => line.StartsWith("-", StringComparison.Ordinal));
+        if (dialogueIndex < 0)
+        {
+            int firstOption = lines.FindIndex(line => line.StartsWith("%", StringComparison.Ordinal));
+            var candidates = (firstOption < 0 ? lines : lines.Take(firstOption))
+                .Where(line => !PleasantryOpeners.Any(opener => line.StartsWith(opener, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+            string? candidate = candidates.LastOrDefault();
+            if (candidate == null || candidate.StartsWith("%", StringComparison.Ordinal))
+            {
+                return new ParsedResponse { FailureReason = "no-dialogue-line" };
+            }
+
+            if (debug)
+            {
+                DialogueServices.Monitor?.Log($"Dialogue line recovered without '-' prefix: {candidate}", StardewModdingAPI.LogLevel.Warn);
+            }
+
+            dialogueIndex = lines.IndexOf(candidate);
+            lines[dialogueIndex] = "- " + candidate;
+        }
+
+        // 4. 台词行清洗。
+        string dialogue = CleanDialogueLine(lines[dialogueIndex], validPortraits);
+        if (dialogue.Length == 0)
+        {
+            return new ParsedResponse { FailureReason = "no-dialogue-line" };
+        }
+
+        // 5. 超长拆分（失败 → 整行作废）。
+        string? split = SplitLongSegments(dialogue);
+        if (split == null)
+        {
+            return new ParsedResponse { FailureReason = "overlong-segment" };
+        }
+
+        dialogue = split;
+
+        // 6. 标点修补。
+        if (fixPunctuation)
+        {
+            dialogue = FixSegmentPunctuation(dialogue, validPortraits);
+        }
+
+        // 7. 选项行。
+        var options = new List<string>();
+        foreach (string line in lines.Skip(dialogueIndex + 1))
+        {
+            string? option = TryParseOption(line, farmerName, fixPunctuation);
+            if (option != null)
+            {
+                options.Add(option);
+            }
+        }
+
+        return new ParsedResponse { Success = true, DialogueLine = dialogue, Options = options };
+    }
+
+    internal static bool IsMetadataLine(string line)
+    {
+        string stripped = line.TrimStart('{', ',', '"', ' ', '\t');
+        return MetadataFieldNames.Any(field => stripped.StartsWith(field, StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal static string CleanDialogueLine(string line, IReadOnlySet<string> validPortraits)
+    {
+        string text = StreamingDialoguePreview.StripHiddenAndResponseTail(line);
+        text = text.TrimStart('-', ' ', '"', '“', '%');
+        text = text.TrimEnd('"', '”', ' ');
+        text = TrimPageMarkers(text);
+        text = text.Replace("\"", string.Empty).Replace("“", string.Empty).Replace("”", string.Empty);
+        text = ConversationTextPostProcessor.NormalizeStardewDialogueCommands(text);
+        text = text.Replace("#$c .5#", string.Empty, StringComparison.Ordinal);
+        text = text.Replace("@@", "@", StringComparison.Ordinal);
+
+        // #$<肖像> → $<肖像>（$b/$e 已由 Normalize 处理为 #$b#/#$e#，不在此列）。
+        text = EmotionCommandFixPattern.Replace(text, match =>
+        {
+            string token = match.Groups["token"].Value;
+            return token is "b" or "e" ? match.Value : "$" + token;
+        });
+
+        // 扫描全部 $ 记号：$e/$c/$b 与合法肖像键保留，其余整体删除。
+        text = DollarTokenPattern.Replace(text, match =>
+        {
+            string token = match.Groups["token"].Value;
+            if (token is "e" or "c" or "b")
+            {
+                return match.Value;
+            }
+
+            return validPortraits.Contains(token) ? match.Value : string.Empty;
+        });
+
+        return text.Trim();
+    }
+
+    private static string TrimPageMarkers(string text)
+    {
+        string trimmed = text.Trim();
+        foreach (string marker in new[] { "#$b#", "#$e#" })
+        {
+            while (trimmed.StartsWith(marker, StringComparison.Ordinal))
+            {
+                trimmed = trimmed[marker.Length..].TrimStart();
+            }
+
+            while (trimmed.EndsWith(marker, StringComparison.Ordinal))
+            {
+                trimmed = trimmed[..^marker.Length].TrimEnd();
+            }
+        }
+
+        return trimmed;
+    }
+
+    /// <summary>按 #$b#/#$e# 分段；任一段 &gt;200 字符时在句界回溯切分；仍超长返回 null。</summary>
+    internal static string? SplitLongSegments(string dialogue)
+    {
+        string[] segments = dialogue.Split("#$b#", StringSplitOptions.None);
+        var rebuilt = new List<string>();
+        foreach (string segment in segments)
+        {
+            string trimmed = segment.Trim();
+            if (trimmed.Length <= MaxSegmentLength)
+            {
+                rebuilt.Add(trimmed);
+                continue;
+            }
+
+            foreach (string piece in SplitAtSentences(trimmed))
+            {
+                if (piece.Length > MaxSegmentLength)
+                {
+                    return null;
+                }
+
+                rebuilt.Add(piece);
+            }
+        }
+
+        return string.Join("#$b#", rebuilt.Where(segment => segment.Length > 0));
+    }
+
+    private static IEnumerable<string> SplitAtSentences(string segment)
+    {
+        var pieces = new List<string>();
+        var current = new StringBuilder();
+        for (int i = 0; i < segment.Length; i++)
+        {
+            current.Append(segment[i]);
+            if (current.Length >= MaxSegmentLength || !IsSentenceEnd(segment[i]))
+            {
+                continue;
+            }
+
+            // 段尾肖像记号粘附在所属句子后。
+            int j = i + 1;
+            while (j < segment.Length && segment[j] == '$')
+            {
+                int k = j + 1;
+                while (k < segment.Length && char.IsLetterOrDigit(segment[k]))
+                {
+                    k++;
+                }
+
+                current.Append(segment[j..k]);
+                i = k - 1;
+                j = k;
+            }
+
+            pieces.Add(current.ToString().Trim());
+            current.Clear();
+        }
+
+        if (current.Length > 0)
+        {
+            pieces.Add(current.ToString().Trim());
+        }
+
+        // 超长且无句界可切时，退回单块（由调用方判作废）。
+        return pieces.Where(piece => piece.Length > 0);
+    }
+
+    private static bool IsSentenceEnd(char c)
+    {
+        return c is '.' or '!' or '?' or '。' or '！' or '？';
+    }
+
+    /// <summary>每段在肖像记号前若不以句末标点结尾则补句号（§4.10.6）。</summary>
+    internal static string FixSegmentPunctuation(string dialogue, IReadOnlySet<string> validPortraits)
+    {
+        string[] segments = dialogue.Split("#$b#", StringSplitOptions.None);
+        for (int i = 0; i < segments.Length; i++)
+        {
+            string segment = segments[i].TrimEnd();
+            string portraitSuffix = string.Empty;
+            var match = Regex.Match(segment, @"\$(?<token>[A-Za-z0-9_]+)\s*$");
+            if (match.Success && validPortraits.Contains(match.Groups["token"].Value))
+            {
+                portraitSuffix = match.Value;
+                segment = segment[..match.Index].TrimEnd();
+            }
+
+            if (segment.Length > 0 && !IsSentenceEnd(segment[^1]) && segment[^1] is not ('…' or '"' or '”'))
+            {
+                segment += ContainsCjk(segment) ? "。" : ".";
+            }
+
+            segments[i] = segment + portraitSuffix;
+        }
+
+        return string.Join("#$b#", segments);
+    }
+
+    private static bool ContainsCjk(string text)
+    {
+        return text.Any(c => c >= '一' && c <= '鿿');
+    }
+
+    /// <summary>选项行归一化（§4.10.7）。返回 null = 不是选项。</summary>
+    internal static string? TryParseOption(string line, string farmerName, bool fixPunctuation)
+    {
+        string candidate;
+        if (line.StartsWith("%", StringComparison.Ordinal))
+        {
+            candidate = line.TrimStart('%').Trim();
+        }
+        else
+        {
+            if (line.StartsWith("!", StringComparison.Ordinal)
+                || line.StartsWith("{", StringComparison.Ordinal)
+                || line.StartsWith("}", StringComparison.Ordinal)
+                || line.StartsWith("-", StringComparison.Ordinal)
+                || line.StartsWith("###", StringComparison.Ordinal)
+                || IsMetadataLine(line))
+            {
+                return null;
+            }
+
+            candidate = OptionPrefixPattern.Replace(line, string.Empty);
+            candidate = ListBulletPattern.Replace(candidate, string.Empty).Trim();
+            if (candidate.Length == 0
+                || candidate.Length > MaxOptionCandidateLength
+                || candidate.Contains("#$", StringComparison.Ordinal)
+                || candidate.Contains(EngineConstants.MetadataMarker, StringComparison.Ordinal))
+            {
+                return null;
+            }
+        }
+
+        if (candidate.Length == 0)
+        {
+            return null;
+        }
+
+        // 选项清洗：删 #，删所有 $ 命令，@→农夫名，必要时补标点。
+        candidate = candidate.Replace("#", string.Empty);
+        candidate = DollarTokenPattern.Replace(candidate, string.Empty);
+        candidate = candidate.Replace("@", farmerName ?? string.Empty, StringComparison.Ordinal);
+        candidate = candidate.Trim().Trim('"', '“', '”').Trim();
+        if (candidate.Length == 0)
+        {
+            return null;
+        }
+
+        if (fixPunctuation && !IsSentenceEnd(candidate[^1]) && candidate[^1] is not ('…' or '"' or '”'))
+        {
+            candidate += ContainsCjk(candidate) ? "。" : ".";
+        }
+
+        return candidate.Length > MaxOptionLength ? null : candidate;
+    }
+}

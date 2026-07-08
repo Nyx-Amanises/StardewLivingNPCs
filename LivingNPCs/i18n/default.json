@@ -4,17 +4,14 @@
   "hud.behaviorSkipped": "LivingNPCs: {{npc}} did not perform {{behavior}}: {{reason}}",
   "hud.behaviorFailed": "LivingNPCs: {{npc}} could not perform {{behavior}}.",
   "hud.behaviorDone": "LivingNPCs: {{npc}} performed {{behavior}}, {{bridge}}.",
-
   "bridge.pushed": "ValleyTalk context pushed",
   "bridge.notPushed": "ValleyTalk context not pushed",
-
   "behavior.facePlayer": "turn toward you",
   "behavior.emote": "show an emote",
   "behavior.approachPlayer": "walk over to you",
   "behavior.pause": "pause and look at you",
   "behavior.lookAround": "look around",
   "behavior.stepAway": "step back",
-
   "skip.eventActive": "an event is in progress",
   "skip.notInLocation": "the NPC is not on the current map",
   "skip.dailyBudget": "this NPC's daily trigger limit has been reached",
@@ -23,7 +20,6 @@
   "skip.approachDisabled": "walking-over behavior is disabled",
   "skip.movementDisabled": "movement behaviors are disabled",
   "skip.attentionDisabled": "small attention behaviors are disabled",
-
   "help.thanksFulfilled": "Thank you, this really helped.",
   "help.thanksReceived": "Thanks, I'll take this for now.",
   "hud.itemDelivered": "LivingNPCs: Gave {{item}} to {{npc}}.",
@@ -52,7 +48,6 @@
   "dialogueInfluence.location.forest": "After we talked about the forest, I felt like taking a walk here.",
   "dialogueInfluence.location.mountain": "After you mentioned the mountain, I started thinking about this place too.",
   "dialogueInfluence.location.default": "After you mentioned {{location}}, I kept thinking about it.",
-
   "location.farm": "the farm",
   "location.town": "Pelican Town",
   "location.mountain": "the mountain",
@@ -85,7 +80,6 @@
   "location.grandpasShed": "Grandpa's shed",
   "location.junimoWoods": "Junimo Woods",
   "location.enchantedGrove": "the enchanted grove",
-
   "gift.mailWhenInventoryFull": "LivingNPCs: Your inventory was full, so {{npc}} will mail you {{item}} tomorrow.",
   "gift.gaveMoney": "LivingNPCs: {{npc}} gave you {{amount}}g.",
   "gift.hud.preference": "LivingNPCs: {{npc}} remembered what you like and gave you {{item}}.",
@@ -420,7 +414,6 @@
   "gift.mail.title.help_request_reward": "{{npc}}'s Help Request Thanks",
   "gift.mail.title.birthday": "{{npc}}'s Birthday Thanks",
   "gift.mail.title.default": "A Gift From {{npc}}",
-
   "outing.start.beach": "Come on, let's get some fresh air at the beach.",
   "outing.start.seedShop": "Come on, let's go browse the shop.",
   "outing.start.archaeologyHouse": "Come on, let's take our time looking around inside.",
@@ -433,13 +426,11 @@
   "outing.start.browse": "Come on, let's go browse for a bit.",
   "outing.start.quiet": "Come on, let's find somewhere quieter.",
   "outing.start.default": "Come on, let's go.",
-
   "outing.timeOfDay.earlyMorning": "early in the morning",
   "outing.timeOfDay.morning": "in the morning",
   "outing.timeOfDay.afternoon": "in the afternoon",
   "outing.timeOfDay.evening": "in the evening",
   "outing.timeOfDay.night": "at night",
-
   "outing.arrival.beach": "The beach feels lovely {{time}}.",
   "outing.arrival.seedShop": "The shop is quiet enough right now to take our time.",
   "outing.arrival.archaeologyHouse": "Now that it has quieted down, it's a nice place to look around slowly.",
@@ -455,12 +446,10 @@
   "outing.arrival.browse": "We can take our time looking around here.",
   "outing.arrival.quiet": "It's just the right kind of quiet here.",
   "outing.arrival.default": "This is a nice place to stay a while.",
-
   "outing.returnOpening.beforeNoon": "We should head back soon, ",
   "outing.returnOpening.afternoon": "It's about time we headed back, ",
   "outing.returnOpening.evening": "It's getting late, ",
   "outing.returnOpening.lateNight": "It's late into the night, ",
-
   "outing.return.beach": "{{opening}}we've had our fill of the sea breeze.",
   "outing.return.seedShop": "{{opening}}we've seen just about everything.",
   "outing.return.archaeologyHouse": "{{opening}}we can look at the books and exhibits another time.",
@@ -473,7 +462,6 @@
   "outing.return.browse": "{{opening}}we've browsed about enough here.",
   "outing.return.quiet": "{{opening}}this quiet time was just right.",
   "outing.return.default": "{{opening}}let's head back.",
-
   "log.mod.disabled": "LivingNPCs is disabled in config.json.",
   "log.mod.loaded": "LivingNPCs loaded.",
   "log.gmcm.missing": "Generic Mod Config Menu not installed. LivingNPCs will still work, but no in-game config menu will be shown.",
@@ -530,14 +518,12 @@
   "log.travel.rejected": "travel action request rejected",
   "log.gift.selectedSmall": "Selected AI gift for {{npc}}: {{gift}} ({{item}}); {{reason}}.",
   "log.gift.selectedMeaningful": "Selected meaningful AI gift for {{npc}}: {{gift}} ({{item}}); {{reason}}.",
-
   "command.livingnpcs_debug.description": "Print the NPC's current state, recent behavior choice reason, help-request fit, and memory recall summary. Usage: livingnpcs_debug [near|NPC name]",
   "command.livingnpcs_prompt.description": "Print the full hidden context LivingNPCs will inject into ValleyTalk. Usage: livingnpcs_prompt [near|NPC name]",
   "command.livingnpcs_export.description": "Export a Markdown debug report. Usage: livingnpcs_export [near|all|NPC name]",
   "command.livingnpcs_eval.description": "Run a lightweight runtime diagnostic suite to check key personality rules.",
   "command.livingnpcs_giftmail.description": "Diagnose LivingNPCs gift mail: tracking state, mailbox position, Data/mail entry, generated text, and orphaned dead letters.",
   "command.livingnpcs_forget.description": "Clear LivingNPCs behavior memory/state. Usage: livingnpcs_forget [near|NPC name|all confirm]",
-
   "debug.needSaveLoaded": "Load a save before running this command.",
   "debug.needSaveLoadedDebug": "LivingNPCs: load a save before using the debug command.",
   "debug.needSaveLoadedPrompt": "LivingNPCs: load a save before using the prompt debug command.",
@@ -639,10 +625,8 @@
   "debug.eval.expectedActual": "expected {{expected}}, actual {{actual}}",
   "debug.pending.helpRequests": "help requests {{count}}",
   "debug.pending.conflicts": "conflicts {{count}}",
-
   "gmcm.para.loaded": "LivingNPCs is loaded. If you can see this page, the mod is running.",
   "gmcm.para.commands": "SMAPI debug commands: livingnpcs_debug, livingnpcs_prompt, livingnpcs_export, livingnpcs_eval, livingnpcs_forget.",
-
   "gmcm.section.basic": "General",
   "gmcm.section.manualTest": "Manual testing",
   "gmcm.section.memory": "Memory",
@@ -652,7 +636,6 @@
   "gmcm.section.compat": "Mod compatibility",
   "gmcm.section.valleyTalk": "ValleyTalk integration",
   "gmcm.section.aiPlanner": "AI behavior planner",
-
   "gmcm.enableMod.name": "Enable LivingNPCs",
   "gmcm.enableMod.tooltip": "Changes take full effect after a game restart.",
   "gmcm.behaviorHotkey.name": "Behavior hotkey",
@@ -663,12 +646,10 @@
   "gmcm.debug.tooltip": "Print more LivingNPCs debug info to the SMAPI console.",
   "gmcm.showHud.name": "Show trigger messages",
   "gmcm.showHud.tooltip": "After a manual trigger, show the result or failure reason in the bottom-left corner.",
-
   "gmcm.manualMode.name": "Manual behavior mode",
   "gmcm.manualMode.tooltip": "Choose which behavior the hotkey always tests. Auto picks one by the rules.",
   "gmcm.manualEmote.name": "Manual emote id",
   "gmcm.manualEmote.tooltip": "Used when the manual behavior mode is Emote. 16 is usually the exclamation mark.",
-
   "gmcm.maxMemory.name": "Memories kept per NPC",
   "gmcm.maxMemory.tooltip": "How many LivingNPCs behavior memories each NPC saves to the save file at most.",
   "gmcm.promptMemory.name": "Memories sent to ValleyTalk",
@@ -699,7 +680,6 @@
   "gmcm.dialogueDrivenBehaviors.tooltip": "Allow AI conversations, under strict limits, to influence an NPC's small behaviors over the next minutes to days, such as being more willing to approach, keeping distance, or responding naturally at a mentioned place.",
   "gmcm.behaviorInfluenceDays.name": "Max behavior-influence days",
   "gmcm.behaviorInfluenceDays.tooltip": "How many days a dialogue-driven behavior influence lasts at most. After it expires it no longer affects the NPC.",
-
   "gmcm.aiWorldActions.name": "Allow AI world actions",
   "gmcm.aiWorldActions.tooltip": "Allow AI, under strict limits, to trigger a few real effects such as small gifts, a little money, companion outings, festival moments, or light quest assists.",
   "gmcm.smallGifts.name": "Allow NPC small gifts",
@@ -724,7 +704,6 @@
   "gmcm.festival.tooltip": "Allow AI to trigger light special interactions during festivals or events.",
   "gmcm.questAssist.name": "Allow quest assistance",
   "gmcm.questAssist.tooltip": "Allow AI to lightly assist around the player's current quests, without completing them or changing their state.",
-
   "gmcm.npcState.name": "Enable NPC state",
   "gmcm.npcState.tooltip": "Track each NPC's light current state, such as mood, attentiveness, and response leaning.",
   "gmcm.stateDecay.name": "Daily state decay",
@@ -733,7 +712,6 @@
   "gmcm.emotionDecay.tooltip": "How far long-term interpersonal emotion falls back toward calm at the start of each day.",
   "gmcm.conflictDecay.name": "Daily conflict decay",
   "gmcm.conflictDecay.tooltip": "How far unresolved conflict severity naturally drops at the start of each day; apologies and fitting gifts speed recovery further.",
-
   "gmcm.passive.name": "Passive behaviors",
   "gmcm.passive.tooltip": "Allow nearby NPCs to react naturally now and then without pressing the hotkey.",
   "gmcm.passiveChance.name": "Passive trigger chance",
@@ -748,15 +726,12 @@
   "gmcm.allowEmote.tooltip": "Allow NPCs to show emote bubbles.",
   "gmcm.allowApproach.name": "Allow walking over",
   "gmcm.allowApproach.tooltip": "Allow NPCs to pathfind a short distance to a safe tile beside the player.",
-
   "gmcm.sve.name": "Enable SVE compatibility",
   "gmcm.sve.tooltip": "When off, LivingNPCs no longer uses SVE-specific profiles, expansion progress, or expansion NPC context.",
-
   "gmcm.bridge.name": "Send behavior context to ValleyTalk",
   "gmcm.bridge.tooltip": "Let ValleyTalk's dialogue generation take an NPC's recent LivingNPCs behavior into account.",
   "gmcm.concisePrompt.name": "Concise prompt context",
   "gmcm.concisePrompt.tooltip": "Send ValleyTalk a slimmer hidden context: keeps mood, memory, relationship and situational cues (gifts/help/outings), but drops the repeated world-stage and reply-guidance text to save tokens. The AI's response format is unaffected. Off by default.",
-
   "gmcm.aiPlanner.name": "Enable AI behavior planner",
   "gmcm.aiPlanner.tooltip": "Optional. Use an OpenAI-compatible endpoint to choose NPC behavior intents.",
   "gmcm.plannerEndpoint.name": "Planner endpoint",
@@ -765,7 +740,6 @@
   "gmcm.plannerModel.tooltip": "The model name used to choose NPC behavior intents.",
   "gmcm.plannerTimeout.name": "Planner timeout",
   "gmcm.plannerTimeout.tooltip": "After the AI planner times out, it falls back to rule-based behavior. Unit: seconds.",
-
   "gmcm.manualMode.auto": "Auto",
   "gmcm.manualMode.facePlayer": "Test only: turn toward player",
   "gmcm.manualMode.emote": "Test only: show emote",
@@ -773,69 +747,40 @@
   "gmcm.manualMode.pause": "Test only: pause and look",
   "gmcm.manualMode.lookAround": "Test only: look around",
   "gmcm.manualMode.stepAway": "Test only: step back",
-
   "dialogue.breaker.auth": "AI dialogue is paused: the LLM provider rejected the credentials twice (HTTP 401/403). Fix the API key in the mod config to resume.",
   "dialogue.breaker.rate": "AI dialogue is paused for 10 minutes: the LLM provider reported repeated rate-limit errors (HTTP 429).",
-
   "dialogue.migration.folder.summary": "Migrated ValleyTalk folder data from '{{source}}': {{multiplayer}} multiplayer files, {{transcripts}} transcript files, config found: {{config}}.",
   "dialogue.migration.save.summary": "Migrated ValleyTalk save data: {{npcCount}} NPC histories, ledger: {{ledger}}, pending: {{pendingCount}}, failed: {{failedCount}}.",
   "dialogue.migration.save.hud": "LivingNPCs: migrated dialogue memories of {{npcCount}} NPCs from ValleyTalk.",
   "dialogue.migration.save.hudPartial": "LivingNPCs: some ValleyTalk data could not be migrated; see the SMAPI log.",
-
   "dialogue.purge.hostOnly": "This command needs a loaded save and only works on the host.",
   "dialogue.purge.usage": "This save holds {{count}} legacy ValleyTalk keys. They are kept for rollback safety; to remove them permanently run: {{command}} confirm",
   "dialogue.purge.done": "Removed {{count}} legacy ValleyTalk keys. The change becomes permanent the next time the game saves.",
-
   "dialogue.tokens.hostOnly": "Note: the token usage ledger is persisted by the host only; these are session stats.",
-
   "dialogue.modelCheckSuccess": "LLM connection check passed for model {{Model}} ({{Provider}}).",
-
   "dialogue.modelCheckCantGenerate": "LLM connection check failed for model {{Model}} ({{Provider}}).",
-
   "dialogue.modelCheckApiKey": "No API key is configured. Enter the provider's API key in the mod config.",
-
   "dialogue.modelCheckModelName": "Check the configured model name: it is empty or not in the provider's model list.",
-
   "dialogue.modelCheckValidModelName": "The provider lists the configured model, so the connection settings look right. The model may not be a text model, the endpoint may be unsafe, or the API key may be rejected for generation.",
-
   "dialogue.modelCheckGetNames": "The provider returned no model list. Check the API key.",
-
   "dialogue.modelCheckGenericError": "Check the server address and connection settings.",
-
   "dialogue.modelCheckInsecure": "The server address does not use HTTPS; the connection is not secure.",
-
   "dialogue.modelCheckNonBlocking": "The LLM connection check failed, but the dialogue engine stays enabled and will retry on the next real conversation.",
-
   "dialogue.warningThinkingParametersRejected": "The request with thinking parameters failed for model {{Model}} ({{Parameters}}, level {{Level}}); retrying without thinking controls. Provider response: {{Error}}",
-
   "dialogue.transcriptNoConversations": "No AI conversation records yet.",
-
   "dialogue.transcriptExportTime": "- Export time: Day {{day}} {{time}}",
-
   "dialogue.transcriptSave": "- Save: {{save}}",
-
   "dialogue.transcriptPlayer": "Player",
-
   "dialogue.transcriptConversationHeading": "## Conversation {{index}}: Year {{year}}, {{season}} {{day}} at {{time}}",
-
   "dialogue.transcriptLine": "- **{{speaker}}:** {{text}}",
-
   "dialogue.transcriptSeasonSpring": "Spring",
-
   "dialogue.transcriptSeasonSummer": "Summer",
-
   "dialogue.transcriptSeasonFall": "Fall",
-
   "dialogue.transcriptSeasonWinter": "Winter",
-
   "dialogue.uiThinking": "{{Name}} is thinking...",
-
   "dialogue.uiStartConversation": "What do you want to say to {{Name}}?",
-
   "dialogue.uiYourResponse": "Your response",
-
   "dialogue.uiTypeYourResponse": "Type your response",
-
   "dialogue.command.forget.description": "Makes NPCs forget AI conversation history. Usage: livingnpcs_forget [near|all|<npc name>]",
   "dialogue.command.forget.needSave": "This command needs a loaded save.",
   "dialogue.command.forget.noNearby": "No NPC is nearby to forget anything.",
@@ -845,7 +790,6 @@
   "dialogue.command.forget.npcNoHistory": "{{npc}} has no AI conversation history.",
   "dialogue.command.forget.npcDone": "{{npc}} forgot the AI conversation history.",
   "dialogue.command.tokens.description": "Shows LLM token usage. Usage: livingnpcs_tokens [export|reset]",
-
   "dialogue.config.section": "AI Dialogue Engine",
   "dialogue.config.enableEngine.name": "Enable AI dialogue",
   "dialogue.config.enableEngine.tooltip": "Master switch of the AI dialogue engine. Turning it on from off needs a game restart.",
@@ -911,8 +855,11 @@
   "dialogue.config.freq.4": "Always",
   "dialogue.config.disableCharacters.name": "Disabled NPCs",
   "dialogue.config.disableCharacters.tooltip": "NPC names (comma or space separated) that never use AI dialogue.",
-
   "dialogue.configNoModels": "No model list is available. The API key may be missing or wrong.",
-
-  "dialogue.configModels": "Models available from {{Provider}}:\n{{Models}}"
+  "dialogue.configModels": "Models available from {{Provider}}:\n{{Models}}",
+  "dialogue.outputRespond": "Respond",
+  "dialogue.outputStaySilent": "Stay silent",
+  "dialogue.generalFarmerLabel": "Farmer",
+  "dialogue.transcriptGiftPlayerLine": "The farmer gave {{npcName}} {{giftName}}.",
+  "dialogue.activityGeneric": "Right now they are occupied with: {{hint}}."
 }
