@@ -701,10 +701,10 @@ WP20 交付时如统一改名，改 PromptAssembler/HistorySampler 中的字面�
 另向 i18n（default+zh）补了 5 个 UI/转录键：outputRespond、outputStaySilent、
 generalFarmerLabel、transcriptGiftPlayerLine、activityGeneric。
 
-### 留白（说明书未给出行为细节，保守处理）
+### 留白裁决（用户 2026-07-08 拍板）
 
-- 配偶主动送礼的抽取概率与物品池旧行为未在说明书量化（审计索引 Prompts.cs:152-170），
-  默认经 `SpouseGiftPicker` 挂钩且缺省为 null（不送礼）；`[物品ID]` 追加与呈现契约已就位，
-  策略由用户/WP16 定夺后一行接入。
-- 约会"公开/低调"与性向词游戏内无直接数据源，快照字段已留（DatingPublicly 默认公开、
-  OrientationWord 默认空），文案参数可空。
+- 配偶主动送礼（原留白，说明书未量化旧行为）：**5% 概率 + 该 NPC 自己的最爱/喜欢礼物
+  口味池**（丢弃类别负数，只送具体物品）。默认策略实现在 `SpouseGiftPolicy` 并接入
+  `DialogueEngine.SpouseGiftPicker` 缺省值；WP16/测试可整体替换或置 null 关闭。
+- 约会"公开/低调"变体与性向词：**维持现状**——游戏无数据源，恒走"公开"分支、性向词
+  恒空；WP20 文案写成不依赖该参数即可，不加配置项。

@@ -278,3 +278,27 @@ public class ResponseFormatterTests
         Assert.Contains(alwaysSingle, option => option.Kind == StreamingResponseOptionKind.Typed);
     }
 }
+
+public class SpouseGiftPolicyTests
+{
+    [Fact]
+    public void ParseCandidateIds_Keeps_Items_Drops_Categories()
+    {
+        var ids = SpouseGiftPolicy.ParseCandidateIds("66 128 -80", "(O)174 -4 216");
+        Assert.Equal(new[] { "66", "128", "(O)174", "216" }, ids);
+    }
+
+    [Fact]
+    public void TryPick_Respects_Probability_And_Pool()
+    {
+        // 命中概率的种子：找一个 Next(20)==0 的种子。
+        int luckySeed = Enumerable.Range(0, 1000).First(seed => new Random(seed).Next(SpouseGiftPolicy.OneInChance) == 0);
+        string? picked = SpouseGiftPolicy.TryPick("66 72", "", new Random(luckySeed));
+        Assert.Contains(picked, new[] { "66", "72" });
+
+        int unluckySeed = Enumerable.Range(0, 1000).First(seed => new Random(seed).Next(SpouseGiftPolicy.OneInChance) != 0);
+        Assert.Null(SpouseGiftPolicy.TryPick("66 72", "", new Random(unluckySeed)));
+
+        Assert.Null(SpouseGiftPolicy.TryPick("-80", "-4", new Random(luckySeed)));
+    }
+}

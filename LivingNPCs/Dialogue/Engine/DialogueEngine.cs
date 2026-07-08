@@ -110,8 +110,10 @@ internal sealed class DialogueEngine : IDialogueEngine
     /// <summary>行为系统回传入口（WP16 接线）：(npcName, playerText, npcLine, analysisJson)。</summary>
     public static Action<string, string, string, string>? RecordExchangeCallback { get; set; }
 
-    /// <summary>配偶主动送礼抽取（§4.1/§3.2）：返回物品 ID 或 null。默认无（由 WP16/WP12 注入策略）。</summary>
+    /// <summary>配偶主动送礼抽取（§4.1/§3.2）：返回物品 ID 或 null。默认策略见 SpouseGiftPolicy
+    /// （用户裁决：5% 概率 + 该 NPC 最爱/喜欢口味池）；WP16/测试可整体替换或置 null 关闭。</summary>
     public static Func<string, GameStateSnapshot, string?>? SpouseGiftPicker { get; set; }
+        = SpouseGiftPolicy.PickForGame;
 
     /// <summary>第三方 Prompt Override 注册表（新 interop 命名归 WP16/WP12；引擎只消费）。</summary>
     public static IReadOnlyDictionary<string, string> PromptOverrides { get; set; }
