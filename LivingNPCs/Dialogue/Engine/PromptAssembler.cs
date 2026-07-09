@@ -741,6 +741,15 @@ internal sealed class PromptAssembler
         {
             AppendLine(builder, this.Text("specialDatesBirthday"));
         }
+        else if (!string.IsNullOrEmpty(s.TodaysBirthdayOthers))
+        {
+            AppendLine(builder, this.Text("specialDatesOthersBirthday", new { birthdayName = s.TodaysBirthdayOthers }));
+        }
+
+        if (s.IsSleepingNow)
+        {
+            AppendLine(builder, this.Text("contextNpcJustWoken"));
+        }
     }
 
     private void BuildGift(StringBuilder builder)

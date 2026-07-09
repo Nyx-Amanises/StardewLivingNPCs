@@ -691,5 +691,7 @@
   "farmContentsPets": "Pets:",
   "activityGeneric": "Current visible or scheduled activity: {{hint}}.",
   "activityTravellingToNext": "Right now {{Name}} is walking to the next stop on today's schedule.",
-  "activityNothingSpecific": "Right now {{Name}} is not doing anything in particular — idling, lingering, or between stops."
+  "activityNothingSpecific": "Right now {{Name}} is not doing anything in particular — idling, lingering, or between stops.",
+  "specialDatesOthersBirthday": "Today is {{birthdayName}}'s birthday. Most villagers know it from the town calendar; {{Name}} may bring it up naturally, especially if they are family or close to {{birthdayName}}.",
+  "contextNpcJustWoken": "{{Name}} was asleep just now and has been woken up by the farmer. The first reaction should fit being roused from sleep and match {{Name}}'s temperament — groggy, startled, grumpy, or gently amused — before easing into the conversation."
 }

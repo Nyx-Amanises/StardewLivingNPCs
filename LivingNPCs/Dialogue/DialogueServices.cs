@@ -48,6 +48,7 @@ internal sealed class DialogueConfig
     public string RoutingThinkingLevel { get; set; } = "off";
     public string ChatThinkingLevel { get; set; } = "auto";
     public SButton InitiateTypedDialogueKey { get; set; } = SButton.None;
+    public bool AllowWakeSleepingNpc { get; set; } = true;
     public bool ApplyTranslation { get; set; } = true;
     public bool UseOptimizedPrompts { get; set; }
     public bool EnableSveCompatibility { get; set; } = true;
@@ -76,6 +77,7 @@ internal sealed class DialogueConfig
         this.RoutingThinkingLevel = source.RoutingThinkingLevel;
         this.ChatThinkingLevel = source.ChatThinkingLevel;
         this.InitiateTypedDialogueKey = source.InitiateTypedDialogueKey;
+        this.AllowWakeSleepingNpc = source.AllowWakeSleepingNpc;
         this.ApplyTranslation = source.ApplyTranslation;
         this.UseOptimizedPrompts = source.UseOptimizedPrompts;
         this.EnableSveCompatibility = source.EnableSveCompatibility;

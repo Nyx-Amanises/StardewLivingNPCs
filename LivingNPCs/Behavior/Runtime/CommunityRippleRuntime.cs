@@ -161,7 +161,7 @@ internal sealed class CommunityRippleRuntime
 
         if (stored > 0 && this.config.Debug)
         {
-            this.monitor.Log(I18n.Get("log.community.rippleSpread", new { npc = subject.Name, summary, stored }), LogLevel.Debug);
+            this.monitor.Log(I18n.Get("log.community.rippleSpread", new { npc = subject.Name, summary, stored }), LogLevel.Trace);
         }
     }
 
@@ -252,7 +252,7 @@ internal sealed class CommunityRippleRuntime
                                 distortion = retelling.DistortionLevel,
                                 recipients = stored
                             }),
-                        LogLevel.Debug
+                        LogLevel.Trace
                     );
                 }
             }

@@ -142,7 +142,17 @@ internal static class MemoryRecallService
             "fading" => -8,
             _ => -20
         };
-        int recentRecallPenalty = memory.LastRecalledTotalDays == currentTotalDays ? 18 : 0;
+        int daysSinceRecall = memory.LastRecalledTotalDays > 0
+            ? currentTotalDays - memory.LastRecalledTotalDays
+            : int.MaxValue;
+        int recentRecallPenalty = daysSinceRecall switch
+        {
+            <= 0 => 60,
+            1 => 35,
+            2 => 20,
+            _ => 0
+        };
+        recentRecallPenalty += System.Math.Min(12, memory.RecallCount * 3);
         int score = memory.Importance
             + (memory.Confidence / 5)
             + freshnessScore

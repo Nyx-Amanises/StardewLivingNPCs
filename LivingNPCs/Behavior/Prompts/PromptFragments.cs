@@ -366,7 +366,7 @@ internal static class PromptFragments
         public static string BehaviorTendenciesLine(LivingNpcState state) => $"- Conversation-driven behavior tendencies: {State.DialogueBehaviorInfluences(state)}.";
         public static string SharedExperiencesLine(LivingNpcState state) => $"- Shared experiences with the farmer: {State.SharedExperiences(state)}.";
         public static string HelpRequestsLine(LivingNpcState state) => $"- Help requests involving the farmer: {State.HelpRequests(state)}.";
-        public static string CommunityImpressionsLine(string recallText) => $"- Community impressions about the farmer's ties with other NPCs: {recallText}.";
+        public static string CommunityImpressionsLine(string recallText) => $"- Community impressions about the farmer's ties with other NPCs (background awareness, not a talking point): {recallText}. Bring this up only when the topic naturally leads there, at most as one brief passing remark, never as the opening subject, and keep second-hand reports tentative.";
 
         public static string SocialCirclesLine(IReadOnlyCollection<string> circleLabels) =>
             $"- Stable community circles this NPC belongs to: {(circleLabels.Count == 0 ? "no stable small-circle affiliation is currently tracked" : string.Join(", ", circleLabels))}.";

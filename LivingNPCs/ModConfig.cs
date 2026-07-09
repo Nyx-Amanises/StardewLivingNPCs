@@ -110,6 +110,8 @@ internal sealed class ModConfig
     public bool GenerateAiForNormalRightClick { get; set; } = false;
     public string TypedResponses { get; set; } = "With Generated";
     public SButton InitiateTypedDialogueKey { get; set; } = SButton.LeftAlt;
+    /// <summary>允许对睡觉中的 NPC 发起主动搭话（叫醒对方，提示词会带"刚被叫醒"情境）。</summary>
+    public bool AllowWakeSleepingNpc { get; set; } = true;
     public bool UseOptimizedPrompts { get; set; } = false;
     public bool EnableSemanticContextRouting { get; set; } = true;
     public int SemanticContextRoutingTimeoutSeconds { get; set; } = 8;

@@ -26,8 +26,13 @@ internal static class NPC_CheckAction_Patch
                 return true;
             }
 
-            if (__instance.IsInvisible || __instance.isSleeping.Value || who?.CanMove != true)
+            bool sleepBlocked = __instance.isSleeping.Value
+                && DialogueServices.Config?.AllowWakeSleepingNpc != true;
+            if (__instance.IsInvisible || sleepBlocked || who?.CanMove != true)
             {
+                DialogueServices.Monitor?.Log(
+                    $"Typed dialogue blocked for {__instance.Name}: invisible={__instance.IsInvisible} sleepBlocked={sleepBlocked} farmerCanMove={who?.CanMove}",
+                    LogLevel.Trace);
                 return true;
             }
 

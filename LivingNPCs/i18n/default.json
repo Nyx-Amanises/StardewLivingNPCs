@@ -850,5 +850,7 @@
   "dialogue.outputStaySilent": "Stay silent",
   "dialogue.generalFarmerLabel": "Farmer",
   "dialogue.transcriptGiftPlayerLine": "The farmer gave {{npcName}} {{giftName}}.",
-  "dialogue.activityGeneric": "Right now they are occupied with: {{hint}}."
+  "dialogue.activityGeneric": "Right now they are occupied with: {{hint}}.",
+  "dialogue.config.allowWakeSleepingNpc.name": "Allow waking sleeping NPCs",
+  "dialogue.config.allowWakeSleepingNpc.tooltip": "Let the typed-dialogue key start a conversation with a sleeping NPC. The prompt tells the AI they were just woken up, so they react in character (e.g. groggy or grumpy)."
 }

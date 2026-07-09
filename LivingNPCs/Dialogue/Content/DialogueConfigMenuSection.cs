@@ -184,6 +184,13 @@ internal static class DialogueConfigMenuSection
 
         api.AddBoolOption(
             mod: manifest,
+            name: () => T("dialogue.config.allowWakeSleepingNpc.name"),
+            tooltip: () => T("dialogue.config.allowWakeSleepingNpc.tooltip"),
+            getValue: () => config.AllowWakeSleepingNpc,
+            setValue: value => config.AllowWakeSleepingNpc = value);
+
+        api.AddBoolOption(
+            mod: manifest,
             name: () => T("dialogue.config.applyTranslation.name"),
             tooltip: () => T("dialogue.config.applyTranslation.tooltip"),
             getValue: () => config.ApplyTranslation,

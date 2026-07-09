@@ -138,6 +138,12 @@ internal sealed class GameStateSnapshot
     /// <summary>当日是该 NPC 生日。</summary>
     public bool IsBirthdayToday { get; init; }
 
+    /// <summary>今天过生日的其他村民（显示名，逗号连接；不含本 NPC）。</summary>
+    public string TodaysBirthdayOthers { get; init; } = string.Empty;
+
+    /// <summary>生成时该 NPC 正在睡觉（被玩家叫醒搭话的场景）。</summary>
+    public bool IsSleepingNow { get; init; }
+
     /// <summary>NPC 是成人（Saloon 微醺提示等）。</summary>
     public bool NpcIsAdult { get; init; } = true;
 

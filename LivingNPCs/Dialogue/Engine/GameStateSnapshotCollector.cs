@@ -133,8 +133,35 @@ internal static class GameStateSnapshotCollector
             ActiveDialogueEvents = TryGet(() => (IReadOnlyList<KeyValuePair<string, int>>)player.previousActiveDialogueEvents.Pairs
                 .Select(pair => new KeyValuePair<string, int>(pair.Key, pair.Value))
                 .ToList()) ?? Array.Empty<KeyValuePair<string, int>>(),
-            IsBirthdayToday = TryGet(() => npc?.isBirthday() == true)
+            IsBirthdayToday = TryGet(() => npc?.isBirthday() == true),
+            TodaysBirthdayOthers = TryGet(() => GetTodaysBirthdayOthers(npc)) ?? string.Empty,
+            IsSleepingNow = TryGet(() => npc?.isSleeping.Value == true)
         };
+    }
+
+    private static int birthdayCacheDay = -1;
+    private static List<(string Name, string DisplayName)> birthdayCacheNpcs = new();
+
+    /// <summary>今天过生日的其他村民（全村扫描按游戏日缓存一次）。</summary>
+    private static string GetTodaysBirthdayOthers(NPC? self)
+    {
+        int today = Game1.Date.TotalDays;
+        if (birthdayCacheDay != today)
+        {
+            birthdayCacheDay = today;
+            birthdayCacheNpcs = new List<(string, string)>();
+            foreach (NPC villager in Utility.getAllVillagers())
+            {
+                if (villager?.isBirthday() == true)
+                {
+                    birthdayCacheNpcs.Add((villager.Name, villager.displayName ?? villager.Name));
+                }
+            }
+        }
+
+        return string.Join(", ", birthdayCacheNpcs
+            .Where(entry => !string.Equals(entry.Name, self?.Name, StringComparison.Ordinal))
+            .Select(entry => entry.DisplayName));
     }
 
     private static IReadOnlyList<string> CollectWeather(GameLocation? location)

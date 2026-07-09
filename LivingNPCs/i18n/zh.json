@@ -850,5 +850,7 @@
   "dialogue.outputStaySilent": "保持沉默",
   "dialogue.generalFarmerLabel": "农夫",
   "dialogue.transcriptGiftPlayerLine": "农夫送给{{npcName}}一份{{giftName}}。",
-  "dialogue.activityGeneric": "此刻正忙于：{{hint}}。"
+  "dialogue.activityGeneric": "此刻正忙于：{{hint}}。",
+  "dialogue.config.allowWakeSleepingNpc.name": "允许叫醒睡觉中的村民",
+  "dialogue.config.allowWakeSleepingNpc.tooltip": "睡觉中的村民也可以用主动搭话键叫醒聊天。提示词会告知 AI 对方刚被叫醒，让 TA 按自己的性格做出睡眼惺忪或起床气之类的反应。"
 }

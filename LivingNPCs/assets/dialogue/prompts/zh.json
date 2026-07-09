@@ -691,5 +691,7 @@
   "farmContentsPets": "宠物：",
   "activityGeneric": "当前可见或日程动作：{{hint}}。",
   "activityTravellingToNext": "{{Name}}此刻正走向今天日程的下一个地点。",
-  "activityNothingSpecific": "{{Name}}此刻没有在做什么特别的事——发呆、停留，或正处于两个日程点之间。"
+  "activityNothingSpecific": "{{Name}}此刻没有在做什么特别的事——发呆、停留，或正处于两个日程点之间。",
+  "specialDatesOthersBirthday": "今天是{{birthdayName}}的生日。镇上的日历写着这件事，大多数村民都知道；{{Name}}可以自然地提起，若与{{birthdayName}}是家人或关系亲近则更可能主动说。",
+  "contextNpcJustWoken": "{{Name}}刚才还在睡觉，被农夫叫醒了。开头的反应应符合刚被吵醒的状态，并贴合{{Name}}的性子——迷迷糊糊、吓一跳、有点起床气，或是无奈地失笑——然后再慢慢进入交谈。"
 }
