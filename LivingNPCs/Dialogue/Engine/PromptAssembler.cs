@@ -74,29 +74,44 @@ internal sealed class PromptAssembler
     /// <summary>节日文案表（(季节, 日) → 键后缀，§4.6.4.13）。</summary>
     private static readonly Dictionary<(string Season, int Day), string> Festivals = new()
     {
-        [("spring", 1)] = "spring1",
-        [("spring", 12)] = "spring12",
-        [("spring", 23)] = "spring23",
-        [("summer", 1)] = "summer1",
-        [("summer", 10)] = "summer10",
-        [("summer", 27)] = "summer27",
-        [("summer", 28)] = "summer28",
-        [("fall", 1)] = "fall1",
-        [("fall", 15)] = "fall15",
-        [("fall", 26)] = "fall26",
-        [("winter", 1)] = "winter1",
-        [("winter", 7)] = "winter7",
-        [("winter", 24)] = "winter24",
-        [("winter", 28)] = "winter28"
+        [("spring", 1)] = "Spring1",
+        [("spring", 12)] = "Spring12",
+        [("spring", 23)] = "Spring23",
+        [("summer", 1)] = "Summer1",
+        [("summer", 10)] = "Summer10",
+        [("summer", 27)] = "Summer27",
+        [("summer", 28)] = "Summer28",
+        [("fall", 1)] = "Fall1",
+        [("fall", 15)] = "Fall15",
+        [("fall", 26)] = "Fall26",
+        [("winter", 1)] = "Winter1",
+        [("winter", 7)] = "Winter7",
+        [("winter", 24)] = "Winter24",
+        [("winter", 28)] = "Winter28"
     };
 
-    /// <summary>RecentEvents 键映射（§4.6.4.11；pamHouseUpgrade 的匿名变体键名保留）。</summary>
-    private static readonly string[] RecentEventKeys =
+    /// <summary>RecentEvents 键映射（§4.6.4.11）：游戏事件旗标 → 提示词表 recentEvents* 后缀。</summary>
+    private static readonly Dictionary<string, string> RecentEventKeys = new(StringComparer.Ordinal)
     {
-        "cc_Boulder", "cc_Bridge", "cc_Bus", "cc_Greenhouse", "cc_Minecart", "cc_Complete",
-        "movieTheater", "pamHouseUpgrade", "pamHouseUpgradeAnonymous", "jojaMartStruckByLightning",
-        "babyBoy", "babyGirl", "wedding", "luauBest", "luauShorts", "luauPoisoned",
-        "Characters_MovieInvite_Invited", "DumpsterDiveComment", "GreenRainFinished"
+        ["cc_Boulder"] = "Boulder",
+        ["cc_Bridge"] = "QuarryBridge",
+        ["cc_Bus"] = "Bus",
+        ["cc_Greenhouse"] = "Greenhouse",
+        ["cc_Minecart"] = "Minecarts",
+        ["cc_Complete"] = "CommunityCenter",
+        ["movieTheater"] = "MovieTheatre",
+        ["pamHouseUpgrade"] = "PamHouse",
+        ["pamHouseUpgradeAnonymous"] = "PamHouseAnonymous",
+        ["jojaMartStruckByLightning"] = "JojaLightning",
+        ["babyBoy"] = "BabyBoy",
+        ["babyGirl"] = "BabyGirl",
+        ["wedding"] = "Married",
+        ["luauBest"] = "LuauBest",
+        ["luauShorts"] = "LuauShorts",
+        ["luauPoisoned"] = "LuauPoisoned",
+        ["Characters_MovieInvite_Invited"] = "MovieInvited",
+        ["DumpsterDiveComment"] = "DumpsterDive",
+        ["GreenRainFinished"] = "GreenRain"
     };
 
     private readonly PromptAssemblyInput input;
@@ -352,7 +367,8 @@ internal sealed class PromptAssembler
     {
         AppendLine(builder, this.Text("coreInstructionHeading"));
         AppendLine(builder, this.Text("coreContextHeading"));
-        AppendLine(builder, this.Text(this.input.S.FarmerIsMale ? "coreFarmerGender.male" : "coreFarmerGender.female"));
+        // coreFarmerGender 的性别分支用游戏 ${male^female}$ 语法，由内容管线按玩家性别预展开。
+        AppendLine(builder, this.Text("coreFarmerGender"));
     }
 
     private void BuildDateAndTime(StringBuilder builder)
@@ -361,7 +377,7 @@ internal sealed class PromptAssembler
         AppendLine(builder, this.Text("dateTimeDayOfSeason", new
         {
             season = s.SeasonName,
-            day = s.DayOfMonth,
+            dayOfSeason = s.DayOfMonth,
             year = s.Year,
             weekday = s.DayOfWeek
         }));
@@ -384,7 +400,7 @@ internal sealed class PromptAssembler
         int residency = s.ResidencyDays;
         AppendLine(builder, residency == 0
             ? this.Text("dateTimeResidencyToday")
-            : this.Text("dateTimeResidencyProgress", new { days = residency, seasons = residency / 28 }));
+            : this.Text("dateTimeResidencyProgress", new { elapsedDays = residency, completedSeasons = residency / 28 }));
     }
 
     private void BuildWeather(StringBuilder builder)
@@ -422,15 +438,15 @@ internal sealed class PromptAssembler
     private void BuildMarriageStatus(StringBuilder builder)
     {
         var s = this.input.S;
-        AppendLine(builder, this.Text("marriageStatusDeclaration"));
+        AppendLine(builder, this.Text("coreMarried"));
         StardewTime weddingDate = s.Now.AddDays(-s.DaysMarried);
-        AppendLine(builder, this.Text("marriageStatusSince", new
+        string relativeDate = this.Text("timeDaysAgoSeasonDay", new
         {
             days = s.DaysMarried,
             season = weddingDate.season.ToString().ToLowerInvariant(),
-            day = weddingDate.dayOfMonth,
-            year = weddingDate.year
-        }));
+            day = weddingDate.dayOfMonth
+        }) ?? string.Empty;
+        AppendLine(builder, this.Text("coreMarriedSince", new { RelativeDate = relativeDate }));
     }
 
     private void BuildChildren(StringBuilder builder)
@@ -440,13 +456,13 @@ internal sealed class PromptAssembler
         string countKey = children.Count switch
         {
             0 => "childrenNone",
-            1 => "childrenOne",
-            _ => "childrenMany"
+            1 => "childrenSingle",
+            _ => "childrenMultiple"
         };
         AppendLine(builder, this.Text(countKey, new { count = children.Count }));
         foreach (var child in children)
         {
-            AppendLine(builder, this.Text(child.IsMale ? "childDescription.male" : "childDescription.female", new
+            AppendLine(builder, this.Text(child.IsMale ? "childrenDescriptionBoy" : "childrenDescriptionGirl", new
             {
                 name = child.Name,
                 age = child.Age
@@ -456,7 +472,7 @@ internal sealed class PromptAssembler
         if (s.DaysUntilBirth.HasValue)
         {
             string key = this.input.NpcGender == PromptGender.Male ? "childrenPregnant.npcMale" : "childrenPregnant.npcFemale";
-            AppendLine(builder, this.Text(key, new { days = s.DaysUntilBirth.Value }));
+            AppendLine(builder, this.Text(key, new { daysUntilBirth = s.DaysUntilBirth.Value }));
         }
     }
 
@@ -473,7 +489,7 @@ internal sealed class PromptAssembler
             return;
         }
 
-        AppendLine(builder, this.Text("coreFarmerSpouse", new { spouseName = s.FarmerSpouseName }));
+        AppendLine(builder, this.Text("spousesMarriedToOne", new { spouseList = s.FarmerSpouseName }));
         if (!string.IsNullOrWhiteSpace(s.InlawOfSpouse))
         {
             AppendLine(builder, this.Text("coreFarmerInlaw", new { spouseName = s.InlawOfSpouse }));
@@ -483,8 +499,9 @@ internal sealed class PromptAssembler
     private void BuildMarriageFeelings(StringBuilder builder)
     {
         int hearts = this.input.S.Hearts;
-        string key = hearts > 12 ? "marriageFeelingsGood" : hearts < 10 ? "marriageFeelingsBad" : "marriageFeelingsNeutral";
-        AppendLine(builder, this.Text(key));
+        string key = hearts > 12 ? "marriageSentimentGood" : hearts < 10 ? "marriageSentimentBad" : "marriageSentimentNeutral";
+        string marriageOrRoommate = this.Text(this.input.S.IsRoommate ? "generalBeingRoommates" : "generalTheMarriage") ?? string.Empty;
+        AppendLine(builder, this.Text(key, new { marriageOrRoommate }));
     }
 
     private void BuildFarmContents(StringBuilder builder)
@@ -499,7 +516,14 @@ internal sealed class PromptAssembler
 
     private void BuildWealth(StringBuilder builder)
     {
-        AppendLine(builder, this.Text("wealthTier" + this.input.S.WealthTier, new { money = this.input.S.FarmerMoney }));
+        string key = this.input.S.WealthTier switch
+        {
+            0 => "wealthPoor",
+            1 => "wealthMiddle",
+            2 => "wealthRich",
+            _ => "wealthVeryRich"
+        };
+        AppendLine(builder, this.Text(key, new { wealth = this.input.S.FarmerMoney }));
     }
 
     private void BuildLocation(StringBuilder builder)
@@ -516,11 +540,8 @@ internal sealed class PromptAssembler
                 && !visitingSpouseRelative;
             if (atHome && !string.IsNullOrWhiteSpace(s.LocationName))
             {
-                AppendLine(builder, this.Text("locationAtHome"));
-                if (s.MightBeInShop)
-                {
-                    AppendLine(builder, this.Text("locationMaybeShop"));
-                }
+                string inShopString = s.MightBeInShop ? this.Text("locationAtHomeOrShop") ?? string.Empty : string.Empty;
+                AppendLine(builder, this.Text("locationAtHome", new { inShopString }));
             }
             else
             {
@@ -534,7 +555,7 @@ internal sealed class PromptAssembler
 
         // 当前状态块（Full 与 Brief 共有）。
         AppendLine(builder, this.Text("locationCurrentStateHeading"));
-        AppendLine(builder, this.Text("locationCurrentStatePosition", new
+        AppendLine(builder, this.Text("locationCurrentStatePlace", new
         {
             location = string.IsNullOrWhiteSpace(s.LocationDisplayName) ? s.LocationName : s.LocationDisplayName,
             tileX = s.TileX,
@@ -555,7 +576,11 @@ internal sealed class PromptAssembler
 
         if (!string.IsNullOrWhiteSpace(s.CurrentSchedulePoint))
         {
-            AppendLine(builder, this.Text("locationCurrentScheduleStop", new { stop = s.CurrentSchedulePoint }));
+            AppendLine(builder, this.Text("locationCurrentScheduleStop", new
+            {
+                location = s.CurrentSchedulePoint,
+                time = GameStateSnapshot.ClockText(s.CurrentScheduleStartTime ?? 600)
+            }));
         }
 
         AppendLine(builder, this.Text("locationCurrentStateGrounding"));
@@ -576,7 +601,7 @@ internal sealed class PromptAssembler
             {
                 AppendLine(builder, this.Text("locationFuturePlans", new
                 {
-                    stops = string.Join(", ", s.RemainingScheduleStops)
+                    locations = string.Join(", ", s.RemainingScheduleStops)
                 }));
             }
 
@@ -604,7 +629,7 @@ internal sealed class PromptAssembler
             "Railroad" => this.Text("locationRailroad"),
             "Saloon" => this.Text("locationSaloon")
                 + (s.NpcIsAdult ? "\n" + (this.Text("locationSaloonDrunk") ?? string.Empty) : string.Empty),
-            "SeedShop" => this.Text("locationSeedShop"),
+            "SeedShop" => this.Text("locationPierres"),
             "JojaMart" => this.Text("locationJojaMart"),
             "FarmHouse" => this.Text("locationFarmHouse"),
             "Farm" => this.Text("locationFarm"),
@@ -627,12 +652,12 @@ internal sealed class PromptAssembler
 
         if (s.HasFrogCompanion)
         {
-            AppendLine(builder, this.Text("trinketsFrog"));
+            AppendLine(builder, this.Text("trinketsCompanionFrog"));
         }
 
         if (s.HasFlyCompanion)
         {
-            AppendLine(builder, this.Text("trinketsFly"));
+            AppendLine(builder, this.Text("trinketsCompanionParrot"));
         }
     }
 
@@ -641,12 +666,12 @@ internal sealed class PromptAssembler
         var lines = new List<string>();
         foreach (var pair in this.input.S.ActiveDialogueEvents)
         {
-            if (pair.Value >= 7 || !RecentEventKeys.Contains(pair.Key, StringComparer.Ordinal))
+            if (pair.Value >= 7 || !RecentEventKeys.TryGetValue(pair.Key, out string? suffix))
             {
                 continue;
             }
 
-            string? text = this.Text("recentEvents_" + pair.Key, new { days = pair.Value });
+            string? text = this.Text("recentEvents" + suffix, new { days = pair.Value });
             if (!string.IsNullOrWhiteSpace(text))
             {
                 lines.Add(text);
@@ -709,7 +734,7 @@ internal sealed class PromptAssembler
         var s = this.input.S;
         if (Festivals.TryGetValue((s.SeasonName.ToLowerInvariant(), s.DayOfMonth), out string? suffix))
         {
-            AppendLine(builder, this.Text("specialDates_" + suffix));
+            AppendLine(builder, this.Text("specialDates" + suffix));
         }
 
         if (s.IsBirthdayToday)
@@ -798,26 +823,26 @@ internal sealed class PromptAssembler
         {
             key = hearts switch
             {
-                < 0 => "friendshipFirstMeeting",
-                < 2 => "friendshipStranger",
-                < 4 => "friendshipAcquaintance",
-                < 6 => "friendshipFriend",
-                < 8 => "friendshipCloseFriend",
-                <= 10 => "friendshipWantsToDate",
-                _ => "friendshipCloseFriend"
+                < 0 => "nonSpouseFriendshipFirstConversation",
+                < 2 => "nonSpouseFriendshipStrangers",
+                < 4 => "nonSpouseFriendshipAcquaintances",
+                < 6 => "nonSpouseFriendshipFriends",
+                < 8 => "nonSpouseFriendshipCloseFriends",
+                <= 10 => "nonSpouseFriendshipWantToDate",
+                _ => "nonSpouseFriendshipCloseFriends"
             };
         }
         else if (s.NpcIsChild)
         {
-            key = "friendshipChildHigh";
+            key = "nonSpouseFriendshipChild8Plus";
         }
         else if (s.NpcIsMarriedToOther && hearts >= 10)
         {
-            key = "friendshipMarriedAdultTen";
+            key = "nonSpouseFriendshipNonSingleAdult10";
         }
         else
         {
-            key = "friendshipMarriedAdultEight";
+            key = "nonSpouseFriendshipNonSingleAdult8";
         }
 
         AppendLine(builder, this.Text(key, new { hearts }));
@@ -828,24 +853,28 @@ internal sealed class PromptAssembler
         var s = this.input.S;
         if (s.IsDating)
         {
-            AppendLine(builder, this.Text(
-                s.DatingPublicly ? "relationshipDatingOpenly" : "relationshipDatingQuietly",
-                new { orientation = s.OrientationWord }));
+            string relationshipPublic = this.Text(
+                s.DatingPublicly ? "specialRelationshipDatingPublic" : "specialRelationshipDatingDiscrete") ?? string.Empty;
+            AppendLine(builder, this.Text("specialRelationshipDating", new
+            {
+                relationshipPublic,
+                relationshipWord = s.OrientationWord
+            }));
         }
 
         if (s.IsEngaged)
         {
-            AppendLine(builder, this.Text("relationshipEngaged", new { days = s.DaysUntilWedding }));
+            AppendLine(builder, this.Text("specialRelationshipEngaged", new { daysToWedding = s.DaysUntilWedding }));
         }
 
         if (s.IsDivorced)
         {
-            AppendLine(builder, this.Text("relationshipDivorced"));
+            AppendLine(builder, this.Text("specialRelationshipDivorced"));
         }
 
         if (s.ProposalRejected)
         {
-            AppendLine(builder, this.Text("relationshipProposalRejected"));
+            AppendLine(builder, this.Text("specialRelationshipProposalRejected"));
         }
     }
 
@@ -857,7 +886,7 @@ internal sealed class PromptAssembler
             return;
         }
 
-        AppendLine(builder, this.Text("preoccupation", new { topic = this.input.PreoccupationTopic }));
+        AppendLine(builder, this.Text("preoccupation", new { preoccupation = this.input.PreoccupationTopic }));
     }
 
     private void BuildCurrentConversation(StringBuilder builder)
@@ -896,27 +925,27 @@ internal sealed class PromptAssembler
         AppendLine(builder, this.Text("instructionsGrounding"));
         if (this.input.Samples.Count > 0)
         {
-            AppendLine(builder, this.Text("instructionsMimicSamples"));
+            AppendLine(builder, this.Text("instructionsSampleDialogue"));
         }
 
-        AppendLine(builder, this.Text("instructionsFarmerName", new { farmerName = this.input.S.FarmerName }));
-        AppendLine(builder, this.Text("instructionsParagraphs"));
+        AppendLine(builder, this.Text("instructionsFarmersName"));
+        AppendLine(builder, this.Text("instructionsBreaks"));
         AppendLine(builder, this.Text("instructionsSingleLine"));
-        AppendLine(builder, this.Text("instructionsResponseOptions"));
+        AppendLine(builder, this.Text("instructionsResponses"));
 
         // LivingNPCs 元数据指示（优化开关先探测 Optimized 变体，存在且非空用之，否则回退完整版；
         // 绝不整节丢弃，§4.8）。
         foreach (string key in new[]
                  {
                      "instructionsLivingNpcMetadata",
-                     "instructionsLivingNpcMetadataGiftIds",
-                     "instructionsLivingNpcMetadataImmediateTravel",
-                     "instructionsLivingNpcMetadataTravelConsent",
-                     "instructionsLivingNpcMetadataHelpRequests",
-                     "instructionsLivingNpcMetadataEmotionDepth"
+                     "instructionsLivingNpcGiftIds",
+                     "instructionsLivingNpcImmediateTravel",
+                     "instructionsLivingNpcTravelConsent",
+                     "instructionsLivingNpcHelpRequests",
+                     "instructionsLivingNpcEmotionDepth"
                  })
         {
-            AppendLine(builder, this.input.Lookup(key, null, this.input.UseOptimizedPrompts));
+            AppendLine(builder, this.TextOptimizable(key));
         }
 
         // 情绪肖像指示：传记 ExtraPortraits 不含键 "!" 时输出（§4.6.5）。
@@ -924,7 +953,7 @@ internal sealed class PromptAssembler
         if (!bio.ExtraPortraits.ContainsKey("!"))
         {
             var extraLines = bio.ExtraPortraits
-                .Select(pair => this.Text("instructionsExtraPortraitLine", new { key = pair.Key, description = pair.Value }))
+                .Select(pair => this.Text("instructionsExtraPortraitLine", new { key = pair.Key, value = pair.Value }))
                 .Where(line => !string.IsNullOrWhiteSpace(line))
                 .ToList();
             AppendLine(builder, this.Text("instructionsEmotion", new { extraPortraits = string.Join("\n", extraLines) }));
@@ -952,7 +981,7 @@ internal sealed class PromptAssembler
             && this.input.Conversation.Count == 0
             && !this.input.JustSpoke)
         {
-            AppendLine(builder, this.Text("commandReplaceSchedule", new { originalLine = this.input.Request.OriginalLine }));
+            AppendLine(builder, this.Text("commandReplaceSchedule", new { scheduleLine = this.input.Request.OriginalLine }));
         }
 
         if (this.input.ApplyTranslation)
@@ -967,7 +996,34 @@ internal sealed class PromptAssembler
 
     private string? Text(string key, object? tokens = null)
     {
-        return this.input.Lookup(key, tokens, false);
+        return this.input.Lookup(key, this.MergeStandardTokens(tokens), false);
+    }
+
+    private string? TextOptimizable(string key)
+    {
+        return this.input.Lookup(key, this.MergeStandardTokens(null), this.input.UseOptimizedPrompts);
+    }
+
+    /// <summary>
+    /// 每次查表都合并标准 token：提示词表全文以 {{Name}}（NPC 显示名）/{{farmerName}} 指代双方，
+    /// 调用点只补差异 token（同名以调用点为准，忽略大小写）。
+    /// </summary>
+    private IReadOnlyDictionary<string, string> MergeStandardTokens(object? tokens)
+    {
+        var merged = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Name"] = this.input.NpcDisplayName,
+            ["farmerName"] = this.input.S.FarmerName
+        };
+        if (tokens != null)
+        {
+            foreach (var property in tokens.GetType().GetProperties())
+            {
+                merged[property.Name] = property.GetValue(tokens)?.ToString() ?? string.Empty;
+            }
+        }
+
+        return merged;
     }
 
     private static void AppendLine(StringBuilder builder, string? text)

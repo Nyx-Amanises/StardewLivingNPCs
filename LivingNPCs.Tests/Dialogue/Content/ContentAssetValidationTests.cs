@@ -147,34 +147,102 @@ public sealed class ContentAssetValidationTests
         }
     }
 
-    /// <summary>PromptKeyAudit：源码里的提示词键字面量与 §3.6 最小集合都必须在 default.json 里。</summary>
+    /// <summary>PromptKeyAudit：源码里的提示词键字面量与 §3.6 最小集合都必须在 default.json 里。
+    /// 覆盖 PromptAssembler 的 this.Text(...)（含三元分支与 "prefix" + suffix 动态键的排除）；
+    /// 键存在性按变体规则判定（基础键或 .MaleNpc/.FemaleNpc 任一命中即可）。</summary>
     [Fact]
     public void PromptKeyAudit_AllReferencedKeysExist()
     {
         var en = Deserialize<Dictionary<string, string>>(Path.Combine(AssetRoot, "prompts", "default.json"));
+
+        bool Resolvable(string key) =>
+            en.ContainsKey(key) || en.ContainsKey(key + ".MaleNpc") || en.ContainsKey(key + ".FemaleNpc");
 
         foreach (string key in PromptTable.KeysReferencedByContentCode)
         {
             Assert.True(en.ContainsKey(key), $"required prompt key missing: {key}");
         }
 
+        // 变量键族（switch/数组里构造，字面量扫描抓不到）：显式列出。
+        foreach (string key in new[]
+                 {
+                     "instructionsLivingNpcMetadata", "instructionsLivingNpcGiftIds",
+                     "instructionsLivingNpcImmediateTravel", "instructionsLivingNpcTravelConsent",
+                     "instructionsLivingNpcHelpRequests", "instructionsLivingNpcEmotionDepth",
+                     "childrenNone", "childrenSingle", "childrenMultiple",
+                     "childrenDescriptionBoy", "childrenDescriptionGirl",
+                     "childrenPregnant.npcMale", "childrenPregnant.npcFemale",
+                     "nonSpouseFriendshipFirstConversation", "nonSpouseFriendshipStrangers",
+                     "nonSpouseFriendshipAcquaintances", "nonSpouseFriendshipFriends",
+                     "nonSpouseFriendshipCloseFriends", "nonSpouseFriendshipWantToDate",
+                     "nonSpouseFriendshipChild8Plus", "nonSpouseFriendshipNonSingleAdult10",
+                     "nonSpouseFriendshipNonSingleAdult8",
+                     "marriageSentimentGood", "marriageSentimentBad", "marriageSentimentNeutral",
+                     "wealthPoor", "wealthMiddle", "wealthRich", "wealthVeryRich",
+                     "giftLoved", "giftLiked", "giftDislike", "giftHate", "giftNeutral",
+                     "spouseActionPatio", "spouseActionFunLeave", "spouseActionJobLeave",
+                     "spouseActionFunReturn", "spouseActionJobReturn", "spouseActionSpouseRoom",
+                     "specialDatesSpring1", "specialDatesSummer1", "specialDatesFall1", "specialDatesWinter1",
+                     "recentEventsBoulder", "recentEventsQuarryBridge", "recentEventsBus",
+                     "recentEventsGreenhouse", "recentEventsMinecarts", "recentEventsCommunityCenter",
+                     "recentEventsMovieTheatre", "recentEventsPamHouse", "recentEventsPamHouseAnonymous",
+                     "recentEventsJojaLightning", "recentEventsBabyBoy", "recentEventsBabyGirl",
+                     "recentEventsMarried", "recentEventsLuauBest", "recentEventsLuauShorts",
+                     "recentEventsLuauPoisoned", "recentEventsMovieInvited", "recentEventsDumpsterDive",
+                     "recentEventsGreenRain"
+                 })
+        {
+            Assert.True(Resolvable(key), $"required prompt key missing: {key}");
+        }
+
         var referenced = new SortedSet<string>(StringComparer.Ordinal);
-        var pattern = new Regex(
-            "(?:GetPromptSkeleton|LookupPrompt|\\.Lookup|getPrompt)\\(\\s*\"(?<key>[A-Za-z][A-Za-z0-9_.]*)\"",
+        var callPattern = new Regex(
+            "(?:GetPromptSkeleton|LookupPrompt|\\.Lookup|getPrompt|\\.Text|TextOptimizable)\\(",
+            RegexOptions.Compiled);
+        // 键形字面量；后随 +（"prefix" + suffix 动态拼键）或前随 + 的排除。
+        var literalPattern = new Regex(
+            "\"(?<key>[a-z][A-Za-z0-9_.]{2,})\"(?!\\s*\\+)",
             RegexOptions.Compiled);
         string sourceDir = Path.Combine(RepoSourceRoot, "Dialogue");
         foreach (string file in Directory.EnumerateFiles(sourceDir, "*.cs", SearchOption.AllDirectories))
         {
-            foreach (Match match in pattern.Matches(File.ReadAllText(file)))
+            foreach (string line in File.ReadLines(file))
             {
-                referenced.Add(match.Groups["key"].Value);
+                if (!callPattern.IsMatch(line))
+                {
+                    continue;
+                }
+
+                foreach (Match match in literalPattern.Matches(line))
+                {
+                    int start = match.Index;
+                    string before = line[..start].TrimEnd();
+                    if (before.EndsWith("+", StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    referenced.Add(match.Groups["key"].Value);
+                }
             }
         }
 
         Assert.NotEmpty(referenced);
-        var missing = referenced.Where(key => !en.ContainsKey(key)).ToList();
+        var missing = referenced
+            .Where(key => !Resolvable(key))
+            // 非键字面量豁免：小节名/事件旗标/字符串参数等（键形但不查表）。
+            .Where(key => !ExemptFromPromptAudit.Contains(key))
+            .ToList();
         Assert.True(missing.Count == 0, $"prompt keys referenced in source but missing from prompts/default.json: {string.Join(", ", missing)}");
     }
+
+    /// <summary>与 .Text(/.Lookup( 同行出现、但并非提示词键的字面量。</summary>
+    private static readonly HashSet<string> ExemptFromPromptAudit = new(StringComparer.Ordinal)
+    {
+        "default", "skip", "coexistenceHud",
+        "uiThinking", "uiStartConversation", "uiTypeYourResponse", "uiYourResponse",
+        "transcriptGiftPlayerLine", "outputRespond", "outputStaySilent"
+    };
 
     [Fact]
     public void I18n_DefaultAndZh_HaveIdenticalKeySets_AndCoverReferencedDialogueKeys()

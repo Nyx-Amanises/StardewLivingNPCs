@@ -90,8 +90,9 @@ internal sealed class DialogueContentService : IDialogueContent
     {
         if (variant.Optimized)
         {
+            // 变体命名遵循交付的提示词表："<key>Optimized"（无点号），与 .MaleNpc/.FemaleNpc 的点号风格不同。
             string? optimizedValue = this.promptTable.Lookup(
-                key + ".Optimized", variant.NpcGender, npc?.PromptOverrides, tokens, returnNull: true);
+                key + "Optimized", variant.NpcGender, npc?.PromptOverrides, tokens, returnNull: true);
             if (optimizedValue != null)
             {
                 return optimizedValue;

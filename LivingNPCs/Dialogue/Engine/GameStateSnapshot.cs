@@ -84,6 +84,9 @@ internal sealed class GameStateSnapshot
     /// <summary>当前日程停留点描述（≤当前时间的最近一条）。</summary>
     public string CurrentSchedulePoint { get; init; } = string.Empty;
 
+    /// <summary>当前生效日程点的开始时刻（游戏时间码，如 900）；无日程为 null。</summary>
+    public int? CurrentScheduleStartTime { get; init; }
+
     /// <summary>下一日程点目标地点（显示名）；空 = 无后续日程。</summary>
     public string NextScheduleLocation { get; init; } = string.Empty;
 

@@ -664,3 +664,25 @@ P3 键构造、P5 六键清单、P9 可并入行过滤、P11 可记录行过滤�
   BehaviorEngine 两个既有方法装配；WP16 重构 ValleyTalkContextService 后换委托即可。
 - DialogueEngine.RecordExchangeCallback / PromptOverrides / SpouseGiftPicker（WP10 留白）
   本包未触碰。
+
+### 冒烟修复补记（2026-07-09）
+
+1. **P11 拦截被普通右键绕过（用户截图：对话框显示硬币+%%%）**：反射核实 1.6 程序集，
+   `NPC.checkAction` 与 `NPC.tryToReceiveActiveObject` 显示对话走的是
+   `Game1.drawDialogue(NPC)`（小写重载，直接 `new DialogueBox(CurrentDialogue.Peek())`），
+   不经过 `DrawDialogue(Dialogue)`——生成占位 `$$$%%%`、静默送礼跳过标记 `$$%%`、
+   方案 B 展示记录全部漏接。修复：P11 拆为共享判定 `DialogueDisplayInterceptor.BeforeDisplay`
+   + 两个补丁（P11a `DrawDialogue(Dialogue)`、P11b `drawDialogue(NPC)`）；P11b 抑制显示时
+   弹掉栈顶跳过对白。`GenerationScheduler.Draw` 经 `MarkEnginePresented` 握手豁免记录
+   （生成台词历史归 EngineHistoryWriter，防转录重复）。
+2. **思考窗双省略号**："{{Name}}正在思考…" i18n 自带省略号，代码又拼 "..."。
+   修复：`ThinkingDialogueController.Start` 对基底文本 TrimEnd('.','…')，动画点数照旧。
+3. **提示词键对账（跨 WP10/WP15/WP20，影响面大）**：装配器约 40 处键名/token 名与 WP20
+   交付表不一致，全部静默丢节或漏 {{token}}（含玩家回应选项指令 instructionsResponses、
+   LivingNpc 元数据五条子指令、婚姻宣告、好感阶梯、财富档、近期事件、节日等；此前提示词
+   中还到处留着未替换的 {{Name}} 字面量）。修复：装配器键名/**token 名全部改为表名**；
+   `Text()` 每次查表合并标准 token（Name/farmerName）；`LookupPrompt` 的 Optimized 变体
+   后缀按交付表改为无点号 `<key>Optimized`；快照新增 CurrentScheduleStartTime 供日程点
+   {{Time}}；新增 10 个无对应物的表键（farmContents* 5、activity* 3、otherNpcsHeading、
+   coreFarmerInlaw，en+zh 全新措辞）。PromptKeyAudit 测试扩展到 `.Text(` 调用行
+   （含三元与动态拼键排除、变体感知解析、变量键族显式清单），此类错配今后编译期测试即抓。

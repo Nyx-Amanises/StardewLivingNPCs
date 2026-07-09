@@ -91,6 +91,7 @@ internal static class GameStateSnapshotCollector
             MightBeInShop = ShopLocations.Contains(npc?.currentLocation?.Name ?? string.Empty, StringComparer.Ordinal),
             CurrentActivity = schedule.CurrentActivity,
             CurrentSchedulePoint = schedule.CurrentStop,
+            CurrentScheduleStartTime = schedule.CurrentStopStart,
             NextScheduleLocation = schedule.NextStop,
             MinutesUntilNextSchedule = schedule.MinutesUntilNext,
             RemainingScheduleStops = schedule.RemainingStops,
@@ -174,7 +175,7 @@ internal static class GameStateSnapshotCollector
         return flags;
     }
 
-    private static (string CurrentActivity, string CurrentStop, string NextStop, int? MinutesUntilNext, IReadOnlyList<string> RemainingStops)
+    private static (string CurrentActivity, string CurrentStop, int? CurrentStopStart, string NextStop, int? MinutesUntilNext, IReadOnlyList<string> RemainingStops)
         CollectSchedule(NPC? npc)
     {
         try
@@ -182,7 +183,7 @@ internal static class GameStateSnapshotCollector
             var schedule = npc?.Schedule;
             if (npc == null || schedule == null || schedule.Count == 0)
             {
-                return (string.Empty, string.Empty, string.Empty, null, Array.Empty<string>());
+                return (string.Empty, string.Empty, null, string.Empty, null, Array.Empty<string>());
             }
 
             int now = Game1.timeOfDay;
@@ -194,6 +195,7 @@ internal static class GameStateSnapshotCollector
             string currentStop = current.Value != null
                 ? DisplayNameFor(current.Value.targetLocationName)
                 : string.Empty;
+            int? currentStopStart = current.Value != null ? current.Key : null;
             string nextStop = next.Value != null ? DisplayNameFor(next.Value.targetLocationName) : string.Empty;
             int? minutes = next.Value != null ? Math.Max(0, Utility.CalculateMinutesBetweenTimes(now, next.Key)) : null;
 
@@ -209,11 +211,11 @@ internal static class GameStateSnapshotCollector
                     current.Value?.endOfRouteBehavior ?? string.Empty,
                     current.Value?.endOfRouteMessage ?? string.Empty);
 
-            return (activity, currentStop, nextStop, minutes, remaining);
+            return (activity, currentStop, currentStopStart, nextStop, minutes, remaining);
         }
         catch
         {
-            return (string.Empty, string.Empty, string.Empty, null, Array.Empty<string>());
+            return (string.Empty, string.Empty, null, string.Empty, null, Array.Empty<string>());
         }
     }
 

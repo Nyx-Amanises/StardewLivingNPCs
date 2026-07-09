@@ -681,5 +681,15 @@
   "wonIceFishing.FemaleNpc": "农夫赢得了冰钓比赛",
   "wonIceFishing.MaleNpc": "农夫赢得了冰钓比赛",
   "specialDatesWinter1.MaleNpc": "今天是冬季第一天。",
-  "specialDatesWinter1.FemaleNpc": "今天是冬季第一天。"
+  "specialDatesWinter1.FemaleNpc": "今天是冬季第一天。",
+  "otherNpcsHeading": "附近的人",
+  "coreFarmerInlaw": "农夫与{{spouseName}}结了婚，因此农夫也算{{Name}}的姻亲家人。在自然的地方，可以让这种亲家间的熟稔影响语气。",
+  "farmContentsHeading": "农场上现有的东西一览：",
+  "farmContentsBuildings": "建筑：",
+  "farmContentsAnimals": "动物：",
+  "farmContentsCrops": "地里的作物：",
+  "farmContentsPets": "宠物：",
+  "activityGeneric": "当前可见或日程动作：{{hint}}。",
+  "activityTravellingToNext": "{{Name}}此刻正走向今天日程的下一个地点。",
+  "activityNothingSpecific": "{{Name}}此刻没有在做什么特别的事——发呆、停留，或正处于两个日程点之间。"
 }

@@ -681,5 +681,15 @@
   "wonIceFishing.FemaleNpc": "The farmer won the ice fishing competition",
   "wonIceFishing.MaleNpc": "The farmer won the ice fishing competition",
   "specialDatesWinter1.MaleNpc": "It is the first day of winter.",
-  "specialDatesWinter1.FemaleNpc": "It is the first day of winter."
+  "specialDatesWinter1.FemaleNpc": "It is the first day of winter.",
+  "otherNpcsHeading": "Nearby People",
+  "coreFarmerInlaw": "The farmer married {{spouseName}}, which makes the farmer part of {{Name}}'s extended family. Let that in-law familiarity color the tone where natural.",
+  "farmContentsHeading": "A quick inventory of what stands on the farm right now:",
+  "farmContentsBuildings": "Buildings:",
+  "farmContentsAnimals": "Animals:",
+  "farmContentsCrops": "Crops in the ground:",
+  "farmContentsPets": "Pets:",
+  "activityGeneric": "Current visible or scheduled activity: {{hint}}.",
+  "activityTravellingToNext": "Right now {{Name}} is walking to the next stop on today's schedule.",
+  "activityNothingSpecific": "Right now {{Name}} is not doing anything in particular — idling, lingering, or between stops."
 }

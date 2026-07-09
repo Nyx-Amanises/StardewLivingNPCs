@@ -207,6 +207,8 @@ internal sealed class GenerationScheduler
         var dialogue = new StardewValley.Dialogue(npc, key, text);
         Game1.currentSpeaker = npc;
         npc.CurrentDialogue.Push(dialogue);
+        // 生成台词的历史由 EngineHistoryWriter 记，向 P11 声明豁免（免得展示记录器重复入历史）。
+        GameHooks.DialogueDisplayInterceptor.MarkEnginePresented(dialogue);
         Game1.drawDialogue(npc);
     }
 }

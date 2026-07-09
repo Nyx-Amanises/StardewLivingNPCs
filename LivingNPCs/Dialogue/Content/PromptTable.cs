@@ -222,7 +222,8 @@ internal sealed class PromptTable
         DialogueServices.Monitor?.Log($"[LivingNPCs] Prompt skeleton key '{key}' was not found; that prompt section will be empty.", StardewModdingAPI.LogLevel.Warn);
     }
 
-    /// <summary>{{Token}} 替换：token 名与匿名对象属性名忽略大小写匹配；未知 token 原样保留。</summary>
+    /// <summary>{{Token}} 替换：token 名忽略大小写匹配；tokens 可为匿名对象或字符串字典
+    /// （装配器合并"标准 token + 调用点 token"时用字典）。未知 token 原样保留。</summary>
     internal static string ReplaceTokens(string text, object? tokens)
     {
         if (tokens == null || string.IsNullOrEmpty(text) || !text.Contains("{{", StringComparison.Ordinal))
@@ -231,9 +232,19 @@ internal sealed class PromptTable
         }
 
         var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var property in tokens.GetType().GetProperties())
+        if (tokens is IReadOnlyDictionary<string, string> map)
         {
-            values[property.Name] = property.GetValue(tokens)?.ToString() ?? string.Empty;
+            foreach (var pair in map)
+            {
+                values[pair.Key] = pair.Value;
+            }
+        }
+        else
+        {
+            foreach (var property in tokens.GetType().GetProperties())
+            {
+                values[property.Name] = property.GetValue(tokens)?.ToString() ?? string.Empty;
+            }
         }
 
         return System.Text.RegularExpressions.Regex.Replace(

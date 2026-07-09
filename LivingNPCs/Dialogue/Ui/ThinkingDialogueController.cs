@@ -33,7 +33,8 @@ internal static class ThinkingDialogueController
         npcName = npc.Name;
         string thinkingText = Util.GetString("uiThinking", new { Name = npc.displayName }, returnNull: true)
             ?? $"{npc.displayName} is thinking";
-        baseText = thinkingText;
+        // i18n 文案可能自带省略号（"正在思考…"），动画基底统一去尾再补点，免得出现"…..."。
+        baseText = thinkingText.TrimEnd('.', '…', ' ', '　');
         activeBox = null;
         activeDialogue = null;
 
