@@ -52,7 +52,12 @@ internal static class DialogueContentSetup
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to persist the imported ValleyTalk config: {ex.Message}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "persist the imported ValleyTalk config", error = ex.Message },
+                    $"Failed to persist the imported ValleyTalk config: {ex.Message}"),
+                LogLevel.Warn);
         }
 
         DialogueServices.Config.SyncFrom(config);
@@ -64,7 +69,12 @@ internal static class DialogueContentSetup
 
         if (!config.EnableDialogueEngine)
         {
-            DialogueServices.Monitor?.Log("[LivingNPCs] The AI dialogue engine is disabled in the config; skipping LLM client setup.", LogLevel.Info);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.engineDisabledConfig",
+                    null,
+                    "The AI dialogue engine is disabled in the config; LLM client setup, Harmony patches, schedulers and dialogue commands stay off (enable it in GMCM and restart)."),
+                LogLevel.Info);
             return;
         }
 
@@ -153,7 +163,12 @@ internal static class DialogueContentSetup
         WorldSummary? summary = pipeline.ReadJsonFile<WorldSummary>(relative);
         if (summary == null)
         {
-            DialogueServices.Monitor?.Log($"[LivingNPCs] Default world summary file '{relative}' is missing or unreadable.", LogLevel.Error);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.assetLoadFailed",
+                    new { asset = relative, error = "the file is missing or unreadable" },
+                    $"Failed to load content asset '{relative}': the file is missing or unreadable"),
+                LogLevel.Error);
             return new WorldSummary();
         }
 

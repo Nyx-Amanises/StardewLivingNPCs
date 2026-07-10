@@ -116,7 +116,12 @@ internal static class Game1_DrawDialogue_Patch
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Game1.DrawDialogue patch failed: {ex}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.patchFailed",
+                    new { patch = "Game1.DrawDialogue", error = ex },
+                    $"Game1.DrawDialogue patch failed: {ex}"),
+                LogLevel.Warn);
             return true;
         }
     }
@@ -160,7 +165,12 @@ internal static class Game1_drawDialogue_Npc_Patch
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Game1.drawDialogue(NPC) patch failed: {ex}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.patchFailed",
+                    new { patch = "Game1.drawDialogue(NPC)", error = ex },
+                    $"Game1.drawDialogue(NPC) patch failed: {ex}"),
+                LogLevel.Warn);
             return true;
         }
     }

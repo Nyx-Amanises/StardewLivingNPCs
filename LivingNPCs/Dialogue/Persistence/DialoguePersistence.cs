@@ -45,7 +45,10 @@ internal static class DialoguePersistence
         if (LegacyValleyTalkLoaded)
         {
             DialogueServices.Monitor?.Log(
-                "The old ValleyTalk mod (dandm1.ValleyTalk) is still loaded. The LivingNPCs dialogue engine and data migration stay disabled until its folder is removed.",
+                Util.GetConsoleString(
+                    "dialogue.log.legacyCoexistence",
+                    null,
+                    "The old ValleyTalk mod (dandm1.ValleyTalk) is still loaded. The LivingNPCs dialogue engine and data migration stay disabled until its folder is removed."),
                 LogLevel.Error);
         }
     }
@@ -58,7 +61,12 @@ internal static class DialoguePersistence
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Legacy folder migration failed: {ex.Message}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.migrationFailed",
+                    new { what = "folder data", error = ex.Message },
+                    $"Legacy ValleyTalk migration failed (folder data): {ex.Message}"),
+                LogLevel.Warn);
         }
     }
 
@@ -72,7 +80,12 @@ internal static class DialoguePersistence
         catch (Exception ex)
         {
             // 失败绝不打断存档载入（§4.4）。
-            DialogueServices.Monitor?.Log($"Legacy save data migration failed: {ex.Message}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.migrationFailed",
+                    new { what = "save data", error = ex.Message },
+                    $"Legacy ValleyTalk migration failed (save data): {ex.Message}"),
+                LogLevel.Warn);
         }
     }
 
@@ -85,7 +98,12 @@ internal static class DialoguePersistence
         catch (Exception ex)
         {
             // 失败绝不打断存档保存（§4.4）。
-            DialogueServices.Monitor?.Log($"Failed to flush dialogue histories on save: {ex.Message}", LogLevel.Error);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "flush dialogue histories on save", error = ex.Message },
+                    $"Failed to flush dialogue histories on save: {ex.Message}"),
+                LogLevel.Error);
         }
     }
 

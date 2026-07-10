@@ -31,7 +31,12 @@ internal static class GameStateSnapshotCollector
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to snapshot game state: {ex}", StardewModdingAPI.LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "snapshot game state", error = ex },
+                    $"Failed to snapshot game state: {ex}"),
+                StardewModdingAPI.LogLevel.Warn);
             return new GameStateSnapshot();
         }
     }

@@ -591,11 +591,21 @@ internal sealed class DialogueEngine : IDialogueEngine
             // 全部尝试失败或不可解析 → 单行 ... 回退（§4.9；裁决 4：回退不附送礼标记）。
             if (failure != null)
             {
-                DialogueServices.Monitor?.Log($"Dialogue generation failed for {request.NpcName}: {failure.Message}", StardewModdingAPI.LogLevel.Error);
+                DialogueServices.Monitor?.Log(
+                    Util.GetConsoleString(
+                        "dialogue.log.generationFailed",
+                        new { npc = request.NpcName, error = failure.Message },
+                        $"Dialogue generation failed for {request.NpcName}: {failure.Message}"),
+                    StardewModdingAPI.LogLevel.Error);
             }
             else
             {
-                DialogueServices.Monitor?.Log($"Dialogue generation produced no usable response for {request.NpcName}.", StardewModdingAPI.LogLevel.Warn);
+                DialogueServices.Monitor?.Log(
+                    Util.GetConsoleString(
+                        "dialogue.log.generationEmpty",
+                        new { npc = request.NpcName },
+                        $"Dialogue generation produced no usable response for {request.NpcName}."),
+                    StardewModdingAPI.LogLevel.Warn);
             }
 
             this.ExportAttempt(prepared, response, ConversationAnalysis.Empty, Array.Empty<string>(), attempts, failure != null ? "error" : "unparseable");
@@ -717,7 +727,12 @@ internal sealed class DialogueEngine : IDialogueEngine
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to finish generation bookkeeping for {request.NpcName}: {ex.Message}", StardewModdingAPI.LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = $"finish generation bookkeeping for {request.NpcName}", error = ex.Message },
+                    $"Failed to finish generation bookkeeping for {request.NpcName}: {ex.Message}"),
+                StardewModdingAPI.LogLevel.Warn);
         }
     }
 

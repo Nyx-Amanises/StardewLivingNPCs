@@ -263,7 +263,12 @@ internal sealed class DialogueContentService : IDialogueContent
 
     private NpcBio MissingBio(string normalized, string reason)
     {
-        DialogueServices.Monitor?.Log($"[LivingNPCs] No biography for '{normalized}' ({reason}).", LogLevel.Warn);
+        DialogueServices.Monitor?.Log(
+            Util.GetConsoleString(
+                "dialogue.log.bioMissing",
+                new { npc = normalized, reason },
+                $"No biography for '{normalized}' ({reason})."),
+            LogLevel.Warn);
         var bio = new NpcBio { Missing = true };
         this.FinalizeBio(normalized, bio);
         return bio;

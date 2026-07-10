@@ -26,7 +26,12 @@ internal static class ConnectionSelfCheck
             }
             catch (Exception ex)
             {
-                DialogueServices.Monitor?.Log($"[LivingNPCs] LLM connection check crashed: {ex}", LogLevel.Error);
+                DialogueServices.Monitor?.Log(
+                    Util.GetConsoleString(
+                        "dialogue.log.stepFailed",
+                        new { step = "run the LLM connection check", error = ex },
+                        $"Failed to run the LLM connection check: {ex}"),
+                    LogLevel.Error);
             }
         });
     }

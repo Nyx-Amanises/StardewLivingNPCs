@@ -32,7 +32,12 @@ internal sealed class WorldSummaryRenderer
 
         if (summary.SectionOrder == null || summary.SectionOrder.Count == 0)
         {
-            this.monitor?.Log("[LivingNPCs] World summary asset has no SectionOrder; returning an empty summary.", LogLevel.Error);
+            this.monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.assetInvalid",
+                    new { asset = "world summary", problem = "it has no SectionOrder; an empty summary is returned" },
+                    "Content asset 'world summary' is invalid: it has no SectionOrder; an empty summary is returned"),
+                LogLevel.Error);
             return string.Empty;
         }
 
@@ -42,7 +47,12 @@ internal sealed class WorldSummaryRenderer
             WorldSummarySection? section = summary.GetSection(pair.Key);
             if (section == null)
             {
-                this.monitor?.Log($"[LivingNPCs] World summary section '{pair.Key}' is listed in SectionOrder but missing; skipped.", LogLevel.Error);
+                this.monitor?.Log(
+                    Util.GetConsoleString(
+                        "dialogue.log.assetInvalid",
+                        new { asset = "world summary", problem = $"section '{pair.Key}' is listed in SectionOrder but missing; skipped" },
+                        $"Content asset 'world summary' is invalid: section '{pair.Key}' is listed in SectionOrder but missing; skipped"),
+                    LogLevel.Error);
                 continue;
             }
 

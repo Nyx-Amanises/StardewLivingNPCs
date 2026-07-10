@@ -29,14 +29,18 @@ internal static class ThirdPartyContentPolicy
             return;
         }
 
+        string packs = string.Join(", ", offenders.Take(10)) + (offenders.Count > 10 ? ", …" : string.Empty);
         monitor?.Log(
-            $"[LivingNPCs] {offenders.Count} installed content pack(s) do not grant AI use of their text (missing manifest field 'PermitAiUse: true').",
+            Util.GetConsoleString(
+                "dialogue.log.contentPacksUnlicensed",
+                new { count = offenders.Count, packs },
+                $"{offenders.Count} installed content pack(s) do not grant AI use of their text (missing manifest field 'PermitAiUse: true'). Affected packs: {packs}"),
             LogLevel.Warn);
         monitor?.Log(
-            $"[LivingNPCs] Affected packs: {string.Join(", ", offenders.Take(10))}{(offenders.Count > 10 ? ", …" : string.Empty)}",
-            LogLevel.Warn);
-        monitor?.Log(
-            "[LivingNPCs] Their content still shows in game as usual, but AI dialogue falls back to unpatched vanilla dialogue samples.",
+            Util.GetConsoleString(
+                "dialogue.log.contentPacksFallback",
+                null,
+                "Their content still shows in game as usual, but AI dialogue falls back to unpatched vanilla dialogue samples."),
             LogLevel.Warn);
     }
 

@@ -44,7 +44,12 @@ internal static class GameLocation_GetLocationOverrideDialogue_Patch
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"GameLocation.GetLocationOverrideDialogue patch failed: {ex}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.patchFailed",
+                    new { patch = "GameLocation.GetLocationOverrideDialogue", error = ex },
+                    $"GameLocation.GetLocationOverrideDialogue patch failed: {ex}"),
+                LogLevel.Warn);
             return true;
         }
     }

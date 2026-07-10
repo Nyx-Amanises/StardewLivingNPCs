@@ -48,7 +48,12 @@ internal static class NetworkAvailability
             return true;
         }
 
-        DialogueServices.Monitor?.Log("[LivingNPCs] Network unavailable on Android; rechecking before AI dialogue generation.", LogLevel.Warn);
+        DialogueServices.Monitor?.Log(
+            Util.GetConsoleString(
+                "dialogue.log.networkRecheck",
+                null,
+                "Network unavailable on Android; rechecking before AI dialogue generation."),
+            LogLevel.Warn);
         for (int attempt = 0; attempt < 5; attempt++)
         {
             await Task.Delay(RecheckDelay, ct).ConfigureAwait(false);
@@ -58,7 +63,12 @@ internal static class NetworkAvailability
             }
         }
 
-        DialogueServices.Monitor?.Log("[LivingNPCs] Network still unavailable; skipping AI dialogue generation this time.", LogLevel.Warn);
+        DialogueServices.Monitor?.Log(
+            Util.GetConsoleString(
+                "dialogue.log.networkStillDown",
+                null,
+                "Network still unavailable; skipping AI dialogue generation this time."),
+            LogLevel.Warn);
         return false;
     }
 

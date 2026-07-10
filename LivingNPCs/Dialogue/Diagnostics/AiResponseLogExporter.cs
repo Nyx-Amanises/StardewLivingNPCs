@@ -48,7 +48,12 @@ internal static class AiResponseLogExporter
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to export AI response log for {npcName}: {ex.Message}", StardewModdingAPI.LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.exportFailed",
+                    new { what = "AI response log", npc = npcName, error = ex.Message },
+                    $"Failed to export AI response log for {npcName}: {ex.Message}"),
+                StardewModdingAPI.LogLevel.Warn);
         }
     }
 

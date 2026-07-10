@@ -67,7 +67,12 @@ internal sealed class GameContentPipeline : IContentPipeline
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"[LivingNPCs] Failed to load world summary asset '{assetName}': {ex.Message}", LogLevel.Error);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.assetLoadFailed",
+                    new { asset = assetName, error = ex.Message },
+                    $"Failed to load content asset '{assetName}': {ex.Message}"),
+                LogLevel.Error);
             return null;
         }
     }
@@ -155,7 +160,12 @@ internal sealed class GameContentPipeline : IContentPipeline
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"[LivingNPCs] Failed to parse '{relativePath}': {ex.Message}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.assetLoadFailed",
+                    new { asset = relativePath, error = ex.Message },
+                    $"Failed to load content asset '{relativePath}': {ex.Message}"),
+                LogLevel.Warn);
             return null;
         }
     }

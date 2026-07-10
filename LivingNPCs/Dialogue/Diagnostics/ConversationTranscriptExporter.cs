@@ -71,7 +71,12 @@ internal static class ConversationTranscriptExporter
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to export conversation transcript for {npcName}: {ex.Message}", StardewModdingAPI.LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.exportFailed",
+                    new { what = "conversation transcript", npc = npcName, error = ex.Message },
+                    $"Failed to export conversation transcript for {npcName}: {ex.Message}"),
+                StardewModdingAPI.LogLevel.Warn);
         }
     }
 
@@ -93,7 +98,12 @@ internal static class ConversationTranscriptExporter
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to reset conversation transcript for {npcName}: {ex.Message}", StardewModdingAPI.LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = $"reset the conversation transcript for {npcName}", error = ex.Message },
+                    $"Failed to reset the conversation transcript for {npcName}: {ex.Message}"),
+                StardewModdingAPI.LogLevel.Warn);
         }
     }
 
@@ -171,7 +181,12 @@ internal static class ConversationTranscriptExporter
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to archive pruned conversations for {npcName}: {ex.Message}", StardewModdingAPI.LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = $"archive pruned conversations for {npcName}", error = ex.Message },
+                    $"Failed to archive pruned conversations for {npcName}: {ex.Message}"),
+                StardewModdingAPI.LogLevel.Warn);
         }
     }
 

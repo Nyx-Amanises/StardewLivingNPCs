@@ -85,7 +85,12 @@ internal static class Dialogue_ChooseResponse_Patch
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Dialogue.chooseResponse patch failed: {ex}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.patchFailed",
+                    new { patch = "Dialogue.chooseResponse", error = ex },
+                    $"Dialogue.chooseResponse patch failed: {ex}"),
+                LogLevel.Warn);
             return true;
         }
     }
@@ -175,7 +180,12 @@ internal static class Dialogue_TryGetDialogue_Patch
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Dialogue.TryGetDialogue patch failed: {ex}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.patchFailed",
+                    new { patch = "Dialogue.TryGetDialogue", error = ex },
+                    $"Dialogue.TryGetDialogue patch failed: {ex}"),
+                LogLevel.Warn);
             return true;
         }
     }

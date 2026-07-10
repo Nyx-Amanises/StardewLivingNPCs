@@ -46,7 +46,12 @@ internal static class ContextRoutingLogExporter
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to export context routing log for {npcName}: {ex.Message}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.exportFailed",
+                    new { what = "context routing log", npc = npcName, error = ex.Message },
+                    $"Failed to export context routing log for {npcName}: {ex.Message}"),
+                LogLevel.Warn);
         }
     }
 

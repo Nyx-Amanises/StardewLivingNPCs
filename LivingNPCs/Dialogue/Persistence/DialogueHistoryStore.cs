@@ -310,7 +310,12 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to load dialogue history for {npcName}; treating as empty: {ex.Message}", LogLevel.Error);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.historyLoadFailed",
+                    new { npc = npcName, error = ex.Message },
+                    $"Failed to load dialogue history for {npcName}; treating as empty: {ex.Message}"),
+                LogLevel.Error);
             return new StardewEventHistory { NpcName = npcName };
         }
     }
@@ -357,7 +362,10 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
             dropped.AddRange(extraDropped);
             this.ArchiveDropped(npcName, dropped);
             DialogueServices.Monitor?.Log(
-                $"Dialogue history for {npcName} exceeded {MaxSerializedNpcBytes / 1024} KB; forced a prune before saving.",
+                Util.GetConsoleString(
+                    "dialogue.log.historyPruned",
+                    new { npc = npcName, kb = MaxSerializedNpcBytes / 1024 },
+                    $"Dialogue history for {npcName} exceeded {MaxSerializedNpcBytes / 1024} KB; forced a prune before saving."),
                 LogLevel.Warn);
         }
 
@@ -399,7 +407,12 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to write farmhand dialogue history file: {ex.Message}", LogLevel.Error);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "write the farmhand dialogue history file", error = ex.Message },
+                    $"Failed to write the farmhand dialogue history file: {ex.Message}"),
+                LogLevel.Error);
         }
     }
 
@@ -505,7 +518,10 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
         {
             this.totalSizeWarned = true;
             DialogueServices.Monitor?.Log(
-                $"LivingNPCs save data totals {totalBytes / 1024} KB (> {TotalSizeWarnBytes / 1024 / 1024} MB); saving may slow down. Consider forgetting some NPC histories.",
+                Util.GetConsoleString(
+                    "dialogue.log.saveDataLarge",
+                    new { kb = totalBytes / 1024, mb = TotalSizeWarnBytes / 1024 / 1024 },
+                    $"LivingNPCs save data totals {totalBytes / 1024} KB (> {TotalSizeWarnBytes / 1024 / 1024} MB); saving may slow down. Consider forgetting some NPC histories."),
                 LogLevel.Warn);
         }
     }
@@ -523,7 +539,12 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to archive pruned conversations for {npcName}: {ex.Message}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = $"archive pruned conversations for {npcName}", error = ex.Message },
+                    $"Failed to archive pruned conversations for {npcName}: {ex.Message}"),
+                LogLevel.Warn);
         }
     }
 

@@ -103,7 +103,12 @@ internal static class NPC_AddMarriageDialogue_Patch
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"NPC.addMarriageDialogue patch failed: {ex}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.patchFailed",
+                    new { patch = "NPC.addMarriageDialogue", error = ex },
+                    $"NPC.addMarriageDialogue patch failed: {ex}"),
+                LogLevel.Warn);
             return true;
         }
     }
@@ -151,7 +156,12 @@ internal static class MarriageDialogueReference_GetDialogue_Patch
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"MarriageDialogueReference.GetDialogue patch failed: {ex}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.patchFailed",
+                    new { patch = "MarriageDialogueReference.GetDialogue", error = ex },
+                    $"MarriageDialogueReference.GetDialogue patch failed: {ex}"),
+                LogLevel.Warn);
             return true;
         }
     }

@@ -48,7 +48,12 @@ internal static class NPC_CheckAction_Patch
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"NPC.checkAction patch failed: {ex}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.patchFailed",
+                    new { patch = "NPC.checkAction", error = ex },
+                    $"NPC.checkAction patch failed: {ex}"),
+                LogLevel.Warn);
             return true;
         }
     }
@@ -125,7 +130,12 @@ internal static class NPC_CheckForNewCurrentDialogue_Patch
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"NPC.checkForNewCurrentDialogue patch failed: {ex}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.patchFailed",
+                    new { patch = "NPC.checkForNewCurrentDialogue", error = ex },
+                    $"NPC.checkForNewCurrentDialogue patch failed: {ex}"),
+                LogLevel.Warn);
         }
     }
 

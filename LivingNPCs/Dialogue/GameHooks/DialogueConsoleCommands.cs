@@ -71,7 +71,12 @@ internal static class DialogueConsoleCommands
         }
         catch (Exception ex)
         {
-            monitor.Log($"livingnpcs_tokens failed: {ex.Message}", LogLevel.Error);
+            monitor.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.commandFailed",
+                    new { command = "livingnpcs_tokens", error = ex.Message },
+                    $"Console command livingnpcs_tokens failed: {ex.Message}"),
+                LogLevel.Error);
         }
     }
 
@@ -101,7 +106,12 @@ internal static class DialogueConsoleCommands
         }
         catch (Exception ex)
         {
-            monitor.Log($"Failed to clear AI conversation history for {npcName}: {ex.Message}", LogLevel.Error);
+            monitor.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.commandFailed",
+                    new { command = $"livingnpcs_forget {npcName}", error = ex.Message },
+                    $"Console command livingnpcs_forget {npcName} failed: {ex.Message}"),
+                LogLevel.Error);
         }
     }
 
@@ -125,7 +135,12 @@ internal static class DialogueConsoleCommands
         }
         catch (Exception ex)
         {
-            monitor.Log($"Failed to clear all AI conversation histories: {ex.Message}", LogLevel.Error);
+            monitor.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.commandFailed",
+                    new { command = "livingnpcs_forget all", error = ex.Message },
+                    $"Console command livingnpcs_forget all failed: {ex.Message}"),
+                LogLevel.Error);
         }
     }
 }

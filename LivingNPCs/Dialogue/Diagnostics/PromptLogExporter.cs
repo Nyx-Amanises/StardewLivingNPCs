@@ -63,7 +63,12 @@ internal static class PromptLogExporter
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to export prompt log for {npcName}: {ex.Message}", StardewModdingAPI.LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.exportFailed",
+                    new { what = "prompt log", npc = npcName, error = ex.Message },
+                    $"Failed to export prompt log for {npcName}: {ex.Message}"),
+                StardewModdingAPI.LogLevel.Warn);
         }
     }
 

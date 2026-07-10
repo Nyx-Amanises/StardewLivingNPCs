@@ -81,12 +81,10 @@ internal sealed class LegacyFolderMigrator
             return result;
         }
 
-        if (this.HasMarker())
-        {
-            return result;
-        }
-
-        result.Ran = true;
+        // 拷贝每次启动都执行（已存在的文件静默跳过）：mod 文件夹会被更新/重新部署重置，
+        // 这里顺带把被清掉的迁移文件从旧文件夹自愈补齐。标记只决定"是否大声播报"。
+        bool firstRun = !this.HasMarker();
+        result.Ran = firstRun;
         this.CopyDirectory(
             Path.Combine(legacyFolder, MultiplayerFolderName),
             Path.Combine(this.modDirectoryPath, MultiplayerFolderName),
@@ -102,8 +100,12 @@ internal sealed class LegacyFolderMigrator
             copied => result.ConversationLogFilesCopied = copied,
             result.Errors);
 
-        this.WriteMarker(result);
-        this.Report(result);
+        if (firstRun)
+        {
+            this.WriteMarker(result);
+        }
+
+        this.Report(result, firstRun);
         return result;
     }
 
@@ -257,26 +259,69 @@ internal sealed class LegacyFolderMigrator
         setCopied(copied);
     }
 
+    /// <summary>全局数据里的标记键（存 SMAPI 全局数据：mod 文件夹被更新/重新部署重置也不丢）。</summary>
+    public const string GlobalMarkerKey = "dialogue-folder-migration-state";
+
     private bool HasMarker()
     {
-        return File.Exists(Path.Combine(this.modDirectoryPath, MarkerRelativePath));
+        try
+        {
+            if (DialogueServices.Helper?.Data.ReadGlobalData<FolderMigrationMarker>(GlobalMarkerKey) != null)
+            {
+                return true;
+            }
+        }
+        catch
+        {
+            // 全局数据读取失败时退回文件标记。
+        }
+
+        if (File.Exists(Path.Combine(this.modDirectoryPath, MarkerRelativePath)))
+        {
+            // 旧版只写过文件标记：回填全局标记，让下次部署重置后依然免播报。
+            try
+            {
+                var legacy = JsonConvert.DeserializeObject<FolderMigrationMarker>(
+                    File.ReadAllText(Path.Combine(this.modDirectoryPath, MarkerRelativePath)));
+                DialogueServices.Helper?.Data.WriteGlobalData(GlobalMarkerKey, legacy ?? new FolderMigrationMarker());
+            }
+            catch
+            {
+                // 回填失败不影响本次判定。
+            }
+
+            return true;
+        }
+
+        return false;
     }
 
     private void WriteMarker(Result result)
     {
+        var marker = new FolderMigrationMarker
+        {
+            CompletedAtUtc = DateTime.UtcNow,
+            SourcePath = result.LegacyFolderPath,
+            MultiplayerFilesCopied = result.MultiplayerFilesCopied,
+            ConversationLogFilesCopied = result.ConversationLogFilesCopied,
+            LegacyConfigFound = result.LegacyConfigFound,
+            Errors = result.Errors.ToList()
+        };
+
+        try
+        {
+            DialogueServices.Helper?.Data.WriteGlobalData(GlobalMarkerKey, marker);
+        }
+        catch (Exception ex)
+        {
+            result.Errors.Add($"global marker: {ex.Message}");
+        }
+
         try
         {
             string markerPath = Path.Combine(this.modDirectoryPath, MarkerRelativePath);
             Directory.CreateDirectory(Path.GetDirectoryName(markerPath)!);
-            File.WriteAllText(markerPath, JsonConvert.SerializeObject(new FolderMigrationMarker
-            {
-                CompletedAtUtc = DateTime.UtcNow,
-                SourcePath = result.LegacyFolderPath,
-                MultiplayerFilesCopied = result.MultiplayerFilesCopied,
-                ConversationLogFilesCopied = result.ConversationLogFilesCopied,
-                LegacyConfigFound = result.LegacyConfigFound,
-                Errors = result.Errors.ToList()
-            }, Formatting.Indented));
+            File.WriteAllText(markerPath, JsonConvert.SerializeObject(marker, Formatting.Indented));
         }
         catch (Exception ex)
         {
@@ -284,7 +329,7 @@ internal sealed class LegacyFolderMigrator
         }
     }
 
-    private void Report(Result result)
+    private void Report(Result result, bool firstRun)
     {
         string summary = Util.GetConsoleString(
             "dialogue.migration.folder.summary",
@@ -296,11 +341,14 @@ internal sealed class LegacyFolderMigrator
                 config = result.LegacyConfigFound
             },
             $"Migrated ValleyTalk folder data from '{result.LegacyFolderPath}': {result.MultiplayerFilesCopied} multiplayer files, {result.ConversationLogFilesCopied} transcript files, config found: {result.LegacyConfigFound}.");
-        DialogueServices.Monitor?.Log(summary, LogLevel.Info);
+        // 只在首次迁移时 Info 播报；后续启动的自愈补拷（含部署重置后的补齐）降为 Trace。
+        DialogueServices.Monitor?.Log(summary, firstRun ? LogLevel.Info : LogLevel.Trace);
 
         foreach (string error in result.Errors)
         {
-            DialogueServices.Monitor?.Log($"Folder migration issue: {error}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString("dialogue.migration.folder.issue", new { error }, $"Folder migration issue: {error}"),
+                LogLevel.Warn);
         }
     }
 }

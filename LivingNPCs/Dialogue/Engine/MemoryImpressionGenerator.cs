@@ -93,7 +93,12 @@ internal sealed class MemoryImpressionGenerator
                 return Fail(display, "wrong-language");
             }
 
-            DialogueServices.Monitor?.Log($"Memory impression compressed for {display} ({impression.Length} chars).", LogLevel.Info);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.memoryCompressed",
+                    new { npc = display, chars = impression.Length },
+                    $"Memory impression compressed for {display} ({impression.Length} chars)."),
+                LogLevel.Info);
             return impression;
         }
         catch (Exception ex)
@@ -109,7 +114,12 @@ internal sealed class MemoryImpressionGenerator
 
     private static string? Fail(string display, string reason)
     {
-        DialogueServices.Monitor?.Log($"Memory impression compression failed for {display}: {reason}; memories stay queued for a later retry.", LogLevel.Info);
+        DialogueServices.Monitor?.Log(
+            Util.GetConsoleString(
+                "dialogue.log.memoryCompressFailed",
+                new { npc = display, reason },
+                $"Memory impression compression failed for {display}: {reason}; memories stay queued for a later retry."),
+            LogLevel.Info);
         return null;
     }
 

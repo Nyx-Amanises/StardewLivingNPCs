@@ -90,7 +90,12 @@ internal static class LlmClientFactory
     {
         if (!Registry.TryGetValue(settings.Provider ?? string.Empty, out var entry))
         {
-            DialogueServices.Monitor?.Log($"[LivingNPCs] Invalid LLM type: {settings.Provider}", LogLevel.Error);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.invalidProvider",
+                    new { provider = settings.Provider },
+                    $"Invalid LLM type: {settings.Provider}"),
+                LogLevel.Error);
             return null;
         }
 

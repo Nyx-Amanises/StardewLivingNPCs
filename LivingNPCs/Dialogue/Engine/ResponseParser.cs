@@ -87,7 +87,12 @@ internal static class ResponseParser
 
             if (debug)
             {
-                DialogueServices.Monitor?.Log($"Dialogue line recovered without '-' prefix: {candidate}", StardewModdingAPI.LogLevel.Warn);
+                DialogueServices.Monitor?.Log(
+                    Util.GetConsoleString(
+                        "dialogue.log.lineRecovered",
+                        new { line = candidate },
+                        $"Dialogue line recovered without '-' prefix: {candidate}"),
+                    StardewModdingAPI.LogLevel.Warn);
             }
 
             dialogueIndex = lines.IndexOf(candidate);

@@ -119,18 +119,20 @@ public sealed class LegacyFolderMigratorTests : IDisposable
     }
 
     [Fact]
-    public void SecondRunDoesNotRecopy()
+    public void SecondRunSelfHealsSilently()
     {
         this.CreateLegacyNestedDeployment();
         var migrator = new LegacyFolderMigrator(this.newModDir);
-        migrator.RunOnGameLaunched(legacyModLoaded: false);
+        var first = migrator.RunOnGameLaunched(legacyModLoaded: false);
 
-        // 用户删掉了搬来的文件：标记仍在，不重复搬。
+        // 迁移文件因 mod 更新/重新部署被清掉：标记仍在，静默补拷（Ran=false 表示不再播报）。
         File.Delete(Path.Combine(this.newModDir, "multiplayer", "Farm_123.json"));
         var second = migrator.RunOnGameLaunched(legacyModLoaded: false);
 
+        Assert.True(first.Ran);
         Assert.False(second.Ran);
-        Assert.False(File.Exists(Path.Combine(this.newModDir, "multiplayer", "Farm_123.json")));
+        Assert.True(File.Exists(Path.Combine(this.newModDir, "multiplayer", "Farm_123.json")));
+        Assert.Equal(1, second.MultiplayerFilesCopied);
     }
 
     [Fact]

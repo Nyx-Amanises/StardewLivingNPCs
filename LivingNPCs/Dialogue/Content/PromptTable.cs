@@ -174,8 +174,18 @@ internal sealed class PromptTable
         catch (Exception ex)
         {
             // §4.2：记两条错误日志并运行时关闭对话引擎（不写回 config.json），返回空缓存。
-            DialogueServices.Monitor?.Log($"[LivingNPCs] Failed to load the prompt skeleton asset '{ContentAssetNames.Prompts}': {ex.Message}", StardewModdingAPI.LogLevel.Error);
-            DialogueServices.Monitor?.Log("[LivingNPCs] The AI dialogue engine is disabled for this session because its prompt table is unavailable.", StardewModdingAPI.LogLevel.Error);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.assetLoadFailed",
+                    new { asset = ContentAssetNames.Prompts, error = ex.Message },
+                    $"Failed to load content asset '{ContentAssetNames.Prompts}': {ex.Message}"),
+                StardewModdingAPI.LogLevel.Error);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.promptTableOff",
+                    null,
+                    "The AI dialogue engine is disabled for this session because its prompt table is unavailable."),
+                StardewModdingAPI.LogLevel.Error);
             DialogueEngineGate.RuntimeDisabled = true;
             return result;
         }
@@ -219,7 +229,12 @@ internal sealed class PromptTable
         }
 
         // 键名打错会静默吞掉整块上下文，这条防线必须保留（§4.2）。
-        DialogueServices.Monitor?.Log($"[LivingNPCs] Prompt skeleton key '{key}' was not found; that prompt section will be empty.", StardewModdingAPI.LogLevel.Warn);
+        DialogueServices.Monitor?.Log(
+            Util.GetConsoleString(
+                "dialogue.log.promptKeyMissing",
+                new { key },
+                $"Prompt skeleton key '{key}' was not found; that prompt section will be empty."),
+            StardewModdingAPI.LogLevel.Warn);
     }
 
     /// <summary>{{Token}} 替换：token 名忽略大小写匹配；tokens 可为匿名对象或字符串字典

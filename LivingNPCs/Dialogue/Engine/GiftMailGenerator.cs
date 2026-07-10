@@ -92,7 +92,12 @@ internal sealed class GiftMailGenerator
             }
 
             body = EnsureSalutation(body, zh);
-            DialogueServices.Monitor?.Log($"AI gift mail generated for {display} ({motive}, {body.Length} chars).", LogLevel.Info);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.giftMailGenerated",
+                    new { npc = display, motive, chars = body.Length },
+                    $"AI gift mail generated for {display} ({motive}, {body.Length} chars)."),
+                LogLevel.Info);
             return body;
         }
         catch (Exception ex)
@@ -108,7 +113,12 @@ internal sealed class GiftMailGenerator
 
     private static string? Fail(string display, string motive, string reason)
     {
-        DialogueServices.Monitor?.Log($"AI gift mail generation failed for {display} ({motive}): {reason}; template will be used.", LogLevel.Info);
+        DialogueServices.Monitor?.Log(
+            Util.GetConsoleString(
+                "dialogue.log.giftMailFailed",
+                new { npc = display, motive, reason },
+                $"AI gift mail generation failed for {display} ({motive}): {reason}; template will be used."),
+            LogLevel.Info);
         return null;
     }
 

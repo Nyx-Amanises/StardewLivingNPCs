@@ -56,7 +56,10 @@ internal sealed class GenerationScheduler
             if (this.inFlight || this.pendingRequest != null)
             {
                 DialogueServices.Monitor?.Log(
-                    $"Dropping dialogue generation request for {request.NpcName}: another request is already in flight.",
+                    Util.GetConsoleString(
+                        "dialogue.log.generationBusy",
+                        new { npc = request.NpcName },
+                        $"Dropping dialogue generation request for {request.NpcName}: another request is already in flight."),
                     LogLevel.Warn);
                 return false;
             }
@@ -171,7 +174,12 @@ internal sealed class GenerationScheduler
             {
                 if (failure != null)
                 {
-                    DialogueServices.Monitor?.Log($"Dialogue generation crashed for {request.NpcName}: {failure}", LogLevel.Error);
+                    DialogueServices.Monitor?.Log(
+                        Util.GetConsoleString(
+                            "dialogue.log.generationFailed",
+                            new { npc = request.NpcName, error = failure },
+                            $"Dialogue generation failed for {request.NpcName}: {failure}"),
+                        LogLevel.Error);
                 }
 
                 this.Draw(npc, EngineConstants.KeyError, EngineConstants.FallbackLine);
@@ -193,7 +201,12 @@ internal sealed class GenerationScheduler
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to present generated dialogue: {ex}", LogLevel.Error);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "present generated dialogue", error = ex },
+                    $"Failed to present generated dialogue: {ex}"),
+                LogLevel.Error);
         }
     }
 

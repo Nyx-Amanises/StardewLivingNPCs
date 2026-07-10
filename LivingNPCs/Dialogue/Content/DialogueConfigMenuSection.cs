@@ -240,7 +240,12 @@ internal static class DialogueConfigMenuSection
             }
             catch (Exception ex)
             {
-                modEntry.Monitor.Log($"Failed to invalidate biography assets after the SVE toggle: {ex.Message}", LogLevel.Warn);
+                modEntry.Monitor.Log(
+                    Util.GetConsoleString(
+                        "dialogue.log.stepFailed",
+                        new { step = "invalidate biography assets after the SVE toggle", error = ex.Message },
+                        $"Failed to invalidate biography assets after the SVE toggle: {ex.Message}"),
+                    LogLevel.Warn);
             }
 
             DialogueContentService.Instance?.InvalidateWorldSummaries();
@@ -269,7 +274,12 @@ internal static class DialogueConfigMenuSection
         }
         catch (Exception ex)
         {
-            modEntry.Monitor.Log($"Failed to persist the provider change: {ex.Message}", LogLevel.Warn);
+            modEntry.Monitor.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "persist the provider change", error = ex.Message },
+                    $"Failed to persist the provider change: {ex.Message}"),
+                LogLevel.Warn);
         }
 
         QueueMenuRefresh(modEntry, config);
@@ -300,7 +310,12 @@ internal static class DialogueConfigMenuSection
             }
             catch (Exception ex)
             {
-                modEntry.Monitor.Log($"Failed to refresh the config menu after a provider change: {ex.Message}", LogLevel.Warn);
+                modEntry.Monitor.Log(
+                    Util.GetConsoleString(
+                        "dialogue.log.stepFailed",
+                        new { step = "refresh the config menu after a provider change", error = ex.Message },
+                        $"Failed to refresh the config menu after a provider change: {ex.Message}"),
+                    LogLevel.Warn);
             }
             finally
             {
@@ -365,7 +380,12 @@ internal static class DialogueConfigMenuSection
             }
         }
 
-        DialogueServices.Monitor?.Log($"[LivingNPCs] Could not parse dialogue frequency value '{raw}'; keeping the previous setting.", LogLevel.Warn);
+        DialogueServices.Monitor?.Log(
+            Util.GetConsoleString(
+                "dialogue.log.freqParseFailed",
+                new { value = raw },
+                $"Could not parse dialogue frequency value '{raw}'; keeping the previous setting."),
+            LogLevel.Warn);
         return fallback;
     }
 
@@ -415,7 +435,12 @@ internal static class DialogueConfigMenuSection
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"[LivingNPCs] Failed to fetch the model list: {ex.Message}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.listModelsFailed",
+                    new { provider = config.Provider, error = ex.Message },
+                    $"Failed to list models for {config.Provider}: {ex.Message}"),
+                LogLevel.Warn);
             text = T("dialogue.configNoModels");
         }
 

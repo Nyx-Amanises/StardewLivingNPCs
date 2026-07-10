@@ -181,7 +181,12 @@ internal sealed class LegacySaveDataMigrator
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to read the migration marker; assuming a fresh migration: {ex.Message}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "read the migration marker (a fresh migration is assumed)", error = ex.Message },
+                    $"Failed to read the migration marker (a fresh migration is assumed): {ex.Message}"),
+                LogLevel.Warn);
             return new MigrationMarker();
         }
     }
@@ -220,7 +225,12 @@ internal sealed class LegacySaveDataMigrator
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to migrate the legacy token ledger: {ex.Message}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.migrationFailed",
+                    new { what = "token usage ledger", error = ex.Message },
+                    $"Legacy ValleyTalk migration failed (token usage ledger): {ex.Message}"),
+                LogLevel.Warn);
             return false;
         }
     }
@@ -237,7 +247,12 @@ internal sealed class LegacySaveDataMigrator
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to migrate legacy history for {npcName}: {ex.Message}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.migrationFailed",
+                    new { what = $"dialogue history of {npcName}", error = ex.Message },
+                    $"Legacy ValleyTalk migration failed (dialogue history of {npcName}): {ex.Message}"),
+                LogLevel.Warn);
             return false;
         }
     }
@@ -263,12 +278,17 @@ internal sealed class LegacySaveDataMigrator
 
         foreach (string key in result.PendingKeys)
         {
-            DialogueServices.Monitor?.Log($"Legacy key left for a later migration (NPC not in this save): {key}", LogLevel.Info);
+            DialogueServices.Monitor?.Log($"Legacy key left for a later migration (NPC not in this save): {key}", LogLevel.Trace);
         }
 
         foreach (string key in result.FailedKeys)
         {
-            DialogueServices.Monitor?.Log($"Legacy key failed to migrate (kept untouched): {key}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.legacyKeyKept",
+                    new { key },
+                    $"Legacy key failed to migrate (kept untouched): {key}"),
+                LogLevel.Warn);
         }
 
         if (result.MigratedNpcCount > 0 || result.LedgerMigrated)

@@ -71,7 +71,10 @@ internal static class DialogueEngineBootstrapper
         if (!engineWiredAtAttach)
         {
             monitor.Log(
-                "[LivingNPCs] The AI dialogue engine is disabled in the config; Harmony patches, schedulers and dialogue commands stay off (enable it in GMCM and restart).",
+                Util.GetConsoleString(
+                    "dialogue.log.engineDisabledConfig",
+                    null,
+                    "The AI dialogue engine is disabled in the config; LLM client setup, Harmony patches, schedulers and dialogue commands stay off (enable it in GMCM and restart)."),
                 LogLevel.Info);
             return;
         }
@@ -109,10 +112,10 @@ internal static class DialogueEngineBootstrapper
         {
             EnableGate.EngineDisabledByCoexistence = true;
             DialogueServices.Monitor?.Log(
-                "The old ValleyTalk mod (dandm1.ValleyTalk) is still installed. The LivingNPCs dialogue engine stays disabled to avoid double Harmony patches — please delete the ValleyTalk folder under Mods (it may be nested as ValleyTalk/ValleyTalk). Behavior features keep working.",
-                LogLevel.Error);
-            DialogueServices.Monitor?.Log(
-                "检测到旧版 ValleyTalk（dandm1.ValleyTalk）仍在加载。为避免两套补丁互踩，LivingNPCs 的对话引擎保持停用——请删除 Mods 下的 ValleyTalk 文件夹（注意可能是嵌套的 ValleyTalk/ValleyTalk）。行为系统不受影响。",
+                Util.GetConsoleString(
+                    "dialogue.log.legacyCoexistenceEngine",
+                    null,
+                    "The old ValleyTalk mod (dandm1.ValleyTalk) is still installed. The LivingNPCs dialogue engine stays disabled to avoid double Harmony patches — please delete the ValleyTalk folder under Mods (it may be nested as ValleyTalk/ValleyTalk). Behavior features keep working."),
                 LogLevel.Error);
             return;
         }
@@ -132,7 +135,12 @@ internal static class DialogueEngineBootstrapper
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"[LivingNPCs] Failed to apply dialogue Harmony patches: {ex}", LogLevel.Error);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "apply dialogue Harmony patches", error = ex },
+                    $"Failed to apply dialogue Harmony patches: {ex}"),
+                LogLevel.Error);
         }
     }
 
@@ -149,7 +157,12 @@ internal static class DialogueEngineBootstrapper
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to export conversation transcripts on save load: {ex.Message}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "export conversation transcripts on save load", error = ex.Message },
+                    $"Failed to export conversation transcripts on save load: {ex.Message}"),
+                LogLevel.Warn);
         }
 
         if (legacyValleyTalkActive)
@@ -175,7 +188,12 @@ internal static class DialogueEngineBootstrapper
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to reset save-scoped dialogue state: {ex.Message}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "reset save-scoped dialogue state", error = ex.Message },
+                    $"Failed to reset save-scoped dialogue state: {ex.Message}"),
+                LogLevel.Warn);
         }
     }
 

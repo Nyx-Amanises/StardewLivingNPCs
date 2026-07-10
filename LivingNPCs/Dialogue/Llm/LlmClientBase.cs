@@ -152,7 +152,12 @@ internal abstract class LlmClientBase : ILlmClient, ILlmCapabilities
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"[LivingNPCs] Failed to list models for {ProviderId}: {ex.Message}", LogLevel.Error);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.listModelsFailed",
+                    new { provider = ProviderId, error = ex.Message },
+                    $"Failed to list models for {ProviderId}: {ex.Message}"),
+                LogLevel.Error);
             return Array.Empty<string>();
         }
     }

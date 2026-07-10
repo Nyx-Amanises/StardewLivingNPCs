@@ -40,7 +40,12 @@ internal static class NPC_GetGiftReaction_Patch
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"NPC.GetGiftReaction patch failed: {ex}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.patchFailed",
+                    new { patch = "NPC.GetGiftReaction", error = ex },
+                    $"NPC.GetGiftReaction patch failed: {ex}"),
+                LogLevel.Warn);
             return true;
         }
     }
@@ -88,7 +93,12 @@ internal static class NPC_PushTemporaryDialogue_Patch
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"NPC._PushTemporaryDialogue patch failed: {ex}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.patchFailed",
+                    new { patch = "NPC._PushTemporaryDialogue", error = ex },
+                    $"NPC._PushTemporaryDialogue patch failed: {ex}"),
+                LogLevel.Warn);
             return false;
         }
     }
@@ -139,7 +149,12 @@ internal static class NPC_TryToGetMarriageSpecificDialogue_Patch
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"NPC.tryToGetMarriageSpecificDialogue patch failed: {ex}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.patchFailed",
+                    new { patch = "NPC.tryToGetMarriageSpecificDialogue", error = ex },
+                    $"NPC.tryToGetMarriageSpecificDialogue patch failed: {ex}"),
+                LogLevel.Warn);
             return true;
         }
     }
@@ -163,7 +178,12 @@ internal static class NPC_TryToRetrieveDialogue_Patch
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"NPC.tryToRetrieveDialogue patch failed: {ex}", LogLevel.Warn);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.patchFailed",
+                    new { patch = "NPC.tryToRetrieveDialogue", error = ex },
+                    $"NPC.tryToRetrieveDialogue patch failed: {ex}"),
+                LogLevel.Warn);
             return true;
         }
     }

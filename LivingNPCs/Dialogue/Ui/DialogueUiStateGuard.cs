@@ -71,9 +71,12 @@ internal static class DialogueUiStateGuard
         }
         else
         {
-            LogBilingual(
-                $"LivingNPCs skipped a stale dialogue draw for {speaker.Name} because the NPC dialogue stack was empty.",
-                $"LivingNPCs 已跳过 {speaker.displayName ?? speaker.Name} 的残留对白绘制，因为 NPC 对白栈为空。",
+            string npcLabel = speaker.displayName ?? speaker.Name;
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.staleDrawSkipped",
+                    new { npc = npcLabel },
+                    $"LivingNPCs skipped a stale dialogue draw for {npcLabel} because the NPC dialogue stack was empty."),
                 LogLevel.Warn);
         }
 
