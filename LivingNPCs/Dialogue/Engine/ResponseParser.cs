@@ -40,6 +40,8 @@ internal static class ResponseParser
     private static readonly Regex MidLineOptionPattern = new(@"(?<=\S)[ \t]+(?=%{1,2}[^\s%\d])", RegexOptions.Compiled);
     private static readonly Regex EmotionCommandFixPattern = new(@"#\$(?<token>[A-Za-z0-9]+)", RegexOptions.Compiled);
     private static readonly Regex DollarTokenPattern = new(@"\$(?<token>[A-Za-z0-9_]+)", RegexOptions.Compiled);
+    private static readonly Regex BareDollarPattern = new(@"\$(?![A-Za-z0-9_])", RegexOptions.Compiled);
+    private static readonly Regex PageMarkerPattern = new(@"(#\$[be]#)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex OptionPrefixPattern = new(
         @"^(?:[-*•\d.、)）\s]*)?(?:玩家回应|玩家回复|回应|回复|选项|response|reply|option)\s*\d*\s*[:：.、\-]?\s*",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -171,7 +173,47 @@ internal static class ResponseParser
             return validPortraits.Contains(token) ? match.Value : string.Empty;
         });
 
+        // Stardew 每个 DialogueLine 只消费一个肖像标记；同一页保留多个不同标记时，
+        // 未消费的 `$x` 会被 SpriteText 当成金币字形画出来。每页只保留最后一个标记，
+        // 并把它移到页尾，确保游戏能稳定消费。
+        text = NormalizePortraitMarkers(text, validPortraits);
+        text = BareDollarPattern.Replace(text, string.Empty);
+
         return text.Trim();
+    }
+
+    internal static string NormalizePortraitMarkers(string text, IReadOnlySet<string> validPortraits)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        string[] parts = PageMarkerPattern.Split(text);
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (PageMarkerPattern.IsMatch(parts[i]))
+            {
+                continue;
+            }
+
+            var portraitMatches = DollarTokenPattern.Matches(parts[i])
+                .Cast<Match>()
+                .Where(match => validPortraits.Contains(match.Groups["token"].Value))
+                .ToList();
+            if (portraitMatches.Count == 0)
+            {
+                continue;
+            }
+
+            string lastPortrait = portraitMatches[^1].Value;
+            string visibleText = DollarTokenPattern.Replace(parts[i], match =>
+                validPortraits.Contains(match.Groups["token"].Value) ? string.Empty : match.Value);
+            visibleText = visibleText.TrimEnd();
+            parts[i] = visibleText.Length == 0 ? string.Empty : visibleText + lastPortrait;
+        }
+
+        return string.Concat(parts);
     }
 
     private static string TrimPageMarkers(string text)
@@ -336,6 +378,7 @@ internal static class ResponseParser
         // 选项清洗：删 #，删所有 $ 命令，@→农夫名，必要时补标点。
         candidate = candidate.Replace("#", string.Empty);
         candidate = DollarTokenPattern.Replace(candidate, string.Empty);
+        candidate = candidate.Replace("$", string.Empty, StringComparison.Ordinal);
         candidate = candidate.Replace("@", farmerName ?? string.Empty, StringComparison.Ordinal);
         candidate = candidate.Trim().Trim('"', '“', '”').Trim();
         if (candidate.Length == 0)

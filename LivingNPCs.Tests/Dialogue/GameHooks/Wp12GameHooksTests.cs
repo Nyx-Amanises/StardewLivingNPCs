@@ -420,6 +420,42 @@ public class Wp12TypedInputQueueTests : IDisposable
 public class Wp12PatchLogicTests
 {
     [Fact]
+    public void Modified_Action_Claim_Begins_Input_Then_Suppresses_Action_Button()
+    {
+        var npc = new NPC();
+        NPC? begunFor = null;
+        bool suppressed = false;
+
+        bool claimed = DialogueEngineBootstrapper.TryClaimTypedDialogueAction(
+            npc,
+            allowInteractiveInput: true,
+            beginConversation: target => begunFor = target,
+            suppressActionButton: () => suppressed = true);
+
+        Assert.True(claimed);
+        Assert.Same(npc, begunFor);
+        Assert.True(suppressed);
+    }
+
+    [Fact]
+    public void Modified_Action_Claim_Does_Not_Suppress_When_Input_Gate_Rejects_Npc()
+    {
+        var npc = new NPC();
+        bool began = false;
+        bool suppressed = false;
+
+        bool claimed = DialogueEngineBootstrapper.TryClaimTypedDialogueAction(
+            npc,
+            allowInteractiveInput: false,
+            beginConversation: _ => began = true,
+            suppressActionButton: () => suppressed = true);
+
+        Assert.False(claimed);
+        Assert.False(began);
+        Assert.False(suppressed);
+    }
+
+    [Fact]
     public void Scheduled_Key_Prefers_TemporaryKey_Then_Heart_Or_Default()
     {
         Assert.Equal("Resort_Entering", NPC_CheckForNewCurrentDialogue_Patch.BuildScheduledKey("Resort_Entering", 6, noPreface: false));
@@ -450,26 +486,6 @@ public class Wp12PatchLogicTests
             "NPC.cs.4463", "NPC.cs.4462", "NPC.cs.4470", "NPC.cs.4474", "NPC.cs.4481", "MultiplePetBowls_watered"
         };
         Assert.Equal(expected.OrderBy(k => k), NPC_AddMarriageDialogue_Patch.MorningChoreKeys.OrderBy(k => k));
-    }
-
-    [Fact]
-    public void Mergeable_Lines_Filter_Blank_Skip_And_Duplicates()
-    {
-        var existing = new HashSet<string>(StringComparer.Ordinal) { "already in context" };
-        var lines = new List<string?>
-        {
-            "already in context",
-            "  ",
-            null,
-            "skip",
-            "SKIP ",
-            "fresh line",
-            "fresh line",
-            "another line"
-        };
-
-        var merged = Dialogue_ChooseResponse_Patch.ExtractMergeableLines(lines, existing);
-        Assert.Equal(new[] { "fresh line", "another line" }, merged);
     }
 
     [Fact]

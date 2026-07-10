@@ -133,7 +133,7 @@ public class ResponseParserTests
 {
     private static readonly IReadOnlySet<string> Portraits = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
     {
-        "h", "s", "l", "a", "u"
+        "0", "h", "s", "l", "a", "u"
     };
 
     [Fact]
@@ -170,7 +170,19 @@ public class ResponseParserTests
     public void Removes_Invalid_Dollar_Tokens_Keeps_Valid_Portraits()
     {
         var parsed = ResponseParser.Parse("- Fine day$h and weird$zz token", Portraits, "Yuki", false);
-        Assert.Equal("Fine day$h and weird token", parsed.DialogueLine);
+        Assert.Equal("Fine day and weird token$h", parsed.DialogueLine);
+    }
+
+    [Fact]
+    public void Keeps_Only_Last_Portrait_Per_Page_And_Removes_Bare_Dollars()
+    {
+        string raw = "- 早上好，@。$l你起得真早$……明天呢？$u#$b#第二页$a还在继续#$e#最后$h一句$0仍继续";
+        var parsed = ResponseParser.Parse(raw, Portraits, "Yuki", fixPunctuation: false);
+
+        Assert.True(parsed.Success);
+        Assert.Equal(
+            "早上好，@。你起得真早……明天呢？$u#$b#第二页还在继续$a#$e#最后一句仍继续$0",
+            parsed.DialogueLine);
     }
 
     [Fact]
@@ -210,6 +222,7 @@ public class ResponseParserTests
         Assert.Null(ResponseParser.TryParseOption("- another dialogue line", "Yuki", false));
         Assert.Null(ResponseParser.TryParseOption("### heading", "Yuki", false));
         Assert.Equal("Yuki will help", ResponseParser.TryParseOption("%@ will help", "Yuki", false));
+        Assert.Equal("想说和符号", ResponseParser.TryParseOption("%想说$h和$符号", "Yuki", false));
     }
 
     [Fact]
@@ -217,6 +230,18 @@ public class ResponseParserTests
     {
         string fixedText = ResponseParser.FixSegmentPunctuation("你好呀$h", Portraits);
         Assert.Equal("你好呀。$h", fixedText);
+    }
+}
+
+public class StreamingDialoguePreviewTests
+{
+    [Fact]
+    public void PrepareDisplayText_Removes_All_Dollar_Signs_After_Converting_Page_Markers()
+    {
+        string display = StreamingDialoguePreview.PrepareDisplayText("- Hello$l world$#$b#Next$u#$e#Last$");
+
+        Assert.Equal("Hello world\fNext\fLast", display);
+        Assert.DoesNotContain('$', display);
     }
 }
 

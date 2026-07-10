@@ -162,7 +162,9 @@ internal static class TypedInputRequestQueue
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to grant conversation friendship for {npc.Name}: {ex.Message}", StardewModdingAPI.LogLevel.Trace);
+            DialogueServices.Monitor?.Log(
+                I18n.Get("log.dialogue.friendshipGrantFailed", new { npc = npc.Name, error = ex.Message }),
+                StardewModdingAPI.LogLevel.Trace);
         }
     }
 }

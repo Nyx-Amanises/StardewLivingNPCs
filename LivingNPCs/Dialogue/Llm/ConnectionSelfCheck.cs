@@ -73,54 +73,54 @@ internal static class ConnectionSelfCheck
         IMonitor? monitor = DialogueServices.Monitor;
         if (reply.IsSuccess && !string.IsNullOrWhiteSpace(reply.Text) && reply.Text.Length >= 5)
         {
-            monitor?.Log($"[LivingNPCs] {texts.Success}", LogLevel.Info);
+            monitor?.Log(texts.Success, LogLevel.Info);
             return;
         }
 
-        monitor?.Log($"[LivingNPCs] {texts.CantGenerate}", LogLevel.Error);
+        monitor?.Log(texts.CantGenerate, LogLevel.Error);
         if (!string.IsNullOrWhiteSpace(reply.ErrorMessage))
         {
-            monitor?.Log($"[LivingNPCs] {reply.ErrorMessage}", LogLevel.Error);
+            monitor?.Log(reply.ErrorMessage, LogLevel.Error);
         }
 
         bool providerNeedsApiKey = !LlmClientFactory.TryGetMetadata(client.ProviderId, out LlmProviderMetadata metadata) || metadata.RequiresApiKey;
         if (providerNeedsApiKey && string.IsNullOrWhiteSpace(settings.ApiKey))
         {
-            monitor?.Log($"[LivingNPCs] {texts.ApiKey}", LogLevel.Error);
+            monitor?.Log(texts.ApiKey, LogLevel.Error);
         }
         else if (client is IModelNameSource modelSource)
         {
             IReadOnlyList<string> names = modelSource.GetModelNames();
             if (names.Count == 0)
             {
-                monitor?.Log($"[LivingNPCs] {texts.GetNames}", LogLevel.Error);
+                monitor?.Log(texts.GetNames, LogLevel.Error);
             }
             else if (string.IsNullOrWhiteSpace(settings.ModelName))
             {
-                monitor?.Log($"[LivingNPCs] {texts.ModelName}", LogLevel.Error);
+                monitor?.Log(texts.ModelName, LogLevel.Error);
             }
             else if (names.Contains(settings.ModelName, StringComparer.Ordinal))
             {
-                monitor?.Log($"[LivingNPCs] {texts.ValidModelName}", LogLevel.Error);
+                monitor?.Log(texts.ValidModelName, LogLevel.Error);
             }
             else
             {
-                monitor?.Log($"[LivingNPCs] {texts.ModelName}", LogLevel.Error);
+                monitor?.Log(texts.ModelName, LogLevel.Error);
             }
         }
         else
         {
-            monitor?.Log($"[LivingNPCs] {texts.GenericError}", LogLevel.Error);
+            monitor?.Log(texts.GenericError, LogLevel.Error);
         }
 
         bool usesServerAddress = metadata is { RequiresServerAddress: true };
         if (usesServerAddress && !(settings.ServerAddress ?? string.Empty).Contains("https", StringComparison.OrdinalIgnoreCase))
         {
-            monitor?.Log($"[LivingNPCs] {texts.Insecure}", LogLevel.Error);
+            monitor?.Log(texts.Insecure, LogLevel.Error);
         }
 
         // 无论怎么失败，最后补一条 Warn：自检永不禁用引擎，真实对话时再试。
-        monitor?.Log($"[LivingNPCs] {texts.NonBlocking}", LogLevel.Warn);
+        monitor?.Log(texts.NonBlocking, LogLevel.Warn);
     }
 
     /// <summary>九条文案走 i18n（键归 WP15），键缺失时用英文兜底（§4.5）。必须在主线程调用。</summary>

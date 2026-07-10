@@ -6,6 +6,7 @@ using System.Text;
 using StardewModdingAPI;
 using StardewValley;
 
+using LivingNPCs.Dialogue.Engine;
 using LivingNPCs.Dialogue.Llm;
 using LivingNPCs.Dialogue.Persistence;
 namespace LivingNPCs.Dialogue.Diagnostics;
@@ -281,7 +282,9 @@ internal static class ConversationTranscriptExporter
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Transcript live-section rewrite failed for {npcName}; falling back to a full export: {ex.Message}", StardewModdingAPI.LogLevel.Trace);
+            DialogueServices.Monitor?.Log(
+                I18n.Get("log.dialogue.transcriptRewriteFailed", new { npc = npcName, error = ex.Message }),
+                StardewModdingAPI.LogLevel.Trace);
             InvalidateLiveSectionOffset(filePath);
             return false;
         }
@@ -486,7 +489,9 @@ internal static class ConversationTranscriptExporter
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to read transcript archive block from {filePath}: {ex.Message}", StardewModdingAPI.LogLevel.Trace);
+            DialogueServices.Monitor?.Log(
+                I18n.Get("log.dialogue.transcriptArchiveReadFailed", new { path = filePath, error = ex.Message }),
+                StardewModdingAPI.LogLevel.Trace);
             return new ArchiveBlock();
         }
     }
@@ -530,7 +535,11 @@ internal static class ConversationTranscriptExporter
     {
         var result = new List<TranscriptLine>();
 
-        foreach (var line in lines)
+        var cleaned = ConversationTurnDeduplicator.CollapseExpandedNpcPages(
+            lines,
+            line => line.Text,
+            line => line.IsPlayerLine);
+        foreach (var line in cleaned)
         {
             string text = SanitizeTranscriptText(line.Text);
             if (!IsExportableTranscriptText(text))

@@ -64,10 +64,7 @@ internal static class DialogueUiStateGuard
         ClearDialogueState(speaker, dialogueBox);
         if (ownedByLivingNPCs)
         {
-            LogBilingual(
-                "LivingNPCs cleared a stale temporary dialogue UI before Stardew could draw an empty NPC dialogue stack.",
-                "LivingNPCs 已在原版绘制空 NPC 对白栈前清理残留临时对白界面。",
-                LogLevel.Trace);
+            DialogueServices.Monitor?.Log(I18n.Get("log.dialogue.staleUiCleared"), LogLevel.Trace);
         }
         else
         {
@@ -129,10 +126,7 @@ internal static class DialogueUiStateGuard
         Game1.player.movementPause = 0;
         Game1.player.noMovementPause = 0;
 
-        LogBilingual(
-            "LivingNPCs released player control after closing a temporary dialogue UI.",
-            "LivingNPCs 已在关闭临时对白界面后恢复玩家控制。",
-            LogLevel.Trace);
+        DialogueServices.Monitor?.Log(I18n.Get("log.dialogue.playerControlReleased"), LogLevel.Trace);
     }
 
     private static bool SpeakersMatch(NPC currentSpeaker, NPC expectedSpeaker)
@@ -145,9 +139,4 @@ internal static class DialogueUiStateGuard
             );
     }
 
-    private static void LogBilingual(string english, string chinese, LogLevel level)
-    {
-        DialogueServices.Monitor?.Log(english, level);
-        DialogueServices.Monitor?.Log(chinese, level);
-    }
 }

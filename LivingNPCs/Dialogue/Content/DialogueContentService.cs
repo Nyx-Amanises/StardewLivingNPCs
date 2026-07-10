@@ -12,7 +12,7 @@ namespace LivingNPCs.Dialogue.Content;
 /// </summary>
 internal sealed class DialogueContentService : IDialogueContent
 {
-    private static readonly string[] BasePortraits = { "h", "s", "l", "a" };
+    private static readonly string[] BasePortraits = { "0", "h", "s", "l", "a" };
 
     private readonly IContentPipeline pipeline;
     private readonly PromptTable promptTable;
@@ -238,7 +238,9 @@ internal sealed class DialogueContentService : IDialogueContent
         else
         {
             // 判 false：即使传记资产存在也强制使用 Data/Characters 轻量回退传记（§4.4）。
-            DialogueServices.Monitor?.Log($"[LivingNPCs] Expansion compatibility is off for '{normalized}'; using the lightweight fallback biography.", LogLevel.Debug);
+            DialogueServices.Monitor?.Log(
+                I18n.Get("log.dialogue.expansionFallbackBio", new { npc = normalized }),
+                LogLevel.Debug);
         }
 
         if (bio == null || string.IsNullOrWhiteSpace(bio.Biography))
@@ -289,7 +291,9 @@ internal sealed class DialogueContentService : IDialogueContent
         var giftNames = this.pipeline.GetGiftTasteNames(normalized);
         if (giftNames == null)
         {
-            DialogueServices.Monitor?.Log($"[LivingNPCs] Gift taste data for '{normalized}' is missing or malformed; topic pool has no gift names.", LogLevel.Debug);
+            DialogueServices.Monitor?.Log(
+                I18n.Get("log.dialogue.giftTasteMissing", new { npc = normalized }),
+                LogLevel.Debug);
         }
         else
         {

@@ -150,9 +150,13 @@ internal static class HistorySampler
     private static string JoinConversation(List<ConversationElement> elements, string npcDisplayName)
     {
         string farmerLabel = Util.GetString("generalFarmerLabel");
+        var cleaned = ConversationTurnDeduplicator.CollapseExpandedNpcPages(
+            elements,
+            element => element.Text,
+            element => element.IsPlayerLine);
         return string.Join(
             " / ",
-            elements
+            cleaned
                 .Where(element => !string.IsNullOrWhiteSpace(element.Text))
                 .Select(element => $"{(element.IsPlayerLine ? farmerLabel : npcDisplayName)}: {element.Text.Trim()}"));
     }

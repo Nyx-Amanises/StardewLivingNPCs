@@ -57,10 +57,11 @@ internal static class Dialogue_ChooseResponse_Patch
                 return false;
             }
 
-            // 两步清理：移除尾部"请回应"引导行；把未入上下文的对白行并入聊天历史。
+            // 清理尾部"请回应"引导行。引擎生成的 NPC 原始台词已由 FinishTrigger 写入
+            // recentContext；不能再把 Stardew 拆屏后的展示行写入，否则同一句会以完整行和
+            // 页面行两种形式重复进入后续提示词。
             string respondPrompt = Util.GetString("outputRespond", returnNull: true) ?? "Respond:";
             RemoveTrailingRespondLine(__instance.dialogues, respondPrompt);
-            MergeDialogueIntoContext(engine, speaker, __instance);
 
             string dialogueKey = string.IsNullOrWhiteSpace(__instance.TranslationKey)
                 ? "default"
@@ -108,45 +109,6 @@ internal static class Dialogue_ChooseResponse_Patch
         {
             lines.RemoveAt(lines.Count - 1);
         }
-    }
-
-    private static void MergeDialogueIntoContext(DialogueEngine engine, NPC speaker, GameDialogue dialogue)
-    {
-        var existing = engine.History.PeekConversationContext(speaker.Name)
-            .Select(turn => turn.Text)
-            .ToHashSet(StringComparer.Ordinal);
-        var lines = dialogue.dialogues?.Select(line => line?.Text) ?? Enumerable.Empty<string?>();
-        foreach (string text in ExtractMergeableLines(lines, existing))
-        {
-            engine.History.AppendToConversationContext(speaker.Name, new ConversationTurn(text, false, NewTurnId()));
-        }
-    }
-
-    /// <summary>可并入上下文的行（纯函数）：排除空白、字面 skip 行、上下文已有与组内重复。</summary>
-    internal static List<string> ExtractMergeableLines(IEnumerable<string?> lines, ISet<string> existingTexts)
-    {
-        var result = new List<string>();
-        foreach (string? line in lines)
-        {
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                continue;
-            }
-
-            if (string.Equals(line.Trim(), "skip", StringComparison.OrdinalIgnoreCase))
-            {
-                continue;
-            }
-
-            if (existingTexts.Contains(line) || result.Contains(line, StringComparer.Ordinal))
-            {
-                continue;
-            }
-
-            result.Add(line);
-        }
-
-        return result;
     }
 
     private static string NewTurnId()

@@ -14,6 +14,8 @@ namespace LivingNPCs.Dialogue.GameHooks;
 [HarmonyPatch(typeof(NPC), nameof(NPC.checkAction))]
 internal static class NPC_CheckAction_Patch
 {
+    [HarmonyPriority(Priority.First)]
+    [HarmonyBefore("ApryllForever.PolyamorySweetKiss", "Digus.CustomKissingMod")]
     public static bool Prefix(NPC __instance, Farmer who, GameLocation l, ref bool __result)
     {
         try
@@ -31,7 +33,15 @@ internal static class NPC_CheckAction_Patch
             if (__instance.IsInvisible || sleepBlocked || who?.CanMove != true)
             {
                 DialogueServices.Monitor?.Log(
-                    $"Typed dialogue blocked for {__instance.Name}: invisible={__instance.IsInvisible} sleepBlocked={sleepBlocked} farmerCanMove={who?.CanMove}",
+                    I18n.Get(
+                        "log.dialogue.typedBlocked",
+                        new
+                        {
+                            npc = __instance.Name,
+                            invisible = __instance.IsInvisible,
+                            sleepBlocked,
+                            farmerCanMove = who?.CanMove
+                        }),
                     LogLevel.Trace);
                 return true;
             }

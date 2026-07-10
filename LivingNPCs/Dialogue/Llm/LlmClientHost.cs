@@ -81,7 +81,7 @@ internal sealed class LlmClientHost
     {
         // 触发时一次性 HUD 提示 + SMAPI error 日志（裁决 2）。文案已在主线程预解析。
         string message = kind == LlmSuspensionKind.Auth ? _breakerTexts.Auth : _breakerTexts.Rate;
-        DialogueServices.Monitor?.Log($"[LivingNPCs] {message}", LogLevel.Error);
+        DialogueServices.Monitor?.Log(message, LogLevel.Error);
         LlmHudNotifier.Show(message);
     }
 

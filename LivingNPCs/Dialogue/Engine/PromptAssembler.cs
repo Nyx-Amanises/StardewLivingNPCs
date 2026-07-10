@@ -906,7 +906,11 @@ internal sealed class PromptAssembler
             AppendLine(builder, this.Text("currentConversationHeading"));
             AppendLine(builder, this.Text("currentConversationIntro"));
             string farmerLabel = this.Text("generalFarmerLabel") ?? "Farmer";
-            foreach (var turn in conversation)
+            var cleaned = ConversationTurnDeduplicator.CollapseExpandedNpcPages(
+                conversation,
+                turn => turn.Text,
+                turn => turn.IsPlayerLine);
+            foreach (var turn in cleaned)
             {
                 // 剔除疑似错误语言的行（§4.6.4.20）。
                 if (ConversationTextPostProcessor.LooksLikeWrongLanguage(turn.Text))

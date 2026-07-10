@@ -76,7 +76,7 @@ public sealed class DialogueContentServiceTests : IDisposable
 
         Assert.False(bio.Missing);
         Assert.Equal("special portrait", bio.ExtraPortraits["u"]);
-        Assert.Superset(new HashSet<string> { "h", "s", "l", "a", "7", "u" }, bio.ValidPortraits);
+        Assert.Superset(new HashSet<string> { "0", "h", "s", "l", "a", "7", "u" }, bio.ValidPortraits);
         // 话题池 = 心事 ∪ 礼物名，忽略大小写去重。
         Assert.Equal(new[] { "the mines", "music", "Amethyst", "Clay" }, bio.TopicPool);
         Assert.Equal(PromptGender.Female, bio.ResolvedGender);

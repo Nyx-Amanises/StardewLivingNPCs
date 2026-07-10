@@ -144,7 +144,9 @@ internal sealed class ConversationStartRecorder
                 this.memory.UpdateStateForEventInteraction(npc, eventContext);
             }
 
-            this.PushInteractionContext(npc, $"Recorded event interaction for {npc.Name}: {eventContext}.");
+            this.PushInteractionContext(
+                npc,
+                I18n.Get("log.interaction.eventRecorded", new { npc = npc.Name, context = eventContext }));
             return;
         }
 
@@ -161,7 +163,9 @@ internal sealed class ConversationStartRecorder
             this.communityRipples.TrySpreadConversationSocialRipple(npc, state);
         }
 
-        this.PushInteractionContext(npc, $"Recorded conversation start for {npc.Name}.");
+        this.PushInteractionContext(
+            npc,
+            I18n.Get("log.interaction.conversationStarted", new { npc = npc.Name }));
         this.MarkConflictFollowUpsMentionedAfterPrompt(npc);
     }
 
@@ -199,7 +203,9 @@ internal sealed class ConversationStartRecorder
                 if (this.config.Debug)
                 {
                     this.monitor.Log(
-                        $"Skipped gift record for {candidate.Npc.Name}: vanilla did not accept {candidate.Gift.ItemName}.",
+                        I18n.Get(
+                            "log.interaction.giftRejectedByGame",
+                            new { npc = candidate.Npc.Name, item = candidate.Gift.ItemName }),
                         LogLevel.Debug
                     );
                 }
@@ -247,11 +253,25 @@ internal sealed class ConversationStartRecorder
                 this.helpRequestQuestLog.Sync();
                 int fulfilledCount = changedHelpRequests.Count(request => request.Status == "Fulfilled");
                 int advancedCount = changedHelpRequests.Count - fulfilledCount;
-                this.PushInteractionContext(npc, $"Updated {changedHelpRequests.Count} help request(s) for {npc.Name} through a gifted item: {fulfilledCount} fulfilled, {advancedCount} advanced.");
+                this.PushInteractionContext(
+                    npc,
+                    I18n.Get(
+                        "log.interaction.helpGiftUpdated",
+                        new
+                        {
+                            npc = npc.Name,
+                            count = changedHelpRequests.Count,
+                            fulfilled = fulfilledCount,
+                            advanced = advancedCount
+                        }));
             }
         }
 
-        this.PushInteractionContext(npc, $"Recorded gift interaction for {npc.Name}: {gift.ItemName} ({gift.TastePromptLabel}).");
+        this.PushInteractionContext(
+            npc,
+            I18n.Get(
+                "log.interaction.giftRecorded",
+                new { npc = npc.Name, item = gift.ItemName, taste = gift.TastePromptLabel }));
     }
 
     private bool HasPendingItemHelpRequest(NPC npc, GiftMemoryDetails gift)
@@ -300,7 +320,15 @@ internal sealed class ConversationStartRecorder
         int advancedCount = changedHelpRequests.Count - fulfilledCount;
         this.PushInteractionContext(
             npc,
-            $"Delivered {gift.ItemName} for {changedHelpRequests.Count} help request(s): {fulfilledCount} fulfilled, {advancedCount} advanced.",
+            I18n.Get(
+                "log.interaction.helpGiftDelivered",
+                new
+                {
+                    item = gift.ItemName,
+                    count = changedHelpRequests.Count,
+                    fulfilled = fulfilledCount,
+                    advanced = advancedCount
+                }),
             BuildHelpRequestDeliveryPrompt(npc, gift, changedHelpRequests)
         );
 
@@ -394,7 +422,9 @@ internal sealed class ConversationStartRecorder
                 $"they noticed the farmer being close with {targetNpc.displayName}",
                 this.config.MaxMemoryEntriesPerNpc
             );
-            this.PushInteractionContext(observer, $"Observed romantic interaction involving {targetNpc.Name}.");
+            this.PushInteractionContext(
+                observer,
+                I18n.Get("log.interaction.romanticObserved", new { npc = targetNpc.Name }));
         }
 
         this.communityRipples.Spread(

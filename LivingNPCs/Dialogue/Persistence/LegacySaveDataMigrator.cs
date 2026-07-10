@@ -278,7 +278,9 @@ internal sealed class LegacySaveDataMigrator
 
         foreach (string key in result.PendingKeys)
         {
-            DialogueServices.Monitor?.Log($"Legacy key left for a later migration (NPC not in this save): {key}", LogLevel.Trace);
+            DialogueServices.Monitor?.Log(
+                I18n.Get("log.migration.keyDeferred", new { key }),
+                LogLevel.Trace);
         }
 
         foreach (string key in result.FailedKeys)

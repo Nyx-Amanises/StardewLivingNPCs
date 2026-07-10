@@ -215,7 +215,7 @@ internal static class ContextRoutingDecisionPass
             var forced = ContextRoutingPlan.Full().WithRoutingDiagnostics("forced-thinking-skip-full", 0, 0);
             if (DialogueServices.Config.Debug)
             {
-                DialogueServices.Monitor.Log($"Semantic context routing skipped for {character.Name}: model {DialogueServices.Config.ModelName} forces thinking; using full context.", StardewModdingAPI.LogLevel.Debug);
+                DialogueServices.Monitor.Log(I18n.Get("log.routing.forcedThinking", new { npc = character.Name, model = DialogueServices.Config.ModelName }), StardewModdingAPI.LogLevel.Debug);
             }
 
             ExportLog(character.Name, context, "forced-thinking-skip-full", 0, 0, "model-forces-thinking", forced.DebugLabel(), string.Empty, string.Empty, string.Empty);
@@ -231,7 +231,7 @@ internal static class ContextRoutingDecisionPass
             deterministic.WithRoutingDiagnostics(isGiftResponse ? "gift-deterministic" : "no-player-text-deterministic", 0, 0);
             if (DialogueServices.Config.Debug)
             {
-                DialogueServices.Monitor.Log($"Semantic context routing skipped for {character.Name}: {(isGiftResponse ? "gift response" : "no player text")}; using deterministic plan.", StardewModdingAPI.LogLevel.Debug);
+                DialogueServices.Monitor.Log(I18n.Get("log.routing.deterministicSkip", new { npc = character.Name, reason = isGiftResponse ? I18n.Get("log.routing.reason.gift") : I18n.Get("log.routing.reason.noPlayerText") }), StardewModdingAPI.LogLevel.Debug);
             }
 
             ExportLog(character.Name, context, deterministic.RoutingOutcome, 0, 0, isGiftResponse ? "gift" : "no-player-text", deterministic.DebugLabel(), string.Empty, string.Empty, string.Empty);
@@ -245,7 +245,7 @@ internal static class ContextRoutingDecisionPass
         bool topicGuardCoversLanguage = TopicShiftGuardCoversLanguage(gameLanguage);
         if (!topicGuardCoversLanguage && DialogueServices.Config.Debug)
         {
-            DialogueServices.Monitor.Log($"Semantic context routing bypasses the conversation cache for {character.Name}: game language '{gameLanguage}' is outside the zh/en topic-shift guard; routing fresh each turn.", StardewModdingAPI.LogLevel.Debug);
+            DialogueServices.Monitor.Log(I18n.Get("log.routing.languageCacheBypass", new { npc = character.Name, language = gameLanguage }), StardewModdingAPI.LogLevel.Debug);
         }
 
         string conversationKey = topicGuardCoversLanguage ? BuildConversationKey(character, context) : null;
@@ -254,7 +254,7 @@ internal static class ContextRoutingDecisionPass
         {
             if (DialogueServices.Config.Debug)
             {
-                DialogueServices.Monitor.Log($"Semantic context routing reused cached plan for {character.Name}: {cachedPlan.DebugLabel()}", StardewModdingAPI.LogLevel.Debug);
+                DialogueServices.Monitor.Log(I18n.Get("log.routing.cacheReused", new { npc = character.Name, plan = cachedPlan.DebugLabel() }), StardewModdingAPI.LogLevel.Debug);
             }
 
             ExportLog(character.Name, context, "cached", 0, 0, "reused-conversation-plan", cachedPlan.DebugLabel(), string.Empty, string.Empty, string.Empty);
@@ -263,7 +263,7 @@ internal static class ContextRoutingDecisionPass
 
         if (!string.IsNullOrWhiteSpace(cacheBypassReason) && DialogueServices.Config.Debug)
         {
-            DialogueServices.Monitor.Log($"Semantic context routing refreshed cached plan for {character.Name}: {cacheBypassReason}.", StardewModdingAPI.LogLevel.Debug);
+            DialogueServices.Monitor.Log(I18n.Get("log.routing.cacheRefreshed", new { npc = character.Name, reason = cacheBypassReason }), StardewModdingAPI.LogLevel.Debug);
         }
 
         string prompt = BuildRouterPrompt(character, context);
@@ -293,7 +293,7 @@ internal static class ContextRoutingDecisionPass
             string outcome = ex is OperationCanceledException || ex is TimeoutException ? "timeout-full" : "failed-full";
             if (DialogueServices.Config.Debug)
             {
-                DialogueServices.Monitor.Log($"Semantic context routing {outcome} for {character.Name} after {routeWatch.ElapsedMilliseconds}ms: {ex.Message}; using full context.", StardewModdingAPI.LogLevel.Debug);
+                DialogueServices.Monitor.Log(I18n.Get("log.routing.failed", new { npc = character.Name, outcome, elapsedMs = routeWatch.ElapsedMilliseconds, error = ex.Message }), StardewModdingAPI.LogLevel.Debug);
             }
 
             var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
@@ -329,7 +329,7 @@ internal static class ContextRoutingDecisionPass
                 : "parse-failed-full";
             if (DialogueServices.Config.Debug)
             {
-                DialogueServices.Monitor.Log($"Semantic context routing fell back to full context for {character.Name} ({outcome}). Reason: {parseDetail}. Output: {response.Text}", StardewModdingAPI.LogLevel.Debug);
+                DialogueServices.Monitor.Log(I18n.Get("log.routing.fallback", new { npc = character.Name, outcome, reason = parseDetail, output = response.Text }), StardewModdingAPI.LogLevel.Debug);
             }
 
             var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
@@ -350,7 +350,7 @@ internal static class ContextRoutingDecisionPass
         plan.WithRoutingDiagnostics("success", routeWatch.ElapsedMilliseconds, timeoutSeconds);
         if (DialogueServices.Config.Debug)
         {
-            DialogueServices.Monitor.Log($"Semantic context routing for {character.Name}: {plan.DebugLabel()}", StardewModdingAPI.LogLevel.Debug);
+            DialogueServices.Monitor.Log(I18n.Get("log.routing.plan", new { npc = character.Name, plan = plan.DebugLabel() }), StardewModdingAPI.LogLevel.Debug);
         }
 
         ExportLog(character.Name, context, "success", routeWatch.ElapsedMilliseconds, timeoutSeconds, parseDetail, plan.DebugLabel(), prompt, response.Text, response.ErrorMessage);

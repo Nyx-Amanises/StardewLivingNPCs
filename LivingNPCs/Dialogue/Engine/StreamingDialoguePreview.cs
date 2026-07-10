@@ -77,6 +77,7 @@ internal static class StreamingDialoguePreview
         display = display.Replace("#$e#", "\f", StringComparison.Ordinal);
         display = display.Replace("@", Game1.player?.Name ?? string.Empty, StringComparison.Ordinal);
         display = EmotionTokenPattern.Replace(display, string.Empty);
+        display = display.Replace("$", string.Empty, StringComparison.Ordinal);
         display = Regex.Replace(display, @"(?<!\f)#(?!\$)", " ");
 
         var segments = display

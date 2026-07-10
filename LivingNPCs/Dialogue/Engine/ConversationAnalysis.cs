@@ -270,7 +270,7 @@ internal sealed class ConversationAnalysis
         }
 
         DialogueServices.Monitor?.Log(
-            $"LivingNPCs metadata block found but not parsed ({reason}). Snippet: {cleaned}",
+            I18n.Get("log.dialogue.metadataParseFailed", new { reason, snippet = cleaned }),
             StardewModdingAPI.LogLevel.Trace);
     }
 

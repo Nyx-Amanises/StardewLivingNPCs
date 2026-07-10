@@ -637,7 +637,9 @@ internal sealed class DialogueEngine : IDialogueEngine
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Action decision pass failed for {request.NpcName}: {ex.Message}", StardewModdingAPI.LogLevel.Trace);
+            DialogueServices.Monitor?.Log(
+                I18n.Get("log.dialogue.actionDecisionFailed", new { npc = request.NpcName, error = ex.Message }),
+                StardewModdingAPI.LogLevel.Trace);
         }
 
         // 元数据裁决：EndConversation 且行数 >1 → 只保留台词行（§4.10.8）。
@@ -787,7 +789,9 @@ internal sealed class DialogueEngine : IDialogueEngine
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to export generation logs: {ex.Message}", StardewModdingAPI.LogLevel.Trace);
+            DialogueServices.Monitor?.Log(
+                I18n.Get("log.dialogue.exportFailed", new { error = ex.Message }),
+                StardewModdingAPI.LogLevel.Trace);
         }
     }
 
@@ -804,10 +808,20 @@ internal sealed class DialogueEngine : IDialogueEngine
             .Where(pair => pair.Value > 0)
             .Select(pair => $"{pair.Key}={pair.Value}"));
         DialogueServices.Monitor?.Log(
-            $"Generated dialogue for {prepared.Request.NpcName}: total {elapsedMilliseconds}ms, "
-            + $"routing {plan.RoutingOutcome} {plan.RoutingMilliseconds}ms, attempts {attempts}, "
-            + $"prompt {prompt.TotalCharacters} chars, response {(response.Text ?? string.Empty).Length} chars, "
-            + $"lines {lineCount}. Sections: {sections}",
+            I18n.Get(
+                "log.dialogue.generated",
+                new
+                {
+                    npc = prepared.Request.NpcName,
+                    totalMs = elapsedMilliseconds,
+                    routingOutcome = plan.RoutingOutcome,
+                    routingMs = plan.RoutingMilliseconds,
+                    attempts,
+                    promptChars = prompt.TotalCharacters,
+                    responseChars = (response.Text ?? string.Empty).Length,
+                    lines = lineCount,
+                    sections
+                }),
             StardewModdingAPI.LogLevel.Debug);
     }
 

@@ -79,7 +79,9 @@ internal static class GenerationRequests
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Behavior context provider failed for {npc.Name}: {ex.Message}", StardewModdingAPI.LogLevel.Trace);
+            DialogueServices.Monitor?.Log(
+                I18n.Get("log.dialogue.behaviorContextFailed", new { npc = npc.Name, error = ex.Message }),
+                StardewModdingAPI.LogLevel.Trace);
             return string.Empty;
         }
     }
@@ -92,7 +94,9 @@ internal static class GenerationRequests
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Gift behavior context provider failed for {npc.Name}: {ex.Message}", StardewModdingAPI.LogLevel.Trace);
+            DialogueServices.Monitor?.Log(
+                I18n.Get("log.dialogue.giftContextFailed", new { npc = npc.Name, error = ex.Message }),
+                StardewModdingAPI.LogLevel.Trace);
             return string.Empty;
         }
     }

@@ -621,7 +621,17 @@ internal static class LivingNpcActionDecisionPass
         }
 
         DialogueServices.Monitor.Log(
-            $"LivingNPCs action decision pass for {character?.Name ?? "unknown"}: outcome={diagnostics.Outcome}, success={diagnostics.ResponseSuccess}, merged={diagnostics.Merged}, detail={diagnostics.DecisionDetail}, error={diagnostics.ErrorMessage}",
+            I18n.Get(
+                "log.dialogue.actionDecisionPass",
+                new
+                {
+                    npc = character?.Name ?? I18n.Get("log.value.unknown"),
+                    outcome = diagnostics.Outcome,
+                    success = diagnostics.ResponseSuccess,
+                    merged = diagnostics.Merged,
+                    detail = diagnostics.DecisionDetail,
+                    error = diagnostics.ErrorMessage
+                }),
             StardewModdingAPI.LogLevel.Debug);
     }
 

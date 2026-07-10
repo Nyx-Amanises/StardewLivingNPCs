@@ -36,7 +36,9 @@ internal static class MainThreadDispatcher
         }
         catch (Exception ex)
         {
-            LivingNPCs.Dialogue.DialogueServices.Monitor?.Log($"Main-thread dispatch failed: {ex}", LogLevel.Warn);
+            LivingNPCs.Dialogue.DialogueServices.Monitor?.Log(
+                I18n.Get("log.dispatch.failed", new { error = ex }),
+                LogLevel.Warn);
         }
     }
 }

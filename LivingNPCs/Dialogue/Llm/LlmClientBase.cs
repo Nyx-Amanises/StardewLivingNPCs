@@ -166,7 +166,9 @@ internal abstract class LlmClientBase : ILlmClient, ILlmCapabilities
     {
         // 瞬时请求失败仅 Debug 级日志，玩家不可见（§4.8）。
         DialogueServices.Monitor?.Log(
-            $"[LivingNPCs] {ProviderId} request attempt failed (candidate {candidateIndex + 1}, attempt {attempt + 1}): {error}",
+            I18n.Get(
+                "log.dialogue.requestAttemptFailed",
+                new { provider = ProviderId, candidate = candidateIndex + 1, attempt = attempt + 1, error }),
             LogLevel.Debug);
     }
 

@@ -85,6 +85,7 @@ internal static class DialogueEngineBootstrapper
 
         // ⑤ 输入请求队列泵（§4.4）。
         modHelper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
+        modHelper.Events.Input.ButtonPressed += OnButtonPressed;
 
         // ⑥ 控制台命令（§4.3.3：livingnpcs_tokens 新注册；对话遗忘并入 livingnpcs_forget）。
         DialogueConsoleCommands.Register(modHelper);
@@ -93,6 +94,59 @@ internal static class DialogueEngineBootstrapper
     private static void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
     {
         TypedInputRequestQueue.OnUpdateTicked();
+    }
+
+    /// <summary>
+    /// 在游戏把动作键交给 NPC.checkAction 之前认领“触发键 + 动作键”，避免拥抱/亲吻类 mod
+    /// 的 Harmony prefix/postfix 抢先消费同一次点击。
+    /// </summary>
+    private static void OnButtonPressed(object? sender, ButtonPressedEventArgs e)
+    {
+        try
+        {
+            if (!Context.IsWorldReady
+                || Game1.activeClickableMenu != null
+                || Game1.player?.CanMove != true
+                || !e.Button.IsActionButton()
+                || !DialoguePatchHelpers.IsTriggerKeyDown()
+                || !DialoguePatchHelpers.TryFindNpcForInteraction(e.Cursor, out NPC? npc)
+                || npc == null)
+            {
+                return;
+            }
+
+            TryClaimTypedDialogueAction(
+                npc,
+                PatchGuards.AllowInteractiveInput(npc),
+                DialoguePatchHelpers.BeginTypedConversation,
+                () => helper.Input.Suppress(e.Button));
+        }
+        catch (Exception ex)
+        {
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "claim modified action input", error = ex.Message },
+                    $"Failed to claim modified action input: {ex.Message}"),
+                LogLevel.Warn);
+        }
+    }
+
+    /// <summary>测试缝：只有目标 NPC 通过主动输入门控时，才发起输入并抑制本次动作键。</summary>
+    internal static bool TryClaimTypedDialogueAction(
+        NPC? npc,
+        bool allowInteractiveInput,
+        Action<NPC> beginConversation,
+        Action suppressActionButton)
+    {
+        if (npc == null || !allowInteractiveInput)
+        {
+            return false;
+        }
+
+        beginConversation(npc);
+        suppressActionButton();
+        return true;
     }
 
     /// <summary>共存检测放 GameLaunched（Entry 阶段 registry 可能不全）→ 通过后才 PatchAll（§4.8）。</summary>
@@ -130,7 +184,7 @@ internal static class DialogueEngineBootstrapper
             var harmony = new Harmony(harmonyId);
             harmony.PatchAll(typeof(DialogueEngineBootstrapper).Assembly);
             DialogueServices.Monitor?.Log(
-                $"[LivingNPCs] Dialogue engine Harmony patches applied to {harmony.GetPatchedMethods().Count()} game methods.",
+                I18n.Get("log.dialogue.patchesApplied", new { count = harmony.GetPatchedMethods().Count() }),
                 LogLevel.Trace);
         }
         catch (Exception ex)
@@ -207,7 +261,9 @@ internal static class DialogueEngineBootstrapper
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to show the ValleyTalk coexistence HUD warning: {ex.Message}", LogLevel.Trace);
+            DialogueServices.Monitor?.Log(
+                I18n.Get("log.dialogue.coexistenceHudFailed", new { error = ex.Message }),
+                LogLevel.Trace);
         }
     }
 }

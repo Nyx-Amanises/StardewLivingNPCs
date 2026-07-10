@@ -152,7 +152,9 @@ internal static class DisplayedDialogueRecorder
         }
         catch (Exception ex)
         {
-            DialogueServices.Monitor?.Log($"Failed to record overheard lines for {speaker.Name}: {ex.Message}", StardewModdingAPI.LogLevel.Trace);
+            DialogueServices.Monitor?.Log(
+                I18n.Get("log.dialogue.overheardRecordFailed", new { npc = speaker.Name, error = ex.Message }),
+                StardewModdingAPI.LogLevel.Trace);
         }
     }
 
