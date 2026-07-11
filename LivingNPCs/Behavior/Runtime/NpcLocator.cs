@@ -85,6 +85,7 @@ internal sealed class NpcLocator
             .Where(candidate =>
                 candidate.currentLocation == Game1.currentLocation
                 && !string.IsNullOrWhiteSpace(candidate.Name)
+                && NpcInteractionEligibility.IsEligible(candidate)
                 && !RsvAiPolicy.IsBlockedNpc(candidate)
                 && !candidate.IsInvisible
                 && !candidate.isSleeping.Value

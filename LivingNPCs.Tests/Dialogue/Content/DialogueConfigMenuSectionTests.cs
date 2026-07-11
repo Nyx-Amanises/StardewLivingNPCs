@@ -112,4 +112,16 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
         Assert.Equal("OpenAiCompatible", config.Provider);
         Assert.Equal(85, config.QueryTimeout);
     }
+
+    [Fact]
+    public void ClearApiKeyWhenProviderChanged_OnlyClearsAfterCommittedProviderChange()
+    {
+        var unchanged = new ModConfig { Provider = "Google", ApiKey = "keep-me" };
+        Assert.False(DialogueConfigMenuSection.ClearApiKeyWhenProviderChanged(unchanged, "google"));
+        Assert.Equal("keep-me", unchanged.ApiKey);
+
+        var changed = new ModConfig { Provider = "Anthropic", ApiKey = "clear-me" };
+        Assert.True(DialogueConfigMenuSection.ClearApiKeyWhenProviderChanged(changed, "Google"));
+        Assert.Equal(string.Empty, changed.ApiKey);
+    }
 }

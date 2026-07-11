@@ -104,7 +104,7 @@ internal static class DialogueContentSetup
         startupInitializationPending = false;
         helper.Events.Content.LocaleChanged -= OnLocaleChanged;
         helper.Events.GameLoop.OneSecondUpdateTicked -= OnOneSecondUpdateTicked;
-        ThirdPartyContentPolicy.Scan(helper.ModRegistry, DialogueServices.Monitor);
+        ThirdPartyContentPolicy.Scan(helper.ModRegistry);
 
         if (!config.EnableDialogueEngine)
         {

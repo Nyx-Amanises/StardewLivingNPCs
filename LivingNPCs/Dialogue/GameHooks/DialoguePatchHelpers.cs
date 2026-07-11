@@ -56,6 +56,7 @@ internal static class DialoguePatchHelpers
             .Where(candidate =>
                 candidate.currentLocation == Game1.currentLocation
                 && !string.IsNullOrWhiteSpace(candidate.Name)
+                && NpcInteractionEligibility.IsEligible(candidate)
                 && !candidate.IsInvisible
                 && (allowSleeping || !candidate.isSleeping.Value))
             .Select(candidate => new

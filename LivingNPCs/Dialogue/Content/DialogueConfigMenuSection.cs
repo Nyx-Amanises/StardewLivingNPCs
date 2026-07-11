@@ -11,8 +11,8 @@ namespace LivingNPCs.Dialogue.Content;
 
 /// <summary>
 /// GMCM 的对话引擎段（WP15 §4.9）：并入 LivingNPCs 现有一次 Register。
-/// 连接字段按提供商元数据（WP11 注册表）动态显隐；切换 Provider 清 ApiKey、写盘并延迟到
-/// 下一个 UpdateTicked 重建菜单（GMCM 的 setValue 回调里同步 Unregister 会崩）。
+/// 连接字段按提供商元数据（WP11 注册表）动态显隐；切换 Provider 在用户点击保存后
+/// 清 ApiKey、写盘并延迟重建菜单。GMCM 会在下拉项悬停时触发 OnFieldChanged，因此不能用该事件提交提供商变更。
 /// </summary>
 internal static class DialogueConfigMenuSection
 {
@@ -63,15 +63,6 @@ internal static class DialogueConfigMenuSection
             allowedValues: LlmClientFactory.ProviderIds.ToArray(),
             formatAllowedValue: FormatProvider,
             fieldId: ProviderFieldId);
-
-        // 值变化的即时反应（§4.9）：清 ApiKey、立即持久化、延迟一 tick 重建菜单刷新动态字段。
-        api.OnFieldChanged(manifest, (fieldId, value) =>
-        {
-            if (fieldId == ProviderFieldId && value is string provider)
-            {
-                OnProviderChanged(modEntry, config, provider);
-            }
-        });
 
         if (metadata is { RequiresApiKey: true })
         {
@@ -228,6 +219,7 @@ internal static class DialogueConfigMenuSection
     /// </summary>
     public static void OnSave(ModEntry modEntry, ModConfig config)
     {
+        bool providerChanged = ClearApiKeyWhenProviderChanged(config, DialogueServices.Config.Provider);
         bool sveChanged = DialogueServices.Config.EnableSveCompatibility != config.EnableSveCompatibility;
         DialogueServices.Config.SyncFrom(config);
 
@@ -255,34 +247,26 @@ internal static class DialogueConfigMenuSection
         {
             LlmClientHost.Instance.ReplaceClient(LlmConnectionSettings.FromConfig(DialogueServices.Config));
         }
+
+        if (providerChanged)
+        {
+            QueueMenuRefresh(modEntry, config);
+        }
     }
 
-    private static void OnProviderChanged(ModEntry modEntry, ModConfig config, string? value)
+    /// <summary>
+    /// GMCM 的下拉框在鼠标悬停于选项时只更新自己的缓存值，真正调用 setValue 是在保存阶段。
+    /// 因此提供商变更的副作用必须放在 OnSave，不能放在 OnFieldChanged。
+    /// </summary>
+    internal static bool ClearApiKeyWhenProviderChanged(ModConfig config, string? previousProvider)
     {
-        string provider = value ?? string.Empty;
-        if (string.Equals(provider, config.Provider, StringComparison.OrdinalIgnoreCase))
+        if (string.Equals(config.Provider, previousProvider, StringComparison.OrdinalIgnoreCase))
         {
-            return;
+            return false;
         }
 
-        // §4.9：切换 Provider 即清空 ApiKey、立即持久化，并延迟重建菜单以刷新动态字段。
-        config.Provider = provider;
         config.ApiKey = string.Empty;
-        try
-        {
-            modEntry.Helper.WriteConfig(config);
-        }
-        catch (Exception ex)
-        {
-            modEntry.Monitor.Log(
-                Util.GetConsoleString(
-                    "dialogue.log.stepFailed",
-                    new { step = "persist the provider change", error = ex.Message },
-                    $"Failed to persist the provider change: {ex.Message}"),
-                LogLevel.Warn);
-        }
-
-        QueueMenuRefresh(modEntry, config);
+        return true;
     }
 
     private static void QueueMenuRefresh(ModEntry modEntry, ModConfig config)
