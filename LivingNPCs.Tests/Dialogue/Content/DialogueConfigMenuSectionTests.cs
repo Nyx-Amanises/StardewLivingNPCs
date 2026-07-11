@@ -114,6 +114,24 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
     }
 
     [Fact]
+    public void Validate_ReenablesHiddenAlwaysOnDialogueOptions()
+    {
+        var config = new ModConfig
+        {
+            EnableMod = false,
+            ShowHudMessages = false,
+            AllowWakeSleepingNpc = false,
+            ApplyTranslation = false
+        };
+
+        Assert.True(config.Validate());
+        Assert.True(config.EnableMod);
+        Assert.True(config.ShowHudMessages);
+        Assert.True(config.AllowWakeSleepingNpc);
+        Assert.True(config.ApplyTranslation);
+    }
+
+    [Fact]
     public void ClearApiKeyWhenProviderChanged_OnlyClearsAfterCommittedProviderChange()
     {
         var unchanged = new ModConfig { Provider = "Google", ApiKey = "keep-me" };

@@ -173,20 +173,6 @@ internal static class DialogueConfigMenuSection
             getValue: () => config.InitiateTypedDialogueKey,
             setValue: value => config.InitiateTypedDialogueKey = value);
 
-        api.AddBoolOption(
-            mod: manifest,
-            name: () => T("dialogue.config.allowWakeSleepingNpc.name"),
-            tooltip: () => T("dialogue.config.allowWakeSleepingNpc.tooltip"),
-            getValue: () => config.AllowWakeSleepingNpc,
-            setValue: value => config.AllowWakeSleepingNpc = value);
-
-        api.AddBoolOption(
-            mod: manifest,
-            name: () => T("dialogue.config.applyTranslation.name"),
-            tooltip: () => T("dialogue.config.applyTranslation.tooltip"),
-            getValue: () => config.ApplyTranslation,
-            setValue: value => config.ApplyTranslation = value);
-
         AddFrequencyOption(api, manifest, "dialogue.config.generalFrequency",
             () => config.GeneralFrequency, value => config.GeneralFrequency = value);
         AddFrequencyOption(api, manifest, "dialogue.config.giftFrequency",

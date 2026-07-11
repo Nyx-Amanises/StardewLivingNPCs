@@ -175,6 +175,32 @@ internal sealed class ModConfig
     {
         bool changed = false;
 
+        // These are intentionally always-on behaviors. The old settings remain deserializable
+        // for config compatibility, but are no longer exposed in GMCM.
+        if (!this.EnableMod)
+        {
+            this.EnableMod = true;
+            changed = true;
+        }
+
+        if (!this.ShowHudMessages)
+        {
+            this.ShowHudMessages = true;
+            changed = true;
+        }
+
+        if (!this.AllowWakeSleepingNpc)
+        {
+            this.AllowWakeSleepingNpc = true;
+            changed = true;
+        }
+
+        if (!this.ApplyTranslation)
+        {
+            this.ApplyTranslation = true;
+            changed = true;
+        }
+
         int Clamp(int value, int min, int max)
         {
             int clamped = value < min ? min : (value > max ? max : value);

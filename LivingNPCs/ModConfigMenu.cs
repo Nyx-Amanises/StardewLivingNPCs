@@ -31,22 +31,13 @@ internal static class ModConfigMenu
             }
         );
 
-        configMenu.AddParagraph(
-            mod: manifest,
-            text: () => I18n.Get("gmcm.para.loaded")
-        );
+        // Keep the connection and dialogue controls at the top of the page, where players
+        // normally need them. The remaining sections contain optional behaviour tuning.
+        DialogueConfigMenuSection.Append(configMenu, modEntry, config);
 
         configMenu.AddSectionTitle(
             mod: manifest,
             text: () => I18n.Get("gmcm.section.basic")
-        );
-
-        configMenu.AddBoolOption(
-            mod: manifest,
-            name: () => I18n.Get("gmcm.enableMod.name"),
-            tooltip: () => I18n.Get("gmcm.enableMod.tooltip"),
-            getValue: () => config.EnableMod,
-            setValue: value => config.EnableMod = value
         );
 
         configMenu.AddKeybindList(
@@ -55,14 +46,6 @@ internal static class ModConfigMenu
             tooltip: () => I18n.Get("gmcm.inspectMemoryHotkey.tooltip"),
             getValue: () => config.InspectMemoryHotkey,
             setValue: value => config.InspectMemoryHotkey = value
-        );
-
-        configMenu.AddBoolOption(
-            mod: manifest,
-            name: () => I18n.Get("gmcm.showHud.name"),
-            tooltip: () => I18n.Get("gmcm.showHud.tooltip"),
-            getValue: () => config.ShowHudMessages,
-            setValue: value => config.ShowHudMessages = value
         );
 
         configMenu.AddBoolOption(
@@ -164,11 +147,6 @@ internal static class ModConfigMenu
             setValue: value => config.EnableSveCompatibility = value
         );
 
-        configMenu.AddSectionTitle(
-            mod: manifest,
-            text: () => I18n.Get("gmcm.section.valleyTalk")
-        );
-
         configMenu.AddBoolOption(
             mod: manifest,
             name: () => I18n.Get("gmcm.concisePrompt.name"),
@@ -177,8 +155,6 @@ internal static class ModConfigMenu
             setValue: value => config.ConcisePromptContext = value
         );
 
-        // 对话引擎段（WP15 §4.9）：并入同一次 Register，reset/save 回调已合并处理。
-        DialogueConfigMenuSection.Append(configMenu, modEntry, config);
     }
 
     private static string FormatPercent(int value)
