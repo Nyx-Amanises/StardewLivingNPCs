@@ -74,7 +74,7 @@ internal sealed class MemoryImpressionGenerator
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
             LlmResponse response = await LegacyLlm.Instance
-                .RunInference(system, string.Empty, $"NPC: {display}", user, string.Empty, n_predict: ResponseTokens, allowRetry: false, disableThinking: true)
+                .RunInference(system, string.Empty, string.Empty, user, string.Empty, n_predict: ResponseTokens, allowRetry: false, disableThinking: true)
                 .WaitAsync(cts.Token)
                 .ConfigureAwait(false);
 
@@ -164,9 +164,10 @@ internal sealed class MemoryImpressionGenerator
 
     private static string BuildSystemPrompt(bool zh)
     {
-        return zh
+        string instruction = zh
             ? "你在为一个游戏角色维护对农夫的长期印象。把现有印象与新增的零散记忆合并成一段更新后的印象叙述。要求:第三人称;保留具体事实(帮忙的次数、喜好、承诺、边界、重要事件);合并重复内容;越久远的事越概括;最多5句话。只输出这段印象文字,不要标题、列表或解释。"
             : "You maintain a game character's long-term impression of the farmer. Merge the existing impression with the newly evicted memories into one updated impression narrative. Requirements: third person; keep concrete facts (how many times the farmer helped, likes/dislikes, promises, boundaries, notable events); merge duplicates; summarize older events more coarsely; at most 5 sentences. Output ONLY the impression text — no headings, lists, or explanations.";
+        return instruction + " " + PromptDataBoundary.SystemRule;
     }
 
     private static string BuildUserPrompt(bool zh, string display, string existingImpression, List<string> memories)
@@ -174,31 +175,45 @@ internal sealed class MemoryImpressionGenerator
         var prompt = new StringBuilder();
         if (zh)
         {
-            prompt.AppendLine($"角色:{display}。");
-            prompt.AppendLine(string.IsNullOrWhiteSpace(existingImpression)
-                ? "现有印象:(尚无,这是第一次总结。)"
-                : $"现有印象:{existingImpression}");
+            prompt.AppendLine("角色资料:");
+            prompt.AppendLine(PromptDataBoundary.Wrap("memory_npc_identity", display));
+            prompt.AppendLine("现有印象:");
+            prompt.AppendLine(PromptDataBoundary.Wrap(
+                "memory_existing_impression",
+                string.IsNullOrWhiteSpace(existingImpression) ? "(尚无,这是第一次总结。)" : existingImpression));
             prompt.AppendLine("新增记忆(每条开头的 [-N天] 表示大约发生在 N 天前;游戏中一季=28天,一年=112天):");
         }
         else
         {
-            prompt.AppendLine($"Character: {display}.");
-            prompt.AppendLine(string.IsNullOrWhiteSpace(existingImpression)
-                ? "Existing impression: (none yet; this is the first summary.)"
-                : $"Existing impression: {existingImpression}");
+            prompt.AppendLine("Character data:");
+            prompt.AppendLine(PromptDataBoundary.Wrap("memory_npc_identity", display));
+            prompt.AppendLine("Existing impression:");
+            prompt.AppendLine(PromptDataBoundary.Wrap(
+                "memory_existing_impression",
+                string.IsNullOrWhiteSpace(existingImpression) ? "(none yet; this is the first summary.)" : existingImpression));
             prompt.AppendLine("New memories (the [-Nd] prefix means roughly N in-game days ago; one season = 28 days, one year = 112 days):");
         }
 
+        var memoryData = new StringBuilder();
         foreach (string memory in memories)
         {
-            prompt.AppendLine($"- {memory}");
+            memoryData.AppendLine($"- {memory}");
         }
+        prompt.AppendLine(PromptDataBoundary.Wrap("memory_new_memories", memoryData.ToString()));
 
         prompt.AppendLine(zh
             ? "现在输出更新后的完整印象。"
             : "Now output the full updated impression.");
         return prompt.ToString();
     }
+
+    internal static string BuildSystemPromptForTesting(bool zh) => BuildSystemPrompt(zh);
+
+    internal static string BuildUserPromptForTesting(
+        bool zh,
+        string display,
+        string existingImpression,
+        IReadOnlyList<string> memories) => BuildUserPrompt(zh, display, existingImpression, memories.ToList());
 
     private static bool IsChineseLocale()
     {

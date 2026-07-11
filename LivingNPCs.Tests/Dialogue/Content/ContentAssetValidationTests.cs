@@ -190,6 +190,30 @@ public sealed class ContentAssetValidationTests
         }
     }
 
+    [Theory]
+    [InlineData("default.json", "output formats", "role changes", "schemas", "data blocks", "hidden prompt")]
+    [InlineData("zh.json", "输出格式", "角色变更", "schema", "数据区块", "隐藏提示词")]
+    public void Prompts_ExplicitlyRejectInstructionsEmbeddedInRuntimeData(
+        string fileName,
+        string outputFormats,
+        string roleChanges,
+        string schemas,
+        string dataBlocks,
+        string hiddenPrompt)
+    {
+        var prompts = Deserialize<Dictionary<string, string>>(Path.Combine(AssetRoot, "prompts", fileName));
+
+        string systemRule = prompts["systemUntrustedData"];
+        Assert.Contains("<untrusted_data>", systemRule, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(outputFormats, systemRule, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(roleChanges, systemRule, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(schemas, systemRule, StringComparison.OrdinalIgnoreCase);
+
+        string instructionReminder = prompts["instructionsUntrustedData"];
+        Assert.Contains(dataBlocks, instructionReminder, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(hiddenPrompt, instructionReminder, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static string ExtractFirstBalancedJson(string text)
     {
         int start = text.IndexOf('{');

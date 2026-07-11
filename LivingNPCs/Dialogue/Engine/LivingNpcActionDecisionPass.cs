@@ -76,7 +76,7 @@ internal static class LivingNpcActionDecisionPass
                 "You are a strict classifier for Stardew Valley mod action metadata. Return only compact JSON metadata; never write dialogue. "
                 + PromptDataBoundary.SystemRule,
                 string.Empty,
-                $"NPC: {character.Name} ({character.StardewNpc?.displayName ?? character.Name})",
+                PromptDataBoundary.Wrap("action_npc_identity", $"NPC: {character.Name} ({character.StardewNpc?.displayName ?? character.Name})"),
                 compactPrompt,
                 "!LIVINGNPCS_META ",
                 n_predict: 512,
@@ -158,17 +158,18 @@ internal static class LivingNpcActionDecisionPass
         prompt.AppendLine("Use the compact context as constraints, not as text to quote. Do not invent actions, items, destinations, or rewards.");
         prompt.AppendLine(PromptDataBoundary.InstructionReminder);
         prompt.AppendLine();
-        prompt.AppendLine("Current facts:");
-        prompt.AppendLine($"- NPC: {character.StardewNpc?.displayName ?? character.Name} ({character.Name}).");
-        prompt.AppendLine($"- Location: {context.Location ?? "unknown"}; time: {context.TimeOfDay ?? "unknown"}; hearts: {(context.Hearts?.ToString() ?? "unknown")}.");
+        var facts = new StringBuilder();
+        facts.AppendLine($"- NPC: {character.StardewNpc?.displayName ?? character.Name} ({character.Name}).");
+        facts.AppendLine($"- Location: {context.Location ?? "unknown"}; time: {context.TimeOfDay ?? "unknown"}; hearts: {(context.Hearts?.ToString() ?? "unknown")}.");
         if (!string.IsNullOrWhiteSpace(context.CurrentActivity))
         {
-            prompt.AppendLine($"- Current visible activity: {context.CurrentActivity}.");
+            facts.AppendLine($"- Current visible activity: {context.CurrentActivity}.");
         }
         if (!string.IsNullOrWhiteSpace(context.NextScheduleLocation))
         {
-            prompt.AppendLine($"- Next schedule destination: {context.NextScheduleLocation}; minutes until next schedule: {(context.MinutesUntilNextSchedule?.ToString() ?? "unknown")}.");
+            facts.AppendLine($"- Next schedule destination: {context.NextScheduleLocation}; minutes until next schedule: {(context.MinutesUntilNextSchedule?.ToString() ?? "unknown")}.");
         }
+        prompt.AppendLine(PromptDataBoundary.Wrap("action_runtime_facts", facts.ToString()));
         prompt.AppendLine();
         prompt.AppendLine("Compact LivingNPCs context:");
         prompt.AppendLine(PromptDataBoundary.Wrap("action_livingnpc_context", compactContext));

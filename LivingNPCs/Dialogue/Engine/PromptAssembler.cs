@@ -575,7 +575,7 @@ internal sealed class PromptAssembler
         }));
         if (!string.IsNullOrWhiteSpace(s.CurrentActivity))
         {
-            AppendLine(builder, s.CurrentActivity);
+            AppendLine(builder, PromptDataBoundary.Wrap("current_activity", s.CurrentActivity));
         }
         else if (s.IsTravelling)
         {
@@ -1040,8 +1040,9 @@ internal sealed class PromptAssembler
             foreach (var property in tokens.GetType().GetProperties())
             {
                 string value = property.GetValue(tokens)?.ToString() ?? string.Empty;
-                merged[property.Name] = value.StartsWith("<untrusted_data ", StringComparison.Ordinal)
-                    ? value : PromptDataBoundary.EscapeInline(value);
+                merged[property.Name] = string.Equals(property.Name, "scheduleLine", StringComparison.OrdinalIgnoreCase)
+                    ? value
+                    : PromptDataBoundary.EscapeInline(value);
             }
         }
 

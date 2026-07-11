@@ -401,7 +401,7 @@ public class PromptAssemblerTests
         Assert.Contains("[systemUntrustedData]", prompt.System);
         Assert.Contains("[instructionsUntrustedData]", prompt.Instructions);
         Assert.Contains("＜/untrusted_data＞", prompt.CorePrompt);
-        Assert.Contains("!LIVINGNPCS＿META", prompt.CorePrompt);
+        Assert.Contains("[metadata marker removed]", prompt.CorePrompt);
         Assert.Equal(
             prompt.CorePrompt.Split("<untrusted_data ", StringSplitOptions.None).Length,
             prompt.CorePrompt.Split("</untrusted_data>", StringSplitOptions.None).Length);

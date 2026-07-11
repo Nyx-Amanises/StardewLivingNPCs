@@ -279,7 +279,7 @@ internal static class ContextRoutingDecisionPass
             var task = LegacyLlm.Instance.RunInference(
                 LlmThinking.RoutingSystemPrompt() + " " + PromptDataBoundary.SystemRule,
                 string.Empty,
-                $"NPC: {character.Name} ({character.StardewNpc?.displayName ?? character.Name})",
+                PromptDataBoundary.Wrap("router_npc_identity", $"NPC: {character.Name} ({character.StardewNpc?.displayName ?? character.Name})"),
                 prompt,
                 string.Empty,
                 n_predict: 384,
@@ -617,18 +617,19 @@ internal static class ContextRoutingDecisionPass
         prompt.AppendLine("Prefer brief unless full context is needed. Never omit safety/core modules by trying to be clever; code will apply hard dependencies after your decision.");
         prompt.AppendLine(PromptDataBoundary.InstructionReminder);
         prompt.AppendLine();
-        prompt.AppendLine("Facts:");
-        prompt.AppendLine($"- NPC: {character.StardewNpc?.displayName ?? character.Name} ({character.Name}); hearts: {(context.Hearts?.ToString() ?? "unknown")}.");
-        prompt.AppendLine($"- Location: {context.Location ?? "unknown"}; time: {context.TimeOfDay ?? "unknown"}; weather: {string.Join(", ", context.Weather ?? new List<string>())}.");
-        prompt.AppendLine($"- Gift response: {(context.Accept != null ? "yes" : "no")}; LivingNPC context present: {!string.IsNullOrWhiteSpace(context.LivingNpcExtraPrompt)}.");
+        var facts = new StringBuilder();
+        facts.AppendLine($"- NPC: {character.StardewNpc?.displayName ?? character.Name} ({character.Name}); hearts: {(context.Hearts?.ToString() ?? "unknown")}.");
+        facts.AppendLine($"- Location: {context.Location ?? "unknown"}; time: {context.TimeOfDay ?? "unknown"}; weather: {string.Join(", ", context.Weather ?? new List<string>())}.");
+        facts.AppendLine($"- Gift response: {(context.Accept != null ? "yes" : "no")}; LivingNPC context present: {!string.IsNullOrWhiteSpace(context.LivingNpcExtraPrompt)}.");
         if (!string.IsNullOrWhiteSpace(context.CurrentActivity))
         {
-            prompt.AppendLine($"- Current activity: {context.CurrentActivity}.");
+            facts.AppendLine($"- Current activity: {context.CurrentActivity}.");
         }
         if (!string.IsNullOrWhiteSpace(context.NextScheduleLocation))
         {
-            prompt.AppendLine($"- Next schedule: {context.NextScheduleLocation} in {(context.MinutesUntilNextSchedule?.ToString() ?? "unknown")} minutes.");
+            facts.AppendLine($"- Next schedule: {context.NextScheduleLocation} in {(context.MinutesUntilNextSchedule?.ToString() ?? "unknown")} minutes.");
         }
+        prompt.AppendLine(PromptDataBoundary.Wrap("router_runtime_facts", facts.ToString()));
         prompt.AppendLine();
         prompt.AppendLine("Recent conversation:");
         prompt.AppendLine(PromptDataBoundary.Wrap("router_conversation_history", recentHistory));

@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using StardewValley;
+using LivingNPCs.Dialogue.Engine;
 
 namespace LivingNPCs.Behavior;
 
@@ -737,7 +738,9 @@ internal static class PromptFragments
     /// <summary>The micro-behavior planner request sent by <see cref="AiBehaviorClient"/>.</summary>
     internal static class Planner
     {
-        public const string SystemMessage = "You choose tiny, safe Stardew Valley NPC behavior intents. Return only JSON.";
+        public const string SystemMessage =
+            "You choose tiny, safe Stardew Valley NPC behavior intents. Return only JSON. "
+            + PromptDataBoundary.SystemRule;
 
         public static string UserPrompt(
             NPC npc,
@@ -750,23 +753,27 @@ internal static class PromptFragments
         {
             string nearby = string.Join(", ", world.NearbyNpcNames);
 
-            var prompt = new StringBuilder();
-            prompt.AppendLine($"NPC: {npc.displayName} ({npc.Name})");
-            prompt.AppendLine($"Profile source: {disposition.SourceLabel}");
-            prompt.AppendLine($"Disposition: {disposition.PromptLabel}");
+            var scene = new StringBuilder();
+            scene.AppendLine($"NPC: {npc.displayName} ({npc.Name})");
+            scene.AppendLine($"Profile source: {disposition.SourceLabel}");
+            scene.AppendLine($"Disposition: {disposition.PromptLabel}");
             if (disposition.HasProfileContext)
             {
-                prompt.AppendLine($"Profile context: {disposition.BackgroundPrompt} {disposition.DialoguePrompt}");
+                scene.AppendLine($"Profile context: {disposition.BackgroundPrompt} {disposition.DialoguePrompt}");
             }
 
-            prompt.AppendLine($"Trigger: {trigger}");
-            prompt.AppendLine($"Location: {world.LocationDisplayName} ({world.LocationName})");
-            prompt.AppendLine($"Date: year {year}, {world.Season} {world.DayOfMonth}");
-            prompt.AppendLine($"Time: {world.TimeOfDay}");
-            prompt.AppendLine($"Scene context: {world.PromptLabel}");
-            prompt.AppendLine($"World knowledge available to this NPC: {world.ProgressionKnowledge.PromptLabel}");
-            prompt.AppendLine($"Distance to farmer in tiles: {System.Math.Round(distanceToFarmerTiles, 1)}");
-            prompt.AppendLine($"Nearby NPCs: {(string.IsNullOrWhiteSpace(nearby) ? "none" : nearby)}");
+            scene.AppendLine($"Trigger: {trigger}");
+            scene.AppendLine($"Location: {world.LocationDisplayName} ({world.LocationName})");
+            scene.AppendLine($"Date: year {year}, {world.Season} {world.DayOfMonth}");
+            scene.AppendLine($"Time: {world.TimeOfDay}");
+            scene.AppendLine($"Scene context: {world.PromptLabel}");
+            scene.AppendLine($"World knowledge available to this NPC: {world.ProgressionKnowledge.PromptLabel}");
+            scene.AppendLine($"Distance to farmer in tiles: {System.Math.Round(distanceToFarmerTiles, 1)}");
+            scene.AppendLine($"Nearby NPCs: {(string.IsNullOrWhiteSpace(nearby) ? "none" : nearby)}");
+
+            var prompt = new StringBuilder();
+            prompt.AppendLine(PromptDataBoundary.InstructionReminder);
+            prompt.AppendLine(PromptDataBoundary.Wrap("behavior_planner_scene", scene.ToString()));
             prompt.AppendLine();
             prompt.AppendLine($"Allowed intents: {string.Join(", ", allowedIntents)}");
             prompt.AppendLine();

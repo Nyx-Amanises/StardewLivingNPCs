@@ -70,7 +70,7 @@ internal sealed class GiftMailGenerator
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
             LlmResponse response = await LegacyLlm.Instance
-                .RunInference(system, string.Empty, $"NPC: {display}", user, string.Empty, n_predict: PromptTokens, allowRetry: false, disableThinking: true)
+                .RunInference(system, string.Empty, string.Empty, user, string.Empty, n_predict: PromptTokens, allowRetry: false, disableThinking: true)
                 .WaitAsync(cts.Token)
                 .ConfigureAwait(false);
 
@@ -140,9 +140,10 @@ internal sealed class GiftMailGenerator
 
     private static string BuildSystemPrompt(bool zh)
     {
-        return zh
+        string instruction = zh
             ? "你在写一封简短、符合角色性格的信。只输出信的正文(纯文本散文),不要标题、不要署名,也不要任何游戏符号(例如 % 或 [ ])。2 到 4 个短句,保持该角色的语气。"
             : "You are writing a short, in-character letter. Output ONLY the letter body as plain prose — no subject line, no signature, and no game symbols (such as % or [ ]). 2 to 4 short sentences. Stay in the character's voice.";
+        return instruction + " " + PromptDataBoundary.SystemRule;
     }
 
     private static string BuildUserPrompt(bool zh, string display, string persona, string motive, string itemLabel, string sourceGift)
@@ -153,39 +154,55 @@ internal sealed class GiftMailGenerator
 
         if (zh)
         {
-            prompt.AppendLine($"角色:{display}。");
+            prompt.AppendLine("角色资料:");
+            prompt.AppendLine(PromptDataBoundary.Wrap("gift_mail_npc_identity", display));
             if (!string.IsNullOrWhiteSpace(persona))
             {
-                prompt.AppendLine($"性格:{persona}。");
+                prompt.AppendLine("性格资料:");
+                prompt.AppendLine(PromptDataBoundary.Wrap("gift_mail_persona", persona));
             }
 
-            prompt.AppendLine(motive switch
+            string context = motive switch
             {
                 "birthday" => $"情境:农夫在{display}生日时送了「{source}」。{display}想随信回赠「{item}」作为生日谢礼。",
                 "help_request_reward" => $"情境:农夫帮{display}完成了关于「{source}」的请求。{display}想随信附上「{item}」作为答谢。",
                 _ => $"情境:农夫之前送给{display}「{source}」。{display}想随信回赠「{item}」。",
-            });
+            };
+            prompt.AppendLine(PromptDataBoundary.Wrap("gift_mail_context", context));
             prompt.AppendLine("用 @ 代表农夫的名字(游戏会自动替换)。现在用该角色的口吻,写这封信的正文。");
         }
         else
         {
-            prompt.AppendLine($"Character: {display}.");
+            prompt.AppendLine("Character data:");
+            prompt.AppendLine(PromptDataBoundary.Wrap("gift_mail_npc_identity", display));
             if (!string.IsNullOrWhiteSpace(persona))
             {
-                prompt.AppendLine($"Personality: {persona}.");
+                prompt.AppendLine("Personality data:");
+                prompt.AppendLine(PromptDataBoundary.Wrap("gift_mail_persona", persona));
             }
 
-            prompt.AppendLine(motive switch
+            string context = motive switch
             {
                 "birthday" => $"Context: the farmer gave {display} \"{source}\" for their birthday. {display} wants to enclose \"{item}\" as a birthday thank-you.",
                 "help_request_reward" => $"Context: the farmer completed {display}'s request involving \"{source}\". {display} wants to enclose \"{item}\" as thanks.",
                 _ => $"Context: the farmer earlier gave {display} \"{source}\". {display} wants to enclose \"{item}\" as a return gift.",
-            });
+            };
+            prompt.AppendLine(PromptDataBoundary.Wrap("gift_mail_context", context));
             prompt.AppendLine("Use @ as a placeholder for the farmer's name (the game replaces it). Now write the body of this letter in the character's voice.");
         }
 
         return prompt.ToString();
     }
+
+    internal static string BuildSystemPromptForTesting(bool zh) => BuildSystemPrompt(zh);
+
+    internal static string BuildUserPromptForTesting(
+        bool zh,
+        string display,
+        string persona,
+        string motive,
+        string itemLabel,
+        string sourceGift) => BuildUserPrompt(zh, display, persona, motive, itemLabel, sourceGift);
 
     private static string EnsureSalutation(string body, bool zh)
     {
