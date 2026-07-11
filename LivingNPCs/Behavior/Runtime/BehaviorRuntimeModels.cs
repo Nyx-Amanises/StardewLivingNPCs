@@ -92,6 +92,11 @@ internal sealed class PendingCompanionOuting
     public int SettledEmoteNotBeforeTimeOfDay { get; set; }
     public bool SettledEmoteShown { get; set; }
     public bool SharedExperienceRecorded { get; set; }
+    /// <summary>
+    /// Whether an event interrupted this outing. Event scripts can replace or invalidate an
+    /// NPC's path controller, so the route must be rebuilt once normal gameplay resumes.
+    /// </summary>
+    public bool WasPausedForEvent { get; set; }
     public PathFindController? LastAssignedController { get; set; }
     public string ReturnLocationName { get; set; } = string.Empty;
     public Point ReturnTile { get; set; } = Point.Zero;

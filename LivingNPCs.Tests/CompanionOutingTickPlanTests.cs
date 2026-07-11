@@ -34,14 +34,18 @@ public sealed class CompanionOutingTickPlanTests
     }
 
     [Fact]
-    public void EventSceneStopsTheOutingBeforeAnyOtherCheck()
+    public void EventScenePausesTheOutingBeforeAnyOtherCheck()
     {
-        // Even with a menu open and the clock past the travel deadline, the event stop wins.
+        // Even with a menu open and the clock past the travel deadline, the event pause wins.
+        // The runtime preserves the current phase and re-arms its route after the event.
         var world = new FakeOutingWorldView { IsEventActive = true, IsMenuOpen = true, TimeOfDay = 2600 };
 
         Assert.Equal(
-            CompanionOutingTickPlan.StopForEventScene,
+            CompanionOutingTickPlan.WaitForEventScene,
             CompanionOutingRules.PlanTick(world, outingTotalDays: 100, npcExists: true, CompanionOutingPhase.AtDestination));
+        Assert.Equal(
+            CompanionOutingTickPlan.WaitForEventScene,
+            CompanionOutingRules.PlanTick(world, outingTotalDays: 100, npcExists: true, CompanionOutingPhase.TravelingFromFarmBoundary));
     }
 
     [Fact]

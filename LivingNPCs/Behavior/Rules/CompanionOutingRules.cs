@@ -8,8 +8,8 @@ internal enum CompanionOutingTickPlan
     /// <summary>The outing is from another day or its NPC vanished; drop it (restoring the schedule if possible).</summary>
     DropStaleOuting,
 
-    /// <summary>An event scene started; stop the outing and return the NPC to its schedule.</summary>
-    StopForEventScene,
+    /// <summary>An event scene is active; preserve the outing and resume its current leg afterward.</summary>
+    WaitForEventScene,
 
     /// <summary>Too late in the day to still be walking there; stop so the NPC can head home.</summary>
     StopForLateTravel,
@@ -40,7 +40,7 @@ internal static class CompanionOutingRules
     /// The per-tick decision core of the outing state machine, pulled out of
     /// CompanionOutingRuntime so it can be tested with a fake <see cref="IOutingWorldView"/>.
     /// Order matters and mirrors the runtime's historical checks: staleness first, then event
-    /// interruption, then the too-late-to-travel abort, then menu pause, then phase dispatch.
+    /// pause, then the too-late-to-travel abort, then menu pause, then phase dispatch.
     /// </summary>
     public static CompanionOutingTickPlan PlanTick(
         IOutingWorldView world,
@@ -55,7 +55,7 @@ internal static class CompanionOutingRules
 
         if (world.IsEventActive)
         {
-            return CompanionOutingTickPlan.StopForEventScene;
+            return CompanionOutingTickPlan.WaitForEventScene;
         }
 
         if (world.TimeOfDay >= LatestPlannedStayEndTime && IsTravelingPhase(phase))

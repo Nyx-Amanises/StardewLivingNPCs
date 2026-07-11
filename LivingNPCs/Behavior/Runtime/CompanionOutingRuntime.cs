@@ -332,15 +332,30 @@ internal sealed class CompanionOutingRuntime
                     continue;
                 }
 
-                if (plan is CompanionOutingTickPlan.StopForEventScene or CompanionOutingTickPlan.StopForLateTravel)
+                if (plan == CompanionOutingTickPlan.StopForLateTravel)
                 {
                     this.Stop(outing, npc!, returnToSchedule: true);
+                    continue;
+                }
+
+                if (plan == CompanionOutingTickPlan.WaitForEventScene)
+                {
+                    // Event scripts temporarily take ownership of NPCs and may replace, clear,
+                    // or leave behind a stale path controller. Keep the outing alive without
+                    // touching the event actor; the route is deliberately re-armed afterward.
+                    outing.WasPausedForEvent = true;
                     continue;
                 }
 
                 if (plan == CompanionOutingTickPlan.WaitForMenu)
                 {
                     continue;
+                }
+
+                if (outing.WasPausedForEvent)
+                {
+                    outing.WasPausedForEvent = false;
+                    outing.LastAssignedController = null;
                 }
 
                 NpcTravelRuntime.SuppressSchedule(npc!);
