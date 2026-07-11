@@ -31,16 +31,10 @@ internal static class ThirdPartyContentPolicy
 
         string packs = string.Join(", ", offenders.Take(10)) + (offenders.Count > 10 ? ", …" : string.Empty);
         monitor?.Log(
-            Util.GetConsoleString(
-                "dialogue.log.contentPacksUnlicensed",
-                new { count = offenders.Count, packs },
-                $"{offenders.Count} installed content pack(s) do not grant AI use of their text (missing manifest field 'PermitAiUse: true'). Affected packs: {packs}"),
+            I18n.Get("dialogue.log.contentPacksUnlicensed", new { count = offenders.Count, packs }),
             LogLevel.Warn);
         monitor?.Log(
-            Util.GetConsoleString(
-                "dialogue.log.contentPacksFallback",
-                null,
-                "Their content still shows in game as usual, but AI dialogue falls back to unpatched vanilla dialogue samples."),
+            I18n.Get("dialogue.log.contentPacksFallback"),
             LogLevel.Warn);
     }
 

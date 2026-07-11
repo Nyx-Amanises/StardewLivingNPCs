@@ -10,14 +10,18 @@ namespace LivingNPCs.Dialogue.Content;
 
 /// <summary>
 /// 内容层装配（WP15 §4.1/§4.10）：注册资产提供与失效事件（一次、静态，不随 NPC 实例增挂）、
-/// 挂 WP14 的旧配置导入器、GameLaunched 时扫描内容包授权并按配置建一次 LLM 客户端。
+/// 挂 WP14 的旧配置导入器，并在 GameLaunched 后等待游戏语言就绪，再扫描内容包授权并创建 LLM 客户端。
 /// 引擎开关为关时只保留资产事件与导入器（GMCM 照常可改，关→开需重启）。
 /// </summary>
 internal static class DialogueContentSetup
 {
+    private const int LocaleStartupFallbackSeconds = 20;
+
     private static IModHelper helper = null!;
     private static ModConfig config = null!;
     private static GameContentPipeline pipeline = null!;
+    private static bool startupInitializationPending;
+    private static int startupWaitSeconds;
 
     public static void Register(IModHelper modHelper, ModConfig modConfig)
     {
@@ -30,6 +34,8 @@ internal static class DialogueContentSetup
 
         helper.Events.Content.AssetRequested += OnAssetRequested;
         helper.Events.Content.AssetsInvalidated += OnAssetsInvalidated;
+        helper.Events.Content.LocaleChanged += OnLocaleChanged;
+        helper.Events.GameLoop.OneSecondUpdateTicked += OnOneSecondUpdateTicked;
 
         // WP14 的文件夹迁移器在 GameLaunched 移交旧 config（找没找到都通知，幂等靠 LegacyConfigImported）。
         LegacyFolderMigrator.ConfigImporter = legacy => ImportLegacyConfig(legacy);
@@ -65,6 +71,39 @@ internal static class DialogueContentSetup
 
     private static void OnGameLaunched(object? sender, GameLaunchedEventArgs e)
     {
+        // SMAPI raises GameLaunched before Stardew applies the saved game language. On a Chinese
+        // install the locale is still "en" here and changes to "zh" a few seconds later, so any
+        // startup diagnostics resolved now are permanently logged in English. Wait for the locale
+        // event; English installs use the timed fallback below because their locale may not change.
+        startupInitializationPending = true;
+        startupWaitSeconds = 0;
+    }
+
+    private static void OnLocaleChanged(object? sender, LocaleChangedEventArgs e)
+    {
+        InitializeAfterLocaleReady();
+    }
+
+    private static void OnOneSecondUpdateTicked(object? sender, OneSecondUpdateTickedEventArgs e)
+    {
+        if (!startupInitializationPending || ++startupWaitSeconds < LocaleStartupFallbackSeconds)
+        {
+            return;
+        }
+
+        InitializeAfterLocaleReady();
+    }
+
+    private static void InitializeAfterLocaleReady()
+    {
+        if (!startupInitializationPending)
+        {
+            return;
+        }
+
+        startupInitializationPending = false;
+        helper.Events.Content.LocaleChanged -= OnLocaleChanged;
+        helper.Events.GameLoop.OneSecondUpdateTicked -= OnOneSecondUpdateTicked;
         ThirdPartyContentPolicy.Scan(helper.ModRegistry, DialogueServices.Monitor);
 
         if (!config.EnableDialogueEngine)
