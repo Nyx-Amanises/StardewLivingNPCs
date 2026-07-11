@@ -149,6 +149,37 @@ public class ResponseParserTests
     }
 
     [Fact]
+    public void Drops_Entire_PrettyPrinted_Metadata_Tail_From_Options()
+    {
+        string raw = """
+            - 其实，我给你带了一份黑莓脆皮馅饼。$h
+            % 谢谢你，这真贴心。
+            % 只要是你做的，我都喜欢。
+            % 我们可以一起分着吃。
+
+            !LivingNpcs_Meta
+            {
+              "actions": [
+                {
+                  "type": "give_small_gift",
+                  "itemId": "(O)611",
+                  "itemLabel": "黑莓脆皮馅饼"
+                }
+              ]
+            }
+            """;
+
+        var parsed = ResponseParser.Parse(raw, Portraits, "Yuki", fixPunctuation: true);
+
+        Assert.True(parsed.Success);
+        Assert.Equal(3, parsed.Options.Count);
+        Assert.Equal("谢谢你，这真贴心。", parsed.Options[0]);
+        Assert.DoesNotContain(parsed.Options, option => option.Contains("give_small_gift", StringComparison.Ordinal));
+        Assert.DoesNotContain(parsed.Options, option => option.Contains("itemId", StringComparison.Ordinal));
+        Assert.DoesNotContain(parsed.Options, option => option.Contains("itemLabel", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Recovers_Dialogue_Line_Without_Dash_Prefix()
     {
         string raw = "Sure, here is the line:\nWhat a lovely morning.\n%Morning!";
@@ -190,7 +221,35 @@ public class ResponseParserTests
     {
         Assert.True(ResponseParser.IsMetadataLine("\"rapportDelta\": 2,"));
         Assert.True(ResponseParser.IsMetadataLine("{endConversation: true"));
+        Assert.True(ResponseParser.IsMetadataLine("type\":\"give_small_gift\","));
+        Assert.True(ResponseParser.IsMetadataLine("itemId\":\"(O)611\","));
+        Assert.True(ResponseParser.IsMetadataLine("itemLabel\":\"Blackberry Cobbler\""));
+        Assert.True(ResponseParser.IsMetadataLine("]."));
         Assert.False(ResponseParser.IsMetadataLine("- normal line"));
+    }
+
+    [Fact]
+    public void PrettyPrinted_Or_Malformed_Metadata_Never_Becomes_Options()
+    {
+        string raw = """
+            - 谢谢你，潘妮，这真贴心。$h
+            % 保持沉默
+            % 谢谢你，潘妮，这真贴心。
+            !LIVINGNPCS_META {
+              "actions": [{
+                type":"give_small_gift",
+                itemId":"(O)611",
+                itemLabel":"黑莓脆皮馅饼"
+              }]
+            }
+            """;
+
+        var parsed = ResponseParser.Parse(raw, Portraits, "Yuki", fixPunctuation: false);
+
+        Assert.True(parsed.Success);
+        Assert.Equal(2, parsed.Options.Count);
+        Assert.DoesNotContain(parsed.Options, option => option.Contains("give_small_gift", StringComparison.Ordinal));
+        Assert.DoesNotContain(parsed.Options, option => option.Contains("itemId", StringComparison.Ordinal));
     }
 
     [Fact]

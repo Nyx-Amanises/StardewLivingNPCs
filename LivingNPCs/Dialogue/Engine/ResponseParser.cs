@@ -36,7 +36,15 @@ internal static class ResponseParser
         "actions", "behaviorInfluences", "helpRequests", "helpRequestUpdates", "conflicts"
     };
 
-    private static readonly Regex MetadataMarkerPattern = new(@"!+LIVINGNPCS_META", RegexOptions.Compiled);
+    private static readonly Regex MetadataMarkerPattern = new(
+        @"!+LIVINGNPCS_META",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex JsonPropertyLinePattern = new(
+        """^(?:[-*]\s*)?[\{\[]?\s*["“”]?[A-Za-z][A-Za-z0-9_]*["“”]?\s*["']?\s*:\s*""",
+        RegexOptions.Compiled);
+    private static readonly Regex JsonStructuralLinePattern = new(
+        @"^[\s,]*[\}\]]+[\s,.;]*$|^```(?:json)?\s*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex MidLineOptionPattern = new(@"(?<=\S)[ \t]+(?=%{1,2}[^\s%\d])", RegexOptions.Compiled);
     private static readonly Regex EmotionCommandFixPattern = new(@"#\$(?<token>[A-Za-z0-9]+)", RegexOptions.Compiled);
     private static readonly Regex DollarTokenPattern = new(@"\$(?<token>[A-Za-z0-9_]+)", RegexOptions.Compiled);
@@ -64,6 +72,16 @@ internal static class ResponseParser
         string normalized = ConversationTextPostProcessor.RemoveInvisibleCharacters(rawText).Replace("\r", string.Empty);
         normalized = MetadataMarkerPattern.Replace(normalized, "\n!LIVINGNPCS_META");
         normalized = MidLineOptionPattern.Replace(normalized, "\n");
+
+        // Hidden metadata is always a tail section. Discard the entire section before splitting
+        // lines so pretty-printed JSON members like "type", "itemId", and "itemLabel" can never
+        // be mistaken for unprefixed response choices. ConversationAnalysis parses the original
+        // response separately, so this does not affect action or memory extraction.
+        int metadataIndex = normalized.IndexOf(EngineConstants.MetadataMarker, StringComparison.OrdinalIgnoreCase);
+        if (metadataIndex >= 0)
+        {
+            normalized = normalized[..metadataIndex];
+        }
 
         // 2. 拆行、去空、剔除疑似元数据行。
         var lines = normalized
@@ -140,7 +158,9 @@ internal static class ResponseParser
     internal static bool IsMetadataLine(string line)
     {
         string stripped = line.TrimStart('{', ',', '"', ' ', '\t');
-        return MetadataFieldNames.Any(field => stripped.StartsWith(field, StringComparison.OrdinalIgnoreCase));
+        return MetadataFieldNames.Any(field => stripped.StartsWith(field, StringComparison.OrdinalIgnoreCase))
+            || JsonPropertyLinePattern.IsMatch(line)
+            || JsonStructuralLinePattern.IsMatch(line.Trim());
     }
 
     internal static string CleanDialogueLine(string line, IReadOnlySet<string> validPortraits)
