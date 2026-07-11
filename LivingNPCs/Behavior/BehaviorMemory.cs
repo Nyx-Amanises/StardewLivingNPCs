@@ -86,6 +86,7 @@ internal sealed class BehaviorMemory
                 }
 
                 pair.Value.Clamp();
+                this.HelpRequests.NormalizeLoadedRequests(pair.Value);
                 this.statesByNpc[pair.Key] = pair.Value;
             }
         }

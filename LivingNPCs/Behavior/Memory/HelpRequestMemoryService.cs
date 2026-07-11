@@ -36,19 +36,22 @@ internal sealed class HelpRequestMemoryService
     private readonly Action<LivingNpcState, string, int, string> applyEmotion;
     private readonly Func<string, string, string, string, BehaviorMemoryEntry> createEntry;
     private readonly Action<BehaviorMemoryEntry, int> addEntry;
+    private readonly Func<string, string, string> resolveItemDisplayName;
 
     public HelpRequestMemoryService(
         Action<LivingNpcState, int, int> addFamiliarity,
         Action<LivingNpcState, int> applyRelationshipTrustDelta,
         Action<LivingNpcState, string, int, string> applyEmotion,
         Func<string, string, string, string, BehaviorMemoryEntry> createEntry,
-        Action<BehaviorMemoryEntry, int> addEntry)
+        Action<BehaviorMemoryEntry, int> addEntry,
+        Func<string, string, string>? resolveItemDisplayName = null)
     {
         this.addFamiliarity = addFamiliarity;
         this.applyRelationshipTrustDelta = applyRelationshipTrustDelta;
         this.applyEmotion = applyEmotion;
         this.createEntry = createEntry;
         this.addEntry = addEntry;
+        this.resolveItemDisplayName = resolveItemDisplayName ?? ResolveItemDisplayName;
     }
 
     public IReadOnlyList<NpcHelpRequestFact> TryCompleteItemHelpRequests(
@@ -123,12 +126,6 @@ internal sealed class HelpRequestMemoryService
         int maxPendingHelpRequestsPerNpc,
         int helpRequestCooldownDays)
     {
-        string normalizedSummary = NormalizeMemorySummary(candidate.Summary);
-        if (string.IsNullOrWhiteSpace(normalizedSummary))
-        {
-            return false;
-        }
-
         var steps = BuildSteps(npc, candidate);
         if (steps.Count == 0)
         {
@@ -136,6 +133,12 @@ internal sealed class HelpRequestMemoryService
         }
 
         var firstStep = steps[0];
+        string normalizedSummary = NormalizeMemorySummary(firstStep.Summary);
+        if (string.IsNullOrWhiteSpace(normalizedSummary))
+        {
+            return false;
+        }
+
         string normalizedType = firstStep.Type;
         var existing = state.HelpRequests.FirstOrDefault(request =>
             request.Status is "Offered" or "Pending"
@@ -172,7 +175,7 @@ internal sealed class HelpRequestMemoryService
             NpcDisplayName = npc.displayName,
             QuestLogId = Guid.NewGuid().ToString("N"),
             Type = normalizedType,
-            Summary = candidate.Summary.Trim(),
+            Summary = firstStep.Summary,
             Steps = steps,
             CurrentStepIndex = 0,
             RequestedItemId = firstStep.RequestedItemId,
@@ -346,7 +349,7 @@ internal sealed class HelpRequestMemoryService
 
         foreach (var item in HelpRequestAdvisor.GetRequestableItems(npc))
         {
-            string localizedName = ResolveItemDisplayName(item.ItemId, item.Label);
+            string localizedName = this.resolveItemDisplayName(item.ItemId, item.Label);
             if (!ContainsAny(combined, localizedName, item.Label))
             {
                 continue;
@@ -462,7 +465,7 @@ internal sealed class HelpRequestMemoryService
         }
     }
 
-    private static List<NpcHelpRequestStepFact> BuildSteps(NPC npc, ValleyTalkHelpRequestCandidate candidate)
+    private List<NpcHelpRequestStepFact> BuildSteps(NPC npc, ValleyTalkHelpRequestCandidate candidate)
     {
         candidate.Steps ??= new List<ValleyTalkHelpRequestStepCandidate>();
         var rawSteps = candidate.Steps.Count > 0
@@ -496,20 +499,62 @@ internal sealed class HelpRequestMemoryService
                 continue;
             }
 
+            string rawLabel = rawStep.RequestedItemLabel?.Trim() ?? string.Empty;
+            string canonicalLabel = this.resolveItemDisplayName(rawStep.RequestedItemId, rawLabel);
+            string rawSummary = string.IsNullOrWhiteSpace(rawStep.Summary)
+                ? candidate.Summary.Trim()
+                : rawStep.Summary.Trim();
+
             steps.Add(new NpcHelpRequestStepFact
             {
                 Type = type,
-                Summary = string.IsNullOrWhiteSpace(rawStep.Summary)
-                    ? candidate.Summary.Trim()
-                    : rawStep.Summary.Trim(),
+                Summary = ReplaceItemLabel(rawSummary, rawLabel, canonicalLabel),
                 RequestedItemId = rawStep.RequestedItemId.Trim(),
-                RequestedItemLabel = rawStep.RequestedItemLabel.Trim(),
+                RequestedItemLabel = canonicalLabel,
                 QuestionTopic = rawStep.QuestionTopic.Trim(),
                 Status = "Pending"
             });
         }
 
         return steps;
+    }
+
+    /// <summary>
+    /// Repairs model-provided item labels already stored in a save. Item IDs are authoritative;
+    /// visible labels and summaries must come from Stardew's localized item registry.
+    /// </summary>
+    public void NormalizeLoadedRequests(LivingNpcState state)
+    {
+        foreach (var request in state.HelpRequests.Where(request => request.Type == "item_request"))
+        {
+            string oldRequestLabel = request.RequestedItemLabel;
+            string requestLabel = this.resolveItemDisplayName(request.RequestedItemId, oldRequestLabel);
+            request.Summary = ReplaceItemLabel(request.Summary, oldRequestLabel, requestLabel);
+            request.RequestedItemLabel = requestLabel;
+
+            foreach (var step in request.Steps.Where(step => step.Type == "item_request"))
+            {
+                string oldStepLabel = step.RequestedItemLabel;
+                string stepLabel = this.resolveItemDisplayName(step.RequestedItemId, oldStepLabel);
+                step.Summary = ReplaceItemLabel(step.Summary, oldStepLabel, stepLabel);
+                step.RequestedItemLabel = stepLabel;
+            }
+
+            ApplyCurrentStep(request);
+        }
+    }
+
+    private static string ReplaceItemLabel(string text, string oldLabel, string canonicalLabel)
+    {
+        if (string.IsNullOrWhiteSpace(text)
+            || string.IsNullOrWhiteSpace(oldLabel)
+            || string.IsNullOrWhiteSpace(canonicalLabel)
+            || string.Equals(oldLabel, canonicalLabel, StringComparison.OrdinalIgnoreCase))
+        {
+            return text;
+        }
+
+        return text.Replace(oldLabel, canonicalLabel, StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool IsFarmerExplicitlyOfferingHelp(string playerText)

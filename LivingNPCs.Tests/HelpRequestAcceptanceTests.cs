@@ -4,6 +4,48 @@ namespace LivingNPCs.Tests;
 
 public sealed class HelpRequestAcceptanceTests
 {
+    [Fact]
+    public void RepairsHallucinatedItemLabelFromAuthoritativeItemId()
+    {
+        var state = new LivingNpcState
+        {
+            HelpRequests =
+            {
+                new NpcHelpRequestFact
+                {
+                    Type = "item_request",
+                    Summary = "给艾米丽带去一个香料菊",
+                    RequestedItemId = "(O)396",
+                    RequestedItemLabel = "香料菊",
+                    Steps =
+                    {
+                        new NpcHelpRequestStepFact
+                        {
+                            Type = "item_request",
+                            Summary = "给艾米丽带去一个香料菊",
+                            RequestedItemId = "(O)396",
+                            RequestedItemLabel = "香料菊"
+                        }
+                    }
+                }
+            }
+        };
+        var service = new HelpRequestMemoryService(
+            (_, _, _) => { },
+            (_, _) => { },
+            (_, _, _, _) => { },
+            (_, _, _, _) => null!,
+            (_, _) => { },
+            (itemId, fallback) => itemId == "(O)396" ? "香味浆果" : fallback);
+
+        service.NormalizeLoadedRequests(state);
+
+        var request = Assert.Single(state.HelpRequests);
+        Assert.Equal("香味浆果", request.RequestedItemLabel);
+        Assert.Equal("给艾米丽带去一个香味浆果", request.Summary);
+        Assert.Equal("香味浆果", Assert.Single(request.Steps).RequestedItemLabel);
+    }
+
     [Theory]
     [InlineData("好的，我帮你找找石英。")]
     [InlineData("可以，交给我。")]

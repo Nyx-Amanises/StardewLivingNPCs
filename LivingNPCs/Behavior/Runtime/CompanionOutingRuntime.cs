@@ -455,7 +455,31 @@ internal sealed class CompanionOutingRuntime
             return;
         }
 
+        if (this.TryBeginDestinationEntryStay(npc, outing, destination))
+        {
+            return;
+        }
+
         this.Stop(outing, npc, returnToSchedule: true);
+    }
+
+    private bool TryBeginDestinationEntryStay(NPC npc, PendingCompanionOuting outing, GameLocation destination)
+    {
+        if (npc.currentLocation != destination)
+        {
+            return false;
+        }
+
+        // A cross-map schedule route can finish at the destination entrance before its final
+        // local path reaches the selected anchor, especially while that map is off-screen. If
+        // all anchor retries then end immediately, the outing used to be cancelled just as the
+        // NPC reached the destination. Keep the natural cross-map walk and settle at the tile the
+        // NPC actually reached; the configured stay clock still begins in BeginStay below.
+        outing.AnchorTile = npc.TilePoint;
+        outing.AnchorFacingDirection = npc.FacingDirection is >= 0 and <= 3 ? npc.FacingDirection : 2;
+        outing.AnchorLabel = "near the destination entrance";
+        this.BeginStay(npc, outing);
+        return true;
     }
 
     private void UpdateTravelingToFarmBoundary(

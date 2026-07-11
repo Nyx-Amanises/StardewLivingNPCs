@@ -108,9 +108,17 @@ internal sealed class GameContentPipeline : IContentPipeline
     {
         try
         {
-            if (Game1.NPCGiftTastes == null || !Game1.NPCGiftTastes.TryGetValue(npcName, out string? data))
+            if (Game1.NPCGiftTastes == null)
             {
                 return null;
+            }
+
+            // Many non-social, temporary, or content-pack NPCs intentionally have no personal
+            // Data/NPCGiftTastes entry. That is a valid empty topic source, not malformed data and
+            // should not produce one warning per character during bio discovery.
+            if (!Game1.NPCGiftTastes.TryGetValue(npcName, out string? data))
+            {
+                return (Array.Empty<string>(), Array.Empty<string>());
             }
 
             string[] segments = data.Split('/');

@@ -821,7 +821,7 @@ internal sealed class DialogueEngine : IDialogueEngine
                     responseChars = (response.Text ?? string.Empty).Length,
                     lines = lineCount,
                     sections
-                }),
+                }) + Environment.NewLine,
             StardewModdingAPI.LogLevel.Debug);
     }
 
