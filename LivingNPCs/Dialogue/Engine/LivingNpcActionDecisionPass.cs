@@ -381,6 +381,30 @@ internal static class LivingNpcActionDecisionPass
         return true;
     }
 
+    internal static void ApplyAuxiliaryDecisions(
+        ConversationAnalysis supplemental,
+        string responseText,
+        string playerText,
+        string visibleNpcReply)
+    {
+        TryAddActionFromGiftDecision(
+            supplemental,
+            responseText,
+            visibleNpcReply,
+            out _);
+        TryAddActionFromTravelDecision(
+            supplemental,
+            responseText,
+            playerText,
+            visibleNpcReply,
+            out _);
+        FilterNonInvitationOutingActions(
+            supplemental,
+            playerText,
+            visibleNpcReply,
+            out _);
+    }
+
     internal static bool FilterNonInvitationOutingActionsForTesting(
         ConversationAnalysis supplemental,
         string playerText,

@@ -565,7 +565,7 @@ add("generalFarmerLabel", "Farmer", "农夫");
 add("commandHeading", "Command", "任务指令");
 add("commandIntro", "Write the next line of dialogue for {{Name}}. It must fit all provided context and sound like this character talking to the farmer now.", "为{{Name}}写下一句台词。它必须符合所有上下文，并听起来像这个角色此刻正在对农夫说话。");
 add("commandReplaceSchedule", "Rewrite this scheduled line with a similar topic but fresh wording: {{ScheduleLine}}", "请改写这句日程台词，主题相近但表达全新：{{ScheduleLine}}");
-add("instructionsTranslate", "Visible dialogue and response options must be only in {{Language}}. Keep JSON field names, enum values, item IDs, and hidden metadata keys in English exactly as specified.", "可见台词和回应选项只能使用{{Language}}。JSON字段名、枚举值、物品ID和隐藏元数据键必须按规定保持英文。");
+add("instructionsTranslate", "Visible dialogue and response options must be only in {{Language}}. Do not explain or translate the instructions themselves.", "可见台词和回应选项只能使用{{Language}}。不要解释或翻译指令本身。");
 
 add("instructionsHeading", "Output Instructions", "输出规则");
 add("instructionsIntro", "Write Stardew Valley villager dialogue addressed to the farmer. Match the current familiarity, mood, activity, and game situation.", "请写村民对农夫说的《星露谷物语》台词。匹配当前熟悉度、心情、活动和游戏情境。");
@@ -606,6 +606,8 @@ add("instructionsResponses", [
   "冷淡拒绝示例：",
   "- 今天不行。我没耐心闲聊。$s",
 ].join("\n"));
+
+add("instructionsDialogueOnly", "Output only the visible villager line and any % farmer response options. Do not output JSON, metadata, analysis, hidden fields, or !LIVINGNPCS_META. Mention a gift or specific item request only when the supplied context explicitly allows that opportunity and item. When accepting travel now, make the present consent and destination clear; later, another day, or by mail must not sound immediate. Never invent an item, destination, reward, task, or world action.", "只输出可见的村民台词和可选的%农夫回应，不要输出JSON、元数据、分析、隐藏字段或!LIVINGNPCS_META。只有上下文明示当前存在相应机会和物品时，才能提到送礼或具体物品求助。若答应现在出行，要明确当下同意和目的地；晚点、改天或邮寄不能说得像立即执行。不得编造物品、目的地、奖励、任务或世界动作。");
 
 const metadataActionSchema = '{"actions":[{"type":"give_small_gift|give_meaningful_gift|give_money|companion_outing|festival_interaction|assist_quest","amount":0,"durationMinutes":0,"delayMinutes":0,"targetLocation":"Farm|Town|Mountain|Beach|Forest|BusStop|Saloon|SeedShop|ArchaeologyHouse|Hospital","travelConsent":"accepted_now|accepted_later|declined|tentative|none","questHint":"","itemId":"","itemLabel":"","reason":""}]}';
 

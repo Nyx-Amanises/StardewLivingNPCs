@@ -963,21 +963,7 @@ internal sealed class PromptAssembler
         AppendLine(builder, this.Text("instructionsBreaks"));
         AppendLine(builder, this.Text("instructionsSingleLine"));
         AppendLine(builder, this.Text("instructionsResponses"));
-
-        // LivingNPCs 元数据指示（优化开关先探测 Optimized 变体，存在且非空用之，否则回退完整版；
-        // 绝不整节丢弃，§4.8）。
-        foreach (string key in new[]
-                 {
-                     "instructionsLivingNpcMetadata",
-                     "instructionsLivingNpcGiftIds",
-                     "instructionsLivingNpcImmediateTravel",
-                     "instructionsLivingNpcTravelConsent",
-                     "instructionsLivingNpcHelpRequests",
-                     "instructionsLivingNpcEmotionDepth"
-                 })
-        {
-            AppendLine(builder, this.TextOptimizable(key));
-        }
+        AppendLine(builder, this.Text("instructionsDialogueOnly"));
 
         // 情绪肖像指示：传记 ExtraPortraits 不含键 "!" 时输出（§4.6.5）。
         var bio = this.input.Bio;

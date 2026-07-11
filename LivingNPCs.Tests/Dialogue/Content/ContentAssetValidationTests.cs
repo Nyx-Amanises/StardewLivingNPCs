@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using LivingNPCs.Dialogue.Content;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 
 namespace LivingNPCs.Tests.Dialogue.Content;
 
@@ -154,10 +155,16 @@ public sealed class ContentAssetValidationTests
     [Theory]
     [InlineData("default.json")]
     [InlineData("zh.json")]
-    public void Prompts_MetadataSchemas_UseCanonicalActionFields(string fileName)
+    public void Prompts_MetadataSchemas_UseCanonicalTopLevelAndActionFields(string fileName)
     {
         var prompts = Deserialize<Dictionary<string, string>>(Path.Combine(AssetRoot, "prompts", fileName));
-        string[] expectedFields =
+        string[] expectedTopLevelFields =
+        {
+            "rapportDelta", "endConversation", "ambientFollowUp", "emotionImpact",
+            "behaviorInfluences", "actions", "helpRequests", "helpRequestUpdates",
+            "conflicts", "memories"
+        };
+        string[] expectedActionFields =
         {
             "type", "amount", "durationMinutes", "delayMinutes", "targetLocation",
             "travelConsent", "questHint", "itemId", "itemLabel", "reason"
@@ -165,8 +172,13 @@ public sealed class ContentAssetValidationTests
 
         foreach (string key in new[] { "instructionsLivingNpcMetadata", "instructionsLivingNpcMetadataOptimized" })
         {
+            string schemaJson = ExtractFirstBalancedJson(prompts[key]);
+            Assert.False(string.IsNullOrWhiteSpace(schemaJson), $"{fileName}:{key} must include a complete JSON schema");
+            var schema = JObject.Parse(schemaJson);
+            Assert.Equal(expectedTopLevelFields, schema.Properties().Select(property => property.Name));
+
             Match actionSchema = Regex.Match(
-                prompts[key],
+                schemaJson,
                 "\\\"actions\\\":\\[\\{(?<body>.*?)\\}\\]",
                 RegexOptions.Singleline);
             Assert.True(actionSchema.Success, $"{fileName}:{key} must include an explicit actions schema");
@@ -174,8 +186,46 @@ public sealed class ContentAssetValidationTests
             string[] actualFields = Regex.Matches(actionSchema.Groups["body"].Value, "\\\"(?<name>[A-Za-z][A-Za-z0-9]*)\\\"\\s*:")
                 .Select(match => match.Groups["name"].Value)
                 .ToArray();
-            Assert.Equal(expectedFields, actualFields);
+            Assert.Equal(expectedActionFields, actualFields);
         }
+    }
+
+    private static string ExtractFirstBalancedJson(string text)
+    {
+        int start = text.IndexOf('{');
+        int depth = 0;
+        bool inString = false;
+        bool escaping = false;
+        for (int i = start; i >= 0 && i < text.Length; i++)
+        {
+            char ch = text[i];
+            if (escaping)
+            {
+                escaping = false;
+                continue;
+            }
+
+            if (inString && ch == '\\')
+            {
+                escaping = true;
+                continue;
+            }
+
+            if (ch == '"')
+            {
+                inString = !inString;
+            }
+            else if (!inString && ch == '{')
+            {
+                depth++;
+            }
+            else if (!inString && ch == '}' && --depth == 0)
+            {
+                return text[start..(i + 1)];
+            }
+        }
+
+        return string.Empty;
     }
 
     [Fact]

@@ -192,7 +192,13 @@ internal sealed class DialogueEngine : IDialogueEngine
         }
 
         watch.Stop();
-        return this.FinalizeResult(prepared, response, failure, Math.Min(attempt, MaxAttempts), watch.ElapsedMilliseconds);
+        return await this.FinalizeResultAsync(
+            prepared,
+            response,
+            failure,
+            Math.Min(attempt, MaxAttempts),
+            watch.ElapsedMilliseconds,
+            ct).ConfigureAwait(false);
     }
 
     // ---- 流式（§4.13） ----
@@ -246,7 +252,13 @@ internal sealed class DialogueEngine : IDialogueEngine
             break;
         }
 
-        var result = this.FinalizeResult(prepared, response, null, MaxAttempts, 0);
+        var result = await this.FinalizeResultAsync(
+            prepared,
+            response,
+            null,
+            MaxAttempts,
+            0,
+            ct).ConfigureAwait(false);
         var options = ResponseFormatter.BuildStreamingOptions(
             result.ParsedLines.Skip(1).ToList(),
             DialogueServices.Config?.TypedResponses ?? "With Generated",
@@ -576,12 +588,13 @@ internal sealed class DialogueEngine : IDialogueEngine
             DialogueServices.Config?.Debug == true);
     }
 
-    private GenerationResult FinalizeResult(
+    private async Task<GenerationResult> FinalizeResultAsync(
         PreparedGeneration prepared,
         LlmResponse? response,
         Exception? failure,
         int attempts,
-        long elapsedMilliseconds)
+        long elapsedMilliseconds,
+        CancellationToken ct)
     {
         var request = prepared.Request;
         string typedResponses = DialogueServices.Config?.TypedResponses ?? "With Generated";
@@ -621,25 +634,52 @@ internal sealed class DialogueEngine : IDialogueEngine
         }
 
         var parsed = this.ParseResponse(prepared, response.Text);
-        var analysis = ConversationAnalysis.Parse(response.Text);
+        var legacyAnalysis = ConversationAnalysis.Parse(response.Text);
+        var analysis = legacyAnalysis;
 
-        // 行动决策补充（主响应解析成功且有台词后，§4.5）。
         List<string> lines = new() { parsed.DialogueLine };
         lines.AddRange(parsed.Options);
         LivingNpcActionDecisionDiagnostics? actionDiagnostics = null;
-        try
+        if (request.Trigger != GenerationTrigger.Scheduled)
         {
-            var supplemented = LivingNpcActionDecisionPass
-                .TrySupplementAsync(prepared.Character, prepared.Context, analysis, lines)
-                .ConfigureAwait(false).GetAwaiter().GetResult();
-            analysis = supplemented.Analysis;
-            actionDiagnostics = supplemented.Diagnostics;
-        }
-        catch (Exception ex)
-        {
-            DialogueServices.Monitor?.Log(
-                I18n.Get("log.dialogue.actionDecisionFailed", new { npc = request.NpcName, error = ex.Message }),
-                StardewModdingAPI.LogLevel.Trace);
+            string playerText = request.Trigger == GenerationTrigger.Gift
+                ? $"The farmer gave {request.NpcName} item {request.GiftItemId}; gift taste code {request.GiftTaste}."
+                : prepared.LastPlayerLine;
+            try
+            {
+                LivingNpcMetadataExtractionResult extracted = await LivingNpcMetadataExtractionPass
+                    .TryExtractAsync(prepared.Character, prepared.Context, playerText, parsed.DialogueLine, parsed.Options)
+                    .ConfigureAwait(false);
+                if (extracted.Success)
+                {
+                    analysis = extracted.Analysis;
+                }
+                else
+                {
+                    // Compatibility fallback: an older/custom model may still have returned inline metadata.
+                    // If the full classifier fails, retain that analysis and allow the old action-only pass
+                    // to recover a clearly promised action without discarding the visible dialogue.
+                    var supplemented = await LivingNpcActionDecisionPass
+                        .TrySupplementAsync(prepared.Character, prepared.Context, legacyAnalysis, lines)
+                        .ConfigureAwait(false);
+                    analysis = supplemented.Analysis;
+                    actionDiagnostics = supplemented.Diagnostics;
+                    DialogueServices.Monitor?.Log(
+                        $"Metadata extraction for {request.NpcName} failed safely: {extracted.FailureReason}",
+                        StardewModdingAPI.LogLevel.Trace);
+                }
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                analysis = legacyAnalysis;
+                DialogueServices.Monitor?.Log(
+                    I18n.Get("log.dialogue.actionDecisionFailed", new { npc = request.NpcName, error = ex.Message }),
+                    StardewModdingAPI.LogLevel.Trace);
+            }
         }
 
         // 元数据裁决：EndConversation 且行数 >1 → 只保留台词行（§4.10.8）。

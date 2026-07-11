@@ -349,13 +349,13 @@ public class PromptAssemblerTests
     }
 
     [Fact]
-    public void Optimized_Flag_Probes_Instruction_Keys()
+    public void Main_Prompt_Uses_Dialogue_Only_Instructions()
     {
         var requested = new List<(string Key, bool Optimized)>();
         new PromptAssembler(Input(requested: requested, useOptimized: true)).Assemble();
 
-        Assert.Contains(requested, pair => pair.Key == "instructionsLivingNpcMetadata" && pair.Optimized);
-        // 其余文案不受优化开关影响。
+        Assert.Contains(requested, pair => pair.Key == "instructionsDialogueOnly" && !pair.Optimized);
+        Assert.DoesNotContain(requested, pair => pair.Key.StartsWith("instructionsLivingNpc", StringComparison.Ordinal));
         Assert.Contains(requested, pair => pair.Key == "systemPrompt" && !pair.Optimized);
     }
 
