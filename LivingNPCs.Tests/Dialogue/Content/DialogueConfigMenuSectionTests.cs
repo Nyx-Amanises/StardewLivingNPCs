@@ -121,7 +121,9 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
             EnableMod = false,
             ShowHudMessages = false,
             AllowWakeSleepingNpc = false,
-            ApplyTranslation = false
+            ApplyTranslation = false,
+            AllowAiFestivalInteractions = false,
+            TypedResponses = "Never"
         };
 
         Assert.True(config.Validate());
@@ -129,6 +131,8 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
         Assert.True(config.ShowHudMessages);
         Assert.True(config.AllowWakeSleepingNpc);
         Assert.True(config.ApplyTranslation);
+        Assert.True(config.AllowAiFestivalInteractions);
+        Assert.Equal("Always", config.TypedResponses);
     }
 
     [Fact]

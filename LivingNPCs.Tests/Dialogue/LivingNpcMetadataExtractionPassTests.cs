@@ -87,7 +87,7 @@ public sealed class LivingNpcMetadataExtractionPassTests
     {
         var result = LivingNpcMetadataExtractionPass.ParseAuthoritativeResponseForTesting(
             """
-            {"rapportDelta":1,"endConversation":false,"ambientFollowUp":{"text":"","delayMinutes":0},"emotionImpact":{"emotion":"none","intensityDelta":0,"apology":false,"repairDelta":0,"reason":""},"behaviorInfluences":[],"actions":[{"type":"companion_outing","amount":0,"durationMinutes":60,"delayMinutes":0,"targetLocation":"Farm","travelConsent":"accepted_now","questHint":"","itemId":"","itemLabel":"","reason":"误判"}],"conflicts":[],"memories":[],"helpRequests":[],"helpRequestUpdates":[],"travelDecision":{"isTravelReply":true,"consent":"accepted_now","targetLocation":"Farm","durationMinutes":60},"giftDecision":{"isGiftReply":false,"timing":"none","tier":"small"}}
+            {"rapportDelta":1,"endConversation":false,"ambientFollowUp":{"text":"","delayMinutes":0},"emotionImpact":{"emotion":"none","intensityDelta":0,"apology":false,"repairDelta":0,"reason":""},"behaviorInfluences":[],"actions":[{"type":"companion_outing","amount":0,"durationMinutes":60,"delayMinutes":0,"targetLocation":"Farm","travelConsent":"accepted_now","itemId":"","itemLabel":"","reason":"误判"}],"conflicts":[],"memories":[],"helpRequests":[],"helpRequestUpdates":[],"travelDecision":{"isTravelReply":true,"consent":"accepted_now","targetLocation":"Farm","durationMinutes":60},"giftDecision":{"isGiftReply":false,"timing":"none","tier":"small"}}
             """,
             "你以前去过我的农场吗？",
             "去过一次。那里的泥很多。");

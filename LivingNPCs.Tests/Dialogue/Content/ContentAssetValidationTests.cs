@@ -167,7 +167,7 @@ public sealed class ContentAssetValidationTests
         string[] expectedActionFields =
         {
             "type", "amount", "durationMinutes", "delayMinutes", "targetLocation",
-            "travelConsent", "questHint", "itemId", "itemLabel", "reason"
+            "travelConsent", "itemId", "itemLabel", "reason"
         };
 
         foreach (string key in new[] { "instructionsLivingNpcMetadata", "instructionsLivingNpcMetadataOptimized" })
