@@ -371,6 +371,39 @@ public sealed class CompanionOutingRulesTests
         Assert.Empty(filtered);
     }
 
+    [Theory]
+    [InlineData("给，这个送给你，就当是谢礼。", true)]
+    [InlineData("我这里有一块派，分给你一块吧！", true)]
+    [InlineData("我明天再给你带点东西。", false)]
+    [InlineData("你准备给贾斯带礼物吗？", false)]
+    public void DailyGiftOpportunityRecognizesOnlyImmediateVisibleOffers(string reply, bool expected)
+    {
+        Assert.Equal(expected, ConversationActionCueRules.VisibleDialogueOffersImmediateGift(reply));
+    }
+
+    [Fact]
+    public void ClearingOneReplyGiftOpportunityPreservesUnrelatedReciprocalState()
+    {
+        var state = new LivingNpcState
+        {
+            DailyGiftOpportunityTotalDays = 42,
+            DailyGiftOpportunityChancePercent = 3,
+            DailyGiftOpportunityReason = "one reply authorization",
+            PendingReciprocalGiftDueTotalDays = 45,
+            PendingReciprocalGiftSourceGiftName = "Sunflower",
+            PendingReciprocalGiftReason = "birthday thanks"
+        };
+
+        GiftActionRules.ClearDailyGiftOpportunity(state);
+
+        Assert.Equal(-1, state.DailyGiftOpportunityTotalDays);
+        Assert.Equal(0, state.DailyGiftOpportunityChancePercent);
+        Assert.Empty(state.DailyGiftOpportunityReason);
+        Assert.Equal(45, state.PendingReciprocalGiftDueTotalDays);
+        Assert.Equal("Sunflower", state.PendingReciprocalGiftSourceGiftName);
+        Assert.Equal("birthday thanks", state.PendingReciprocalGiftReason);
+    }
+
     [Fact]
     public void HiddenGiftActionStaysWhenVisibleDialogueOffersGift()
     {

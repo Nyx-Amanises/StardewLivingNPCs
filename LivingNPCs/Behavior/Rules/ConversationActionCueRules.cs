@@ -217,6 +217,10 @@ internal static class ConversationActionCueRules
             "下次再给",
             "以后再给",
             "改天再给",
+            "明天再给",
+            "稍后再给",
+            "等会再给",
+            "等会儿再给",
             "没有什么能给",
             "没什么能给",
             "not today",
@@ -474,6 +478,12 @@ internal static class ConversationActionCueRules
                 "brought you",
                 "saved this"
             );
+    }
+
+    internal static bool VisibleDialogueOffersImmediateGift(string npcResponse)
+    {
+        return !LooksLikeGiftOfferRejection(npcResponse)
+            && LooksLikeImmediateGiftOffer(npcResponse);
     }
 
     private static bool LooksLikeImmediateMoneyOffer(string npcResponse)

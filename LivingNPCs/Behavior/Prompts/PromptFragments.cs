@@ -571,12 +571,25 @@ internal static class PromptFragments
                 "\n",
                 "## LivingNPCs Gift Opportunity",
                 $"- Gift cue: {cue}.",
-                "- This is an opportunity, not an obligation. If it fits the visible reply, have the NPC naturally offer a small in-game gift now and include exactly one hidden action with type give_small_gift.",
+                "- This authorization applies to this one reply only. It is an opportunity, not an obligation: offer at most one small in-game gift and include exactly one hidden action with type give_small_gift only if the visible reply gives it now. Do not upgrade it to give_meaningful_gift unless another explicit LivingNPCs context authorizes that tier.",
                 "- If you include give_small_gift, the visible dialogue must explicitly offer the gift before the hidden metadata, using natural wording such as 'I brought you a small thing' or 'this is for you'. If the visible reply does not offer a gift, do not include the hidden action.",
                 $"- Shared small gift IDs: {sharedGiftIds}.",
                 $"- {npcDisplayName}'s personalized small gift IDs: {personalizedGiftIds}.",
-                "- If naming a specific gift, use an itemId from the two lists above and the matching itemLabel. Generic wording such as 'a small thing' is fine when no specific item is named.",
+                "- If naming a specific gift, copy both itemId and its matching itemLabel from the two lists above. If you cannot make that exact match, use only generic wording such as 'a small thing' and leave both fields empty.",
+                "- Never invent jewelry, clothing, keepsakes, notes, handmade props, or any other object outside those lists, even if it would sound in character.",
                 "- If the moment feels emotionally wrong, crowded, or abrupt, skip the gift rather than forcing it."
+            );
+        }
+
+        public static string NoOpportunitySection()
+        {
+            return string.Join(
+                "\n",
+                "## LivingNPCs Gift Restriction",
+                "- No immediate NPC gift is authorized for this reply.",
+                "- Do not offer or give the farmer any item now, and include no give_small_gift or give_meaningful_gift action.",
+                "- Ordinary conversation may mention gifts for other people, but never turn that topic into an item for the farmer.",
+                "- If conversation history contains an earlier unsupported or failed gift offer, do not claim the farmer received, wore, ate, or kept it; move on without repeating it."
             );
         }
     }

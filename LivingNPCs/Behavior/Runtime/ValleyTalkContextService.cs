@@ -108,13 +108,17 @@ internal sealed class ValleyTalkContextService
     private string BuildGiftOpportunityPromptContext(NPC npc)
     {
         var state = this.memory.GetState(npc);
-        if (state == null
-            || !this.config.EnableAiWorldActions
+        if (state == null)
+        {
+            return string.Empty;
+        }
+
+        if (!this.config.EnableAiWorldActions
             || !this.config.AllowAiSmallGifts
             || state.HighestUnresolvedConflictSeverity >= 30
             || GiftActionRules.HasAiGiftToday(state))
         {
-            return string.Empty;
+            return PromptFragments.GiftOpportunity.NoOpportunitySection();
         }
 
         string cue = string.Empty;
@@ -127,7 +131,7 @@ internal sealed class ValleyTalkContextService
 
         if (string.IsNullOrWhiteSpace(cue))
         {
-            return string.Empty;
+            return PromptFragments.GiftOpportunity.NoOpportunitySection();
         }
 
         return PromptFragments.GiftOpportunity.Section(

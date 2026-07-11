@@ -57,6 +57,12 @@ internal sealed class GiftActionRuntime
             return false;
         }
 
+        if (state.DailyGiftOpportunityTotalDays != Game1.Date.TotalDays)
+        {
+            reason = "no active daily gift opportunity authorized this conversation gift";
+            return false;
+        }
+
         if (!GiftActionRules.IsEligibleForSmallGift(npc, state))
         {
             reason = $"small gifts require at least {GiftActionRules.SmallGiftMinFriendshipHearts} hearts or familiarity {GiftActionRules.SmallGiftMinFamiliarity}";
@@ -189,6 +195,12 @@ internal sealed class GiftActionRuntime
         if (GiftActionRules.HasAiGiftToday(state))
         {
             reason = "another AI gift was already used today";
+            return false;
+        }
+
+        if (state.DailyGiftOpportunityTotalDays != Game1.Date.TotalDays)
+        {
+            reason = "no active daily gift opportunity authorized this meaningful gift";
             return false;
         }
 

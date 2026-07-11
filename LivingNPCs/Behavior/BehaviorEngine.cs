@@ -617,6 +617,13 @@ internal sealed class BehaviorEngine
         string npcResponse
     )
     {
+        // A daily gift opportunity authorizes exactly one generated reply, not every later turn in
+        // the same conversation. Execute that reply's action first, then consume the opportunity
+        // whether the model used it, skipped it, or named an invalid item. Generation failures never
+        // reach this method, so a failed request can still retry safely.
+        LivingNpcState? giftOpportunityState = this.memory.GetState(npc);
+        bool consumeDailyGiftOpportunity = giftOpportunityState?.DailyGiftOpportunityTotalDays == Game1.Date.TotalDays;
+
         foreach (var action in this.BuildEffectiveConversationActions(npc, actions, playerText, npcResponse).Take(1))
         {
             if (action.Type == "companion_outing")
@@ -651,6 +658,11 @@ internal sealed class BehaviorEngine
 
                 this.monitor.Log(I18n.Get("log.worldAction.skipped", new { type = action.Type, npc = npc.Name, reason = actionReason }), LogLevel.Debug);
             }
+        }
+
+        if (consumeDailyGiftOpportunity && giftOpportunityState != null)
+        {
+            GiftActionRules.ClearDailyGiftOpportunity(giftOpportunityState);
         }
     }
 

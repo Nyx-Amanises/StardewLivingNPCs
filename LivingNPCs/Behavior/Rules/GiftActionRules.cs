@@ -37,12 +37,17 @@ internal static class GiftActionRules
 
     public static void ClearGiftOpportunities(LivingNpcState state)
     {
-        state.DailyGiftOpportunityTotalDays = -1;
-        state.DailyGiftOpportunityChancePercent = 0;
-        state.DailyGiftOpportunityReason = string.Empty;
+        ClearDailyGiftOpportunity(state);
         state.PendingReciprocalGiftDueTotalDays = -1;
         state.PendingReciprocalGiftSourceGiftName = string.Empty;
         state.PendingReciprocalGiftReason = string.Empty;
+    }
+
+    public static void ClearDailyGiftOpportunity(LivingNpcState state)
+    {
+        state.DailyGiftOpportunityTotalDays = -1;
+        state.DailyGiftOpportunityChancePercent = 0;
+        state.DailyGiftOpportunityReason = string.Empty;
     }
 
     public static bool VisibleDialoguePromisesUnsupportedGift(string npcResponse)
@@ -61,7 +66,16 @@ internal static class GiftActionRules
             "纸条",
             "手帕",
             "发夹",
-            "小卡片"
+            "手链",
+            "项链",
+            "耳环",
+            "首饰",
+            "小卡片",
+            "bracelet",
+            "necklace",
+            "earring",
+            "jewelry",
+            "jewellery"
         );
     }
 
