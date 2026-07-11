@@ -31,7 +31,6 @@
   "AllowAiCompanionOutings": true,
   "MinimumCompanionOutingStayMinutes": 60,
   "AllowAiFestivalInteractions": true,
-  "AllowAiQuestAssists": true,
   "EnableNpcState": true,
   "NpcStateDailyDecay": 12,
   "NpcEmotionDailyDecay": 12,

@@ -150,7 +150,6 @@ internal static class LivingNpcMetadataRules
             "companion_outing" => "companion_outing",
             "escort_to_location" => "companion_outing",
             "festival_interaction" => "festival_interaction",
-            "assist_quest" => "assist_quest",
             _ => "none"
         };
     }

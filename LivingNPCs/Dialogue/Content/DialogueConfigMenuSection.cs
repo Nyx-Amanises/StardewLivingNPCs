@@ -104,15 +104,6 @@ internal static class DialogueConfigMenuSection
             max: 180,
             interval: 5);
 
-        api.AddTextOption(
-            mod: manifest,
-            name: () => T("dialogue.config.typedResponses.name"),
-            tooltip: () => T("dialogue.config.typedResponses.tooltip"),
-            getValue: () => config.TypedResponses,
-            setValue: value => config.TypedResponses = LegacyConfigImporter.NormalizeTypedResponses(value) ?? config.TypedResponses,
-            allowedValues: ModConfig.TypedResponsesValues,
-            formatAllowedValue: FormatTypedResponses);
-
         // EnableSveCompatibility 与行为系统共用一个字段，已在"兼容"段展示，引擎段不重复列出。
 
         api.AddBoolOption(
@@ -422,17 +413,6 @@ internal static class DialogueConfigMenuSection
     private static string FormatProvider(string providerId)
     {
         return Util.GetConsoleString($"dialogue.config.provider.{providerId.ToLowerInvariant()}", null, providerId);
-    }
-
-    private static string FormatTypedResponses(string value)
-    {
-        string key = value switch
-        {
-            "Always" => "dialogue.config.typedResponses.always",
-            "Never" => "dialogue.config.typedResponses.never",
-            _ => "dialogue.config.typedResponses.withGenerated"
-        };
-        return Util.GetConsoleString(key, null, value);
     }
 
     private static string FormatThinkingLevel(string level)

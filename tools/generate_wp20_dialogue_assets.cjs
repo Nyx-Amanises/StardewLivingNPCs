@@ -609,7 +609,7 @@ add("instructionsResponses", [
 
 add("instructionsDialogueOnly", "Output only the visible villager line and any % farmer response options. Do not output JSON, metadata, analysis, hidden fields, or !LIVINGNPCS_META. Mention a gift or specific item request only when the supplied context explicitly allows that opportunity and item. When accepting travel now, make the present consent and destination clear; later, another day, or by mail must not sound immediate. Never invent an item, destination, reward, task, or world action.", "只输出可见的村民台词和可选的%农夫回应，不要输出JSON、元数据、分析、隐藏字段或!LIVINGNPCS_META。只有上下文明示当前存在相应机会和物品时，才能提到送礼或具体物品求助。若答应现在出行，要明确当下同意和目的地；晚点、改天或邮寄不能说得像立即执行。不得编造物品、目的地、奖励、任务或世界动作。");
 
-const metadataActionSchema = '{"actions":[{"type":"give_small_gift|give_meaningful_gift|give_money|companion_outing|festival_interaction|assist_quest","amount":0,"durationMinutes":0,"delayMinutes":0,"targetLocation":"Farm|Town|Mountain|Beach|Forest|BusStop|Saloon|SeedShop|ArchaeologyHouse|Hospital","travelConsent":"accepted_now|accepted_later|declined|tentative|none","questHint":"","itemId":"","itemLabel":"","reason":""}]}';
+const metadataActionSchema = '{"actions":[{"type":"give_small_gift|give_meaningful_gift|give_money|companion_outing|festival_interaction","amount":0,"durationMinutes":0,"delayMinutes":0,"targetLocation":"Farm|Town|Mountain|Beach|Forest|BusStop|Saloon|SeedShop|ArchaeologyHouse|Hospital","travelConsent":"accepted_now|accepted_later|declined|tentative|none","itemId":"","itemLabel":"","reason":""}]}';
 
 const metadataFull = [
   "After visible dialogue and any % response options, append exactly one final hidden metadata line beginning with !LIVINGNPCS_META followed by compact JSON.",
@@ -620,7 +620,7 @@ const metadataFull = [
   "ambientFollowUp is a short follow-up line only when both people plausibly remain nearby. Do not use it to narrate travel, rewards, or hidden mechanics.",
   "emotionImpact is only for a real emotional shift. emotion must be one of happy, calm, jealous, worried, grateful, disappointed, uneasy, upset, angry, sad, none. apology is true only for a sincere farmer apology; repairDelta only for real repair.",
   "behaviorInfluences are short-lived aftereffects, not world edits or teleportation. At most two. type must be visit_location, comforted, offended, give_space, stay_near, or pause_to_talk.",
-  "actions are system requests, at most one per turn, and must be promised by visible dialogue. Allowed types: give_small_gift, give_meaningful_gift, give_money, companion_outing, festival_interaction, assist_quest.",
+  "actions are system requests, at most one per turn, and must be promised by visible dialogue. Allowed types: give_small_gift, give_meaningful_gift, give_money, companion_outing, festival_interaction.",
   "Money actions must stay from 25 to 250. Companion outings need mutual consent and a supported targetLocation: Farm, Town, Mountain, Beach, Forest, BusStop, Saloon, SeedShop, ArchaeologyHouse, Hospital.",
   "Gift actions must obey the gift ID whitelist from context. If the visible line names a gift, itemId and itemLabel must match it. If the gift is unnamed, leave both empty for the system to choose.",
   "conflicts are only for explicit harm, broken boundaries, bad gifts, or broken promises. severity 10-25 is friction, 30-60 real hurt, above 60 severe rupture.",
@@ -638,7 +638,7 @@ const metadataFullZh = [
   "ambientFollowUp只在双方仍可能留在附近且有自然后续时填写一句短后续。不要用它叙述旅行、奖励或隐藏机制。",
   "emotionImpact只用于真实情绪变化。emotion必须为happy, calm, jealous, worried, grateful, disappointed, uneasy, upset, angry, sad, none之一。apology仅用于农夫真诚道歉；repairDelta仅用于真正修复。",
   "behaviorInfluences是短期事后倾向，不是世界编辑或传送。最多两条。type必须为visit_location, comforted, offended, give_space, stay_near, pause_to_talk。",
-  "actions是系统请求，每轮最多一个，且必须由可见台词明确承诺。允许类型：give_small_gift, give_meaningful_gift, give_money, companion_outing, festival_interaction, assist_quest。",
+  "actions是系统请求，每轮最多一个，且必须由可见台词明确承诺。允许类型：give_small_gift, give_meaningful_gift, give_money, companion_outing, festival_interaction。",
   "给钱动作必须在25到250之间。同行出游需要双方同意，并使用支持的targetLocation：Farm, Town, Mountain, Beach, Forest, BusStop, Saloon, SeedShop, ArchaeologyHouse, Hospital。",
   "礼物动作必须遵守上下文礼物ID白名单。若可见台词点名礼物，itemId和itemLabel必须匹配；若未点名，两者留空由系统选择。",
   "conflicts只用于明确伤害、边界被破坏、糟糕礼物或违背承诺。severity 10-25为轻微摩擦，30-60为真实伤害，60以上为严重破裂。",

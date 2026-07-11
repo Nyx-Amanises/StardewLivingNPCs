@@ -97,7 +97,7 @@ ValleyTalk 侧对 `RegisterPromptOverride` / `RequestGiftMailText` / `RequestMem
    `ConcurrentQueue<PendingValleyTalkExchange>`，返回 true = "已入队"。
    下一次 `UpdateTicked`（主线程）`ProcessPendingValleyTalkExchanges` 出队，
    `ApplyValleyTalkExchange`（:512）：经 `ValleyTalkExchangeParser.Parse` 归一化后
-   写记忆/好感/求助/冲突/情绪，执行世界动作（送小礼、给钱、出游、节日互动、协助任务），
+   写记忆/好感/求助/冲突/情绪，执行世界动作（送小礼、给钱、出游、节日互动），
    排队环境跟进台词，最后 `PushInteractionContext` 刷新推送上下文（见 §3.5）。
    NPC 已不在当前地图则整条丢弃。
 
@@ -146,12 +146,12 @@ ValleyTalk 侧对 `RegisterPromptOverride` / `RequestGiftMailText` / `RequestMem
                      "apology": false, "repairDelta": 0, "reason": "" },
   "actions": [{                    // ≤1 条
     "type": "none",                // give_small_gift | give_meaningful_gift | give_money |
-                                   // companion_outing | festival_interaction | assist_quest | none
+                                   // companion_outing | festival_interaction | none
     "amount": 0,                   // 金额钳制 ≤250
     "durationMinutes": 0,          // 出游 ≤600，其余 ≤20
     "delayMinutes": 0,             // ≤20
     "reason": "", "targetLocation": "", "travelConsent": "",
-    "questHint": "", "itemId": "", "itemLabel": ""
+    "itemId": "", "itemLabel": ""
   }],
   "behaviorInfluences": [{         // ≤2 条
     "type": "none", "summary": "", "targetLocation": "", "targetLocationLabel": "",

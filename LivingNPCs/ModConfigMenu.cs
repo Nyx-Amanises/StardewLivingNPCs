@@ -118,22 +118,6 @@ internal static class ModConfigMenu
             formatValue: FormatPercent
         );
 
-        configMenu.AddBoolOption(
-            mod: manifest,
-            name: () => I18n.Get("gmcm.festival.name"),
-            tooltip: () => I18n.Get("gmcm.festival.tooltip"),
-            getValue: () => config.AllowAiFestivalInteractions,
-            setValue: value => config.AllowAiFestivalInteractions = value
-        );
-
-        configMenu.AddBoolOption(
-            mod: manifest,
-            name: () => I18n.Get("gmcm.questAssist.name"),
-            tooltip: () => I18n.Get("gmcm.questAssist.tooltip"),
-            getValue: () => config.AllowAiQuestAssists,
-            setValue: value => config.AllowAiQuestAssists = value
-        );
-
         configMenu.AddSectionTitle(
             mod: manifest,
             text: () => I18n.Get("gmcm.section.compat")

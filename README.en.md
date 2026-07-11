@@ -205,7 +205,6 @@ Current whitelist:
 | `give_money` | at least friendly; defaults to 100g, capped by config (default cap 250g) |
 | `companion_outing` | both clearly agree to go somewhere together now; the NPC uses vanilla schedule-style cross-map routing and stays at least 2 in-game hours on arrival |
 | `festival_interaction` | light special interactions in festival / event scenes only |
-| `assist_quest` | light assistance around the player's existing quests; never completes them |
 
 Deliberately not enabled: planting crops, arbitrary NPC teleports (outings prefer vanilla schedule pathing and real map exits; a safe-position fallback is only allowed once the NPC is off-screen and routing failed), permanent schedule edits, changing quests/story/world state, or any non-whitelisted command.
 
@@ -357,7 +356,7 @@ LivingNPCs ships a deliberately small in-game Generic Mod Config Menu (enable mo
 - Hotkeys and manual-behavior test mode; memory sizes; whether to log conversation starts.
 - Help requests: pending cap, cooldown days, minimum relationship trust, daily offer chance, completion reward range.
 - AI-chat bonus friendship and its daily cap; ambient follow-ups; dialogue-driven behaviors and how many days they linger.
-- AI world actions: per-action toggles (small / meaningful gift, money, outing, festival, quest assist); meaningful-gift cooldown; money cap; minimum outing stay.
+- AI world actions: per-action toggles (small / meaningful gift, money, outing, festival); meaningful-gift cooldown; money cap; minimum outing stay.
 - State / emotion / conflict daily decay; passive-behavior chance; daily behavior cap; interaction range.
 - ValleyTalk prompt bridge; `ConcisePromptContext`; the optional AI behavior planner; and the hidden, default-on LivingNPCs action decision pass.
 

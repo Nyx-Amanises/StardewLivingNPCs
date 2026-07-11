@@ -378,7 +378,6 @@ internal sealed class ValleyTalkWorldActionRequest
     public string Reason { get; set; } = string.Empty;
     public string TargetLocation { get; set; } = string.Empty;
     public string TravelConsent { get; set; } = string.Empty;
-    public string QuestHint { get; set; } = string.Empty;
     public string ItemId { get; set; } = string.Empty;
     public string ItemLabel { get; set; } = string.Empty;
 }

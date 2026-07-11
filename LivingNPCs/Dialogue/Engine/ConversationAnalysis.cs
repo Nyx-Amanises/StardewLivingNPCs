@@ -167,7 +167,6 @@ internal sealed class ConversationAnalysis
                     action.DelayMinutes = LivingNpcMetadataRules.ClampActionDelayMinutes(action.DelayMinutes);
                     action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
                     action.TravelConsent = LivingNpcMetadataRules.NormalizeTravelConsent(action.TravelConsent);
-                    action.QuestHint = action.QuestHint?.Trim() ?? string.Empty;
                     action.ItemId = action.ItemId?.Trim() ?? string.Empty;
                     action.ItemLabel = action.ItemLabel?.Trim() ?? string.Empty;
                     return action;
@@ -409,8 +408,6 @@ internal sealed class ConversationWorldActionRequest
     [JsonProperty("travelConsent")]
     public string TravelConsent { get; set; } = string.Empty;
 
-    [JsonProperty("questHint")]
-    public string QuestHint { get; set; } = string.Empty;
 
     [JsonProperty("itemId")]
     public string ItemId { get; set; } = string.Empty;

@@ -645,7 +645,6 @@ internal sealed class BehaviorEngine
                 "give_money" => this.giftActions.TryGiveMoney(npc, action, out actionReason),
                 "companion_outing" => this.companionOutings.TryStart(npc, action, out actionReason),
                 "festival_interaction" => this.directWorldActions.TryFestivalInteraction(npc, action, out actionReason),
-                "assist_quest" => this.directWorldActions.TryAssistQuest(npc, action, out actionReason),
                 _ => false
             };
 

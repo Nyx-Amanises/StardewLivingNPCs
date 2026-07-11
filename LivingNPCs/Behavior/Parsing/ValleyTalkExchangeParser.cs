@@ -69,7 +69,6 @@ internal static class ValleyTalkExchangeParser
                     action.DelayMinutes = LivingNpcMetadataRules.ClampActionDelayMinutes(action.DelayMinutes);
                     action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
                     action.TravelConsent = BehaviorValueNormalizer.NormalizeTravelConsent(action.TravelConsent);
-                    action.QuestHint = action.QuestHint?.Trim() ?? string.Empty;
                     action.ItemId = action.ItemId?.Trim() ?? string.Empty;
                     action.ItemLabel = action.ItemLabel?.Trim() ?? string.Empty;
                     return action;

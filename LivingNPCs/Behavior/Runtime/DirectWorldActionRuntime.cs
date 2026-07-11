@@ -73,45 +73,6 @@ internal sealed class DirectWorldActionRuntime
         return true;
     }
 
-    public bool TryAssistQuest(NPC npc, ValleyTalkWorldActionRequest action, out string reason)
-    {
-        reason = string.Empty;
-        if (!this.config.AllowAiQuestAssists)
-        {
-            reason = "quest assists are disabled";
-            return false;
-        }
-
-        if (!this.canUseWorldAction(npc, "assist_quest", requireFriendly: true, out reason, allowDuringEvents: false, allowDistantWhenExplicit: false))
-        {
-            return false;
-        }
-
-        if (Game1.player?.questLog == null || Game1.player.questLog.Count == 0)
-        {
-            reason = "the farmer has no active quest";
-            return false;
-        }
-
-        var state = this.memory.GetState(npc);
-        npc.doEmote(16);
-        if (state != null)
-        {
-            string questCue = string.IsNullOrWhiteSpace(action.QuestHint)
-                ? "an active task"
-                : action.QuestHint.Trim();
-            this.memory.RecordNpcWorldAction(
-                npc,
-                "AssistedQuest",
-                BuildWorldActionReason(action.Reason, $"they offered light non-completing help around {questCue}"),
-                this.config.MaxMemoryEntriesPerNpc
-            );
-            MarkStateAfterWorldAction(state, "they offered light task help");
-        }
-
-        return true;
-    }
-
     private static string BuildWorldActionReason(string requestedReason, string fallback)
     {
         return string.IsNullOrWhiteSpace(requestedReason)

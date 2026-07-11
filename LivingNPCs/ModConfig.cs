@@ -46,7 +46,6 @@ internal sealed class ModConfig
     public bool AllowAiCompanionOutings { get; set; } = true;
     public int MinimumCompanionOutingStayMinutes { get; set; } = 60;
     public bool AllowAiFestivalInteractions { get; set; } = true;
-    public bool AllowAiQuestAssists { get; set; } = true;
     public bool EnableNpcState { get; set; } = true;
     public int NpcStateDailyDecay { get; set; } = 12;
     public int NpcEmotionDailyDecay { get; set; } = 12;
@@ -108,7 +107,7 @@ internal sealed class ModConfig
     public int MarriageFrequency { get; set; } = 4;
     public int GiftFrequency { get; set; } = 4;
     public bool GenerateAiForNormalRightClick { get; set; } = false;
-    public string TypedResponses { get; set; } = "With Generated";
+    public string TypedResponses { get; set; } = "Always";
     public SButton InitiateTypedDialogueKey { get; set; } = SButton.LeftAlt;
     /// <summary>允许对睡觉中的 NPC 发起主动搭话（叫醒对方，提示词会带"刚被叫醒"情境）。</summary>
     public bool AllowWakeSleepingNpc { get; set; } = true;
@@ -201,6 +200,18 @@ internal sealed class ModConfig
             changed = true;
         }
 
+        if (!this.AllowAiFestivalInteractions)
+        {
+            this.AllowAiFestivalInteractions = true;
+            changed = true;
+        }
+
+        if (!string.Equals(this.TypedResponses, "Always", StringComparison.Ordinal))
+        {
+            this.TypedResponses = "Always";
+            changed = true;
+        }
+
         int Clamp(int value, int min, int max)
         {
             int clamped = value < min ? min : (value > max ? max : value);
@@ -237,7 +248,7 @@ internal sealed class ModConfig
         this.AiGiftMailTimeoutSeconds = Clamp(this.AiGiftMailTimeoutSeconds, 5, 120);
         this.MemoryImpressionTimeoutSeconds = Clamp(this.MemoryImpressionTimeoutSeconds, 10, 180);
 
-        // 对话引擎字段（WP15 §3.1/§4.9：超时与档位钳制、思考档位归一、TypedResponses 归一）。
+        // 对话引擎字段（WP15 §3.1/§4.9：超时与档位钳制、思考档位归一）。
         this.QueryTimeout = Clamp(this.QueryTimeout, 5, 180);
         this.SemanticContextRoutingTimeoutSeconds = Clamp(this.SemanticContextRoutingTimeoutSeconds, 2, 30);
         this.GeneralFrequency = Clamp(this.GeneralFrequency, 0, 4);
@@ -255,13 +266,6 @@ internal sealed class ModConfig
         if (!string.Equals(chat, this.ChatThinkingLevel, StringComparison.Ordinal))
         {
             this.ChatThinkingLevel = chat;
-            changed = true;
-        }
-
-        string typed = Dialogue.Content.LegacyConfigImporter.NormalizeTypedResponses(this.TypedResponses) ?? "With Generated";
-        if (!string.Equals(typed, this.TypedResponses, StringComparison.Ordinal))
-        {
-            this.TypedResponses = typed;
             changed = true;
         }
 
@@ -315,7 +319,6 @@ internal sealed class ModConfig
         this.AllowAiCompanionOutings = defaults.AllowAiCompanionOutings;
         this.MinimumCompanionOutingStayMinutes = defaults.MinimumCompanionOutingStayMinutes;
         this.AllowAiFestivalInteractions = defaults.AllowAiFestivalInteractions;
-        this.AllowAiQuestAssists = defaults.AllowAiQuestAssists;
         this.EnableNpcState = defaults.EnableNpcState;
         this.NpcStateDailyDecay = defaults.NpcStateDailyDecay;
         this.NpcEmotionDailyDecay = defaults.NpcEmotionDailyDecay;
