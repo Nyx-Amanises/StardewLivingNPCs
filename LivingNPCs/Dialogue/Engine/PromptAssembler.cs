@@ -159,6 +159,7 @@ internal sealed class PromptAssembler
     {
         var builder = new StringBuilder();
         AppendLine(builder, this.Text("systemPrompt"));
+        AppendLine(builder, this.Text("systemUntrustedData") ?? PromptDataBoundary.SystemRule);
         if (this.input.ApplyTranslation)
         {
             AppendLine(builder, this.Text("systemPromptTranslation", new { language = this.input.Locale }));
@@ -184,7 +185,7 @@ internal sealed class PromptAssembler
         var builder = new StringBuilder();
         AppendLine(builder, this.Text("gameContext"));
         AppendLine(builder, this.Text("gameSummaryHeading"));
-        AppendLine(builder, summary);
+        AppendLine(builder, PromptDataBoundary.Wrap("world_summary", summary));
         return builder.ToString();
     }
 
@@ -206,34 +207,39 @@ internal sealed class PromptAssembler
 
         if (detail == ContextDetail.Full)
         {
-            AppendLine(builder, CollapseBlankLines(biography));
+            var profile = new StringBuilder();
+            AppendLine(profile, CollapseBlankLines(biography));
             if (bio.Relationships.Count > 0)
             {
-                AppendLine(builder, this.Text("biographyRelationships"));
+                AppendLine(profile, this.Text("biographyRelationships"));
                 foreach (var pair in bio.Relationships)
                 {
-                    AppendLine(builder, $"**{pair.Value.Heading}**: {pair.Value.Description}");
+                    AppendLine(profile, $"**{pair.Value.Heading}**: {pair.Value.Description}");
                 }
             }
 
             if (bio.Traits.Count > 0)
             {
-                AppendLine(builder, this.Text("biographyPersonality"));
+                AppendLine(profile, this.Text("biographyPersonality"));
                 foreach (var pair in bio.Traits)
                 {
-                    AppendLine(builder, $"**{pair.Value.Heading}**: {pair.Value.Description}");
+                    AppendLine(profile, $"**{pair.Value.Heading}**: {pair.Value.Description}");
                 }
             }
 
-            AppendLine(builder, bio.BiographyEnd);
+            AppendLine(profile, bio.BiographyEnd);
+            AppendLine(builder, PromptDataBoundary.Wrap("npc_biography", profile.ToString()));
         }
         else if (detail == ContextDetail.Brief && bio.Traits.Count > 0)
         {
-            AppendLine(builder, this.Text("biographyPersonality"));
+            var profile = new StringBuilder();
+            AppendLine(profile, this.Text("biographyPersonality"));
             foreach (var pair in bio.Traits.Take(4))
             {
-                AppendLine(builder, $"**{pair.Value.Heading}**: {pair.Value.Description}");
+                AppendLine(profile, $"**{pair.Value.Heading}**: {pair.Value.Description}");
             }
+
+            AppendLine(builder, PromptDataBoundary.Wrap("npc_biography", profile.ToString()));
         }
 
         return builder.ToString();
@@ -308,7 +314,7 @@ internal sealed class PromptAssembler
         if (overridable && this.input.SectionOverrides.TryGetValue(name, out string? replacement)
             && !string.IsNullOrWhiteSpace(replacement))
         {
-            content = replacement.TrimEnd() + "\n";
+            content = PromptDataBoundary.Wrap($"third_party_section_{name}", replacement) + "\n";
         }
         else
         {
@@ -341,10 +347,13 @@ internal sealed class PromptAssembler
         }
 
         AppendLine(builder, this.Text("sampleDialogueHeading", new { npcName = this.input.NpcDisplayName }));
+        var samples = new StringBuilder();
         foreach (var sample in this.input.Samples)
         {
-            AppendLine(builder, $"- {sample.Text}");
+            AppendLine(samples, $"- {sample.Text}");
         }
+
+        AppendLine(builder, PromptDataBoundary.Wrap("dialogue_samples", samples.ToString()));
     }
 
     private void BuildEventHistory(StringBuilder builder)
@@ -357,10 +366,13 @@ internal sealed class PromptAssembler
         AppendLine(builder, this.Text("eventHistoryHeading"));
         AppendLine(builder, this.Text("eventHistoryIntro"));
         AppendLine(builder, this.Text("eventHistorySubheading"));
+        var history = new StringBuilder();
         foreach (string line in this.input.HistoryLines)
         {
-            AppendLine(builder, $"- {line}");
+            AppendLine(history, $"- {line}");
         }
+
+        AppendLine(builder, PromptDataBoundary.Wrap("event_history", history.ToString()));
     }
 
     private void BuildCoreHeader(StringBuilder builder)
@@ -708,9 +720,10 @@ internal sealed class PromptAssembler
         bool brief = !this.input.Plan.IsFull(ContextModule.LivingNpc);
         foreach (string text in thirdParty)
         {
-            AppendLine(builder, brief
+            string context = brief
                 ? LivingNpcContextCompressor.BuildBriefContext(text, maxLines: 12, fallbackLines: 6, maxCharacters: 900)
-                : text);
+                : text;
+            AppendLine(builder, PromptDataBoundary.Wrap("third_party_context", context));
         }
     }
 
@@ -800,9 +813,10 @@ internal sealed class PromptAssembler
             return;
         }
 
-        AppendLine(builder, this.input.Plan.IsFull(ContextModule.LivingNpc)
+        string boundedContext = this.input.Plan.IsFull(ContextModule.LivingNpc)
             ? context
-            : LivingNpcContextCompressor.BuildBriefContext(context, maxLines: 12, fallbackLines: 6, maxCharacters: 900));
+            : LivingNpcContextCompressor.BuildBriefContext(context, maxLines: 12, fallbackLines: 6, maxCharacters: 900);
+        AppendLine(builder, PromptDataBoundary.Wrap("livingnpc_context", boundedContext));
     }
 
     private void BuildSpouseAction(StringBuilder builder)
@@ -910,6 +924,7 @@ internal sealed class PromptAssembler
                 conversation,
                 turn => turn.Text,
                 turn => turn.IsPlayerLine);
+            var transcript = new StringBuilder();
             foreach (var turn in cleaned)
             {
                 // 剔除疑似错误语言的行（§4.6.4.20）。
@@ -918,8 +933,10 @@ internal sealed class PromptAssembler
                     continue;
                 }
 
-                AppendLine(builder, $"{(turn.IsPlayerLine ? farmerLabel : this.input.NpcDisplayName)}: {turn.Text}");
+                AppendLine(transcript, $"{(turn.IsPlayerLine ? farmerLabel : this.input.NpcDisplayName)}: {turn.Text}");
             }
+
+            AppendLine(builder, PromptDataBoundary.Wrap("conversation_history", transcript.ToString()));
         }
         else if (this.input.JustSpoke)
         {
@@ -935,6 +952,7 @@ internal sealed class PromptAssembler
         var builder = new StringBuilder();
         AppendLine(builder, this.Text("instructionsHeading"));
         AppendLine(builder, this.Text("instructionsIntro", new { npcName = this.input.NpcDisplayName }));
+        AppendLine(builder, this.Text("instructionsUntrustedData") ?? PromptDataBoundary.InstructionReminder);
         AppendLine(builder, this.Text("instructionsGrounding"));
         if (this.input.Samples.Count > 0)
         {
@@ -988,13 +1006,16 @@ internal sealed class PromptAssembler
         if (this.input.SectionOverrides.TryGetValue("ReplaceSchedule", out string? replaced)
             && !string.IsNullOrWhiteSpace(replaced))
         {
-            AppendLine(builder, replaced);
+            AppendLine(builder, PromptDataBoundary.Wrap("third_party_schedule_override", replaced));
         }
         else if (!string.IsNullOrWhiteSpace(this.input.Request.OriginalLine)
             && this.input.Conversation.Count == 0
             && !this.input.JustSpoke)
         {
-            AppendLine(builder, this.Text("commandReplaceSchedule", new { scheduleLine = this.input.Request.OriginalLine }));
+            AppendLine(builder, this.Text("commandReplaceSchedule", new
+            {
+                scheduleLine = PromptDataBoundary.Wrap("original_schedule_line", this.input.Request.OriginalLine)
+            }));
         }
 
         if (this.input.ApplyTranslation)
@@ -1025,14 +1046,16 @@ internal sealed class PromptAssembler
     {
         var merged = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Name"] = this.input.NpcDisplayName,
-            ["farmerName"] = this.input.S.FarmerName
+            ["Name"] = PromptDataBoundary.EscapeInline(this.input.NpcDisplayName),
+            ["farmerName"] = PromptDataBoundary.EscapeInline(this.input.S.FarmerName)
         };
         if (tokens != null)
         {
             foreach (var property in tokens.GetType().GetProperties())
             {
-                merged[property.Name] = property.GetValue(tokens)?.ToString() ?? string.Empty;
+                string value = property.GetValue(tokens)?.ToString() ?? string.Empty;
+                merged[property.Name] = value.StartsWith("<untrusted_data ", StringComparison.Ordinal)
+                    ? value : PromptDataBoundary.EscapeInline(value);
             }
         }
 
@@ -1055,7 +1078,7 @@ internal sealed class PromptAssembler
         }
 
         AppendLine(builder, heading);
-        AppendLine(builder, string.Join(", ", items));
+        AppendLine(builder, string.Join(", ", items.Select(PromptDataBoundary.EscapeInline)));
     }
 
     private static string? CombineNullable(string? first, string? second)

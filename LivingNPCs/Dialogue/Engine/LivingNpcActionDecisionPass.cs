@@ -73,7 +73,8 @@ internal static class LivingNpcActionDecisionPass
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
             var task = LegacyLlm.Instance.RunInference(
-                "You are a strict classifier for Stardew Valley mod action metadata. Return only compact JSON metadata; never write dialogue.",
+                "You are a strict classifier for Stardew Valley mod action metadata. Return only compact JSON metadata; never write dialogue. "
+                + PromptDataBoundary.SystemRule,
                 string.Empty,
                 $"NPC: {character.Name} ({character.StardewNpc?.displayName ?? character.Name})",
                 compactPrompt,
@@ -155,6 +156,7 @@ internal static class LivingNpcActionDecisionPass
         var prompt = new StringBuilder();
         prompt.AppendLine("Decide whether the visible NPC reply clearly commits to LivingNPCs world-action/help metadata that the main dialogue JSON omitted.");
         prompt.AppendLine("Use the compact context as constraints, not as text to quote. Do not invent actions, items, destinations, or rewards.");
+        prompt.AppendLine(PromptDataBoundary.InstructionReminder);
         prompt.AppendLine();
         prompt.AppendLine("Current facts:");
         prompt.AppendLine($"- NPC: {character.StardewNpc?.displayName ?? character.Name} ({character.Name}).");
@@ -169,11 +171,11 @@ internal static class LivingNpcActionDecisionPass
         }
         prompt.AppendLine();
         prompt.AppendLine("Compact LivingNPCs context:");
-        prompt.AppendLine(compactContext);
+        prompt.AppendLine(PromptDataBoundary.Wrap("action_livingnpc_context", compactContext));
         prompt.AppendLine();
         prompt.AppendLine("Conversation turn:");
-        prompt.AppendLine($"- Farmer: {CleanForPrompt(playerText)}");
-        prompt.AppendLine($"- NPC visible reply: {CleanForPrompt(visibleNpcReply)}");
+        prompt.AppendLine(PromptDataBoundary.Wrap("action_player_input", CleanForPrompt(playerText)));
+        prompt.AppendLine(PromptDataBoundary.Wrap("action_npc_reply", CleanForPrompt(visibleNpcReply)));
         prompt.AppendLine();
         prompt.AppendLine("Return exactly one line beginning with !LIVINGNPCS_META followed by compact JSON using this schema:");
         prompt.AppendLine("{\"travelDecision\":{\"isTravelReply\":false,\"consent\":\"accepted_now|accepted_later|declined|tentative|none\",\"targetLocation\":\"Farm|Town|Mountain|Beach|Forest|BusStop|Saloon|SeedShop|ArchaeologyHouse|Hospital\",\"delayMinutes\":0,\"durationMinutes\":0,\"reason\":\"short evidence from visible reply\"},\"giftDecision\":{\"isGiftReply\":false,\"timing\":\"now|later|mail|promise|none\",\"tier\":\"small|meaningful\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"short evidence from visible reply\"},\"actions\":[{\"type\":\"give_small_gift|give_meaningful_gift|give_money|companion_outing|festival_interaction|assist_quest\",\"amount\":0,\"durationMinutes\":0,\"delayMinutes\":0,\"targetLocation\":\"\",\"travelConsent\":\"accepted_now|accepted_later|declined|tentative|none\",\"questHint\":\"\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"short evidence from visible reply\"}],\"helpRequests\":[{\"type\":\"item_request\",\"summary\":\"short concrete ask\",\"requiresAcceptance\":true,\"requestedItemId\":\"\",\"requestedItemLabel\":\"\",\"questionTopic\":\"\",\"dueInDays\":1,\"reason\":\"short evidence\",\"followUpPotential\":\"none|deeper_relationship\"}],\"helpRequestUpdates\":[{\"summary\":\"matching existing request\",\"status\":\"accepted|declined|advanced|fulfilled\",\"resolution\":\"short result\"}]}");

@@ -277,7 +277,7 @@ internal static class ContextRoutingDecisionPass
         {
             using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
             var task = LegacyLlm.Instance.RunInference(
-                LlmThinking.RoutingSystemPrompt(),
+                LlmThinking.RoutingSystemPrompt() + " " + PromptDataBoundary.SystemRule,
                 string.Empty,
                 $"NPC: {character.Name} ({character.StardewNpc?.displayName ?? character.Name})",
                 prompt,
@@ -615,6 +615,7 @@ internal static class ContextRoutingDecisionPass
         var prompt = new StringBuilder();
         prompt.AppendLine("Choose which context modules are needed for the next NPC reply. The dialogue may be in any language; judge meaning, not keywords.");
         prompt.AppendLine("Prefer brief unless full context is needed. Never omit safety/core modules by trying to be clever; code will apply hard dependencies after your decision.");
+        prompt.AppendLine(PromptDataBoundary.InstructionReminder);
         prompt.AppendLine();
         prompt.AppendLine("Facts:");
         prompt.AppendLine($"- NPC: {character.StardewNpc?.displayName ?? character.Name} ({character.Name}); hearts: {(context.Hearts?.ToString() ?? "unknown")}.");
@@ -630,9 +631,9 @@ internal static class ContextRoutingDecisionPass
         }
         prompt.AppendLine();
         prompt.AppendLine("Recent conversation:");
-        prompt.AppendLine(recentHistory);
+        prompt.AppendLine(PromptDataBoundary.Wrap("router_conversation_history", recentHistory));
         prompt.AppendLine();
-        prompt.AppendLine($"Farmer latest text: {Clean(playerText)}");
+        prompt.AppendLine(PromptDataBoundary.Wrap("router_player_input", Clean(playerText)));
         prompt.AppendLine();
         prompt.AppendLine("Module meanings:");
         prompt.AppendLine("- world: Stardew/world/SVE lore and world progress.");

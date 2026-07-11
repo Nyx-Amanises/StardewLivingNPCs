@@ -123,12 +123,59 @@ public sealed class ContentAssetValidationTests
     }
 
     [Fact]
-    public void Prompts_DefaultAndZh_HaveIdenticalKeySets()
+    public void Prompts_DefaultAndZh_HaveIdenticalBaseKeys_AndZhKeepsOnlyMeaningfulGenderVariants()
     {
         var en = Deserialize<Dictionary<string, string>>(Path.Combine(AssetRoot, "prompts", "default.json"));
         var zh = Deserialize<Dictionary<string, string>>(Path.Combine(AssetRoot, "prompts", "zh.json"));
 
-        Assert.Equal(en.Keys.OrderBy(k => k, StringComparer.Ordinal), zh.Keys.OrderBy(k => k, StringComparer.Ordinal));
+        static bool IsGenderVariant(string key) =>
+            key.EndsWith(".MaleNpc", StringComparison.Ordinal)
+            || key.EndsWith(".FemaleNpc", StringComparison.Ordinal);
+
+        Assert.Equal(
+            en.Keys.Where(key => !IsGenderVariant(key)).OrderBy(key => key, StringComparer.Ordinal),
+            zh.Keys.Where(key => !IsGenderVariant(key)).OrderBy(key => key, StringComparer.Ordinal));
+
+        foreach (string maleKey in zh.Keys.Where(key => key.EndsWith(".MaleNpc", StringComparison.Ordinal)))
+        {
+            string baseKey = maleKey[..^".MaleNpc".Length];
+            string femaleKey = baseKey + ".FemaleNpc";
+            Assert.Contains(baseKey, zh.Keys);
+            Assert.Contains(femaleKey, zh.Keys);
+            Assert.NotEqual(zh[maleKey], zh[femaleKey]);
+        }
+
+        foreach (string femaleKey in zh.Keys.Where(key => key.EndsWith(".FemaleNpc", StringComparison.Ordinal)))
+        {
+            Assert.Contains(femaleKey[..^".FemaleNpc".Length] + ".MaleNpc", zh.Keys);
+        }
+    }
+
+    [Theory]
+    [InlineData("default.json")]
+    [InlineData("zh.json")]
+    public void Prompts_MetadataSchemas_UseCanonicalActionFields(string fileName)
+    {
+        var prompts = Deserialize<Dictionary<string, string>>(Path.Combine(AssetRoot, "prompts", fileName));
+        string[] expectedFields =
+        {
+            "type", "amount", "durationMinutes", "delayMinutes", "targetLocation",
+            "travelConsent", "questHint", "itemId", "itemLabel", "reason"
+        };
+
+        foreach (string key in new[] { "instructionsLivingNpcMetadata", "instructionsLivingNpcMetadataOptimized" })
+        {
+            Match actionSchema = Regex.Match(
+                prompts[key],
+                "\\\"actions\\\":\\[\\{(?<body>.*?)\\}\\]",
+                RegexOptions.Singleline);
+            Assert.True(actionSchema.Success, $"{fileName}:{key} must include an explicit actions schema");
+
+            string[] actualFields = Regex.Matches(actionSchema.Groups["body"].Value, "\\\"(?<name>[A-Za-z][A-Za-z0-9]*)\\\"\\s*:")
+                .Select(match => match.Groups["name"].Value)
+                .ToArray();
+            Assert.Equal(expectedFields, actualFields);
+        }
     }
 
     [Fact]

@@ -186,14 +186,46 @@ internal static class DialogueContentSetup
             var zh = pipeline.ReadJsonFile<Dictionary<string, string>>(ContentAssetNames.PromptsZhFile);
             if (zh != null)
             {
-                foreach (var pair in zh)
-                {
-                    table[pair.Key] = pair.Value;
-                }
+                MergeLocalizedPrompts(table, zh);
             }
         }
 
         return table;
+    }
+
+    /// <summary>
+    /// 将本地化提示词逐键覆盖到默认表。若本地化文件提供了基础键但没有显式提供对应的 NPC 性别变体，
+    /// 则移除默认语言中的性别变体，使查找正确回退到本地化基础键，而不是重新命中默认语言旧文案。
+    /// </summary>
+    internal static void MergeLocalizedPrompts(
+        Dictionary<string, string> table,
+        IReadOnlyDictionary<string, string> localized)
+    {
+        foreach (string key in localized.Keys)
+        {
+            if (key.EndsWith(".MaleNpc", StringComparison.Ordinal)
+                || key.EndsWith(".FemaleNpc", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string maleKey = key + ".MaleNpc";
+            string femaleKey = key + ".FemaleNpc";
+            if (!localized.ContainsKey(maleKey))
+            {
+                table.Remove(maleKey);
+            }
+
+            if (!localized.ContainsKey(femaleKey))
+            {
+                table.Remove(femaleKey);
+            }
+        }
+
+        foreach (var pair in localized)
+        {
+            table[pair.Key] = pair.Value;
+        }
     }
 
     private static WorldSummary LoadWorldFile(bool optimized)
