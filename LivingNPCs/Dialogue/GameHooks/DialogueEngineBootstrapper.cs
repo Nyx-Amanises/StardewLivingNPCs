@@ -93,6 +93,7 @@ internal static class DialogueEngineBootstrapper
 
     private static void OnUpdateTicked(object? sender, UpdateTickedEventArgs e)
     {
+        ConversationTranscriptExporter.ExportPending();
         TypedInputRequestQueue.OnUpdateTicked();
     }
 
@@ -236,6 +237,7 @@ internal static class DialogueEngineBootstrapper
         {
             AsyncBuilder.Instance.Scheduler?.CancelActiveGeneration();
             DialogueEngineHost.Instance?.History.ClearContext();
+            ConversationTranscriptExporter.ClearPending();
             TypedInputRequestQueue.Clear();
             MarriageChoreBuffer.Clear();
             DisplayedDialogueRecorder.Reset();

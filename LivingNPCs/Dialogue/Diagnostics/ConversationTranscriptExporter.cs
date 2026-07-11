@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -30,6 +31,45 @@ internal static class ConversationTranscriptExporter
     // seeded by full writes and dropped whenever the file is rebuilt or fails validation.
     private static readonly object LiveSectionGate = new();
     private static readonly Dictionary<string, (long Offset, int ArchivedCount)> LiveSectionOffsets = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly ConcurrentQueue<string> PendingExports = new();
+
+    /// <summary>
+    /// 生成收尾可能发生在后台线程；这里只排队，由主线程的 UpdateTicked 泵执行文件写入。
+    /// </summary>
+    public static void QueueExport(string npcName)
+    {
+        if (!string.IsNullOrWhiteSpace(npcName))
+        {
+            PendingExports.Enqueue(npcName);
+        }
+    }
+
+    /// <summary>主线程逐帧刷新已完成的会话，并合并同一帧内同 NPC 的重复请求。</summary>
+    public static void ExportPending()
+    {
+        if (!Context.IsWorldReady || DialogueServices.Helper == null)
+        {
+            return;
+        }
+
+        var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        while (PendingExports.TryDequeue(out string? npcName))
+        {
+            names.Add(npcName);
+        }
+
+        foreach (string npcName in names)
+        {
+            Export(npcName, DialogueHistoryStore.Instance.GetHistory(npcName));
+        }
+    }
+
+    public static void ClearPending()
+    {
+        while (PendingExports.TryDequeue(out _))
+        {
+        }
+    }
 
     public static string CurrentSaveFolderPath => Path.Combine(
         DialogueServices.Helper.DirectoryPath,

@@ -16,6 +16,12 @@ internal sealed class EngineHistoryWriter
     private readonly DialogueHistoryStore store;
     private readonly object gate = new();
 
+    /// <summary>
+    /// 玩家可读聊天记录的即时导出通道。每次完整 AI 会话写入历史后调用；测试可替换。
+    /// </summary>
+    internal Action<string, StardewEventHistory>? TranscriptSink { get; set; }
+        = (npcName, _) => ConversationTranscriptExporter.QueueExport(npcName);
+
     /// <summary>会话续接缓存：NPC 名 → 最近上下文（连续对话间按元素 GUID 去重合并）。</summary>
     private readonly Dictionary<string, List<ConversationTurn>> recentContext = new(StringComparer.OrdinalIgnoreCase);
 
@@ -145,6 +151,7 @@ internal sealed class EngineHistoryWriter
             Lines = turns.Select(turn => new ExchangeLine(turn.Text, turn.IsPlayerLine)).ToList()
         });
         this.store.PruneAndArchive(npcName);
+        this.TranscriptSink?.Invoke(npcName, this.store.GetHistory(npcName));
     }
 
     // ---- 查询 ----

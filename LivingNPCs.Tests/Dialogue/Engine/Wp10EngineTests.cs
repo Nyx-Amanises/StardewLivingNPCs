@@ -208,6 +208,7 @@ public class EngineHistoryWriterTests
     public void UpsertConversation_Overwrites_Same_Id_And_Removes_Overlapping_Dialogue()
     {
         var (writer, store) = Create();
+        writer.TranscriptSink = null;
         writer.AddDialogueLine("Abigail", new[] { "shared line" }, Now);
 
         var turns = new List<ConversationTurn>
@@ -222,6 +223,35 @@ public class EngineHistoryWriterTests
         Assert.Empty(history.DialogueHistory);
         Assert.Single(history.ConversationHistory);
         Assert.Equal(3, history.ConversationHistory[0].Item2.ConversationElements.Count);
+    }
+
+    [Fact]
+    public void UpsertConversation_Exports_Transcript_After_Each_Completed_Round()
+    {
+        var (writer, _) = Create();
+        var exports = new List<(string NpcName, int TurnCount)>();
+        writer.TranscriptSink = (npcName, history) => exports.Add((
+            npcName,
+            history.ConversationHistory.Single().Item2.ConversationElements.Count));
+
+        writer.UpsertConversation("Abigail", new List<ConversationTurn>
+        {
+            new("hello", true, "conv-1"),
+            new("Hi!", false, "npc-1")
+        }, Now);
+        writer.UpsertConversation("Abigail", new List<ConversationTurn>
+        {
+            new("hello", true, "conv-1"),
+            new("Hi!", false, "npc-1"),
+            new("How are you?", true, "player-2"),
+            new("Doing well.", false, "npc-2")
+        }, Now);
+
+        Assert.Equal(new[]
+        {
+            ("Abigail", 2),
+            ("Abigail", 4)
+        }, exports);
     }
 
     [Fact]
