@@ -273,6 +273,15 @@ internal static class NativeDialogueTextInputController
             return;
         }
 
+        // SpriteText's Chinese bitmap only contains the glyphs needed by the game's shipped
+        // strings. Valid IME input can therefore be accepted into text but remain invisible
+        // (for example U+6B38 '欸'). Use the broader localized dialogue font for Chinese input.
+        if (LocalizedContentManager.CurrentLanguageCode == LocalizedContentManager.LanguageCode.zh)
+        {
+            DrawWrappedSpriteFontText(spriteBatch, value, bounds, color);
+            return;
+        }
+
         int wrapWidth = Math.Max(1, bounds.Width - WrapSafetyPixels);
         int lineHeight = GetLineHeight(wrapWidth);
         int maxLines = Math.Max(1, bounds.Height / lineHeight);
@@ -308,6 +317,62 @@ internal static class NativeDialogueTextInputController
             );
             y += lineHeight;
         }
+    }
+
+    private static void DrawWrappedSpriteFontText(SpriteBatch spriteBatch, string value, Rectangle bounds, Color color)
+    {
+        SpriteFont font = Game1.dialogueFont ?? Game1.smallFont;
+        if (font == null)
+        {
+            return;
+        }
+
+        int wrapWidth = Math.Max(1, bounds.Width - WrapSafetyPixels);
+        int lineHeight = Math.Max(42, font.LineSpacing);
+        int maxLines = Math.Max(1, bounds.Height / lineHeight);
+        string[] lines = WrapSpriteFontText(value, font, wrapWidth);
+        if (lines.Length > maxLines)
+        {
+            lines = lines.Skip(lines.Length - maxLines).ToArray();
+        }
+
+        int y = bounds.Y;
+        foreach (string line in lines)
+        {
+            if (y + lineHeight > bounds.Bottom)
+            {
+                break;
+            }
+
+            spriteBatch.DrawString(font, line, new Vector2(bounds.X, y), color);
+            y += lineHeight;
+        }
+    }
+
+    private static string[] WrapSpriteFontText(string value, SpriteFont font, int maxWidth)
+    {
+        var lines = new List<string>();
+        foreach (string paragraph in (value ?? string.Empty).Replace("\r", string.Empty).Split('\n'))
+        {
+            string currentLine = string.Empty;
+            foreach (char character in paragraph)
+            {
+                string testLine = currentLine + character;
+                if (font.MeasureString(testLine).X <= maxWidth || string.IsNullOrEmpty(currentLine))
+                {
+                    currentLine = testLine;
+                }
+                else
+                {
+                    lines.Add(currentLine);
+                    currentLine = character.ToString();
+                }
+            }
+
+            lines.Add(currentLine);
+        }
+
+        return lines.Where(line => !string.IsNullOrWhiteSpace(line)).DefaultIfEmpty(string.Empty).ToArray();
     }
 
     private static string[] WrapText(string value, int maxWidth)

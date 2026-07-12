@@ -190,7 +190,35 @@ internal static class TravelLocationRules
             return mapped;
         }
 
+        string collapsed = CollapseAdjacentDuplicateCharacters(candidate);
+        if (!string.Equals(collapsed, candidate, System.StringComparison.Ordinal)
+            && Aliases.TryGetValue(collapsed, out mapped))
+        {
+            return mapped;
+        }
+
         return string.IsNullOrWhiteSpace(candidate) ? "Town" : candidate;
+    }
+
+    private static string CollapseAdjacentDuplicateCharacters(string value)
+    {
+        if (string.IsNullOrEmpty(value) || value.Length < 2)
+        {
+            return value;
+        }
+
+        var result = new System.Text.StringBuilder(value.Length);
+        char previous = '\0';
+        foreach (char character in value)
+        {
+            if (character != previous)
+            {
+                result.Append(character);
+                previous = character;
+            }
+        }
+
+        return result.ToString();
     }
 
     public static bool IsKnownPublicOutingTarget(string locationName)

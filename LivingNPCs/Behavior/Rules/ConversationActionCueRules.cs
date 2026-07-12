@@ -300,8 +300,20 @@ internal static class ConversationActionCueRules
             return;
         }
 
-        if (!string.IsNullOrWhiteSpace(action.TargetLocation))
+        string originalTarget = action.TargetLocation?.Trim() ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(originalTarget)
+            && TravelLocationRules.IsKnownPublicOutingTarget(originalTarget))
         {
+            string normalizedTarget = TravelLocationRules.Normalize(originalTarget, string.Empty);
+            if (!string.Equals(normalizedTarget, originalTarget, StringComparison.Ordinal))
+            {
+                action.TargetLocation = normalizedTarget;
+                action.Reason = BuildWorldActionReason(
+                    action.Reason,
+                    $"normalized destination '{originalTarget}' as {normalizedTarget}"
+                );
+            }
+
             return;
         }
 
@@ -316,11 +328,14 @@ internal static class ConversationActionCueRules
             return;
         }
 
+        string correctionKind = string.IsNullOrWhiteSpace(originalTarget)
+            ? "missing"
+            : $"unsupported '{originalTarget}'";
         action.Type = "companion_outing";
         action.TargetLocation = visibleTarget;
         action.Reason = BuildWorldActionReason(
             action.Reason,
-            $"visible dialogue supplied missing destination as {visibleTarget}"
+            $"visible dialogue replaced {correctionKind} destination with {visibleTarget}"
         );
     }
 

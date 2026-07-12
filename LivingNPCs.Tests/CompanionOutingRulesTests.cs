@@ -299,9 +299,33 @@ public sealed class CompanionOutingRulesTests
 
         var action = Assert.Single(actions);
         Assert.Equal("Farm", action.TargetLocation);
-        Assert.Contains("visible dialogue supplied missing destination as Farm", action.Reason);
+        Assert.Contains("visible dialogue replaced missing destination with Farm", action.Reason);
     }
 
+    [Fact]
+    public void VisibleTargetCorrectionRepairsUnsupportedModelTypoFromExplicitFarmInvitation()
+    {
+        var actions = new[]
+        {
+            new ValleyTalkWorldActionRequest
+            {
+                Type = "companion_outing",
+                TargetLocation = "农农场",
+                TravelConsent = "accepted_now",
+                Reason = "Penny agrees to go together now"
+            }
+        };
+
+        ConversationActionCueRules.TryCorrectTravelActionTargetFromVisibleDialogueForTesting(
+            actions,
+            "欸欸欸啊，这样啊，要不我们先去，花不了多少时间的，回来之后我和你一起做家务怎么样？",
+            "真的吗？那……那好吧。不过，怎么能让你帮我做家务呢……这太不好意思了。我们快去快回，然后我一个人做就行了。"
+        );
+
+        var action = Assert.Single(actions);
+        Assert.Equal("Farm", action.TargetLocation);
+        Assert.Contains("normalized destination '农农场' as Farm", action.Reason);
+    }
     [Fact]
     public void AcceptedNowTravelConsentDoesNotKeepLocalCompanyAsOuting()
     {
