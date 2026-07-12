@@ -647,6 +647,53 @@ public class DialogueEngineGenerateTests
     }
 
     [Fact]
+    public async Task Accepted_Immediate_Companion_Outing_Ends_Conversation_And_Discards_Options()
+    {
+        const string reply = """
+            - 好的，那我们走吧。$h
+            %我也准备好了。
+            %出发！
+            !LIVINGNPCS_META {"rapportDelta":2,"endConversation":false,"actions":[{"type":"companion_outing","targetLocation":"Beach","travelConsent":"accepted_now","durationMinutes":60}]}
+            """;
+        var (engine, _, _) = Create(reply);
+
+        var result = await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Haley",
+            Trigger = GenerationTrigger.Conversation,
+            Conversation = new List<ConversationTurn> { new("现在一起去海滩吗？", true, "p-outing") },
+            Snapshot = new GameStateSnapshot { FarmerName = "Yuki" }
+        }, CancellationToken.None);
+
+        Assert.True(result.EndConversation);
+        Assert.Equal(new[] { "好的，那我们走吧。$h" }, result.ParsedLines);
+        Assert.DoesNotContain("SLD_", result.FormattedLine);
+        Assert.Contains("\"endConversation\":true", result.AnalysisJson);
+    }
+
+    [Fact]
+    public async Task Deferred_Companion_Outing_Does_Not_Force_Conversation_To_End()
+    {
+        const string reply = """
+            - 晚点再去吧。
+            %好，我晚点来找你。
+            !LIVINGNPCS_META {"rapportDelta":2,"endConversation":false,"actions":[{"type":"companion_outing","targetLocation":"Beach","travelConsent":"accepted_later","durationMinutes":60}]}
+            """;
+        var (engine, _, _) = Create(reply);
+
+        var result = await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Haley",
+            Trigger = GenerationTrigger.Conversation,
+            Conversation = new List<ConversationTurn> { new("现在一起去海滩吗？", true, "p-outing-later") },
+            Snapshot = new GameStateSnapshot { FarmerName = "Yuki" }
+        }, CancellationToken.None);
+
+        Assert.False(result.EndConversation);
+        Assert.Equal(2, result.ParsedLines.Length);
+    }
+
+    [Fact]
     public async Task ConversationOpening_Is_Stored_And_Merged_Into_FollowUp()
     {
         var (engine, _, store) = Create();

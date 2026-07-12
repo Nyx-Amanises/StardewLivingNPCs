@@ -682,6 +682,13 @@ internal sealed class DialogueEngine : IDialogueEngine
             }
         }
 
+        // 立即出游已经把这轮交流转化成世界动作；NPC 的确认台词应当像明确道别一样
+        // 点完即关闭，不能继续显示模型误生成的回应选项。
+        if (HasAcceptedImmediateCompanionOuting(analysis))
+        {
+            analysis.EndConversation = true;
+        }
+
         // 元数据裁决：EndConversation 且行数 >1 → 只保留台词行（§4.10.8）。
         var options = parsed.Options;
         if (analysis.EndConversation && options.Count > 0)
@@ -723,6 +730,14 @@ internal sealed class DialogueEngine : IDialogueEngine
         this.ExportAttempt(prepared, response, analysis, parsedLines, attempts, "success", actionDiagnostics);
         this.LogDiagnostics(prepared, response, attempts, elapsedMilliseconds, parsedLines.Count);
         return result;
+    }
+
+    private static bool HasAcceptedImmediateCompanionOuting(ConversationAnalysis analysis)
+    {
+        return analysis.Actions.Any(action =>
+            string.Equals(action.Type, "companion_outing", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(action.TravelConsent, "accepted_now", StringComparison.OrdinalIgnoreCase)
+            && Behavior.TravelLocationRules.IsKnownPublicOutingTarget(action.TargetLocation));
     }
 
     /// <summary>各触发的收尾动作（§4.12）。Scheduled/Marriage 不回传、不写会话历史。</summary>
