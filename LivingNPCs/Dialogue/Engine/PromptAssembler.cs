@@ -562,9 +562,17 @@ internal sealed class PromptAssembler
         }
 
         AppendLine(builder, s.IsTravelling
-            ? this.Text("locationTravelling", new { destination = s.NextScheduleLocation })
+            ? string.IsNullOrWhiteSpace(s.CurrentTravelDestination)
+                ? this.Text("locationTravellingUnknown")
+                : this.Text("locationTravelling", new { destination = s.CurrentTravelDestination })
             : this.Text("locationCurrentlyStationary"));
 
+        if (s.IsTravelling
+            && s.CurrentTravelPurposeConfirmed
+            && s.CurrentTravelPurpose != SchedulePurposeKind.None)
+        {
+            AppendLine(builder, this.Text(SchedulePurposePromptKey(s.CurrentTravelPurpose)));
+        }
         // 当前状态块（Full 与 Brief 共有）。
         AppendLine(builder, this.Text("locationCurrentStateHeading"));
         AppendLine(builder, this.Text("locationCurrentStatePlace", new
@@ -605,7 +613,9 @@ internal sealed class PromptAssembler
 
         if (string.IsNullOrWhiteSpace(s.NextScheduleLocation))
         {
-            AppendLine(builder, this.Text("locationNoUpcomingSchedule"));
+            AppendLine(builder, s.ScheduleAvailability == ScheduleAvailability.Available
+                ? this.Text("locationNoUpcomingSchedule")
+                : this.Text("locationScheduleUnavailable"));
         }
         else if (scheduleCued)
         {
@@ -621,9 +631,32 @@ internal sealed class PromptAssembler
             AppendLine(builder, minutes <= 30
                 ? this.Text("locationNextScheduleSoon", new { destination = s.NextScheduleLocation, minutes })
                 : this.Text("locationScheduleWindow", new { destination = s.NextScheduleLocation, minutes }));
+
+            if (s.NextSchedulePurposeConfirmed && s.NextSchedulePurpose != SchedulePurposeKind.None)
+            {
+                AppendLine(builder, this.Text(SchedulePurposePromptKey(s.NextSchedulePurpose)));
+            }
         }
     }
 
+    private static string SchedulePurposePromptKey(SchedulePurposeKind purpose)
+    {
+        return purpose switch
+        {
+            SchedulePurposeKind.AttendDesertFestival => "schedulePurposeAttendDesertFestival",
+            SchedulePurposeKind.InspectKegs => "schedulePurposeInspectKegs",
+            SchedulePurposeKind.UsePhone => "schedulePurposeUsePhone",
+            SchedulePurposeKind.Read => "schedulePurposeRead",
+            SchedulePurposeKind.Fish => "schedulePurposeFish",
+            SchedulePurposeKind.Drink => "schedulePurposeDrink",
+            SchedulePurposeKind.Exercise => "schedulePurposeExercise",
+            SchedulePurposeKind.PlayMusic => "schedulePurposePlayMusic",
+            SchedulePurposeKind.Sleep => "schedulePurposeSleep",
+            SchedulePurposeKind.Work => "schedulePurposeWork",
+            SchedulePurposeKind.Meditate => "schedulePurposeMeditate",
+            _ => string.Empty
+        };
+    }
     private string? SpecificLocationText()
     {
         var s = this.input.S;

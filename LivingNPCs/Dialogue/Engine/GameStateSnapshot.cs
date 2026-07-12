@@ -3,6 +3,29 @@ using System.Collections.Generic;
 using LivingNPCs.Dialogue.Content;
 
 namespace LivingNPCs.Dialogue.Engine;
+internal enum ScheduleAvailability
+{
+    Available,
+    Missing,
+    ReadFailed
+}
+
+internal enum SchedulePurposeKind
+{
+    None,
+    AttendDesertFestival,
+    InspectKegs,
+    UsePhone,
+    Read,
+    Fish,
+    Drink,
+    Exercise,
+    PlayMusic,
+    Sleep,
+    Work,
+    Meditate
+}
+
 
 /// <summary>
 /// 生成请求发起时对游戏状态的一次性快照（WP10 §4.3）。纯数据、可直接构造（单测友好）；
@@ -49,6 +72,17 @@ internal sealed class GameStateSnapshot
     /// <summary>已订婚时距婚期的天数。</summary>
     public int DaysUntilWedding { get; init; }
     public bool IsDivorced { get; init; }
+
+    /// <summary>当天运行时日程是否可可靠读取；Missing/ReadFailed 不等于“确认没有日程”。</summary>
+    public ScheduleAvailability ScheduleAvailability { get; init; } = ScheduleAvailability.Missing;
+
+    /// <summary>当前正在执行的路线目标；与“下一条未来日程”分开。</summary>
+    public string CurrentTravelDestination { get; init; } = string.Empty;
+
+    /// <summary>当前路线到达后的活动目的；由游戏行为或节日状态确定性解析。</summary>
+    public SchedulePurposeKind CurrentTravelPurpose { get; init; }
+
+    public bool CurrentTravelPurposeConfirmed { get; init; }
     public bool ProposalRejected { get; init; }
     /// <summary>性向词（约会文案参数，采集时按双方性别给出；可空）。</summary>
     public string OrientationWord { get; init; } = string.Empty;
@@ -92,6 +126,11 @@ internal sealed class GameStateSnapshot
 
     /// <summary>距下一日程点的分钟数（向下取 0）。</summary>
     public int? MinutesUntilNextSchedule { get; init; }
+
+    /// <summary>下一日程点到达后的活动目的。</summary>
+    public SchedulePurposeKind NextSchedulePurpose { get; init; }
+
+    public bool NextSchedulePurposeConfirmed { get; init; }
 
     /// <summary>剩余日程的不重复地点显示名列表（未来计划）。</summary>
     public IReadOnlyList<string> RemainingScheduleStops { get; init; } = Array.Empty<string>();

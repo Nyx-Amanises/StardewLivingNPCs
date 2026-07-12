@@ -640,7 +640,7 @@ internal sealed class DialogueEngine : IDialogueEngine
         List<string> lines = new() { parsed.DialogueLine };
         lines.AddRange(parsed.Options);
         LivingNpcActionDecisionDiagnostics? actionDiagnostics = null;
-        if (request.Trigger != GenerationTrigger.Scheduled)
+        if (request.Trigger is GenerationTrigger.Conversation or GenerationTrigger.Gift)
         {
             string playerText = request.Trigger == GenerationTrigger.Gift
                 ? $"The farmer gave {request.NpcName} item {request.GiftItemId}; gift taste code {request.GiftTaste}."
@@ -734,6 +734,15 @@ internal sealed class DialogueEngine : IDialogueEngine
         {
             switch (request.Trigger)
             {
+                case GenerationTrigger.ConversationOpening:
+                {
+                    var npcTurn = new ConversationTurn(dialogueLine, false, Guid.NewGuid().ToString("N"));
+                    this.services.History.AppendToConversationContext(request.NpcName, npcTurn);
+                    var turns = this.services.History.PeekConversationContext(request.NpcName);
+                    this.services.History.UpsertConversation(request.NpcName, turns, now);
+                    break;
+                }
+
                 case GenerationTrigger.Conversation:
                 {
                     var npcTurn = new ConversationTurn(dialogueLine, false, Guid.NewGuid().ToString("N"));

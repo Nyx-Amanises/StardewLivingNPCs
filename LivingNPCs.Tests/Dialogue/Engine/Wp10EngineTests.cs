@@ -448,6 +448,86 @@ public class PromptAssemblerTests
     }
 
     [Fact]
+    public void Missing_Schedule_Emits_Unavailable_Not_NoUpcoming()
+    {
+        var requested = new List<(string Key, bool Optimized)>();
+        var request = new GenerationRequest
+        {
+            NpcName = "Abigail",
+            Snapshot = new GameStateSnapshot { ScheduleAvailability = ScheduleAvailability.Missing }
+        };
+
+        new PromptAssembler(Input(request: request, requested: requested)).Assemble();
+
+        Assert.Contains(requested, pair => pair.Key == "locationScheduleUnavailable");
+        Assert.DoesNotContain(requested, pair => pair.Key == "locationNoUpcomingSchedule");
+    }
+
+    [Fact]
+    public void Available_Schedule_Without_Next_Stop_Emits_NoUpcoming()
+    {
+        var requested = new List<(string Key, bool Optimized)>();
+        var request = new GenerationRequest
+        {
+            NpcName = "Abigail",
+            Snapshot = new GameStateSnapshot { ScheduleAvailability = ScheduleAvailability.Available }
+        };
+
+        new PromptAssembler(Input(request: request, requested: requested)).Assemble();
+
+        Assert.Contains(requested, pair => pair.Key == "locationNoUpcomingSchedule");
+        Assert.DoesNotContain(requested, pair => pair.Key == "locationScheduleUnavailable");
+    }
+
+    [Fact]
+    public void Current_Travel_Purpose_Requires_Confirmed_Runtime_Evidence()
+    {
+        var requested = new List<(string Key, bool Optimized)>();
+        var request = new GenerationRequest
+        {
+            NpcName = "Abigail",
+            Snapshot = new GameStateSnapshot
+            {
+                IsTravelling = true,
+                CurrentTravelDestination = "Desert",
+                CurrentTravelPurpose = SchedulePurposeKind.AttendDesertFestival,
+                CurrentTravelPurposeConfirmed = false,
+                ScheduleAvailability = ScheduleAvailability.Missing
+            }
+        };
+
+        new PromptAssembler(Input(request: request, requested: requested)).Assemble();
+
+        Assert.DoesNotContain(requested, pair => pair.Key == "schedulePurposeAttendDesertFestival");
+    }
+
+    [Fact]
+    public void Schedule_Question_Includes_Confirmed_Next_Stop_Purpose()
+    {
+        var requested = new List<(string Key, bool Optimized)>();
+        var request = new GenerationRequest
+        {
+            NpcName = "Abigail",
+            Snapshot = new GameStateSnapshot
+            {
+                ScheduleAvailability = ScheduleAvailability.Available,
+                NextScheduleLocation = "Custom_BlueMoonVineyard",
+                MinutesUntilNextSchedule = 120,
+                NextSchedulePurpose = SchedulePurposeKind.InspectKegs,
+                NextSchedulePurposeConfirmed = true
+            }
+        };
+        var conversation = new List<ConversationTurn>
+        {
+            new("你之后去哪里，去做什么？", true, "schedule-question")
+        };
+
+        new PromptAssembler(Input(request: request, requested: requested, conversation: conversation)).Assemble();
+
+        Assert.Contains(requested, pair => pair.Key == "locationScheduleWindow");
+        Assert.Contains(requested, pair => pair.Key == "schedulePurposeInspectKegs");
+    }
+    [Fact]
     public void LivingNpc_Override_Markers_Detected()
     {
         Assert.True(PromptAssembler.IsLivingNpcOverride("## LivingNPCs Help Request details"));
@@ -566,6 +646,47 @@ public class DialogueEngineGenerateTests
         }
     }
 
+    [Fact]
+    public async Task ConversationOpening_Is_Stored_And_Merged_Into_FollowUp()
+    {
+        var (engine, _, store) = Create();
+
+        await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Abigail",
+            Trigger = GenerationTrigger.ConversationOpening,
+            Snapshot = new GameStateSnapshot()
+        }, CancellationToken.None);
+
+        var openingElements = store.GetHistory("Abigail")
+            .ConversationHistory[0]
+            .Item2
+            .ConversationElements;
+        Assert.Single(openingElements);
+        Assert.False(openingElements[0].IsPlayerLine);
+        Assert.Equal("Hello farmer!$h", openingElements[0].Text);
+
+        await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Abigail",
+            Trigger = GenerationTrigger.Conversation,
+            Conversation = new List<ConversationTurn>
+            {
+                new("Where are you going?", true, "follow-up")
+            },
+            Snapshot = new GameStateSnapshot()
+        }, CancellationToken.None);
+
+        var finalElements = store.GetHistory("Abigail")
+            .ConversationHistory[0]
+            .Item2
+            .ConversationElements;
+        Assert.Equal(3, finalElements.Count);
+        Assert.Equal("Hello farmer!$h", finalElements[0].Text);
+        Assert.True(finalElements[1].IsPlayerLine);
+        Assert.Equal("Where are you going?", finalElements[1].Text);
+        Assert.False(finalElements[2].IsPlayerLine);
+    }
     [Fact]
     public async Task Unusable_Response_Falls_Back_After_Retries()
     {

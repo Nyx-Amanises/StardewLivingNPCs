@@ -25,9 +25,13 @@ internal static class NPC_CheckAction_Patch
 
             if (!DialoguePatchHelpers.IsTriggerKeyDown())
             {
+                if (DialogueServices.Config?.GenerateAiForNormalRightClick == true)
+                {
+                    GenerationRequests.CaptureConversationOpeningSnapshot(__instance);
+                }
+
                 return true;
             }
-
             bool sleepBlocked = __instance.isSleeping.Value
                 && DialogueServices.Config?.AllowWakeSleepingNpc != true;
             if (__instance.IsInvisible || sleepBlocked || who?.CanMove != true)
@@ -66,6 +70,11 @@ internal static class NPC_CheckAction_Patch
                 LogLevel.Warn);
             return true;
         }
+    }
+
+    public static void Postfix(NPC __instance)
+    {
+        GenerationRequests.ClearConversationOpeningSnapshot(__instance);
     }
 }
 

@@ -12,6 +12,37 @@ namespace LivingNPCs.Dialogue.GameHooks;
 /// </summary>
 internal static class GenerationRequests
 {
+    private static NPC? pendingOpeningNpc;
+    private static GameStateSnapshot? pendingOpeningSnapshot;
+
+    /// <summary>在原版 checkAction 改变朝向/移动控制器之前保存普通右键的瞬时状态。</summary>
+    public static void CaptureConversationOpeningSnapshot(NPC npc)
+    {
+        pendingOpeningNpc = npc;
+        pendingOpeningSnapshot = GameStateSnapshotCollector.Collect(npc);
+    }
+
+    public static void ClearConversationOpeningSnapshot(NPC npc)
+    {
+        if (ReferenceEquals(pendingOpeningNpc, npc))
+        {
+            pendingOpeningNpc = null;
+            pendingOpeningSnapshot = null;
+        }
+    }
+
+    private static bool TryConsumeOpeningSnapshot(NPC npc, out GameStateSnapshot snapshot)
+    {
+        if (ReferenceEquals(pendingOpeningNpc, npc) && pendingOpeningSnapshot != null)
+        {
+            snapshot = pendingOpeningSnapshot;
+            ClearConversationOpeningSnapshot(npc);
+            return true;
+        }
+
+        snapshot = GameStateSnapshotCollector.Collect(npc);
+        return false;
+    }
     /// <summary>行为上下文注入点（对话触发）：WP16/ModEntry 装配；null = 无行为系统。</summary>
     public static Func<NPC, string>? ConversationContextProvider { get; set; }
 
@@ -30,14 +61,17 @@ internal static class GenerationRequests
     /// <summary>被动占位改道的基础生成（P11 拦截占位后调用；婚后键同走此路，靠键解析）。</summary>
     public static GenerationRequest BuildScheduled(NPC npc, string dialogueKey, string originalLine)
     {
+        bool isConversationOpening = TryConsumeOpeningSnapshot(npc, out GameStateSnapshot snapshot);
         return new GenerationRequest
         {
             NpcName = npc.Name,
-            Trigger = GenerationTrigger.Scheduled,
+            Trigger = isConversationOpening
+                ? GenerationTrigger.ConversationOpening
+                : GenerationTrigger.Scheduled,
             DialogueKey = dialogueKey ?? string.Empty,
             OriginalLine = originalLine ?? string.Empty,
             BehaviorContext = SafeConversationContext(npc),
-            Snapshot = GameStateSnapshotCollector.Collect(npc)
+            Snapshot = snapshot
         };
     }
 

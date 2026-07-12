@@ -595,6 +595,11 @@ internal static class ContextRoutingDecisionPass
             plan.Promote(ContextModule.Location, ContextDetail.Full);
             plan.Promote(ContextModule.LivingNpc, ContextDetail.Full);
         }
+
+        if (ConversationCues.ContainsAny(playerText, ConversationCues.FutureSchedule))
+        {
+            plan.Promote(ContextModule.Location, ContextDetail.Full);
+        }
     }
 
     private static ContextDetail ParseDetail(string value)
@@ -641,12 +646,12 @@ internal static class ContextRoutingDecisionPass
         prompt.AppendLine("- npcProfile: biography, personality, relationships.");
         prompt.AppendLine("- gameState/recentEvents/eventHistory: farm/world achievements and older conversation/event memory.");
         prompt.AppendLine("- sampleDialogue: style reference lines for tone consistency.");
-        prompt.AppendLine("- location/livingNpc/gift: current scene, LivingNPCs memory/actions/help/outing/conflict, gift reaction.");
+        prompt.AppendLine("- location/livingNpc/gift: current scene, current and future schedule, schedule purpose, LivingNPCs memory/actions/help/outing/conflict, gift reaction.");
         prompt.AppendLine("- action: set to full when the farmer is asking to go somewhere, offering/requesting help, giving/receiving items, handling conflict, or any concrete world action. Controls location+livingNpc+gift together.");
         prompt.AppendLine();
         prompt.AppendLine("Return only JSON with keys world,npcProfile,gameState,sampleDialogue,eventHistory,recentEvents,location,livingNpc,gift,action,confidence.");
         prompt.AppendLine("Each module value must be none, brief, or full. confidence is 0-1.");
-        prompt.AppendLine("Use full for world only when the reply needs specific lore/progress. Use sampleDialogue none unless style is likely fragile or this is an unfamiliar/custom NPC.");
+        prompt.AppendLine("Use full for location whenever the farmer asks where the NPC is going, what the NPC is doing, or about later plans. Use full for world only when the reply needs specific lore/progress. Use sampleDialogue none unless style is likely fragile or this is an unfamiliar/custom NPC.");
         return prompt.ToString();
     }
 

@@ -25,6 +25,8 @@ internal interface IDialogueEngine
 internal enum GenerationTrigger
 {
     Scheduled,
+    /// <summary>由玩家普通右键开启的 AI 对话首句；保留 Scheduled 的改写语义，但会写入会话上下文。</summary>
+    ConversationOpening,
     Conversation,
     Gift
 }

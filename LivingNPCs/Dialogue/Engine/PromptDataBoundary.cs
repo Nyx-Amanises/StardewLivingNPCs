@@ -38,9 +38,13 @@ internal static class PromptDataBoundary
 
     public static string EscapeInline(string? content)
     {
-        return Regex.Replace(Escape(content).Replace('\n', ' '), "\\s+", " ").Trim();
-    }
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return string.Empty;
+        }
 
+        return Regex.Replace(Escape(content).Replace((char)10, ' '), @"\s+", " ").Trim();
+    }
     internal static string Escape(string? content)
     {
         if (string.IsNullOrWhiteSpace(content))

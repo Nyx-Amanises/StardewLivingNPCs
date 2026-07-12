@@ -23,6 +23,18 @@ internal static class GameStateSnapshotCollector
         "SeedShop", "Saloon", "JojaMart", "ScienceHouse", "AnimalShop", "FishShop", "Blacksmith", "Hospital", "Sewer"
     };
 
+    private sealed record ScheduleSnapshot(
+        ScheduleAvailability Availability,
+        string CurrentActivity,
+        string CurrentStop,
+        int? CurrentStopStart,
+        string NextStop,
+        int? MinutesUntilNext,
+        SchedulePurposeResult NextPurpose,
+        IReadOnlyList<string> RemainingStops,
+        bool IsTravelling,
+        string TravelDestination,
+        SchedulePurposeResult TravelPurpose);
     public static GameStateSnapshot Collect(NPC? npc)
     {
         try
@@ -91,14 +103,20 @@ internal static class GameStateSnapshotCollector
             LocationDisplayName = TryGet(() => npc?.currentLocation?.DisplayName) ?? string.Empty,
             TileX = TryGet(() => npc?.TilePoint.X ?? 0),
             TileY = TryGet(() => npc?.TilePoint.Y ?? 0),
-            IsTravelling = TryGet(() => npc?.controller != null || npc?.isMovingOnPathFindPath.Value == true),
-            HomeLocationName = TryGet(() => npc?.DefaultMap) ?? string.Empty,
+            IsTravelling = schedule.IsTravelling,
+            ScheduleAvailability = schedule.Availability,
+            CurrentTravelDestination = schedule.TravelDestination,
+            CurrentTravelPurpose = schedule.TravelPurpose.Kind,
+            CurrentTravelPurposeConfirmed = schedule.TravelPurpose.Confirmed,
+            HomeLocationName = ResolveHomeLocation(npc),
             MightBeInShop = ShopLocations.Contains(npc?.currentLocation?.Name ?? string.Empty, StringComparer.Ordinal),
             CurrentActivity = schedule.CurrentActivity,
             CurrentSchedulePoint = schedule.CurrentStop,
             CurrentScheduleStartTime = schedule.CurrentStopStart,
             NextScheduleLocation = schedule.NextStop,
             MinutesUntilNextSchedule = schedule.MinutesUntilNext,
+            NextSchedulePurpose = schedule.NextPurpose.Kind,
+            NextSchedulePurposeConfirmed = schedule.NextPurpose.Confirmed,
             RemainingScheduleStops = schedule.RemainingStops,
 
             FarmerIsMale = player.IsMale,
@@ -207,15 +225,60 @@ internal static class GameStateSnapshotCollector
         return flags;
     }
 
-    private static (string CurrentActivity, string CurrentStop, int? CurrentStopStart, string NextStop, int? MinutesUntilNext, IReadOnlyList<string> RemainingStops)
-        CollectSchedule(NPC? npc)
+    private static string ResolveHomeLocation(NPC? npc)
     {
         try
         {
-            var schedule = npc?.Schedule;
-            if (npc == null || schedule == null || schedule.Count == 0)
+            if (npc == null)
             {
-                return (string.Empty, string.Empty, null, string.Empty, null, Array.Empty<string>());
+                return string.Empty;
+            }
+
+            var data = npc.GetData();
+            if (data != null
+                && NPC.ReadNpcHomeData(data, npc.currentLocation, out string locationName, out _, out _)
+                && !string.IsNullOrWhiteSpace(locationName))
+            {
+                return locationName;
+            }
+
+            return string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private static ScheduleSnapshot CollectSchedule(NPC? npc)
+    {
+        if (npc == null)
+        {
+            return EmptySchedule(ScheduleAvailability.Missing);
+        }
+
+        try
+        {
+            var travel = npc.DirectionsToNewLocation;
+            string travelLocationName = travel?.targetLocationName ?? string.Empty;
+            bool isTravelling = npc.controller != null || npc.isMovingOnPathFindPath.Value;
+            SchedulePurposeResult travelPurpose = !isTravelling || travel == null
+                ? default
+                : SchedulePurposeResolver.Resolve(
+                    travelLocationName,
+                    travel.endOfRouteBehavior ?? string.Empty,
+                    travel.endOfRouteMessage ?? string.Empty,
+                    Game1.seasonIndex,
+                    Game1.dayOfMonth);
+
+            var schedule = npc.Schedule;
+            if (schedule == null || schedule.Count == 0)
+            {
+                return EmptySchedule(
+                    ScheduleAvailability.Missing,
+                    isTravelling,
+                    DisplayNameFor(travelLocationName),
+                    travelPurpose);
             }
 
             int now = Game1.timeOfDay;
@@ -230,6 +293,14 @@ internal static class GameStateSnapshotCollector
             int? currentStopStart = current.Value != null ? current.Key : null;
             string nextStop = next.Value != null ? DisplayNameFor(next.Value.targetLocationName) : string.Empty;
             int? minutes = next.Value != null ? Math.Max(0, Utility.CalculateMinutesBetweenTimes(now, next.Key)) : null;
+            SchedulePurposeResult nextPurpose = next.Value == null
+                ? default
+                : SchedulePurposeResolver.Resolve(
+                    next.Value.targetLocationName ?? string.Empty,
+                    next.Value.endOfRouteBehavior ?? string.Empty,
+                    next.Value.endOfRouteMessage ?? string.Empty,
+                    Game1.seasonIndex,
+                    Game1.dayOfMonth);
 
             var remaining = upcoming
                 .Select(pair => DisplayNameFor(pair.Value.targetLocationName))
@@ -237,20 +308,51 @@ internal static class GameStateSnapshotCollector
                 .Distinct(StringComparer.Ordinal)
                 .ToList();
 
-            string activity = npc.controller != null || npc.isMovingOnPathFindPath.Value
-                ? string.Empty // 在途：活动描述由装配器给"正走向下一日程点"。
+            string activity = isTravelling
+                ? string.Empty
                 : ScheduleActivityNormalizer.Describe(
                     current.Value?.endOfRouteBehavior ?? string.Empty,
                     current.Value?.endOfRouteMessage ?? string.Empty);
 
-            return (activity, currentStop, currentStopStart, nextStop, minutes, remaining);
+            return new(
+                ScheduleAvailability.Available,
+                activity,
+                currentStop,
+                currentStopStart,
+                nextStop,
+                minutes,
+                nextPurpose,
+                remaining,
+                isTravelling,
+                DisplayNameFor(travelLocationName),
+                travelPurpose);
         }
-        catch
+        catch (Exception ex)
         {
-            return (string.Empty, string.Empty, null, string.Empty, null, Array.Empty<string>());
+            DialogueServices.Monitor?.Log(
+                $"Failed to read runtime schedule for {npc.Name}: {ex.Message}",
+                StardewModdingAPI.LogLevel.Debug);
+            return EmptySchedule(ScheduleAvailability.ReadFailed);
         }
     }
 
+    private static ScheduleSnapshot EmptySchedule(
+        ScheduleAvailability availability,
+        bool isTravelling = false,
+        string travelDestination = "",
+        SchedulePurposeResult travelPurpose = default)
+        => new(
+            availability,
+            string.Empty,
+            string.Empty,
+            null,
+            string.Empty,
+            null,
+            default,
+            Array.Empty<string>(),
+            isTravelling,
+            travelDestination,
+            travelPurpose);
     private static string DisplayNameFor(string? locationName)
     {
         if (string.IsNullOrWhiteSpace(locationName))
