@@ -62,6 +62,12 @@ internal sealed class ExchangeApplicationService
         int maxDialogueBehaviorInfluenceDays)
     {
         var analysis = ValleyTalkExchangeParser.Parse(analysisJson);
+        NicknamePreferenceService.TryUpdateStateFromDialogue(
+            state,
+            playerText,
+            npcResponse,
+            Game1.Date.TotalDays,
+            Game1.timeOfDay);
         var pendingHelpRequestIdsBefore = state.HelpRequests
             .Where(request => request.Status == "Pending")
             .Select(request => request.QuestLogId)

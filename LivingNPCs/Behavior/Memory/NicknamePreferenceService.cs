@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Text.RegularExpressions;
 
 namespace LivingNPCs.Behavior;
@@ -31,6 +32,77 @@ internal static class NicknamePreferenceService
         return true;
     }
 
+    public static bool TryUpdateStateFromDialogue(
+        LivingNpcState state,
+        string playerText,
+        string npcResponse,
+        int currentTotalDays,
+        int currentTimeOfDay)
+    {
+        if (!TryExtractNicknameRequest(playerText, out string nickname))
+        {
+            return false;
+        }
+
+        ApplyNicknameState(
+            state,
+            nickname,
+            DetermineNicknameStatus(nickname, npcResponse),
+            currentTotalDays,
+            currentTimeOfDay);
+        return true;
+    }
+
+    public static bool RecoverStateFromStoredMemories(LivingNpcState state)
+    {
+        if (!string.IsNullOrWhiteSpace(state.FarmerNickname))
+        {
+            return false;
+        }
+
+        foreach (var preference in (state.PlayerPreferenceMemories ?? new())
+                     .OrderByDescending(memory => memory.LastUpdatedTotalDays)
+                     .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+                     .ThenByDescending(memory => memory.Importance))
+        {
+            if (!TryExtractNicknameFromPlayerPreference(preference, out string nickname))
+            {
+                continue;
+            }
+
+            ApplyNicknameState(
+                state,
+                nickname,
+                DetermineStoredNicknameStatus(preference.Summary),
+                preference.LastUpdatedTotalDays >= 0
+                    ? preference.LastUpdatedTotalDays
+                    : preference.CreatedTotalDays,
+                preference.LastUpdatedTotalDays >= 0
+                    ? preference.LastUpdatedTimeOfDay
+                    : preference.CreatedTimeOfDay);
+            return true;
+        }
+
+        foreach (var memory in (state.LongTermMemories ?? new())
+                     .Where(memory => memory.Kind == "preference")
+                     .OrderByDescending(memory => memory.LastUpdatedTotalDays)
+                     .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+                     .ThenByDescending(memory => memory.Importance))
+        {
+            UpdateStateFromMemory(
+                state,
+                memory,
+                memory.LastUpdatedTotalDays,
+                memory.LastUpdatedTimeOfDay);
+            if (!string.IsNullOrWhiteSpace(state.FarmerNickname))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public static void UpdateStateFromMemory(
         LivingNpcState state,
         LongTermMemoryFact? memory,
@@ -44,7 +116,7 @@ internal static class NicknamePreferenceService
 
         var match = Regex.Match(
             memory.Summary,
-            @"(?:called|称呼|叫)(?:\s+as)?\s*[“""']?(?<name>[\u4e00-\u9fffA-Za-z0-9_·•\-]{1,24})",
+            @"(?:called|称呼|叫)(?:\s+as)?\s*(?:我|她|他|农夫|玩家|自己)?\s*[“""']?(?<name>[\u4e00-\u9fffA-Za-z0-9_·•\-]{1,24})",
             RegexOptions.IgnoreCase | RegexOptions.CultureInvariant
         );
         if (!match.Success)
@@ -58,13 +130,12 @@ internal static class NicknamePreferenceService
             return;
         }
 
-        state.FarmerNickname = nickname;
-        state.FarmerNicknameStatus = memory.Summary.Contains("did not accept", StringComparison.OrdinalIgnoreCase)
-            || memory.Summary.Contains("未接受", StringComparison.OrdinalIgnoreCase)
-            ? "Rejected"
-            : "Accepted";
-        state.FarmerNicknameTotalDays = currentTotalDays;
-        state.FarmerNicknameTimeOfDay = currentTimeOfDay;
+        ApplyNicknameState(
+            state,
+            nickname,
+            DetermineStoredNicknameStatus(memory.Summary),
+            currentTotalDays,
+            currentTimeOfDay);
     }
 
     private static bool TryExtractNicknameRequest(string playerText, out string nickname)
@@ -94,6 +165,99 @@ internal static class NicknamePreferenceService
         }
 
         return false;
+    }
+
+    private static bool TryExtractNicknameFromPlayerPreference(
+        PlayerPreferenceFact preference,
+        out string nickname)
+    {
+        nickname = string.Empty;
+        string summary = preference.Summary?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(summary)
+            || !Regex.IsMatch(
+                summary,
+                @"(?:农夫|玩家).{0,32}(?:希望|想|要求|请).{0,32}(?:叫|喊|称呼)|(?:farmer|player).{0,48}(?:prefer|want|ask).{0,48}(?:called|call)",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+        {
+            return false;
+        }
+
+        var summaryMatch = Regex.Match(
+            summary,
+            @"(?:叫|喊|称呼)(?:我|她|他|其|自己|农夫|玩家)?(?:为|作|做)?\s*[“""']?(?<name>[\u4e00-\u9fffA-Za-z0-9_·•\-]{1,24})|(?:called|call)(?:\s+(?:me|her|him|them|the\s+farmer))?(?:\s+as)?\s*[“""']?(?<name>[A-Za-z0-9_·•\-]{1,24})",
+            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        if (summaryMatch.Success)
+        {
+            nickname = CleanNickname(summaryMatch.Groups["name"].Value);
+        }
+
+        if (string.IsNullOrWhiteSpace(nickname))
+        {
+            var subjectMatch = Regex.Match(
+                preference.Subject?.Trim() ?? string.Empty,
+                @"^(?:称呼|昵称|nickname)\s*[:：]?\s*[“""']?(?<name>[\u4e00-\u9fffA-Za-z0-9_·•\-]{1,24})[”""']?$",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+            if (subjectMatch.Success)
+            {
+                nickname = CleanNickname(subjectMatch.Groups["name"].Value);
+            }
+        }
+
+        return IsUsableNickname(nickname);
+    }
+
+    private static string DetermineStoredNicknameStatus(string summary)
+    {
+        if (ContainsAny(
+                summary.ToLowerInvariant(),
+                "did not accept",
+                "refused",
+                "rejected",
+                "未接受",
+                "不接受",
+                "拒绝",
+                "不愿意"))
+        {
+            return "Rejected";
+        }
+
+        return ContainsAny(summary.ToLowerInvariant(), "unclear", "尚不明确", "不明确")
+            ? "Requested"
+            : "Accepted";
+    }
+
+    private static bool IsUsableNickname(string nickname)
+    {
+        if (string.IsNullOrWhiteSpace(nickname) || nickname.Length > 24)
+        {
+            return false;
+        }
+
+        return nickname != "@"
+            && !ContainsAny(
+                nickname.ToLowerInvariant(),
+                "我",
+                "她",
+                "他",
+                "其",
+                "自己",
+                "农夫",
+                "玩家",
+                "farmer",
+                "player");
+    }
+
+    private static void ApplyNicknameState(
+        LivingNpcState state,
+        string nickname,
+        string status,
+        int currentTotalDays,
+        int currentTimeOfDay)
+    {
+        state.FarmerNickname = nickname;
+        state.FarmerNicknameStatus = status;
+        state.FarmerNicknameTotalDays = currentTotalDays;
+        state.FarmerNicknameTimeOfDay = currentTimeOfDay;
     }
 
     private static string CleanNickname(string nickname)

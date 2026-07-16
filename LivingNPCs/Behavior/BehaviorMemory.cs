@@ -87,6 +87,7 @@ internal sealed class BehaviorMemory
 
                 pair.Value.Clamp();
                 this.HelpRequests.NormalizeLoadedRequests(pair.Value);
+                NicknamePreferenceService.RecoverStateFromStoredMemories(pair.Value);
                 this.statesByNpc[pair.Key] = pair.Value;
             }
         }
