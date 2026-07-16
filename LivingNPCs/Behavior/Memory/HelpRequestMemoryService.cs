@@ -488,6 +488,8 @@ internal sealed class HelpRequestMemoryService
             string type = BehaviorValueNormalizer.NormalizeHelpRequestType(rawStep.Type);
             if (type == "item_request")
             {
+                rawStep.RequestedItemId =
+                    BehaviorValueNormalizer.NormalizeQualifiedObjectItemId(rawStep.RequestedItemId);
                 if (!AllowedHelpRequestItemIds.Contains(rawStep.RequestedItemId)
                     || !HelpRequestAdvisor.IsCurrentlyRequestableItem(rawStep.RequestedItemId, npc))
                 {

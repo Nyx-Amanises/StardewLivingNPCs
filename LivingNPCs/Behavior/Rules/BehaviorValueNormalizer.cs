@@ -135,6 +135,27 @@ internal static class BehaviorValueNormalizer
         return LivingNpcMetadataRules.NormalizeHelpRequestFollowUpPotential(value);
     }
 
+    public static string NormalizeQualifiedObjectItemId(string? itemId)
+    {
+        string value = itemId?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return string.Empty;
+        }
+
+        if (value.StartsWith("(O)", System.StringComparison.OrdinalIgnoreCase))
+        {
+            return $"(O){value.Substring(3)}";
+        }
+
+        if (Regex.IsMatch(value, @"^\d+$"))
+        {
+            return $"(O){value}";
+        }
+
+        return value;
+    }
+
     public static string NormalizeSharedExperienceType(string type)
     {
         return type?.Trim().ToLowerInvariant() switch

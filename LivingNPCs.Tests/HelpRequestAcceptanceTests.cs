@@ -4,6 +4,17 @@ namespace LivingNPCs.Tests;
 
 public sealed class HelpRequestAcceptanceTests
 {
+    [Theory]
+    [InlineData("395", "(O)395")]
+    [InlineData(" (o)395 ", "(O)395")]
+    [InlineData("(O)395", "(O)395")]
+    [InlineData("(BC)12", "(BC)12")]
+    [InlineData("not-an-item", "not-an-item")]
+    public void NormalizesModelItemIdsBeforeHelpRequestValidation(string modelItemId, string expected)
+    {
+        Assert.Equal(expected, BehaviorValueNormalizer.NormalizeQualifiedObjectItemId(modelItemId));
+    }
+
     [Fact]
     public void RepairsHallucinatedItemLabelFromAuthoritativeItemId()
     {
