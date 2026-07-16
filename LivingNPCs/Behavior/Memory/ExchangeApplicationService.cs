@@ -62,6 +62,10 @@ internal sealed class ExchangeApplicationService
         int maxDialogueBehaviorInfluenceDays)
     {
         var analysis = ValleyTalkExchangeParser.Parse(analysisJson);
+        var pendingHelpRequestIdsBefore = state.HelpRequests
+            .Where(request => request.Status == "Pending")
+            .Select(request => request.QuestLogId)
+            .ToHashSet(StringComparer.Ordinal);
         int storedMemories = 0;
         int storedPlayerPreferences = 0;
         int storedHelpRequests = 0;
@@ -281,6 +285,11 @@ internal sealed class ExchangeApplicationService
             state.LastUpdatedTimeOfDay = Game1.timeOfDay;
         }
 
+        var activatedHelpRequests = state.HelpRequests
+            .Where(request => request.Status == "Pending"
+                && !pendingHelpRequestIdsBefore.Contains(request.QuestLogId))
+            .ToList();
+
         return new ValleyTalkExchangeResult(
             storedMemories,
             storedPlayerPreferences,
@@ -296,7 +305,8 @@ internal sealed class ExchangeApplicationService
             analysis.AmbientFollowUp.Text,
             analysis.AmbientFollowUp.DelayMinutes,
             analysis.Actions,
-            fulfilledHelpRequests
+            fulfilledHelpRequests,
+            activatedHelpRequests
         );
     }
 }

@@ -25,6 +25,7 @@
   "help.reward.inventoryFullMail": "LivingNPCs：你的背包满了，{{npc}} 会把 {{item}} 明天寄给你作为谢礼。",
   "help.reward.giftMailScheduled": "LivingNPCs：{{npc}} 会在明天把 {{item}} 寄给你作为谢礼。",
   "help.reward.moneyHud": "LivingNPCs：求助奖励 +{{amount}}g。",
+  "help.quest.acceptedHud": "LivingNPCs：已接受 {{npc}} 的求助（{{item}}），详情已加入任务日志。",
   "help.quest.title": "求助：{{npc}}",
   "help.quest.description.item": "{{npc}} 请你帮忙找一件东西。{{step}}{{detail}}\n{{due}}",
   "help.quest.description.question": "{{npc}} 想就一件事请教你。{{step}}{{detail}}\n{{due}}",

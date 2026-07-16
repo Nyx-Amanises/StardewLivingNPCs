@@ -549,6 +549,23 @@ internal sealed class BehaviorEngine
         if (result.HelpRequestsStored > 0 || result.HelpRequestsUpdated > 0)
         {
             this.helpRequestQuestLog.Sync();
+            foreach (NpcHelpRequestFact request in result.ActivatedHelpRequests)
+            {
+                string item = string.IsNullOrWhiteSpace(request.RequestedItemLabel)
+                    ? request.Summary
+                    : request.RequestedItemLabel;
+                this.feedback.ShowAfterDialogue(
+                    I18n.Get(
+                        "help.quest.acceptedHud",
+                        new
+                        {
+                            npc = string.IsNullOrWhiteSpace(request.NpcDisplayName)
+                                ? npc.displayName
+                                : request.NpcDisplayName,
+                            item
+                        })
+                );
+            }
         }
 
         if (this.config.EnableDialogueFollowUps && !string.IsNullOrWhiteSpace(result.AmbientFollowUpText))

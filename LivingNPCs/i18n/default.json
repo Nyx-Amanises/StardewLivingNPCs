@@ -25,6 +25,7 @@
   "help.reward.inventoryFullMail": "LivingNPCs: Your inventory was full, so {{npc}} will mail you {{item}} tomorrow as thanks.",
   "help.reward.giftMailScheduled": "LivingNPCs: {{npc}} will mail you {{item}} tomorrow as a thank-you.",
   "help.reward.moneyHud": "LivingNPCs: Help request reward +{{amount}}g.",
+  "help.quest.acceptedHud": "LivingNPCs: Accepted {{npc}}'s help request for {{item}}. Details were added to the quest log.",
   "help.quest.title": "Help: {{npc}}",
   "help.quest.description.item": "{{npc}} asked you to help find something. {{step}}{{detail}}\n{{due}}",
   "help.quest.description.question": "{{npc}} wanted to ask you about something. {{step}}{{detail}}\n{{due}}",

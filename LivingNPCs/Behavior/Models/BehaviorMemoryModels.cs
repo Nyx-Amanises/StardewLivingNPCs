@@ -445,7 +445,8 @@ internal sealed record ValleyTalkExchangeResult(
     string AmbientFollowUpText,
     int AmbientFollowUpDelayMinutes,
     IReadOnlyList<ValleyTalkWorldActionRequest> Actions,
-    IReadOnlyList<NpcHelpRequestFact> FulfilledHelpRequests
+    IReadOnlyList<NpcHelpRequestFact> FulfilledHelpRequests,
+    IReadOnlyList<NpcHelpRequestFact> ActivatedHelpRequests
 )
 {
     public bool HasEffect => this.LongTermMemoriesStored > 0
