@@ -2,7 +2,7 @@ namespace LivingNPCs.Dialogue.Llm;
 
 /// <summary>
 /// 工厂入参：与 WP15 的 7 个配置字段一一对应（WP11 §4.5）。
-/// 默认值按裁决 6：新装默认 Provider = "OpenAiCompatible"（与默认 openrouter 地址组合自洽）。
+/// 新装默认 Provider = "OpenAiCompatible"；服务器地址由用户配置。
 /// </summary>
 internal sealed class LlmConnectionSettings
 {
@@ -14,7 +14,7 @@ internal sealed class LlmConnectionSettings
     public string ModelName { get; init; } = string.Empty;
 
     /// <summary>仅 OpenAiCompatible 与 LlamaCpp 消费。</summary>
-    public string ServerAddress { get; init; } = "https://openrouter.ai/api";
+    public string ServerAddress { get; init; } = string.Empty;
 
     /// <summary>仅 LlamaCpp 消费。</summary>
     public string PromptFormat { get; init; } = "[INST] {system}\n{prompt}[/INST]\n{response_start}";

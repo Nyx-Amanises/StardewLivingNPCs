@@ -100,6 +100,7 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
             MaxMemoryEntriesPerNpc = 7,
             ApiKey = "sk-x",
             Provider = "Google",
+            ServerAddress = "https://example.test",
             QueryTimeout = 33,
             LegacyConfigImported = true
         };
@@ -110,6 +111,7 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
         Assert.True(config.LegacyConfigImported);
         Assert.Equal(string.Empty, config.ApiKey);
         Assert.Equal("OpenAiCompatible", config.Provider);
+        Assert.Equal(string.Empty, config.ServerAddress);
         Assert.Equal(85, config.QueryTimeout);
     }
 

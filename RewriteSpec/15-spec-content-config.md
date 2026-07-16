@@ -56,7 +56,7 @@ Harmony 补丁与 UI（WP12）、历史/用量持久化与旧数据搬迁的执�
 | `Provider` | string | `"Mistral"` | LLM 提供商 ID，合法值见 WP11 §3（`OpenAI`/`OpenAiCompatible`/`Google`/`Anthropic`/`Mistral`/`DeepSeek`/`VolcEngine`/`LlamaCpp`，DEBUG 构建另有 `Dummy`）；大小写不敏感匹配；非法值回退列表首项 | 下拉（allowedValues），显示名走 i18n | 保存时 |
 | `ApiKey` | string | `""` | **敏感**：API 密钥。不得写入任何日志/导出文件/git；迁移时原样保留 | 文本框（仅当所选提供商构造需要 apiKey 时显示） | 保存时 |
 | `ModelName` | string | `""` | 模型名；空串用提供商默认（见 WP11） | 文本框（提供商需要 modelName 时显示） | 保存时 |
-| `ServerAddress` | string | `"https://openrouter.ai/api"` | 自定义端点地址（LlamaCpp 与 OpenAiCompatible 用） | 文本框（提供商需要 url 时显示） | 保存时 |
+| `ServerAddress` | string | `""` | 自定义端点地址（LlamaCpp 与 OpenAiCompatible 用） | 文本框（提供商需要 url 时显示） | 保存时 |
 | `PromptFormat` | string | `"[INST] {system}\n{prompt}[/INST]\n{response_start}"` | LlamaCpp 原始补全的提示词模板 | 无（仅 config.json） | 保存时 |
 | `QueryTimeout` | int | `85` | LLM 请求超时秒数 | 数字（min 5, max 180, 步长 5） | 即时 |
 | `ApplyTranslation` | bool | `true` | 要求模型用游戏语言输出（在系统提示词尾追加语言指令，见 §4.7） | Bool | 即时 |

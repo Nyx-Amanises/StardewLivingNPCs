@@ -1,7 +1,7 @@
 {
   "Name": "LivingNPCs",
   "Author": "Yuki",
-  "Version": "0.1.5",
+  "Version": "0.2.0",
   "Description": "Living NPC behaviors with a built-in AI dialogue engine: memories, moods, help requests, outings and generated dialogue in one mod.",
   "UniqueID": "Yuki.LivingNPCs",
   "EntryDll": "LivingNPCs.dll",

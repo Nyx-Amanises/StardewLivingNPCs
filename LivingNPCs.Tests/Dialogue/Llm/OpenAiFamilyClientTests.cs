@@ -135,6 +135,7 @@ public sealed class OpenAiFamilyClientTests : LlmTestBase
     }
 
     [Theory]
+    [InlineData("", "")]
     [InlineData("https://openrouter.ai/api", "https://openrouter.ai/api")]
     [InlineData("https://openrouter.ai/api/", "https://openrouter.ai/api")]
     [InlineData("https://openrouter.ai/api/v1", "https://openrouter.ai/api")]

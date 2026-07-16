@@ -332,7 +332,7 @@ HTTP 状态码、`TokenUsage`、成功标志。
     `modelCheckCantGenerate`、`modelCheckInsecure`、`modelCheckGetNames`、
     `modelCheckGenericError`、`modelCheckSuccess`；键缺失时用英文兜底文案。
 - **配置字段名**（精确，WP15 对齐）：`Provider`（默认 `"Mistral"`）、`ModelName`
-  （默认空）、`ServerAddress`（默认 `"https://openrouter.ai/api"`）、`ApiKey`
+  （默认空）、`ServerAddress`（默认空）、`ApiKey`
   （默认空）、`PromptFormat`（默认 `"[INST] {system}\n{prompt}[/INST]\n{response_start}"`）、
   `QueryTimeout`（默认 85，秒）、`SuppressConnectionCheck`（默认 false）。
 
@@ -451,9 +451,9 @@ thinkingConfig（可能为 null）；`DescribeThinkingParameters(JObject)` 生�
    合并版是否补？默认不补，保持行为面等价。
 5. **User-Agent 与缓存键前缀改名**（`ValleyTalk/1.0` → `LivingNPCs/…`、
    `valleytalk-` → `livingnpcs-`）：功能无影响，默认改名，若需保留旧值请明示。
-6. `Provider` 配置默认值 `"Mistral"` + `ServerAddress` 默认 openrouter 地址是历史
-   遗留组合（Mistral 客户端并不读 ServerAddress）。迁移期是否把默认 Provider 改为
-   更合理的值由 WP15 与用户定，本包不动语义。
+6. 旧实现的 `Provider = "Mistral"` + `ServerAddress` 默认 openrouter 地址是历史
+   遗留组合（Mistral 客户端并不读 ServerAddress）。当前默认值已由下方裁决更新，
+   不再沿用这个组合。
 
 ### 裁决（2026-07-06，Yuki + 架构侧，全部落定）
 
@@ -467,8 +467,8 @@ thinkingConfig（可能为 null）；`DescribeThinkingParameters(JObject)` 生�
 3. 流式 usage：01 §2 已裁决为 `LlmStreamEvent` 事件流，§5 已同步。
 4. Gemini 流式不补，保持行为面等价。
 5. User-Agent 与缓存键前缀**改名**（`LivingNPCs/<版本>`、`livingnpcs-` 前缀）。
-6. 新装默认 `Provider = "OpenAiCompatible"`（与默认 openrouter ServerAddress 组合
-   自洽）；迁移用户按 WP14 导入旧值不受影响。WP15 落表。
+6. 新装默认 `Provider = "OpenAiCompatible"`，`ServerAddress` 默认空、由用户填写；
+   迁移用户按 WP14 导入旧值不受影响。WP15 落表。
 
 ## 9. 审计索引（行为点 → 旧代码 file:line）
 

@@ -39,7 +39,7 @@ internal sealed class DialogueConfig
     public string Provider { get; set; } = "unset";
     public string ModelName { get; set; } = "unset";
     public string ApiKey { get; set; } = "";
-    public string ServerAddress { get; set; } = "https://openrouter.ai/api";
+    public string ServerAddress { get; set; } = string.Empty;
     public string PromptFormat { get; set; } = "[INST] {system}\n{prompt}[/INST]\n{response_start}";
     public bool SuppressConnectionCheck { get; set; }
     public int QueryTimeout { get; set; } = 85;

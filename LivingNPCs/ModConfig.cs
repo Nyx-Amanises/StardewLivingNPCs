@@ -99,7 +99,7 @@ internal sealed class ModConfig
     /// <summary>敏感：不得写入任何日志/导出文件。</summary>
     public string ApiKey { get; set; } = string.Empty;
     public string ModelName { get; set; } = string.Empty;
-    public string ServerAddress { get; set; } = "https://openrouter.ai/api";
+    public string ServerAddress { get; set; } = string.Empty;
     public string PromptFormat { get; set; } = "[INST] {system}\n{prompt}[/INST]\n{response_start}";
     public int QueryTimeout { get; set; } = 85;
     public bool ApplyTranslation { get; set; } = true;
