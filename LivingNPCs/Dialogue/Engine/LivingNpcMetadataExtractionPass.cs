@@ -11,7 +11,8 @@ using Newtonsoft.Json.Linq;
 namespace LivingNPCs.Dialogue.Engine;
 
 /// <summary>
-/// Extracts the complete hidden exchange analysis after visible dialogue has already been written.
+/// Extracts the complete hidden exchange analysis from a prepared visible reply. The result stays
+/// detached from game state until the caller presents and commits the generation.
 /// A successful result is authoritative for the whole <see cref="ConversationAnalysis"/>; callers
 /// should retain their previous analysis only when <see cref="LivingNpcMetadataExtractionResult.Success"/>
 /// is false.
@@ -31,8 +32,10 @@ internal static class LivingNpcMetadataExtractionPass
         DialogueContext context,
         string playerText,
         string visibleNpcReply,
-        IReadOnlyList<string>? farmerOptions)
+        IReadOnlyList<string>? farmerOptions,
+        CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (character == null || context == null || string.IsNullOrWhiteSpace(visibleNpcReply))
         {
             return LivingNpcMetadataExtractionResult.Failed("missing character, context, or visible NPC reply");
@@ -47,7 +50,8 @@ internal static class LivingNpcMetadataExtractionPass
         LlmResponse response;
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
             response = await LegacyLlm.Instance.RunInference(
                     "You are a strict metadata classifier for a Stardew Valley dialogue mod. "
                     + "Return only the requested compact JSON; never write or revise dialogue. "
@@ -58,14 +62,20 @@ internal static class LivingNpcMetadataExtractionPass
                     "!LIVINGNPCS_META ",
                     n_predict: 1600,
                     allowRetry: false,
-                    disableThinking: true)
+                    disableThinking: true,
+                    ct: cts.Token)
                 .WaitAsync(cts.Token);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             return LivingNpcMetadataExtractionResult.Failed(ex.Message, prompt);
         }
 
+        ct.ThrowIfCancellationRequested();
         TokenUsage usage = response.Usage.HasAnyTokens
             ? response.Usage
             : TokenUsage.Estimate(prompt, response.Text ?? response.ErrorMessage ?? string.Empty);

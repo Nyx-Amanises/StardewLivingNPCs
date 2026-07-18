@@ -188,25 +188,42 @@ internal sealed class EngineHistoryWriter
 
     // ---- 会话续接缓存（§4.14） ----
 
+    /// <summary>预览合并后的会话上下文，不修改缓存；生成阶段使用此方法保持可取消事务纯净。</summary>
+    public List<ConversationTurn> BuildMergedConversationContext(string npcName, IReadOnlyList<ConversationTurn> incoming)
+    {
+        lock (this.gate)
+        {
+            return this.BuildMergedConversationContextLocked(npcName, incoming);
+        }
+    }
+
     /// <summary>合并请求携带的会话与缓存上下文（按元素 GUID 去重），并刷新缓存。</summary>
     public List<ConversationTurn> MergeConversationContext(string npcName, IReadOnlyList<ConversationTurn> incoming)
     {
         lock (this.gate)
         {
-            this.recentContext.TryGetValue(npcName, out var cached);
-            var merged = new List<ConversationTurn>(cached ?? Enumerable.Empty<ConversationTurn>());
-            var seen = new HashSet<string>(merged.Select(turn => turn.Id), StringComparer.Ordinal);
-            foreach (var turn in incoming ?? Array.Empty<ConversationTurn>())
-            {
-                if (seen.Add(turn.Id))
-                {
-                    merged.Add(turn);
-                }
-            }
-
+            var merged = this.BuildMergedConversationContextLocked(npcName, incoming);
             this.recentContext[npcName] = merged;
             return new List<ConversationTurn>(merged);
         }
+    }
+
+    private List<ConversationTurn> BuildMergedConversationContextLocked(
+        string npcName,
+        IReadOnlyList<ConversationTurn> incoming)
+    {
+        this.recentContext.TryGetValue(npcName, out var cached);
+        var merged = new List<ConversationTurn>(cached ?? Enumerable.Empty<ConversationTurn>());
+        var seen = new HashSet<string>(merged.Select(turn => turn.Id), StringComparer.Ordinal);
+        foreach (var turn in incoming ?? Array.Empty<ConversationTurn>())
+        {
+            if (seen.Add(turn.Id))
+            {
+                merged.Add(turn);
+            }
+        }
+
+        return merged;
     }
 
     /// <summary>NPC 新台词追加进会话缓存。</summary>

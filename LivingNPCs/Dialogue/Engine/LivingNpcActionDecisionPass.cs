@@ -21,8 +21,10 @@ internal static class LivingNpcActionDecisionPass
         Character character,
         DialogueContext context,
         ConversationAnalysis analysis,
-        IReadOnlyList<string> parsedLines)
+        IReadOnlyList<string> parsedLines,
+        CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         analysis ??= ConversationAnalysis.Empty;
 
         if (DialogueServices.Config?.EnableLivingNpcActionDecisionPass != true)
@@ -71,7 +73,8 @@ internal static class LivingNpcActionDecisionPass
         LlmResponse response;
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
             var task = LegacyLlm.Instance.RunInference(
                 "You are a strict classifier for Stardew Valley mod action metadata. Return only compact JSON metadata; never write dialogue. "
                 + PromptDataBoundary.SystemRule,
@@ -81,8 +84,13 @@ internal static class LivingNpcActionDecisionPass
                 "!LIVINGNPCS_META ",
                 n_predict: 512,
                 allowRetry: false,
-                disableThinking: true);
+                disableThinking: true,
+                ct: cts.Token);
             response = await task.WaitAsync(cts.Token);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -92,6 +100,7 @@ internal static class LivingNpcActionDecisionPass
             return new LivingNpcActionDecisionResult(analysis, diagnostics);
         }
 
+        ct.ThrowIfCancellationRequested();
         diagnostics.ResponseSuccess = response.IsSuccess;
         diagnostics.RawResponse = response.Text ?? string.Empty;
         diagnostics.ResponseCharacters = diagnostics.RawResponse.Length;

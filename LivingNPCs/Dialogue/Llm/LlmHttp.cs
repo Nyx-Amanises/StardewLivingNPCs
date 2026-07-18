@@ -132,6 +132,12 @@ internal static class LlmHttp
             {
                 body = await response.Content.ReadAsStringAsync(cts.Token).ConfigureAwait(false);
             }
+            catch (Exception ex) when (ex is OperationCanceledException
+                                       || ct.IsCancellationRequested
+                                       || cts.IsCancellationRequested)
+            {
+                throw TranslateSendException(ex, ct);
+            }
             catch
             {
                 body = string.Empty;

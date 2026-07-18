@@ -74,7 +74,7 @@ internal sealed class MemoryImpressionGenerator
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
             LlmResponse response = await LegacyLlm.Instance
-                .RunInference(system, string.Empty, string.Empty, user, string.Empty, n_predict: ResponseTokens, allowRetry: false, disableThinking: true)
+                .RunInference(system, string.Empty, string.Empty, user, string.Empty, n_predict: ResponseTokens, allowRetry: false, disableThinking: true, ct: cts.Token)
                 .WaitAsync(cts.Token)
                 .ConfigureAwait(false);
 

@@ -14,8 +14,11 @@ internal interface IDialogueEngine
 {
     bool IsEnabledFor(NPC npc);
 
-    /// <summary>玩家开启对话/送礼/事件触发时请求一次生成；结果经 callback 回主线程。</summary>
+    /// <summary>玩家开启对话/送礼/事件触发时请求一次纯生成；调用方在展示成功后提交结果。</summary>
     Task<GenerationResult> GenerateAsync(GenerationRequest request, CancellationToken ct);
+
+    /// <summary>在主线程确认结果仍有效且已展示后提交一次游戏状态副作用。</summary>
+    bool CommitResult(GenerationResult result);
 
     /// <summary>流式：每产生一个可显示片段回调一次（已做后处理的安全文本）。</summary>
     Task StreamAsync(GenerationRequest request, IStreamSink sink, CancellationToken ct);
@@ -53,6 +56,26 @@ internal sealed class GenerationRequest
     public GameStateSnapshot Snapshot { get; init; } = new();
 }
 
+/// <summary>
+/// A successful generation's game-state commit payload. Generation is deliberately pure until
+/// the scheduler has validated the generation and presented the result on the main thread.
+/// </summary>
+internal sealed class GenerationCommit
+{
+    private int claimed;
+
+    public GenerationRequest Request { get; init; } = new();
+    public string NpcDisplayName { get; init; } = string.Empty;
+    public string LastPlayerLine { get; init; } = string.Empty;
+    public string DialogueLine { get; init; } = string.Empty;
+    public IReadOnlyList<ConversationTurn> Conversation { get; init; } = System.Array.Empty<ConversationTurn>();
+
+    public bool TryClaim()
+    {
+        return Interlocked.CompareExchange(ref this.claimed, 1, 0) == 0;
+    }
+}
+
 /// <summary>一次生成的产物（WP10 §5.2）。</summary>
 internal sealed class GenerationResult
 {
@@ -71,6 +94,9 @@ internal sealed class GenerationResult
     public string DialogueKey { get; init; } = string.Empty;
 
     public TokenUsage Usage { get; init; } = new();
+
+    /// <summary>内部提交载荷；生成失败或未成功解析时为空。</summary>
+    internal GenerationCommit? Commit { get; init; }
 }
 
 /// <summary>流式回调（WP10 §5.2/§4.13）。OnToken 给原始增量，过滤由消费方用搬运件做。</summary>

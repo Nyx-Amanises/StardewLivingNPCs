@@ -20,16 +20,23 @@ namespace LivingNPCs.Dialogue.Engine;
 internal sealed class GenerationScheduler
 {
     private readonly DialogueEngine engine;
+    private readonly Func<NPC?, string, string, bool> draw;
     private readonly object gate = new();
 
     private GenerationRequest? pendingRequest;
     private NPC? pendingNpc;
     private bool inFlight;
     private int generation;
+    private CancellationTokenSource? activeCancellation;
+    private Task? activeTask;
 
-    public GenerationScheduler(DialogueEngine engine, bool subscribeEvents = true)
+    public GenerationScheduler(
+        DialogueEngine engine,
+        bool subscribeEvents = true,
+        Func<NPC?, string, string, bool>? drawOverride = null)
     {
         this.engine = engine;
+        this.draw = drawOverride ?? this.Draw;
         if (subscribeEvents && DialogueServices.Helper != null)
         {
             DialogueServices.Helper.Events.GameLoop.UpdateTicked += (_, _) => this.OnUpdateTicked();
@@ -44,6 +51,18 @@ internal sealed class GenerationScheduler
             lock (this.gate)
             {
                 return this.inFlight || this.pendingRequest != null;
+            }
+        }
+    }
+
+    /// <summary>仅供确定性单元测试等待 worker 收尾；生产代码不依赖此观察点。</summary>
+    internal Task? ActiveTaskForTests
+    {
+        get
+        {
+            lock (this.gate)
+            {
+                return this.activeTask;
             }
         }
     }
@@ -70,15 +89,27 @@ internal sealed class GenerationScheduler
         }
     }
 
-    /// <summary>玩家按 Esc 取消：置取消标志、代际号 +1、关思考窗；底层请求靠超时自灭（§4.2）。</summary>
+    /// <summary>玩家按 Esc 取消当前代际、传播取消令牌并关闭思考窗。</summary>
     public void CancelActiveGeneration()
     {
+        CancellationTokenSource? cancellation;
         lock (this.gate)
         {
             this.generation++;
             this.pendingRequest = null;
             this.pendingNpc = null;
             this.inFlight = false;
+            cancellation = this.activeCancellation;
+            this.activeCancellation = null;
+        }
+
+        try
+        {
+            cancellation?.Cancel();
+        }
+        catch (ObjectDisposedException)
+        {
+            // The worker finished concurrently; generation invalidation still rejects its result.
         }
 
         ThinkingDialogueController.Close();
@@ -90,6 +121,7 @@ internal sealed class GenerationScheduler
         GenerationRequest? request;
         NPC? npc;
         int myGeneration;
+        CancellationTokenSource cancellation;
         lock (this.gate)
         {
             if (this.pendingRequest == null || this.inFlight)
@@ -108,6 +140,8 @@ internal sealed class GenerationScheduler
             this.pendingNpc = null;
             this.inFlight = true;
             myGeneration = ++this.generation;
+            cancellation = new CancellationTokenSource();
+            this.activeCancellation = cancellation;
         }
 
         if (npc != null)
@@ -115,20 +149,44 @@ internal sealed class GenerationScheduler
             ThinkingDialogueController.Start(npc);
         }
 
-        _ = Task.Run(() => this.RunAsync(npc, request!, myGeneration));
+        Task task = Task.Run(() => this.RunAsync(npc, request!, myGeneration, cancellation));
+        lock (this.gate)
+        {
+            this.activeTask = task;
+        }
     }
 
-    private async Task RunAsync(NPC? npc, GenerationRequest request, int myGeneration)
+    private async Task RunAsync(
+        NPC? npc,
+        GenerationRequest request,
+        int myGeneration,
+        CancellationTokenSource cancellation)
     {
         GenerationResult? result = null;
         Exception? failure = null;
         try
         {
-            result = await this.engine.GenerateAsync(request, CancellationToken.None).ConfigureAwait(false);
+            result = await this.engine.GenerateAsync(request, cancellation.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            return;
         }
         catch (Exception ex)
         {
             failure = ex;
+        }
+        finally
+        {
+            lock (this.gate)
+            {
+                if (ReferenceEquals(this.activeCancellation, cancellation))
+                {
+                    this.activeCancellation = null;
+                }
+            }
+
+            cancellation.Dispose();
         }
 
         // 主线程交接：注册一次性的 UpdateTicked，把关窗 + 呈现推迟到下一游戏 tick（§4.2）。
@@ -161,12 +219,13 @@ internal sealed class GenerationScheduler
             }
         }
 
-        ThinkingDialogueController.Close();
         if (!isCurrent)
         {
             // 迟到结果凭代际号校验后静默丢弃（§4.16）。
             return;
         }
+
+        ThinkingDialogueController.Close();
 
         try
         {
@@ -182,7 +241,7 @@ internal sealed class GenerationScheduler
                         LogLevel.Error);
                 }
 
-                this.Draw(npc, EngineConstants.KeyError, EngineConstants.FallbackLine);
+                this.draw(npc, EngineConstants.KeyError, EngineConstants.FallbackLine);
                 return;
             }
 
@@ -197,7 +256,10 @@ internal sealed class GenerationScheduler
                 text = text[EngineConstants.SkipPrefix.Length..];
             }
 
-            this.Draw(npc, result.DialogueKey, text);
+            if (this.draw(npc, result.DialogueKey, text))
+            {
+                this.engine.CommitResult(result);
+            }
         }
         catch (Exception ex)
         {
@@ -210,11 +272,11 @@ internal sealed class GenerationScheduler
         }
     }
 
-    private void Draw(NPC? npc, string key, string text)
+    private bool Draw(NPC? npc, string key, string text)
     {
         if (npc == null || string.IsNullOrWhiteSpace(text))
         {
-            return;
+            return false;
         }
 
         var dialogue = new StardewValley.Dialogue(npc, key, text);
@@ -223,5 +285,6 @@ internal sealed class GenerationScheduler
         // 生成台词的历史由 EngineHistoryWriter 记，向 P11 声明豁免（免得展示记录器重复入历史）。
         GameHooks.DialogueDisplayInterceptor.MarkEnginePresented(dialogue);
         Game1.drawDialogue(npc);
+        return true;
     }
 }

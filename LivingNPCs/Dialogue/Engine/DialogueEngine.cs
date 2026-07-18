@@ -87,8 +87,8 @@ internal sealed class DialogueEngineServices
 
 /// <summary>
 /// 对话生成引擎（WP10 核心编排）：上下文装配 → 路由 → 提示词拼装 → LLM 调用（重试/超时）
-/// → 解析/校验/后处理 → 收尾（历史 + 行为系统回传）。异步时序（单飞行/主线程交接）在
-/// <see cref="GenerationScheduler"/>。
+/// → 解析/校验/后处理。结果提交（历史 + 行为系统回传）由 <see cref="GenerationScheduler"/>
+/// 在主线程确认展示成功后负责。
 /// </summary>
 internal sealed class DialogueEngine : IDialogueEngine
 {
@@ -137,7 +137,8 @@ internal sealed class DialogueEngine : IDialogueEngine
 
     public async Task<GenerationResult> GenerateAsync(GenerationRequest request, CancellationToken ct)
     {
-        var prepared = await this.PrepareAsync(request).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        var prepared = await this.PrepareAsync(request, ct).ConfigureAwait(false);
         var watch = Stopwatch.StartNew();
 
         LlmResponse? response = null;
@@ -154,6 +155,7 @@ internal sealed class DialogueEngine : IDialogueEngine
             try
             {
                 response = await this.RunAttemptAsync(prepared, languageRetry, ct).ConfigureAwait(false);
+                ct.ThrowIfCancellationRequested();
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
             {
@@ -192,6 +194,7 @@ internal sealed class DialogueEngine : IDialogueEngine
         }
 
         watch.Stop();
+        ct.ThrowIfCancellationRequested();
         return await this.FinalizeResultAsync(
             prepared,
             response,
@@ -205,7 +208,8 @@ internal sealed class DialogueEngine : IDialogueEngine
 
     public async Task StreamAsync(GenerationRequest request, IStreamSink sink, CancellationToken ct)
     {
-        var prepared = await this.PrepareAsync(request).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        var prepared = await this.PrepareAsync(request, ct).ConfigureAwait(false);
 
         LlmResponse? response = null;
         bool languageRetry = false;
@@ -259,6 +263,7 @@ internal sealed class DialogueEngine : IDialogueEngine
             MaxAttempts,
             0,
             ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
         var options = ResponseFormatter.BuildStreamingOptions(
             result.ParsedLines.Skip(1).ToList(),
             DialogueServices.Config?.TypedResponses ?? "With Generated",
@@ -319,7 +324,7 @@ internal sealed class DialogueEngine : IDialogueEngine
         public bool FixPunctuation { get; init; }
     }
 
-    private async Task<PreparedGeneration> PrepareAsync(GenerationRequest request)
+    private async Task<PreparedGeneration> PrepareAsync(GenerationRequest request, CancellationToken ct)
     {
         var config = DialogueServices.Config ?? new DialogueConfig();
         var snapshot = request.Snapshot;
@@ -328,7 +333,7 @@ internal sealed class DialogueEngine : IDialogueEngine
 
         // 会话续接：与上次会话上下文按元素 GUID 去重合并（§4.3/§4.14）。
         List<ConversationTurn> conversation = request.Trigger == GenerationTrigger.Conversation
-            ? this.services.History.MergeConversationContext(request.NpcName, request.Conversation)
+            ? this.services.History.BuildMergedConversationContext(request.NpcName, request.Conversation)
             : new List<ConversationTurn>(request.Conversation);
         string lastPlayerLine = conversation.LastOrDefault(turn => turn.IsPlayerLine)?.Text ?? string.Empty;
 
@@ -355,7 +360,9 @@ internal sealed class DialogueEngine : IDialogueEngine
         };
 
         // 上下文路由（提示词构造之前，§4.5）。
-        ContextRoutingPlan plan = await ContextRoutingDecisionPass.BuildPlanAsync(character, context).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
+        ContextRoutingPlan plan = await ContextRoutingDecisionPass.BuildPlanAsync(character, context, ct).ConfigureAwait(false);
+        ct.ThrowIfCancellationRequested();
 
         // 键解析（触发上下文 + 样本选择）。
         var keyFacts = DialogueKeyGrammar.Parse(request.DialogueKey);
@@ -596,6 +603,7 @@ internal sealed class DialogueEngine : IDialogueEngine
         long elapsedMilliseconds,
         CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         var request = prepared.Request;
         string typedResponses = DialogueServices.Config?.TypedResponses ?? "With Generated";
 
@@ -622,6 +630,7 @@ internal sealed class DialogueEngine : IDialogueEngine
             }
 
             this.ExportAttempt(prepared, response, ConversationAnalysis.Empty, Array.Empty<string>(), attempts, failure != null ? "error" : "unparseable");
+            ct.ThrowIfCancellationRequested();
             return new GenerationResult
             {
                 FormattedLine = EngineConstants.SkipPrefix + EngineConstants.FallbackLine,
@@ -633,6 +642,7 @@ internal sealed class DialogueEngine : IDialogueEngine
             };
         }
 
+        ct.ThrowIfCancellationRequested();
         var parsed = this.ParseResponse(prepared, response.Text);
         var legacyAnalysis = ConversationAnalysis.Parse(response.Text);
         var analysis = legacyAnalysis;
@@ -648,7 +658,7 @@ internal sealed class DialogueEngine : IDialogueEngine
             try
             {
                 LivingNpcMetadataExtractionResult extracted = await LivingNpcMetadataExtractionPass
-                    .TryExtractAsync(prepared.Character, prepared.Context, playerText, parsed.DialogueLine, parsed.Options)
+                    .TryExtractAsync(prepared.Character, prepared.Context, playerText, parsed.DialogueLine, parsed.Options, ct)
                     .ConfigureAwait(false);
                 if (extracted.Success)
                 {
@@ -660,7 +670,7 @@ internal sealed class DialogueEngine : IDialogueEngine
                     // If the full classifier fails, retain that analysis and allow the old action-only pass
                     // to recover a clearly promised action without discarding the visible dialogue.
                     var supplemented = await LivingNpcActionDecisionPass
-                        .TrySupplementAsync(prepared.Character, prepared.Context, legacyAnalysis, lines)
+                        .TrySupplementAsync(prepared.Character, prepared.Context, legacyAnalysis, lines, ct)
                         .ConfigureAwait(false);
                     analysis = supplemented.Analysis;
                     actionDiagnostics = supplemented.Diagnostics;
@@ -681,6 +691,8 @@ internal sealed class DialogueEngine : IDialogueEngine
                     StardewModdingAPI.LogLevel.Trace);
             }
         }
+
+        ct.ThrowIfCancellationRequested();
 
         // 立即出游已经把这轮交流转化成世界动作；NPC 的确认台词应当像明确道别一样
         // 点完即关闭，不能继续显示模型误生成的回应选项。
@@ -723,10 +735,17 @@ internal sealed class DialogueEngine : IDialogueEngine
             AnalysisJson = analysis.ToJson(),
             EndConversation = ended,
             DialogueKey = this.ResolveDialogueKey(request),
-            Usage = response.Usage
+            Usage = response.Usage,
+            Commit = new GenerationCommit
+            {
+                Request = request,
+                NpcDisplayName = prepared.NpcDisplayName,
+                LastPlayerLine = prepared.LastPlayerLine,
+                DialogueLine = dialogueLine,
+                Conversation = prepared.Conversation.ToList()
+            }
         };
 
-        this.FinishTrigger(prepared, result, dialogueLine, analysis);
         this.ExportAttempt(prepared, response, analysis, parsedLines, attempts, "success", actionDiagnostics);
         this.LogDiagnostics(prepared, response, attempts, elapsedMilliseconds, parsedLines.Count);
         return result;
@@ -740,18 +759,35 @@ internal sealed class DialogueEngine : IDialogueEngine
             && Behavior.TravelLocationRules.IsKnownPublicOutingTarget(action.TargetLocation));
     }
 
-    /// <summary>各触发的收尾动作（§4.12）。Scheduled/Marriage 不回传、不写会话历史。</summary>
-    private void FinishTrigger(PreparedGeneration prepared, GenerationResult result, string dialogueLine, ConversationAnalysis analysis)
+    /// <summary>
+    /// Commits a generated result after the caller has validated its generation/session and shown
+    /// it to the player. The payload is claim-once so a stale completion or duplicate presenter
+    /// cannot write history or enqueue behavior twice.
+    /// </summary>
+    public bool CommitResult(GenerationResult result)
     {
-        var request = prepared.Request;
-        StardewTime now = this.services.Now();
+        GenerationCommit? commit = result.Commit;
+        if (commit == null || !commit.TryClaim())
+        {
+            return false;
+        }
+
+        this.FinishTrigger(commit, result.AnalysisJson);
+        return true;
+    }
+
+    /// <summary>各触发的收尾动作（§4.12）。Scheduled/Marriage 不回传、不写会话历史。</summary>
+    private void FinishTrigger(GenerationCommit commit, string analysisJson)
+    {
+        var request = commit.Request;
         try
         {
+            StardewTime now = this.services.Now();
             switch (request.Trigger)
             {
                 case GenerationTrigger.ConversationOpening:
                 {
-                    var npcTurn = new ConversationTurn(dialogueLine, false, Guid.NewGuid().ToString("N"));
+                    var npcTurn = new ConversationTurn(commit.DialogueLine, false, Guid.NewGuid().ToString("N"));
                     this.services.History.AppendToConversationContext(request.NpcName, npcTurn);
                     var turns = this.services.History.PeekConversationContext(request.NpcName);
                     this.services.History.UpsertConversation(request.NpcName, turns, now);
@@ -760,11 +796,12 @@ internal sealed class DialogueEngine : IDialogueEngine
 
                 case GenerationTrigger.Conversation:
                 {
-                    var npcTurn = new ConversationTurn(dialogueLine, false, Guid.NewGuid().ToString("N"));
+                    this.services.History.MergeConversationContext(request.NpcName, commit.Conversation);
+                    var npcTurn = new ConversationTurn(commit.DialogueLine, false, Guid.NewGuid().ToString("N"));
                     this.services.History.AppendToConversationContext(request.NpcName, npcTurn);
                     var turns = this.services.History.PeekConversationContext(request.NpcName);
                     this.services.History.UpsertConversation(request.NpcName, turns, now);
-                    RecordExchangeCallback?.Invoke(request.NpcName, prepared.LastPlayerLine, dialogueLine, result.AnalysisJson);
+                    RecordExchangeCallback?.Invoke(request.NpcName, commit.LastPlayerLine, commit.DialogueLine, analysisJson);
                     break;
                 }
 
@@ -774,17 +811,17 @@ internal sealed class DialogueEngine : IDialogueEngine
                     RecordExchangeCallback?.Invoke(
                         request.NpcName,
                         $"The farmer offered {giftName}.",
-                        dialogueLine,
-                        result.AnalysisJson);
+                        commit.DialogueLine,
+                        analysisJson);
 
                     string playerLine = Util.GetString(
                         "transcriptGiftPlayerLine",
-                        new { npcName = prepared.NpcDisplayName, giftName },
-                        returnNull: true) ?? $"The farmer gave {prepared.NpcDisplayName} {giftName}.";
+                        new { npcName = commit.NpcDisplayName, giftName },
+                        returnNull: true) ?? $"The farmer gave {commit.NpcDisplayName} {giftName}.";
                     var turns = new List<ConversationTurn>
                     {
                         new(playerLine, true, Guid.NewGuid().ToString("N")),
-                        new(dialogueLine, false, Guid.NewGuid().ToString("N"))
+                        new(commit.DialogueLine, false, Guid.NewGuid().ToString("N"))
                     };
                     this.services.History.UpsertConversation(request.NpcName, turns, now);
                     break;

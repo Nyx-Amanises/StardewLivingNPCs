@@ -609,7 +609,12 @@ public class DialogueEngineGenerateTests
     {
         var (engine, client, store) = Create();
         (string Npc, string Player, string Line, string Json)? recorded = null;
-        DialogueEngine.RecordExchangeCallback = (npc, player, line, json) => recorded = (npc, player, line, json);
+        int callbackCalls = 0;
+        DialogueEngine.RecordExchangeCallback = (npc, player, line, json) =>
+        {
+            callbackCalls++;
+            recorded = (npc, player, line, json);
+        };
         try
         {
             var request = new GenerationRequest
@@ -631,7 +636,15 @@ public class DialogueEngineGenerateTests
             Assert.Contains("\"rapportDelta\":2", result.AnalysisJson);
             Assert.False(result.EndConversation);
 
+            Assert.Null(recorded);
+            Assert.Empty(store.GetHistory("Abigail").ConversationHistory);
+            Assert.Empty(engine.History.PeekConversationContext("Abigail"));
+
+            engine.CommitResult(result);
+            engine.CommitResult(result);
+
             Assert.NotNull(recorded);
+            Assert.Equal(1, callbackCalls);
             Assert.Equal("How are you?", recorded!.Value.Player);
             Assert.Equal("Hello farmer!$h", recorded.Value.Line);
 
@@ -698,12 +711,15 @@ public class DialogueEngineGenerateTests
     {
         var (engine, _, store) = Create();
 
-        await engine.GenerateAsync(new GenerationRequest
+        var opening = await engine.GenerateAsync(new GenerationRequest
         {
             NpcName = "Abigail",
             Trigger = GenerationTrigger.ConversationOpening,
             Snapshot = new GameStateSnapshot()
         }, CancellationToken.None);
+
+        Assert.Empty(store.GetHistory("Abigail").ConversationHistory);
+        engine.CommitResult(opening);
 
         var openingElements = store.GetHistory("Abigail")
             .ConversationHistory[0]
@@ -713,7 +729,7 @@ public class DialogueEngineGenerateTests
         Assert.False(openingElements[0].IsPlayerLine);
         Assert.Equal("Hello farmer!$h", openingElements[0].Text);
 
-        await engine.GenerateAsync(new GenerationRequest
+        var followUp = await engine.GenerateAsync(new GenerationRequest
         {
             NpcName = "Abigail",
             Trigger = GenerationTrigger.Conversation,
@@ -723,6 +739,9 @@ public class DialogueEngineGenerateTests
             },
             Snapshot = new GameStateSnapshot()
         }, CancellationToken.None);
+
+        Assert.Single(store.GetHistory("Abigail").ConversationHistory[0].Item2.ConversationElements);
+        engine.CommitResult(followUp);
 
         var finalElements = store.GetHistory("Abigail")
             .ConversationHistory[0]
@@ -770,6 +789,10 @@ public class DialogueEngineGenerateTests
         var result = await engine.GenerateAsync(request, CancellationToken.None);
 
         Assert.Equal(EngineConstants.GiftKeyPrefix + "72", result.DialogueKey);
+        Assert.Empty(store.GetHistory("Abigail").ConversationHistory);
+
+        engine.CommitResult(result);
+
         var history = store.GetHistory("Abigail");
         Assert.Single(history.ConversationHistory);
         var elements = history.ConversationHistory[0].Item2.ConversationElements;

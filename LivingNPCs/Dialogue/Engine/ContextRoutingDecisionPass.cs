@@ -214,8 +214,12 @@ internal static class ContextRoutingDecisionPass
 
     private const string ActiveCompanionOutingHeading = "## Active Companion Outing";
 
-    public static async Task<ContextRoutingPlan> BuildPlanAsync(Character character, DialogueContext context)
+    public static async Task<ContextRoutingPlan> BuildPlanAsync(
+        Character character,
+        DialogueContext context,
+        CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         if (DialogueServices.Config?.EnableSemanticContextRouting != true || character == null || context == null)
         {
             return ContextRoutingPlan.Full().WithRoutingDiagnostics("disabled-full", 0, 0);
@@ -290,7 +294,8 @@ internal static class ContextRoutingDecisionPass
         var routeWatch = Stopwatch.StartNew();
         try
         {
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(timeoutSeconds));
+            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
             var task = LegacyLlm.Instance.RunInference(
                 LlmThinking.RoutingSystemPrompt() + " " + PromptDataBoundary.SystemRule,
                 string.Empty,
@@ -299,8 +304,13 @@ internal static class ContextRoutingDecisionPass
                 string.Empty,
                 n_predict: 384,
                 allowRetry: false,
-                disableThinking: true);
+                disableThinking: true,
+                ct: cts.Token);
             response = await task.WaitAsync(cts.Token);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -317,6 +327,7 @@ internal static class ContextRoutingDecisionPass
         }
 
         routeWatch.Stop();
+        ct.ThrowIfCancellationRequested();
         TokenUsage usage = response.Usage.HasAnyTokens
             ? response.Usage
             : TokenUsage.Estimate(prompt, response.Text ?? response.ErrorMessage ?? string.Empty);
@@ -354,6 +365,7 @@ internal static class ContextRoutingDecisionPass
 
         // Cache the raw (pre-boundary) decision so the rest of this conversation can reuse it
         // without another router round-trip.
+        ct.ThrowIfCancellationRequested();
         if (conversationKey != null)
         {
             StoreCachedPlan(conversationKey, plan.Clone());
