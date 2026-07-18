@@ -199,6 +199,21 @@ internal static class ContextRoutingDecisionPass
         ContextModule.Gift
     ];
 
+    // These exact headings represent one-turn or active business state. The ordinary memory
+    // context also contains help-request capability text on every turn, so generic fragments such
+    // as "Help-request fit" must never be used as Full-context signals.
+    private static readonly string[] LivingNpcFullContextMarkers =
+    [
+        "## LivingNPCs Gift Opportunity",
+        "## LivingNPCs Help Request Opportunity",
+        "## LivingNPCs Help Request Gift Response",
+        "## LivingNPCs Immediate Help Request Delivery",
+        "Active help request:",
+        "Unresolved conflict:"
+    ];
+
+    private const string ActiveCompanionOutingHeading = "## Active Companion Outing";
+
     public static async Task<ContextRoutingPlan> BuildPlanAsync(Character character, DialogueContext context)
     {
         if (DialogueServices.Config?.EnableSemanticContextRouting != true || character == null || context == null)
@@ -576,13 +591,12 @@ internal static class ContextRoutingDecisionPass
 
         if (!string.IsNullOrWhiteSpace(context.LivingNpcExtraPrompt))
         {
-            if (ContainsAny(
-                    context.LivingNpcExtraPrompt,
-                    "Gift Opportunity",
-                    "Help Request Opportunity",
-                    "Active Companion Outing",
-                    "Help-request fit",
-                    "currently reasonable item requests"))
+            if (ContainsAny(context.LivingNpcExtraPrompt, LivingNpcFullContextMarkers))
+            {
+                plan.Promote(ContextModule.LivingNpc, ContextDetail.Full);
+            }
+
+            if (ContainsAny(context.LivingNpcExtraPrompt, ActiveCompanionOutingHeading))
             {
                 plan.Promote(ContextModule.LivingNpc, ContextDetail.Full);
                 plan.Promote(ContextModule.Location, ContextDetail.Full);
@@ -600,6 +614,11 @@ internal static class ContextRoutingDecisionPass
         {
             plan.Promote(ContextModule.Location, ContextDetail.Full);
         }
+    }
+
+    internal static void ApplyDeterministicBoundariesForTesting(ContextRoutingPlan plan, DialogueContext context)
+    {
+        ApplyDeterministicBoundaries(plan, context);
     }
 
     private static ContextDetail ParseDetail(string value)

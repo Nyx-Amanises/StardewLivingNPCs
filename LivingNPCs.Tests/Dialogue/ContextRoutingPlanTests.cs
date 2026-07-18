@@ -126,6 +126,81 @@ public sealed class ContextRoutingPlanTests
     }
 
     [Fact]
+    public void OrdinaryLivingNpcContextDoesNotForceFullDetail()
+    {
+        var plan = ContextRoutingPlan.ConservativeBrief();
+        var context = BuildConversationContext("早上好。", string.Join(
+            "\n",
+            "## LivingNPCs Context: Abigail",
+            "- Help-request fit: theme adventure; currently reasonable item requests: (O)390 Stone.",
+            "## LivingNPCs Gift Restriction",
+            "- No immediate NPC gift is authorized for this reply."));
+
+        ContextRoutingDecisionPass.ApplyDeterministicBoundariesForTesting(plan, context);
+
+        Assert.Equal(ContextDetail.Brief, plan.Get(ContextModule.LivingNpc));
+        Assert.Equal(ContextDetail.Brief, plan.Get(ContextModule.Location));
+    }
+
+    [Theory]
+    [InlineData("## LivingNPCs Gift Opportunity")]
+    [InlineData("## LivingNPCs Help Request Opportunity")]
+    [InlineData("## LivingNPCs Help Request Gift Response")]
+    [InlineData("## LivingNPCs Immediate Help Request Delivery")]
+    [InlineData("Active help request: item request is pending.")]
+    [InlineData("Unresolved conflict: trust was damaged.")]
+    public void RealLivingNpcBusinessSectionsOnlyExpandLivingNpcDetail(string marker)
+    {
+        var plan = ContextRoutingPlan.ConservativeBrief();
+        var context = BuildConversationContext("早上好。", marker + "\n- Action-critical context.");
+
+        ContextRoutingDecisionPass.ApplyDeterministicBoundariesForTesting(plan, context);
+
+        Assert.Equal(ContextDetail.Full, plan.Get(ContextModule.LivingNpc));
+        Assert.Equal(ContextDetail.Brief, plan.Get(ContextModule.Location));
+    }
+
+    [Fact]
+    public void ActiveCompanionOutingExpandsLivingNpcAndLocationDetail()
+    {
+        var plan = ContextRoutingPlan.ConservativeBrief();
+        var context = BuildConversationContext(
+            "今天天气不错。",
+            "## Active Companion Outing\n- Phase: traveling naturally toward the destination.");
+
+        ContextRoutingDecisionPass.ApplyDeterministicBoundariesForTesting(plan, context);
+
+        Assert.Equal(ContextDetail.Full, plan.Get(ContextModule.LivingNpc));
+        Assert.Equal(ContextDetail.Full, plan.Get(ContextModule.Location));
+    }
+
+    [Fact]
+    public void BriefLivingNpcContextProtectsCriticalSectionsUnderProductionBudget()
+    {
+        string noisyState = string.Join(
+            "\n",
+            Enumerable.Range(1, 40).Select(i => "- Mood: background state line " + i + " that may be omitted."));
+        string fullContext = string.Join(
+            "\n",
+            "## LivingNPCs Context: Abigail",
+            noisyState,
+            "## LivingNPCs Gift Restriction",
+            "- No immediate NPC gift is authorized for this reply.",
+            "- Do not offer or give the farmer any item now.");
+
+        string brief = LivingNpcContextCompressor.BuildBriefContext(
+            fullContext,
+            maxLines: 12,
+            fallbackLines: 6,
+            maxCharacters: 900);
+
+        Assert.Contains("## LivingNPCs Gift Restriction", brief);
+        Assert.Contains("No immediate NPC gift is authorized", brief);
+        Assert.Contains("Do not offer or give the farmer any item now", brief);
+        Assert.DoesNotContain("background state line 40", brief);
+    }
+
+    [Fact]
     public void BriefLivingNpcContextKeepsActionCriticalSections()
     {
         string noisyMemory = string.Join("\n", Enumerable.Range(1, 120).Select(i => $"- low-priority anecdote {i}: background flavor that should not survive brief routing."));
@@ -273,10 +348,11 @@ public sealed class ContextRoutingPlanTests
         Assert.False(refresh);
         Assert.Equal(string.Empty, reason);
     }
-    private static DialogueContext BuildConversationContext(string latestPlayerText)
+    private static DialogueContext BuildConversationContext(string latestPlayerText, string livingNpcExtraPrompt = "")
     {
         return new DialogueContext
         {
+            LivingNpcExtraPrompt = livingNpcExtraPrompt,
             ChatHistory = new()
             {
                 new ConversationElement("早上好。", true),

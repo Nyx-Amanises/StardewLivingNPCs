@@ -13,6 +13,8 @@ public static class LivingNpcContextCompressor
     private const int DefaultFallbackLines = 12;
     private const int DefaultMaxBriefCharacters = 6000;
 
+    private readonly record struct BriefContextLine(string Text, bool IsCritical);
+
     public static string BuildBriefContext(
         string fullContext,
         int maxLines = DefaultMaxBriefLines,
@@ -29,7 +31,7 @@ public static class LivingNpcContextCompressor
             .Split('\n')
             .Select(line => line.Trim())
             .ToList();
-        var selected = new List<string>();
+        var selected = new List<BriefContextLine>();
         bool inCriticalSection = false;
 
         foreach (string line in lines)
@@ -46,7 +48,7 @@ public static class LivingNpcContextCompressor
 
             if (inCriticalSection || ShouldKeepBriefContextLine(line))
             {
-                selected.Add(line);
+                selected.Add(new BriefContextLine(line, inCriticalSection));
             }
         }
 
@@ -55,7 +57,13 @@ public static class LivingNpcContextCompressor
             selected = lines
                 .Where(line => !string.IsNullOrWhiteSpace(line))
                 .Take(Math.Max(1, fallbackLines))
+                .Select(line => new BriefContextLine(line, false))
                 .ToList();
+        }
+
+        if (selected.Any(line => line.IsCritical))
+        {
+            return BuildWithProtectedCriticalSections(selected, maxLines, maxCharacters);
         }
 
         if (maxLines > 0 && selected.Count > maxLines)
@@ -63,13 +71,64 @@ public static class LivingNpcContextCompressor
             selected = selected.Take(maxLines).ToList();
         }
 
-        string compact = string.Join("\n", selected);
+        string compact = string.Join("\n", selected.Select(line => line.Text));
         if (maxCharacters > 0 && compact.Length > maxCharacters)
         {
             compact = compact[..maxCharacters].TrimEnd() + "\n<truncated>";
         }
 
         return compact;
+    }
+
+    private static string BuildWithProtectedCriticalSections(
+        IReadOnlyList<BriefContextLine> selected,
+        int maxLines,
+        int maxCharacters)
+    {
+        var keep = new bool[selected.Count];
+        int keptCount = 0;
+        int keptCharacters = 0;
+
+        // Reserve budget for complete situational sections first. If those sections alone exceed
+        // the brief budget, correctness wins over the soft size cap.
+        for (int i = 0; i < selected.Count; i++)
+        {
+            if (!selected[i].IsCritical)
+            {
+                continue;
+            }
+
+            keep[i] = true;
+            keptCharacters += selected[i].Text.Length + (keptCount > 0 ? 1 : 0);
+            keptCount++;
+        }
+
+        bool truncated = false;
+        for (int i = 0; i < selected.Count; i++)
+        {
+            if (selected[i].IsCritical)
+            {
+                continue;
+            }
+
+            int addedCharacters = selected[i].Text.Length + (keptCount > 0 ? 1 : 0);
+            bool exceedsLines = maxLines > 0 && keptCount >= maxLines;
+            bool exceedsCharacters = maxCharacters > 0 && keptCharacters + addedCharacters > maxCharacters;
+            if (exceedsLines || exceedsCharacters)
+            {
+                truncated = true;
+                continue;
+            }
+
+            keep[i] = true;
+            keptCharacters += addedCharacters;
+            keptCount++;
+        }
+
+        string compact = string.Join(
+            "\n",
+            selected.Where((_, index) => keep[index]).Select(line => line.Text));
+        return truncated ? compact.TrimEnd() + "\n<truncated>" : compact;
     }
 
     public static bool ShouldKeepBriefContextLine(string line)
