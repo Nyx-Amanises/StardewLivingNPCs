@@ -184,6 +184,11 @@ internal sealed class GameContentPipeline : IContentPipeline
         var names = new List<string>();
         foreach (string token in segment.Split(' ', StringSplitOptions.RemoveEmptyEntries))
         {
+            if (global::LivingNPCs.RsvAiPolicy.IsBlockedContentId(token))
+            {
+                continue;
+            }
+
             if (int.TryParse(token, out int numeric) && numeric < 0)
             {
                 continue;

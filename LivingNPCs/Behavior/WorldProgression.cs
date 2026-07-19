@@ -95,7 +95,8 @@ internal static class WorldProgression
         string residentStage = DetermineResidentStage();
         int cropCount = CountGrowingCrops();
         int buildingCount = CountCompletedBuildings();
-        int animalCount = Game1.getFarm().getAllFarmAnimals().Count();
+        int animalCount = Game1.getFarm().getAllFarmAnimals()
+            .Count(animal => IsAllowedFarmAggregateContent(animal.type.Value));
         string farmScale = DetermineFarmScale(cropCount, buildingCount, animalCount);
         var professionFocuses = DetermineProfessionFocuses(farmer);
         var spouseNames = GetSpouseDisplayNames(farmer);
@@ -438,7 +439,18 @@ internal static class WorldProgression
     {
         return Game1.getFarm().terrainFeatures.Values
             .OfType<StardewValley.TerrainFeatures.HoeDirt>()
-            .Count(dirt => dirt.crop != null);
+            .Count(dirt =>
+            {
+                try
+                {
+                    return dirt.crop != null
+                        && IsAllowedFarmAggregateContent(dirt.crop.GetData()?.HarvestItemId);
+                }
+                catch
+                {
+                    return false;
+                }
+            });
     }
 
     private static int CountCompletedBuildings()
@@ -453,7 +465,15 @@ internal static class WorldProgression
         return Game1.getFarm().buildings.Count(building =>
             building.daysOfConstructionLeft.Value <= 0
             && !excludedTypes.Contains(building.buildingType.Value)
+            && IsAllowedFarmAggregateContent(building.buildingType.Value)
         );
+    }
+
+    internal static bool IsAllowedFarmAggregateContent(string? contentId)
+    {
+        return !string.IsNullOrWhiteSpace(contentId)
+            && !RsvAiPolicy.IsBlockedContentId(contentId)
+            && !RsvAiPolicy.ContainsBlockedReference(contentId);
     }
 
     private static string DetermineFarmScale(int cropCount, int buildingCount, int animalCount)
@@ -510,7 +530,9 @@ internal static class WorldProgression
     private static IReadOnlyList<string> GetSpouseDisplayNames(Farmer farmer)
     {
         return farmer.friendshipData.FieldDict
-            .Where(pair => pair.Value.Value.IsMarried() && !pair.Value.Value.IsRoommate())
+            .Where(pair => pair.Value.Value.IsMarried()
+                && !pair.Value.Value.IsRoommate()
+                && !RsvAiPolicy.IsBlockedNpcName(pair.Key))
             .Select(pair => Game1.characterData.TryGetValue(pair.Key, out var data) && !string.IsNullOrWhiteSpace(data.DisplayName)
                 ? data.DisplayName
                 : pair.Key)

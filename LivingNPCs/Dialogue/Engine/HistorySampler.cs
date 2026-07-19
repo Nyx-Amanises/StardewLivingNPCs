@@ -60,6 +60,12 @@ internal static class HistorySampler
 
         foreach (var entry in history.EventHistory)
         {
+            if (RsvAiPolicy.ContainsBlockedReference(entry.Item2.EventName)
+                || RsvAiPolicy.IsBlockedDialogueKey(entry.Item2.EventName))
+            {
+                continue;
+            }
+
             string text = JoinLines(entry.Item2.Dialogues);
             if (text.Length > 0)
             {
@@ -69,6 +75,11 @@ internal static class HistorySampler
 
         foreach (var entry in history.OverheardHistory)
         {
+            if (RsvAiPolicy.IsBlockedNpcName(entry.Item2.SpeakerName))
+            {
+                continue;
+            }
+
             string text = JoinLines(entry.Item2.Dialogues);
             if (text.Length > 0)
             {
@@ -78,6 +89,13 @@ internal static class HistorySampler
 
         foreach (var entry in history.ThirdPartyHistory)
         {
+            if (RsvAiPolicy.IsBlockedNpcName(entry.Item2.SpeakerName)
+                || RsvAiPolicy.ContainsBlockedReference(entry.Item2.EventName)
+                || RsvAiPolicy.IsBlockedDialogueKey(entry.Item2.EventName))
+            {
+                continue;
+            }
+
             string text = JoinLines(entry.Item2.Dialogues);
             if (text.Length > 0)
             {
@@ -157,7 +175,8 @@ internal static class HistorySampler
         return string.Join(
             " / ",
             cleaned
-                .Where(element => !string.IsNullOrWhiteSpace(element.Text))
+                .Where(element => !string.IsNullOrWhiteSpace(element.Text)
+                    && !RsvAiPolicy.ContainsBlockedReference(element.Text))
                 .Select(element => $"{(element.IsPlayerLine ? farmerLabel : npcDisplayName)}: {element.Text.Trim()}"));
     }
 
@@ -165,7 +184,10 @@ internal static class HistorySampler
     {
         return string.Join(
             " / ",
-            lines.Where(line => !string.IsNullOrWhiteSpace(line.Text)).Select(line => line.Text.Trim()));
+            lines
+                .Where(line => !string.IsNullOrWhiteSpace(line.Text)
+                    && !RsvAiPolicy.ContainsBlockedReference(line.Text))
+                .Select(line => line.Text.Trim()));
     }
 
     private static string Format(string key, StardewTime time, string text, string speaker, string eventName)

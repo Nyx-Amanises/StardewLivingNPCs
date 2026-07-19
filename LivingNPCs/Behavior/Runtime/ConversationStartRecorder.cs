@@ -84,7 +84,9 @@ internal sealed class ConversationStartRecorder
             return;
         }
 
-        if (!this.tryFindNpcForInteraction(e.Cursor, out NPC? npc) || npc == null)
+        if (!this.tryFindNpcForInteraction(e.Cursor, out NPC? npc)
+            || npc == null
+            || RsvAiPolicy.IsBlockedNpc(npc))
         {
             return;
         }
@@ -237,6 +239,11 @@ internal sealed class ConversationStartRecorder
 
     private void RecordAcceptedGift(NPC npc, GiftMemoryDetails gift)
     {
+        if (RsvAiPolicy.IsBlockedContentId(gift.ItemId))
+        {
+            return;
+        }
+
         this.memory.RecordGiftOffered(npc, gift, this.config.MaxMemoryEntriesPerNpc);
         if (this.config.EnableNpcState)
         {

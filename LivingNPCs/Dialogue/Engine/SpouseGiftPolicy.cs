@@ -61,6 +61,7 @@ internal static class SpouseGiftPolicy
             .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
             .Where(token => token.StartsWith("(", StringComparison.Ordinal)
                 || (int.TryParse(token, out int id) && id > 0))
+            .Where(token => !RsvAiPolicy.IsBlockedContentId(token))
             .Distinct(StringComparer.Ordinal)
             .ToList();
     }

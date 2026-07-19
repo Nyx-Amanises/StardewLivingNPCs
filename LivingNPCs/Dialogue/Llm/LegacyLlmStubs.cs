@@ -83,14 +83,20 @@ internal sealed class LegacyLlmBridge : LegacyLlm
             };
         }
 
+        // LegacyLlm is still the transport used by the router, metadata, action, gift-mail, and
+        // memory side channels. Keep a final no-RSV boundary here so a newly added side channel
+        // cannot accidentally bypass the structured collectors above.
+        static string Sanitize(string? value)
+            => global::LivingNPCs.RsvAiPolicy.RemoveBlockedLines(value);
+
         LlmReply reply = await client.CompleteAsync(
             new LlmRequest
             {
-                SystemPrompt = systemPromptString ?? string.Empty,
-                StableContext = gameCacheString ?? string.Empty,
-                NpcContext = npcCacheString ?? string.Empty,
-                Tail = promptString ?? string.Empty,
-                ResponseStart = responseStart ?? string.Empty,
+                SystemPrompt = Sanitize(systemPromptString),
+                StableContext = Sanitize(gameCacheString),
+                NpcContext = Sanitize(npcCacheString),
+                Tail = Sanitize(promptString),
+                ResponseStart = Sanitize(responseStart),
                 MaxTokens = n_predict,
                 AllowRetry = allowRetry,
                 DisableThinking = disableThinking

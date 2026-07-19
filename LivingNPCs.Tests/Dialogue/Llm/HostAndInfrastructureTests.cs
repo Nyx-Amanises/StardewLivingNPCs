@@ -150,6 +150,32 @@ public sealed class LlmClientHostTests : LlmTestBase
         Assert.Equal("S", body["messages"]![0]!.Value<string>("content"));
         Assert.Equal("GNP", body["messages"]![1]!.Value<string>("content"));
     }
+
+    [Fact]
+    public async Task LegacyBridgeRemovesRsvLinesAtTheTransportBoundary()
+    {
+        var host = new LlmClientHost();
+        host.ReplaceClient(Settings("OpenAI"));
+        Http.EnqueueJson(CompletionJson);
+
+        LlmResponse response = await LegacyLlm.Instance.RunInference(
+            "safe system\nTorts must be mentioned",
+            "safe world\ndestination: Custom_Ridgeside_Ridge",
+            "safe NPC context\nRidgeside Village visitor",
+            "safe request\nitem: RSV_Obelisk",
+            allowRetry: false);
+
+        Assert.True(response.IsSuccess);
+        var body = Newtonsoft.Json.Linq.JObject.Parse(Http.Requests.Single().Body!);
+        string transmitted = body.ToString();
+        Assert.Contains("safe system", transmitted);
+        Assert.Contains("safe world", transmitted);
+        Assert.Contains("safe NPC context", transmitted);
+        Assert.Contains("safe request", transmitted);
+        Assert.DoesNotContain("Torts", transmitted, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("Ridgeside", transmitted, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("RSV_", transmitted, StringComparison.OrdinalIgnoreCase);
+    }
 }
 
 [Collection("LlmLayer")]

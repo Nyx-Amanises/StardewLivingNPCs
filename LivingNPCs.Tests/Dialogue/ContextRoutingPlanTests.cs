@@ -63,6 +63,137 @@ public sealed class ContextRoutingPlanTests
         Assert.False(ConversationCues.ContainsAny("今天天气真好", ConversationCues.FutureSchedule));
     }
 
+    [Theory]
+    [InlineData("你好，有什么我可以帮忙的吗？")]
+    [InlineData("有什么需要我帮忙的吗？")]
+    [InlineData("我能帮你做点什么？")]
+    [InlineData("需要我做点什么吗？")]
+    [InlineData("有什么事需要我做吗？")]
+    [InlineData("有什么事情我能做吗？")]
+    [InlineData("能帮个忙吗？")]
+    [InlineData("我想向你求助。")]
+    [InlineData("Is there anything I can HELP with?")]
+    [InlineData("Is there anything I could help with?")]
+    [InlineData("Do you need any help?")]
+    [InlineData("Can I do something to help?")]
+    [InlineData("Could you help me with something?")]
+    [InlineData("要我搭把手吗？")]
+    [InlineData("Can I do anything for you?")]
+    [InlineData("Do you need me to do anything?")]
+    [InlineData("Is there anything you need me to do?")]
+    [InlineData("What can I do for you?")]
+    [InlineData("Need me to do anything?")]
+    [InlineData("Could I give you a hand?")]
+    [InlineData("I need your help with coffee.")]
+    [InlineData("I can help with coffee.")]
+    [InlineData("We could help.")]
+    [InlineData("Let me help.")]
+    [InlineData("I'll help.")]
+    [InlineData("你不需要我帮忙吗？")]
+    [InlineData("不用我帮忙吗？")]
+    [InlineData("没有任务给我吗？")]
+    [InlineData("没有委托吗？")]
+    [InlineData("没有需要帮忙的吗？")]
+    [InlineData("你没有什么委托要交给我吗？")]
+    [InlineData("Don't you need help?")]
+    [InlineData("Do you not need my help?")]
+    [InlineData("You don't need my help?")]
+    [InlineData("You do not need my help?")]
+    [InlineData("You have no task for me?")]
+    [InlineData("你刚说没有需要帮忙，但现在有什么我可以帮的吗？")]
+    [InlineData("I know you did not need help before, but could I help now?")]
+    [InlineData("I don't need help myself and can I help you?")]
+    public void ConversationCuesMatchExplicitHelpActions(string text)
+    {
+        Assert.True(ConversationCues.ContainsHelpAction(text));
+    }
+
+    [Theory]
+    [InlineData("我只是想问问有什么需要注意的吗？")]
+    [InlineData("你不用帮忙，我自己来。")]
+    [InlineData("What's your favorite season?")]
+    [InlineData("I do not need help today.")]
+    [InlineData("I don't need any help today.")]
+    [InlineData("I don’t need help today.")]
+    [InlineData("I can't help you today.")]
+    [InlineData("I need helpful advice.")]
+    [InlineData("我不需要你帮忙。")]
+    [InlineData("我不需要你的帮助。")]
+    [InlineData("我不需要任何帮助。")]
+    [InlineData("我没什么需要帮忙的。")]
+    [InlineData("请不要帮我。")]
+    [InlineData("我不需要你帮忙，明白吗？")]
+    [InlineData("不用帮忙，懂了吗？")]
+    [InlineData("That was a helpful answer.")]
+    public void ConversationCuesRejectNonHelpOrNegatedPhrases(string text)
+    {
+        Assert.False(ConversationCues.ContainsHelpAction(text));
+    }
+
+    [Theory]
+    [InlineData("你好，有什么我可以帮忙的吗？")]
+    [InlineData("我能帮你做点什么？")]
+    [InlineData("需要我做点什么吗？")]
+    [InlineData("Do you need help with anything?")]
+    [InlineData("What can I do for you?")]
+    [InlineData("Do you need any help?")]
+    [InlineData("Is there anything I could help with?")]
+    [InlineData("Could you help me with something?")]
+    [InlineData("I can help with coffee.")]
+    [InlineData("不用我帮忙吗？")]
+    public void ExplicitHelpActionPromotesFullContextOnCachedPlan(string text)
+    {
+        var cached = ContextRoutingPlan.ConservativeBrief();
+        var currentTurn = cached.Clone();
+        var context = BuildConversationContext(text);
+
+        ContextRoutingDecisionPass.ApplyDeterministicBoundariesForTesting(currentTurn, context);
+
+        Assert.Equal(ContextDetail.Full, currentTurn.Get(ContextModule.Location));
+        Assert.Equal(ContextDetail.Full, currentTurn.Get(ContextModule.LivingNpc));
+        Assert.Equal(ContextDetail.Full, currentTurn.Get(ContextModule.Gift));
+        Assert.Equal(ContextDetail.Brief, cached.Get(ContextModule.Location));
+        Assert.Equal(ContextDetail.Brief, cached.Get(ContextModule.LivingNpc));
+        Assert.Equal(ContextDetail.Brief, cached.Get(ContextModule.Gift));
+    }
+
+    [Fact]
+    public void OrdinaryConversationDoesNotPromoteHelpActionContext()
+    {
+        var plan = ContextRoutingPlan.ConservativeBrief();
+        var context = BuildConversationContext("今天天气真好。");
+
+        ContextRoutingDecisionPass.ApplyDeterministicBoundariesForTesting(plan, context);
+
+        Assert.Equal(ContextDetail.Brief, plan.Get(ContextModule.Location));
+        Assert.Equal(ContextDetail.Brief, plan.Get(ContextModule.LivingNpc));
+        Assert.Equal(ContextDetail.Brief, plan.Get(ContextModule.Gift));
+    }
+
+    [Fact]
+    public void CachedHelpPromotionDoesNotPolluteFollowingOrdinaryTurn()
+    {
+        const string cacheKey = "routing-test|cached-help";
+        var cached = ContextRoutingPlan.ConservativeBrief();
+        ContextRoutingDecisionPass.StoreCachedPlanForTesting(cacheKey, cached);
+
+        Assert.True(ContextRoutingDecisionPass.TryReuseCachedPlanForTesting(
+            cacheKey,
+            BuildConversationContext("Can I do anything for you?"),
+            out ContextRoutingPlan helpTurn));
+        Assert.Equal(ContextDetail.Full, helpTurn.Get(ContextModule.Location));
+        Assert.Equal(ContextDetail.Full, helpTurn.Get(ContextModule.LivingNpc));
+        Assert.Equal(ContextDetail.Full, helpTurn.Get(ContextModule.Gift));
+
+        Assert.True(ContextRoutingDecisionPass.TryReuseCachedPlanForTesting(
+            cacheKey,
+            BuildConversationContext("今天天气真好。"),
+            out ContextRoutingPlan ordinaryTurn));
+        Assert.Equal(ContextDetail.Brief, ordinaryTurn.Get(ContextModule.Location));
+        Assert.Equal(ContextDetail.Brief, ordinaryTurn.Get(ContextModule.LivingNpc));
+        Assert.Equal(ContextDetail.Brief, ordinaryTurn.Get(ContextModule.Gift));
+    }
+
     [Fact]
     public void BriefLivingNpcContextKeepsUnenumeratedLivingNpcSectionsWhole()
     {

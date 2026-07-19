@@ -232,6 +232,7 @@ internal sealed class BehaviorMailService
             mail.NpcName,
             mail.NpcDisplayName,
             mail.Motive,
+            mail.ItemId,
             mail.ItemLabel,
             mail.SourceGiftName,
             mail.Tier,
@@ -294,6 +295,8 @@ internal sealed class BehaviorMailService
         {
             return;
         }
+
+        RsvAiPolicy.RegisterGameThreadAliases();
 
         foreach (var state in this.memory.GetTrackedStates())
         {

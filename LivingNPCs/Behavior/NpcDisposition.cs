@@ -320,8 +320,13 @@ internal static class NpcDisposition
 
         if (data.FriendsAndFamily is { Count: > 0 })
         {
-            string names = string.Join(", ", data.FriendsAndFamily.Keys.Take(4));
-            details.Add($"Known family or close connections include: {names}.");
+            string names = string.Join(", ", data.FriendsAndFamily.Keys
+                .Where(name => !RsvAiPolicy.IsBlockedNpcName(name))
+                .Take(4));
+            if (!string.IsNullOrWhiteSpace(names))
+            {
+                details.Add($"Known family or close connections include: {names}.");
+            }
         }
 
         return string.Join(" ", details);

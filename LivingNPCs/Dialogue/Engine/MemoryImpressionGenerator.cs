@@ -43,15 +43,18 @@ internal sealed class MemoryImpressionGenerator
     /// <summary>Generates the updated impression paragraph, or null on any failure.</summary>
     public async Task<string?> GenerateAsync(MemoryImpressionRequest request, CancellationToken ct)
     {
-        if (request == null || string.IsNullOrWhiteSpace(request.NpcName))
+        if (request == null
+            || string.IsNullOrWhiteSpace(request.NpcName)
+            || RsvAiPolicy.IsBlockedNpcName(request.NpcName)
+            || RsvAiPolicy.ContainsBlockedReference(request.NpcName))
         {
             return null;
         }
 
-        string display = string.IsNullOrWhiteSpace(request.NpcDisplayName) ? request.NpcName : request.NpcDisplayName;
-        var memories = (request.Memories ?? Array.Empty<string>())
-            .Where(text => !string.IsNullOrWhiteSpace(text))
-            .ToList();
+        bool zh = IsChineseLocale();
+        string rawDisplay = string.IsNullOrWhiteSpace(request.NpcDisplayName) ? request.NpcName : request.NpcDisplayName;
+        string display = RsvPromptSanitizer.SafeInline(rawDisplay, zh ? "这位村民" : "the villager");
+        List<string> memories = RsvPromptSanitizer.SafeLines(request.Memories).ToList();
         int timeoutSeconds = Math.Clamp(request.TimeoutSeconds, 10, 180);
 
         if (memories.Count == 0)
@@ -64,9 +67,9 @@ internal sealed class MemoryImpressionGenerator
             return Fail(display, "no-model");
         }
 
-        bool zh = IsChineseLocale();
         string system = BuildSystemPrompt(zh);
-        string user = BuildUserPrompt(zh, display, request.ExistingImpression ?? string.Empty, memories);
+        string existingImpression = RsvPromptSanitizer.SafeMultiline(request.ExistingImpression);
+        string user = BuildUserPrompt(zh, display, existingImpression, memories);
 
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
@@ -172,6 +175,9 @@ internal sealed class MemoryImpressionGenerator
 
     private static string BuildUserPrompt(bool zh, string display, string existingImpression, List<string> memories)
     {
+        display = RsvPromptSanitizer.SafeInline(display, zh ? "这位村民" : "the villager");
+        existingImpression = RsvPromptSanitizer.SafeMultiline(existingImpression);
+        memories = RsvPromptSanitizer.SafeLines(memories).ToList();
         var prompt = new StringBuilder();
         if (zh)
         {

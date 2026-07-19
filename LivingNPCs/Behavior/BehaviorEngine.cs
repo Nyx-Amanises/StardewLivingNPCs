@@ -126,6 +126,7 @@ internal sealed class BehaviorEngine
             }
 
             this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
+            RsvAiPolicy.RegisterGameThreadAliases();
             this.conversationStartRecorder.Clear();
             this.mailService.ResolvePendingGiftMailGenerations();
             this.mailService.QueueDueGiftMailsForTomorrow();
@@ -172,6 +173,10 @@ internal sealed class BehaviorEngine
     {
         this.SafeRun("day started", () =>
         {
+            // Memory-impression generation is independent from AI gift mail. Register localized
+            // RSV aliases before either subsystem can send saved text to an LLM.
+            RsvAiPolicy.RegisterGameThreadAliases();
+
             if (this.config.EnableNpcState)
             {
                 this.memory.DecayStates(
@@ -474,7 +479,6 @@ internal sealed class BehaviorEngine
         // These checks only touch the immutable arguments and config flags, so they are safe on
         // any thread.
         if (RsvAiPolicy.IsBlockedNpcName(npcName)
-            || RsvAiPolicy.IsBlockedNpcName(npcDisplayName)
             || !this.config.EnableConversationMemory
             || string.IsNullOrWhiteSpace(playerText))
         {

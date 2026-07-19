@@ -60,6 +60,11 @@ internal sealed class MemoryImpressionService
         int started = 0;
         foreach (LivingNpcState state in this.memory.GetTrackedStates().ToList())
         {
+            if (RsvAiPolicy.IsBlockedNpcName(state.NpcName))
+            {
+                continue;
+            }
+
             if (HasInFlightRequest(state))
             {
                 // A live task will apply or fail on its own; an orphaned batch (game restarted
@@ -127,6 +132,7 @@ internal sealed class MemoryImpressionService
 
     private void StartRequest(LivingNpcState state, int today)
     {
+        state.ImpressionBacklog.RemoveAll(memoryFact => RsvAiPolicy.ContainsBlockedReference(memoryFact.Summary));
         List<LongTermMemoryFact> batch = state.ImpressionBacklog
             .Take(LongTermMemoryStore.MaxImpressionBatch)
             .ToList();
@@ -147,6 +153,15 @@ internal sealed class MemoryImpressionService
     /// <summary>Launches one generation task for the current in-flight batch (main thread only).</summary>
     private void SendRequest(LivingNpcState state, int today)
     {
+        state.ImpressionInFlight.RemoveAll(memoryFact => RsvAiPolicy.ContainsBlockedReference(memoryFact.Summary));
+        if (state.ImpressionInFlight.Count == 0)
+        {
+            state.ImpressionRequestId = string.Empty;
+            state.ImpressionRequestTotalDays = -1;
+            state.ImpressionRequestAttempts = 0;
+            return;
+        }
+
         if (!this.generationsInFlight.Add(state.NpcName))
         {
             return;
@@ -239,8 +254,13 @@ internal sealed class MemoryImpressionService
         return new MemoryImpressionRequest(
             state.NpcName,
             displayName,
-            state.RelationshipImpression,
-            state.ImpressionInFlight.Select(memoryFact => FormatMemory(memoryFact, today)).ToList(),
+            RsvAiPolicy.ContainsBlockedReference(state.RelationshipImpression)
+                ? string.Empty
+                : state.RelationshipImpression,
+            state.ImpressionInFlight
+                .Where(memoryFact => !RsvAiPolicy.ContainsBlockedReference(memoryFact.Summary))
+                .Select(memoryFact => FormatMemory(memoryFact, today))
+                .ToList(),
             timeoutSeconds);
     }
 

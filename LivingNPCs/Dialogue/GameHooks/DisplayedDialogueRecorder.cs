@@ -44,11 +44,16 @@ internal static class DisplayedDialogueRecorder
     public static void Record(NPC speaker, GameDialogue dialogue)
     {
         var engine = DialogueEngineHost.Instance;
-        if (engine == null || speaker == null)
+        if (engine == null
+            || speaker == null
+            || dialogue == null
+            || RsvAiPolicy.IsBlockedNpc(speaker)
+            || HasBlockedSourceDialogueKey(dialogue.temporaryDialogueKey, dialogue.TranslationKey))
         {
             return;
         }
 
+        Event? currentEvent = TryGetCurrentEvent();
         List<string> lines = ExtractRecordableLines(dialogue.dialogues?.Select(line => line?.Text));
         if (lines.Count == 0)
         {
@@ -61,14 +66,9 @@ internal static class DisplayedDialogueRecorder
         }
 
         StardewTime now = CurrentTime();
-        Event? currentEvent = TryGetCurrentEvent();
         if (currentEvent != null)
         {
-            var listeners = currentEvent.actors?
-                .Where(actor => !string.IsNullOrWhiteSpace(actor?.Name))
-                .Select(actor => actor!.Name)
-                .Distinct(StringComparer.Ordinal)
-                .ToList() ?? new List<string>();
+            List<string> listeners = FilterEventListenerNames(currentEvent.actors);
             engine.History.AddEventLine(speaker.Name, currentEvent.FestivalName ?? string.Empty, lines, listeners, now);
         }
         else
@@ -77,6 +77,38 @@ internal static class DisplayedDialogueRecorder
         }
 
         RecordOverheard(engine, speaker, lines, now);
+    }
+
+    internal static List<string> FilterEventListenerNames(IEnumerable<NPC?>? actors)
+    {
+        return (actors ?? Enumerable.Empty<NPC?>())
+            .Where(actor => !string.IsNullOrWhiteSpace(actor?.Name) && !IsBlockedEventActor(actor))
+            .Select(actor => actor!.Name)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    internal static bool HasBlockedSourceDialogueKey(string? temporaryDialogueKey, string? translationKey)
+    {
+        return RsvAiPolicy.IsBlockedDialogueKey(temporaryDialogueKey)
+            || RsvAiPolicy.IsBlockedDialogueKey(translationKey);
+    }
+
+    private static bool IsBlockedEventActor(NPC? actor)
+    {
+        if (actor == null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return RsvAiPolicy.IsBlockedNpc(actor);
+        }
+        catch
+        {
+            return false;
+        }
     }
 
     /// <summary>可记录的行（纯函数）：非空白、非占位标记、非跳过标记行。</summary>
@@ -132,7 +164,8 @@ internal static class DisplayedDialogueRecorder
             {
                 if (bystander == null
                     || ReferenceEquals(bystander, speaker)
-                    || string.Equals(bystander.Name, speaker.Name, StringComparison.Ordinal))
+                    || string.Equals(bystander.Name, speaker.Name, StringComparison.Ordinal)
+                    || RsvAiPolicy.IsBlockedNpc(bystander))
                 {
                     continue;
                 }

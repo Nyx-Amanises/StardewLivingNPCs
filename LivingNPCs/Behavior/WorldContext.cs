@@ -10,9 +10,11 @@ internal static class WorldContext
 {
     public static WorldContextSnapshot For(NPC npc, LivingNpcState? state = null)
     {
+        RegisterRuntimePromptAliases();
         var location = npc.currentLocation ?? Game1.currentLocation;
-        string locationName = location?.Name ?? string.Empty;
-        string locationDisplayName = location?.DisplayName ?? locationName;
+        string rawLocationName = location?.Name ?? string.Empty;
+        string locationName = RsvAiPolicy.IsBlockedLocationName(rawLocationName) ? string.Empty : rawLocationName;
+        string locationDisplayName = locationName.Length == 0 ? string.Empty : location?.DisplayName ?? locationName;
         bool isOutdoors = location?.IsOutdoors ?? false;
         var locationKind = DetermineLocationKind(locationName, isOutdoors);
         var weather = DetermineWeather(isOutdoors);
@@ -88,6 +90,11 @@ internal static class WorldContext
         );
     }
 
+    private static void RegisterRuntimePromptAliases()
+    {
+        RsvAiPolicy.RegisterGameThreadAliases();
+    }
+
     private static SocialContextFactor DetermineSocialContext(NPC npc)
     {
         var location = npc.currentLocation ?? Game1.currentLocation;
@@ -97,7 +104,10 @@ internal static class WorldContext
         }
 
         var nearbyNames = location.characters
-            .Where(other => other.Name != npc.Name && !string.IsNullOrWhiteSpace(other.Name) && !other.IsInvisible)
+            .Where(other => other.Name != npc.Name
+                && !string.IsNullOrWhiteSpace(other.Name)
+                && !other.IsInvisible
+                && !RsvAiPolicy.IsBlockedNpc(other))
             .Select(other => new
             {
                 Npc = other,

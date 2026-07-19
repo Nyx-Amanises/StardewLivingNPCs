@@ -55,7 +55,7 @@ internal static class NpcSocialGraph
         {
             foreach (string name in data.FriendsAndFamily.Keys)
             {
-                if (!string.IsNullOrWhiteSpace(name))
+                if (!string.IsNullOrWhiteSpace(name) && !RsvAiPolicy.IsBlockedNpcName(name))
                 {
                     names.Add(name);
                 }
@@ -64,7 +64,8 @@ internal static class NpcSocialGraph
 
         foreach (var pair in Game1.characterData)
         {
-            if (pair.Value.FriendsAndFamily?.ContainsKey(npcName) == true)
+            if (!RsvAiPolicy.IsBlockedNpcName(pair.Key)
+                && pair.Value.FriendsAndFamily?.ContainsKey(npcName) == true)
             {
                 names.Add(pair.Key);
             }

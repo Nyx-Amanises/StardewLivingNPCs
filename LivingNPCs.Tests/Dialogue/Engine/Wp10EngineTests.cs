@@ -153,6 +153,27 @@ public class HistorySamplerTests
         Assert.Equal(2, synthesized.Count);
         Assert.Equal(Now.AddDays(-3).ToAbsoluteDays(), synthesized[0].Time.ToAbsoluteDays());
     }
+
+    [Fact]
+    public void DropsThirdPartyHistoryWithRsvEventKey()
+    {
+        var history = new StardewEventHistory();
+        history.Add(
+            Now,
+            new ThirdPartyHistory(
+                "Abigail",
+                new List<HistoryLine> { new("A generic-looking line.") },
+                "AntonLikesFarmer"));
+
+        List<string> sampled = HistorySampler.Sample(
+            history,
+            Array.Empty<KeyValuePair<string, int>>(),
+            Now,
+            "Penny",
+            string.Empty);
+
+        Assert.Empty(sampled);
+    }
 }
 
 [Collection("LlmLayer")]
@@ -190,6 +211,25 @@ public class EngineHistoryWriterTests
         Assert.Single(store.GetHistory("Abigail").EventHistory);
         Assert.Single(store.GetHistory("Sebastian").ThirdPartyHistory);
         Assert.Equal("Abigail", store.GetHistory("Sebastian").ThirdPartyHistory[0].Item2.SpeakerName);
+    }
+
+    [Fact]
+    public void AddEventLine_FiltersRsvListener_AndKeepsOrdinaryEvent()
+    {
+        var (writer, store) = Create();
+
+        writer.AddEventLine(
+            "Abigail",
+            "ordinary event",
+            new[] { "What a day!" },
+            new[] { "Sebastian", "Torts" },
+            Now);
+
+        var eventHistory = store.GetHistory("Abigail").EventHistory;
+        Assert.Single(eventHistory);
+        Assert.Equal(new[] { "Sebastian" }, eventHistory[0].Item2.Listeners);
+        Assert.Single(store.GetHistory("Sebastian").ThirdPartyHistory);
+        Assert.Empty(store.GetHistory("Torts").ThirdPartyHistory);
     }
 
     [Fact]
@@ -544,6 +584,7 @@ public class DialogueEngineGenerateTests
             "- Hello farmer!$h\n%Hi there\n%Tell me more\n!LIVINGNPCS_META {\"rapportDelta\":2}";
 
         public int Calls { get; private set; }
+        public LlmRequest? LastRequest { get; private set; }
         public string ProviderId => "Fake";
         public bool IsHighlySensoredModel => false;
         public string ExtraInstructions => string.Empty;
@@ -551,6 +592,7 @@ public class DialogueEngineGenerateTests
         public Task<LlmReply> CompleteAsync(LlmRequest request, CancellationToken ct)
         {
             this.Calls++;
+            this.LastRequest = request;
             return Task.FromResult(LlmReply.Success(this.ReplyText, null));
         }
 
@@ -559,13 +601,17 @@ public class DialogueEngineGenerateTests
             [System.Runtime.CompilerServices.EnumeratorCancellation] CancellationToken ct = default)
         {
             this.Calls++;
+            this.LastRequest = request;
             yield return LlmStreamEvent.Delta(this.ReplyText);
             yield return LlmStreamEvent.Done();
             await Task.CompletedTask;
         }
     }
 
-    private static (DialogueEngine Engine, FakeClient Client, DialogueHistoryStore Store) Create(string? replyText = null)
+    private static (DialogueEngine Engine, FakeClient Client, DialogueHistoryStore Store) Create(
+        string? replyText = null,
+        Func<string, NpcBio>? getBio = null,
+        Func<string, NpcBio, IReadOnlyDictionary<string, string>>? getSamples = null)
     {
         DialogueServices.Initialize(null!, null!, new DialogueConfig
         {
@@ -584,14 +630,14 @@ public class DialogueEngineGenerateTests
 
         var services = new DialogueEngineServices
         {
-            GetBio = _ => new NpcBio
-            {
-                Biography = "A biography for testing.",
-                ValidPortraits = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "h", "s", "l", "a" }
-            },
+            GetBio = getBio ?? (_ => new NpcBio
+                {
+                    Biography = "A biography for testing.",
+                    ValidPortraits = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "h", "s", "l", "a" }
+                }),
             LookupPrompt = (key, _, _, _) => $"[{key}]",
             GetWorldSummaryText = optimized => optimized ? "BRIEF" : "FULL",
-            GetSamples = (_, _) => new Dictionary<string, string>(),
+            GetSamples = getSamples ?? ((_, _) => new Dictionary<string, string>()),
             GetClient = () => client,
             History = new EngineHistoryWriter(store),
             GetHistory = store.GetHistory,
@@ -660,6 +706,45 @@ public class DialogueEngineGenerateTests
     }
 
     [Fact]
+    public async Task BlockedLatestPlayerTurn_DoesNotFallBackToOlderPlayerText()
+    {
+        var (engine, client, _) = Create();
+        string? recordedPlayer = null;
+        DialogueEngine.RecordExchangeCallback = (_, player, _, _) => recordedPlayer = player;
+        try
+        {
+            var result = await engine.GenerateAsync(new GenerationRequest
+            {
+                NpcName = "Penny",
+                Trigger = GenerationTrigger.Conversation,
+                Conversation = new List<ConversationTurn>
+                {
+                    new("How are you?", true, "older-safe-turn"),
+                    new("Who is Torts?", true, "latest-rsv-turn")
+                },
+                Snapshot = new GameStateSnapshot { FarmerName = "Yuki" }
+            }, CancellationToken.None);
+
+            Assert.NotNull(client.LastRequest);
+            string transmitted = client.LastRequest!.SystemPrompt
+                + client.LastRequest.StableContext
+                + client.LastRequest.NpcContext
+                + client.LastRequest.Tail;
+            Assert.DoesNotContain("Torts", transmitted, StringComparison.OrdinalIgnoreCase);
+            Assert.DoesNotContain("How are you?", transmitted, StringComparison.Ordinal);
+            Assert.Contains("latest message unavailable", transmitted, StringComparison.OrdinalIgnoreCase);
+
+            engine.CommitResult(result);
+
+            Assert.Equal(string.Empty, recordedPlayer);
+        }
+        finally
+        {
+            DialogueEngine.RecordExchangeCallback = null;
+        }
+    }
+
+    [Fact]
     public async Task Accepted_Immediate_Companion_Outing_Ends_Conversation_And_Discards_Options()
     {
         const string reply = """
@@ -682,6 +767,51 @@ public class DialogueEngineGenerateTests
         Assert.Equal(new[] { "好的，那我们走吧。$h" }, result.ParsedLines);
         Assert.DoesNotContain("SLD_", result.FormattedLine);
         Assert.Contains("\"endConversation\":true", result.AnalysisJson);
+    }
+
+    [Fact]
+    public async Task CapturedContentSnapshotAvoidsWorkerContentCallbacks()
+    {
+        int bioCalls = 0;
+        int sampleCalls = 0;
+        var (engine, client, _) = Create(
+            getBio: _ =>
+            {
+                bioCalls++;
+                return new NpcBio { Biography = "Worker fallback biography." };
+            },
+            getSamples: (_, _) =>
+            {
+                sampleCalls++;
+                return new Dictionary<string, string> { ["spring_1"] = "Worker fallback sample." };
+            });
+        var capturedBio = new NpcBio
+        {
+            Biography = "Captured biography.",
+            ValidPortraits = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "h", "s", "l", "a" }
+        };
+
+        await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Penny",
+            Trigger = GenerationTrigger.Conversation,
+            Conversation = new List<ConversationTurn> { new("Good morning.", true, "captured-content-turn") },
+            Snapshot = new GameStateSnapshot { SeasonName = "spring", DayOfMonth = 1, FarmerName = "Yuki" },
+            ContentSnapshot = new GenerationContentSnapshot(
+                capturedBio,
+                new Dictionary<string, string> { ["spring_1"] = "Captured sample." })
+        }, CancellationToken.None);
+
+        Assert.Equal(0, bioCalls);
+        Assert.Equal(0, sampleCalls);
+        Assert.NotNull(client.LastRequest);
+        string transmitted = client.LastRequest!.SystemPrompt
+            + client.LastRequest.StableContext
+            + client.LastRequest.NpcContext
+            + client.LastRequest.Tail;
+        Assert.Contains("Captured biography.", transmitted, StringComparison.Ordinal);
+        Assert.Contains("Captured sample.", transmitted, StringComparison.Ordinal);
+        Assert.DoesNotContain("Worker fallback", transmitted, StringComparison.Ordinal);
     }
 
     [Fact]

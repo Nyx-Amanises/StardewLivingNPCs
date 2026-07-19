@@ -49,6 +49,9 @@ internal static class GenerationRequests
     /// <summary>行为上下文注入点（送礼触发）：(npc, itemId, displayName, taste) → 上下文。</summary>
     public static Func<NPC, string, string, int, string>? GiftContextProvider { get; set; }
 
+    /// <summary>主线程内容快照注入点；由默认引擎装配。</summary>
+    public static Func<NPC, GenerationContentSnapshot?>? ContentSnapshotProvider { get; set; }
+
     /// <summary>单飞行判定（P3/P4/P14 的"已有生成在途"检查）。</summary>
     public static bool SchedulerBusy => AsyncBuilder.Instance.Scheduler?.IsBusy == true;
 
@@ -62,30 +65,37 @@ internal static class GenerationRequests
     public static GenerationRequest BuildScheduled(NPC npc, string dialogueKey, string originalLine)
     {
         bool isConversationOpening = TryConsumeOpeningSnapshot(npc, out GameStateSnapshot snapshot);
+        GenerationContentSnapshot? contentSnapshot = SafeContentSnapshot(npc);
         return new GenerationRequest
         {
             NpcName = npc.Name,
+            NpcDisplayName = npc.displayName ?? npc.Name,
             Trigger = isConversationOpening
                 ? GenerationTrigger.ConversationOpening
                 : GenerationTrigger.Scheduled,
             DialogueKey = dialogueKey ?? string.Empty,
             OriginalLine = originalLine ?? string.Empty,
             BehaviorContext = SafeConversationContext(npc),
-            Snapshot = snapshot
+            Snapshot = snapshot,
+            ContentSnapshot = contentSnapshot
         };
     }
 
     /// <summary>玩家会话生成（输入框提交 / P9 文本选项）。</summary>
     public static GenerationRequest BuildConversation(NPC npc, string dialogueKey, IReadOnlyList<ConversationTurn> conversation)
     {
+        GameStateSnapshot snapshot = GameStateSnapshotCollector.Collect(npc);
+        GenerationContentSnapshot? contentSnapshot = SafeContentSnapshot(npc);
         return new GenerationRequest
         {
             NpcName = npc.Name,
+            NpcDisplayName = npc.displayName ?? npc.Name,
             Trigger = GenerationTrigger.Conversation,
             DialogueKey = dialogueKey ?? string.Empty,
             Conversation = conversation,
             BehaviorContext = SafeConversationContext(npc),
-            Snapshot = GameStateSnapshotCollector.Collect(npc)
+            Snapshot = snapshot,
+            ContentSnapshot = contentSnapshot
         };
     }
 
@@ -94,15 +104,37 @@ internal static class GenerationRequests
     {
         string itemId = gift?.QualifiedItemId ?? string.Empty;
         string displayName = gift?.DisplayName ?? string.Empty;
+        GameStateSnapshot snapshot = GameStateSnapshotCollector.Collect(npc);
+        GenerationContentSnapshot? contentSnapshot = SafeContentSnapshot(npc);
         return new GenerationRequest
         {
             NpcName = npc.Name,
+            NpcDisplayName = npc.displayName ?? npc.Name,
             Trigger = GenerationTrigger.Gift,
             GiftItemId = itemId,
             GiftTaste = taste,
             BehaviorContext = SafeGiftContext(npc, itemId, displayName, taste),
-            Snapshot = GameStateSnapshotCollector.Collect(npc)
+            Snapshot = snapshot,
+            ContentSnapshot = contentSnapshot
         };
+    }
+
+    private static GenerationContentSnapshot? SafeContentSnapshot(NPC npc)
+    {
+        try
+        {
+            return ContentSnapshotProvider?.Invoke(npc);
+        }
+        catch (Exception ex)
+        {
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = $"capture dialogue content for {npc.Name}", error = ex.Message },
+                    $"Failed to capture dialogue content for {npc.Name}: {ex.Message}"),
+                StardewModdingAPI.LogLevel.Trace);
+            return null;
+        }
     }
 
     private static string SafeConversationContext(NPC npc)

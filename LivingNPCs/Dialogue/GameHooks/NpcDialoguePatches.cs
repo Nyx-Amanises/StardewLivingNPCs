@@ -131,6 +131,14 @@ internal static class NPC_CheckForNewCurrentDialogue_Patch
                 return;
             }
 
+            // P6/P8 deliberately leave blocked source keys to vanilla. Their calls may be nested
+            // inside checkForNewCurrentDialogue, so this outer Postfix must preserve the same
+            // boundary instead of converting the returned RSV line into an AI placeholder.
+            if (HasBlockedSourceDialogueKey(top.temporaryDialogueKey, top.TranslationKey))
+            {
+                return;
+            }
+
             string firstLine = lines[0]?.Text ?? string.Empty;
             if (string.IsNullOrEmpty(firstLine) || string.Equals(firstLine, EngineConstants.DialogueGenerationTag, StringComparison.Ordinal))
             {
@@ -167,5 +175,11 @@ internal static class NPC_CheckForNewCurrentDialogue_Patch
         }
 
         return $"{(noPreface ? "default" : "heart")}_{heartLevel}";
+    }
+
+    internal static bool HasBlockedSourceDialogueKey(string? temporaryDialogueKey, string? translationKey)
+    {
+        return RsvAiPolicy.IsBlockedDialogueKey(temporaryDialogueKey)
+            || RsvAiPolicy.IsBlockedDialogueKey(translationKey);
     }
 }

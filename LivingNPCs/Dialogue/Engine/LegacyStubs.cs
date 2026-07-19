@@ -11,13 +11,17 @@ namespace LivingNPCs.Dialogue.Engine;
 
 internal sealed class Character
 {
-    public Character(string name, NPC? stardewNpc = null)
+    public Character(string name, NPC? stardewNpc = null, string? displayName = null)
     {
         this.Name = string.IsNullOrWhiteSpace(name) ? stardewNpc?.Name ?? string.Empty : name;
+        this.DisplayName = !string.IsNullOrWhiteSpace(displayName)
+            ? displayName
+            : stardewNpc?.displayName ?? this.Name;
         this.StardewNpc = stardewNpc;
     }
 
     public string Name { get; }
+    public string DisplayName { get; }
     public NPC? StardewNpc { get; }
     public CharacterBio? Bio { get; init; }
 }

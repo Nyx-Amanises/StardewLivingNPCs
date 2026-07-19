@@ -1,46 +1,53 @@
-using System;
-using System.Collections.Generic;
 using StardewValley;
+using System.Collections.Generic;
 
 using LivingNPCs.Dialogue.Diagnostics;
 using LivingNPCs.Dialogue.Llm;
 using LivingNPCs.Dialogue.Persistence;
 namespace LivingNPCs.Dialogue.Engine;
 
+/// <summary>Dialogue-side facade for the shared Ridgeside AI policy.</summary>
 internal static class RsvAiPolicy
 {
-    private static readonly HashSet<string> BlockedNpcNames = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "Acorn", "Aguar", "Alissa", "Althea", "Anton", "Ariah", "Belinda", "Bert", "Blair", "Bliss", "Bryle", "Carmen",
-        "Corine", "Daia", "Ezekiel", "Faye", "Flor", "Freddie", "Helen", "Ian", "Irene", "Jeric", "Jio", "June", "Keahi",
-        "Kenneth", "Kiarra", "Kimpoi", "Kiwi", "Lenny", "Lola", "Lorenzo", "Lorraine", "Louie", "Maddie", "Maive",
-        "Malaya", "Nadaline", "Naomi", "Olga", "Paula", "Philip", "Pika", "Pipo", "Raeriyala", "RelicSpirit", "Richard",
-        "Sari", "Sean", "Shanice", "Shiro", "Sonny", "Torts", "TreehouseGirl", "Trinnie", "Undreya", "Ysabelle", "Yuuma",
-        "Zachary", "Zayne"
-    };
-
     internal static bool IsBlockedNpc(NPC npc)
-    {
-        return npc != null
-            && (IsBlockedNpcName(npc.Name)
-                || IsBlockedNpcName(npc.displayName)
-                || IsRidgesideLocationName(npc.currentLocation != null ? npc.currentLocation.Name : null));
-    }
+        => global::LivingNPCs.RsvAiPolicy.IsBlockedNpc(npc);
 
     internal static bool IsBlockedNpcName(string name)
-    {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            return false;
-        }
+        => global::LivingNPCs.RsvAiPolicy.IsBlockedNpcName(name);
 
-        string normalized = name.Trim().TrimEnd('·', '•', '-');
-        return BlockedNpcNames.Contains(normalized);
-    }
+    internal static bool IsBlockedLocationName(string locationName)
+        => global::LivingNPCs.RsvAiPolicy.IsBlockedLocationName(locationName);
 
-    private static bool IsRidgesideLocationName(string locationName)
-    {
-        return !string.IsNullOrWhiteSpace(locationName)
-            && locationName.StartsWith("Custom_Ridgeside_", StringComparison.OrdinalIgnoreCase);
-    }
+    internal static bool IsBlockedContentId(string contentId)
+        => global::LivingNPCs.RsvAiPolicy.IsBlockedContentId(contentId);
+
+    internal static bool IsBlockedDialogueKey(string dialogueKey)
+        => global::LivingNPCs.RsvAiPolicy.IsBlockedDialogueKey(dialogueKey);
+
+    internal static bool ContainsBlockedReference(string text)
+        => global::LivingNPCs.RsvAiPolicy.ContainsBlockedReference(text);
+
+    internal static string RemoveBlockedLines(string text)
+        => global::LivingNPCs.RsvAiPolicy.RemoveBlockedLines(text);
+
+    internal static string WithheldPlayerMessage
+        => global::LivingNPCs.RsvAiPolicy.WithheldPlayerMessage;
+
+    internal static bool IsWithheldPlayerMessage(string text)
+        => global::LivingNPCs.RsvAiPolicy.IsWithheldPlayerMessage(text);
+
+    internal static void RegisterRuntimeNpcAliases(IEnumerable<NPC> villagers)
+        => global::LivingNPCs.RsvAiPolicy.RegisterRuntimeNpcAliases(villagers);
+
+    internal static void RegisterRuntimeNpcAlias(string? internalName, string? displayName)
+        => global::LivingNPCs.RsvAiPolicy.RegisterRuntimeNpcAlias(internalName, displayName);
+
+    internal static void RegisterRuntimeLocationAlias(string? internalName, string? displayName)
+        => global::LivingNPCs.RsvAiPolicy.RegisterRuntimeLocationAlias(internalName, displayName);
+
+    internal static void RegisterRuntimeContentAliases(string? contentId, params string?[] aliases)
+        => global::LivingNPCs.RsvAiPolicy.RegisterRuntimeContentAliases(contentId, aliases);
+
+    internal static void RegisterGameThreadAliases()
+        => global::LivingNPCs.RsvAiPolicy.RegisterGameThreadAliases();
 }

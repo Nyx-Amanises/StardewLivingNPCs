@@ -517,6 +517,20 @@ public class Wp12PatchLogicTests
     }
 
     [Fact]
+    public void EventListenersExcludeRsvActorsWithoutDroppingVanillaActors()
+    {
+        var actors = new NPC?[]
+        {
+            new NPC { Name = "Abigail", displayName = "Abigail" },
+            new NPC { Name = "Torts", displayName = "托托" }
+        };
+
+        Assert.Equal(
+            new[] { "Abigail" },
+            DisplayedDialogueRecorder.FilterEventListenerNames(actors));
+    }
+
+    [Fact]
     public void Marriage_Chore_Buffer_Drains_Once()
     {
         MarriageChoreBuffer.Clear();

@@ -242,7 +242,8 @@ internal static class ContextRoutingDecisionPass
         }
 
         bool isGiftResponse = context.Accept != null;
-        bool hasPlayerText = context.ChatHistory?.Any(line => line.IsPlayerLine) == true;
+        bool hasPlayerText = !string.IsNullOrWhiteSpace(
+            context.ChatHistory?.LastOrDefault(line => line.IsPlayerLine)?.Text);
         if (isGiftResponse || !hasPlayerText)
         {
             var deterministic = ContextRoutingPlan.ConservativeBrief();
@@ -299,7 +300,7 @@ internal static class ContextRoutingDecisionPass
             var task = LegacyLlm.Instance.RunInference(
                 LlmThinking.RoutingSystemPrompt() + " " + PromptDataBoundary.SystemRule,
                 string.Empty,
-                PromptDataBoundary.Wrap("router_npc_identity", $"NPC: {character.Name} ({character.StardewNpc?.displayName ?? character.Name})"),
+                BuildRouterNpcIdentity(character),
                 prompt,
                 string.Empty,
                 n_predict: 384,
@@ -616,6 +617,10 @@ internal static class ContextRoutingDecisionPass
         }
 
         string playerText = context.ChatHistory?.LastOrDefault(line => line.IsPlayerLine)?.Text ?? string.Empty;
+        if (RsvAiPolicy.ContainsBlockedReference(playerText))
+        {
+            playerText = string.Empty;
+        }
         if (ConversationCues.ContainsAny(playerText, ConversationCues.LocationPromotion))
         {
             plan.Promote(ContextModule.Location, ContextDetail.Full);
@@ -626,11 +631,35 @@ internal static class ContextRoutingDecisionPass
         {
             plan.Promote(ContextModule.Location, ContextDetail.Full);
         }
+
+        // A cached plan from an ordinary greeting must not hide help-request readiness/fit when
+        // the farmer changes the subject to asking for help. This is deterministic and scoped to
+        // the current turn, so the cheap conversation cache remains useful for later small talk.
+        if (ConversationCues.ContainsHelpAction(playerText))
+        {
+            foreach (ContextModule module in ActionGroupModules)
+            {
+                plan.Promote(module, ContextDetail.Full);
+            }
+        }
     }
 
     internal static void ApplyDeterministicBoundariesForTesting(ContextRoutingPlan plan, DialogueContext context)
     {
         ApplyDeterministicBoundaries(plan, context);
+    }
+
+    internal static void StoreCachedPlanForTesting(string conversationKey, ContextRoutingPlan rawPlan)
+    {
+        StoreCachedPlan(conversationKey, rawPlan.Clone());
+    }
+
+    internal static bool TryReuseCachedPlanForTesting(
+        string conversationKey,
+        DialogueContext context,
+        out ContextRoutingPlan plan)
+    {
+        return TryReuseCachedPlan(conversationKey, context, out plan, out _);
     }
 
     private static ContextDetail ParseDetail(string value)
@@ -647,23 +676,34 @@ internal static class ContextRoutingDecisionPass
     private static string BuildRouterPrompt(Character character, DialogueContext context)
     {
         string playerText = context.ChatHistory?.LastOrDefault(line => line.IsPlayerLine)?.Text ?? string.Empty;
+        if (RsvAiPolicy.ContainsBlockedReference(playerText))
+        {
+            playerText = string.Empty;
+        }
+
         string recentHistory = FormatRecentHistory(context);
+        string npcIdentity = RsvPromptSanitizer.CharacterIdentity(character, "the villager");
+        string location = RsvPromptSanitizer.SafeInline(context.Location, "unknown");
+        string time = RsvPromptSanitizer.SafeInline(context.TimeOfDay, "unknown");
+        string weather = string.Join(", ", RsvPromptSanitizer.SafeLines(context.Weather));
+        string currentActivity = RsvPromptSanitizer.SafeInline(context.CurrentActivity);
+        string nextScheduleLocation = RsvPromptSanitizer.SafeInline(context.NextScheduleLocation);
         var prompt = new StringBuilder();
         prompt.AppendLine("Choose which context modules are needed for the next NPC reply. The dialogue may be in any language; judge meaning, not keywords.");
         prompt.AppendLine("Prefer brief unless full context is needed. Never omit safety/core modules by trying to be clever; code will apply hard dependencies after your decision.");
         prompt.AppendLine(PromptDataBoundary.InstructionReminder);
         prompt.AppendLine();
         var facts = new StringBuilder();
-        facts.AppendLine($"- NPC: {character.StardewNpc?.displayName ?? character.Name} ({character.Name}); hearts: {(context.Hearts?.ToString() ?? "unknown")}.");
-        facts.AppendLine($"- Location: {context.Location ?? "unknown"}; time: {context.TimeOfDay ?? "unknown"}; weather: {string.Join(", ", context.Weather ?? new List<string>())}.");
+        facts.AppendLine($"- NPC: {npcIdentity}; hearts: {(context.Hearts?.ToString() ?? "unknown")}.");
+        facts.AppendLine($"- Location: {location}; time: {time}; weather: {weather}.");
         facts.AppendLine($"- Gift response: {(context.Accept != null ? "yes" : "no")}; LivingNPC context present: {!string.IsNullOrWhiteSpace(context.LivingNpcExtraPrompt)}.");
-        if (!string.IsNullOrWhiteSpace(context.CurrentActivity))
+        if (!string.IsNullOrWhiteSpace(currentActivity))
         {
-            facts.AppendLine($"- Current activity: {context.CurrentActivity}.");
+            facts.AppendLine($"- Current activity: {currentActivity}.");
         }
-        if (!string.IsNullOrWhiteSpace(context.NextScheduleLocation))
+        if (!string.IsNullOrWhiteSpace(nextScheduleLocation))
         {
-            facts.AppendLine($"- Next schedule: {context.NextScheduleLocation} in {(context.MinutesUntilNextSchedule?.ToString() ?? "unknown")} minutes.");
+            facts.AppendLine($"- Next schedule: {nextScheduleLocation} in {(context.MinutesUntilNextSchedule?.ToString() ?? "unknown")} minutes.");
         }
         prompt.AppendLine(PromptDataBoundary.Wrap("router_runtime_facts", facts.ToString()));
         prompt.AppendLine();
@@ -683,8 +723,21 @@ internal static class ContextRoutingDecisionPass
         prompt.AppendLine("Return only JSON with keys world,npcProfile,gameState,sampleDialogue,eventHistory,recentEvents,location,livingNpc,gift,action,confidence.");
         prompt.AppendLine("Each module value must be none, brief, or full. confidence is 0-1.");
         prompt.AppendLine("Use full for location whenever the farmer asks where the NPC is going, what the NPC is doing, or about later plans. Use full for world only when the reply needs specific lore/progress. Use sampleDialogue none unless style is likely fragile or this is an unfamiliar/custom NPC.");
-        return prompt.ToString();
+        return RsvAiPolicy.RemoveBlockedLines(prompt.ToString());
     }
+
+    private static string BuildRouterNpcIdentity(Character character)
+    {
+        return PromptDataBoundary.Wrap(
+            "router_npc_identity",
+            $"NPC: {RsvPromptSanitizer.CharacterIdentity(character, "the villager")}");
+    }
+
+    internal static string BuildRouterPromptForTesting(Character character, DialogueContext context)
+        => BuildRouterPrompt(character, context);
+
+    internal static string BuildRouterNpcIdentityForTesting(Character character)
+        => BuildRouterNpcIdentity(character);
 
     private static string FormatRecentHistory(DialogueContext context)
     {
@@ -697,6 +750,8 @@ internal static class ContextRoutingDecisionPass
             "\n",
             context.ChatHistory
                 .TakeLast(4)
+                .Where(line => !string.IsNullOrWhiteSpace(line.Text))
+                .Where(line => !RsvAiPolicy.ContainsBlockedReference(line.Text))
                 .Select(line => $"- {(line.IsPlayerLine ? "Farmer" : "NPC")}: {Clean(line.Text)}"));
     }
 

@@ -27,6 +27,13 @@ internal static class NPC_GetGiftReaction_Patch
                 return true;
             }
 
+            // RSV does not authorize AI use of its item text. Keep the vanilla reaction for
+            // RSV-origin item IDs instead of sending their display name/taste to the model.
+            if (RsvAiPolicy.IsBlockedContentId(gift?.QualifiedItemId))
+            {
+                return true;
+            }
+
             var request = GenerationRequests.BuildGift(__instance, gift, taste);
             if (!GenerationRequests.Enqueue(__instance, request))
             {
@@ -60,6 +67,14 @@ internal static class NPC_PushTemporaryDialogue_Patch
     {
         try
         {
+            // Let the source mod display its own dialogue unchanged. This must run before the
+            // passive-generation gate or content lookup so RSV text never becomes AI reference
+            // text even when the speaking NPC is a vanilla character.
+            if (RsvAiPolicy.IsBlockedDialogueKey(translationKey))
+            {
+                return true;
+            }
+
             if (!PatchGuards.AllowPassiveGeneration(__instance, GenerationFrequencyKind.General, checkNetwork: true))
             {
                 return true;
@@ -168,6 +183,13 @@ internal static class NPC_TryToRetrieveDialogue_Patch
     {
         try
         {
+            // Conversation topics can patch RSV-authored text into vanilla NPCs. Preserve the
+            // original retrieval path, but never replace those keyed lines with AI dialogue.
+            if (RsvAiPolicy.IsBlockedDialogueKey(preface))
+            {
+                return true;
+            }
+
             if (!PatchGuards.AllowPassiveGeneration(__instance, GenerationFrequencyKind.General, checkNetwork: true))
             {
                 return true;

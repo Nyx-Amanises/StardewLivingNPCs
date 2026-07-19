@@ -56,6 +56,12 @@ internal static class GameStateSnapshotCollector
     private static GameStateSnapshot CollectCore(NPC? npc)
     {
         Farmer player = Game1.player;
+        RegisterRuntimePromptAliases();
+        string rawSpouseName = player.spouse ?? string.Empty;
+        string promptSpouseName = RsvAiPolicy.IsBlockedNpcName(rawSpouseName)
+            ? string.Empty
+            : rawSpouseName;
+        string currentLocationName = PromptLocationName(npc?.currentLocation?.Name);
         var friendship = TryGet(() =>
             npc != null && player.friendshipData.TryGetValue(npc.Name, out Friendship data) ? data : null);
 
@@ -89,7 +95,7 @@ internal static class GameStateSnapshotCollector
             NpcIsMarriedToOther = TryGet(() => npc?.isMarried() == true && !string.Equals(player.spouse, npc.Name, StringComparison.Ordinal)),
             InlawOfSpouse = TryGet(() =>
             {
-                string spouse = player.spouse ?? string.Empty;
+                string spouse = promptSpouseName;
                 if (npc == null || spouse.Length == 0 || string.Equals(npc.Name, spouse, StringComparison.Ordinal))
                 {
                     return string.Empty;
@@ -99,8 +105,10 @@ internal static class GameStateSnapshotCollector
                 return family != null && family.ContainsKey(spouse) ? spouse : string.Empty;
             }) ?? string.Empty,
 
-            LocationName = npc?.currentLocation?.Name ?? string.Empty,
-            LocationDisplayName = TryGet(() => npc?.currentLocation?.DisplayName) ?? string.Empty,
+            LocationName = currentLocationName,
+            LocationDisplayName = currentLocationName.Length == 0
+                ? string.Empty
+                : TryGet(() => npc?.currentLocation?.DisplayName) ?? string.Empty,
             TileX = TryGet(() => npc?.TilePoint.X ?? 0),
             TileY = TryGet(() => npc?.TilePoint.Y ?? 0),
             IsTravelling = schedule.IsTravelling,
@@ -109,7 +117,7 @@ internal static class GameStateSnapshotCollector
             CurrentTravelPurpose = schedule.TravelPurpose.Kind,
             CurrentTravelPurposeConfirmed = schedule.TravelPurpose.Confirmed,
             HomeLocationName = ResolveHomeLocation(npc),
-            MightBeInShop = ShopLocations.Contains(npc?.currentLocation?.Name ?? string.Empty, StringComparer.Ordinal),
+            MightBeInShop = ShopLocations.Contains(currentLocationName, StringComparer.Ordinal),
             CurrentActivity = schedule.CurrentActivity,
             CurrentSchedulePoint = schedule.CurrentStop,
             CurrentScheduleStartTime = schedule.CurrentStopStart,
@@ -122,7 +130,7 @@ internal static class GameStateSnapshotCollector
             FarmerIsMale = player.IsMale,
             FarmerName = player.Name ?? string.Empty,
             FarmerMoney = player.Money,
-            FarmerSpouseName = player.spouse ?? string.Empty,
+            FarmerSpouseName = promptSpouseName,
             FarmerIsMarried = TryGet(() => player.isMarriedOrRoommates()),
             Children = TryGet(() => (IReadOnlyList<Content.ChildDescription>)player.getChildren()
                 .Select(child => new Content.ChildDescription(child.Name, child.Gender == Gender.Male, child.Age))
@@ -154,6 +162,7 @@ internal static class GameStateSnapshotCollector
             HasFlyCompanion = HasTrinket("MagicQuiver") || HasTrinket("ParrotEgg"),
 
             ActiveDialogueEvents = TryGet(() => (IReadOnlyList<KeyValuePair<string, int>>)player.previousActiveDialogueEvents.Pairs
+                .Where(pair => !RsvAiPolicy.IsBlockedDialogueKey(pair.Key))
                 .Select(pair => new KeyValuePair<string, int>(pair.Key, pair.Value))
                 .ToList()) ?? Array.Empty<KeyValuePair<string, int>>(),
             IsBirthdayToday = TryGet(() => npc?.isBirthday() == true),
@@ -162,29 +171,52 @@ internal static class GameStateSnapshotCollector
         };
     }
 
+    private static void RegisterRuntimePromptAliases()
+    {
+        RsvAiPolicy.RegisterGameThreadAliases();
+    }
+
     private static int birthdayCacheDay = -1;
+    private static ulong birthdayCacheSaveId = ulong.MaxValue;
     private static List<(string Name, string DisplayName)> birthdayCacheNpcs = new();
 
     /// <summary>今天过生日的其他村民（全村扫描按游戏日缓存一次）。</summary>
     private static string GetTodaysBirthdayOthers(NPC? self)
     {
         int today = Game1.Date.TotalDays;
-        if (birthdayCacheDay != today)
+        ulong saveId = Game1.uniqueIDForThisGame;
+        if (birthdayCacheDay != today || birthdayCacheSaveId != saveId)
         {
             birthdayCacheDay = today;
+            birthdayCacheSaveId = saveId;
             birthdayCacheNpcs = new List<(string, string)>();
             foreach (NPC villager in Utility.getAllVillagers())
             {
-                if (villager?.isBirthday() == true)
+                if (villager?.isBirthday() == true && !RsvAiPolicy.IsBlockedNpc(villager))
                 {
                     birthdayCacheNpcs.Add((villager.Name, villager.displayName ?? villager.Name));
                 }
             }
         }
 
-        return string.Join(", ", birthdayCacheNpcs
-            .Where(entry => !string.Equals(entry.Name, self?.Name, StringComparison.Ordinal))
-            .Select(entry => entry.DisplayName));
+        return string.Join(", ", FilterPromptVisibleNpcNames(birthdayCacheNpcs, self?.Name));
+    }
+
+    /// <summary>Filters prompt-facing NPC identities before localized display names are emitted.</summary>
+    internal static IReadOnlyList<string> FilterPromptVisibleNpcNames(
+        IEnumerable<(string InternalName, string DisplayName)> candidates,
+        string? excludedInternalName = null)
+    {
+        return (candidates ?? Enumerable.Empty<(string, string)>())
+            .Where(candidate => !string.IsNullOrWhiteSpace(candidate.InternalName))
+            .Where(candidate => !string.Equals(candidate.InternalName, excludedInternalName, StringComparison.OrdinalIgnoreCase))
+            .Where(candidate => !RsvAiPolicy.IsBlockedNpcName(candidate.InternalName))
+            .Select(candidate => string.IsNullOrWhiteSpace(candidate.DisplayName)
+                ? candidate.InternalName
+                : candidate.DisplayName)
+            .Where(name => !string.IsNullOrWhiteSpace(name))
+            .Distinct(StringComparer.Ordinal)
+            .ToList();
     }
 
     private static IReadOnlyList<string> CollectWeather(GameLocation? location)
@@ -239,7 +271,7 @@ internal static class GameStateSnapshotCollector
                 && NPC.ReadNpcHomeData(data, npc.currentLocation, out string locationName, out _, out _)
                 && !string.IsNullOrWhiteSpace(locationName))
             {
-                return locationName;
+                return PromptLocationName(locationName);
             }
 
             return string.Empty;
@@ -260,9 +292,10 @@ internal static class GameStateSnapshotCollector
         try
         {
             var travel = npc.DirectionsToNewLocation;
-            string travelLocationName = travel?.targetLocationName ?? string.Empty;
+            string rawTravelLocationName = travel?.targetLocationName ?? string.Empty;
+            string travelLocationName = PromptLocationName(rawTravelLocationName);
             bool isTravelling = npc.controller != null || npc.isMovingOnPathFindPath.Value;
-            SchedulePurposeResult travelPurpose = !isTravelling || travel == null
+            SchedulePurposeResult travelPurpose = !isTravelling || travel == null || travelLocationName.Length == 0
                 ? default
                 : SchedulePurposeResolver.Resolve(
                     travelLocationName,
@@ -284,7 +317,15 @@ internal static class GameStateSnapshotCollector
             int now = Game1.timeOfDay;
             var ordered = schedule.OrderBy(pair => pair.Key).ToList();
             var current = ordered.LastOrDefault(pair => pair.Key <= now);
-            var upcoming = ordered.Where(pair => pair.Key > now).ToList();
+            if (current.Value != null && RsvAiPolicy.IsBlockedLocationName(current.Value.targetLocationName))
+            {
+                current = default;
+            }
+
+            var upcoming = ordered
+                .Where(pair => pair.Key > now)
+                .Where(pair => pair.Value != null && !RsvAiPolicy.IsBlockedLocationName(pair.Value.targetLocationName))
+                .ToList();
             var next = upcoming.FirstOrDefault();
 
             string currentStop = current.Value != null
@@ -355,19 +396,27 @@ internal static class GameStateSnapshotCollector
             travelPurpose);
     private static string DisplayNameFor(string? locationName)
     {
-        if (string.IsNullOrWhiteSpace(locationName))
+        string promptLocationName = PromptLocationName(locationName);
+        if (promptLocationName.Length == 0)
         {
             return string.Empty;
         }
 
         try
         {
-            return Game1.getLocationFromName(locationName)?.DisplayName ?? locationName;
+            return Game1.getLocationFromName(promptLocationName)?.DisplayName ?? promptLocationName;
         }
         catch
         {
-            return locationName;
+            return promptLocationName;
         }
+    }
+
+    internal static string PromptLocationName(string? locationName)
+    {
+        return string.IsNullOrWhiteSpace(locationName) || RsvAiPolicy.IsBlockedLocationName(locationName)
+            ? string.Empty
+            : locationName;
     }
 
     private static IReadOnlyList<string> CollectNearby(NPC? npc)
@@ -381,15 +430,13 @@ internal static class GameStateSnapshotCollector
             }
 
             var origin = npc.TilePoint;
-            return location.characters
+            var candidates = location.characters
                 .Where(other => other != null
                     && !ReferenceEquals(other, npc)
                     && other.IsVillager
                     && Math.Abs(other.TilePoint.X - origin.X) + Math.Abs(other.TilePoint.Y - origin.Y) <= NearbyTileRadius)
-                .Select(other => other.displayName ?? other.Name)
-                .Where(name => !string.IsNullOrWhiteSpace(name))
-                .Distinct(StringComparer.Ordinal)
-                .ToList();
+                .Select(other => (InternalName: other.Name, DisplayName: other.displayName ?? other.Name));
+            return FilterPromptVisibleNpcNames(candidates, npc.Name);
         }
         catch
         {
@@ -406,13 +453,16 @@ internal static class GameStateSnapshotCollector
             var buildings = farm.buildings
                 .Select(building => building.buildingType.Value)
                 .Where(type => !string.IsNullOrWhiteSpace(type))
+                .Where(type => !RsvAiPolicy.IsBlockedContentId(type))
                 .GroupBy(type => type, StringComparer.Ordinal)
                 .Select(group => group.Count() > 1 ? $"{group.Key} x{group.Count()}" : group.Key)
                 .ToList();
 
             var animals = farm.getAllFarmAnimals()
+                .Where(animal => !RsvAiPolicy.IsBlockedContentId(animal.type.Value))
                 .Select(animal => animal.displayType ?? animal.type.Value)
-                .Where(type => !string.IsNullOrWhiteSpace(type))
+                .Where(type => !string.IsNullOrWhiteSpace(type)
+                    && !RsvAiPolicy.ContainsBlockedReference(type))
                 .GroupBy(type => type, StringComparer.Ordinal)
                 .Select(group => group.Count() > 1 ? $"{group.Key} x{group.Count()}" : group.Key)
                 .ToList();
@@ -423,6 +473,7 @@ internal static class GameStateSnapshotCollector
                 .Where(crop => crop != null && !crop.dead.Value)
                 .Select(crop => TryGet(() => crop!.GetData()?.HarvestItemId) ?? string.Empty)
                 .Where(id => !string.IsNullOrWhiteSpace(id))
+                .Where(id => !RsvAiPolicy.IsBlockedContentId(id))
                 .Select(id => TryGet(() => ItemRegistry.GetDataOrErrorItem(id).DisplayName) ?? id)
                 .GroupBy(name => name, StringComparer.Ordinal)
                 .Select(group => group.Count() > 1 ? $"{group.Key} x{group.Count()}" : group.Key)

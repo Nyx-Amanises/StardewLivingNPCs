@@ -14,6 +14,11 @@ internal static class DialogueSampleLoader
 {
     public static Dictionary<string, string> GetSamples(NPC? npc, NpcBio bio, bool expansionCompatible)
     {
+        if (RsvAiPolicy.IsBlockedNpc(npc))
+        {
+            return new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        }
+
         bool useCleanLoad = (ThirdPartyContentPolicy.HasUnauthorizedContent || !expansionCompatible)
             && !bio.UsePatchedDialogue;
 
@@ -29,10 +34,7 @@ internal static class DialogueSampleLoader
             {
                 if (npc?.Dialogue != null)
                 {
-                    foreach (var pair in npc.Dialogue)
-                    {
-                        samples[pair.Key] = pair.Value;
-                    }
+                    MergeAllowed(npc.Dialogue, samples, keyPrefix: null);
                 }
             }
             catch
@@ -41,11 +43,19 @@ internal static class DialogueSampleLoader
             }
         }
 
-        foreach (var pair in bio.Dialogue)
-        {
-            samples[pair.Key] = pair.Value;
-        }
+        MergeAllowed(bio.Dialogue, samples, keyPrefix: null);
 
+        return samples;
+    }
+
+    /// <summary>
+    /// Worker-safe fallback for requests created outside the game hooks. Runtime requests capture
+    /// the full NPC/clean sample set on the game thread before enqueueing.
+    /// </summary>
+    internal static Dictionary<string, string> GetBioOnlySamples(NpcBio bio)
+    {
+        var samples = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        MergeAllowed(bio?.Dialogue ?? new Dictionary<string, string>(), samples, keyPrefix: null);
         return samples;
     }
 
@@ -85,10 +95,7 @@ internal static class DialogueSampleLoader
             try
             {
                 var loaded = content.Load<Dictionary<string, string>>(baseAssetName + suffix);
-                foreach (var pair in loaded)
-                {
-                    target[keyPrefix == null ? pair.Key : keyPrefix + pair.Key] = pair.Value;
-                }
+                MergeAllowed(loaded, target, keyPrefix);
 
                 return;
             }
@@ -96,6 +103,24 @@ internal static class DialogueSampleLoader
             {
                 // 该语言变体不存在，试下一个。
             }
+        }
+    }
+
+    private static void MergeAllowed(
+        IEnumerable<KeyValuePair<string, string>> source,
+        Dictionary<string, string> target,
+        string? keyPrefix)
+    {
+        foreach (var pair in source)
+        {
+            string key = keyPrefix == null ? pair.Key : keyPrefix + pair.Key;
+            if (RsvAiPolicy.IsBlockedDialogueKey(key)
+                || RsvAiPolicy.ContainsBlockedReference(pair.Value))
+            {
+                continue;
+            }
+
+            target[key] = pair.Value;
         }
     }
 

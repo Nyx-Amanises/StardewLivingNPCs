@@ -35,6 +35,11 @@ internal sealed class EngineHistoryWriter
     /// <summary>一次展示的台词行组。与最后一条 DialogueHistory 完全一致则跳过。</summary>
     public void AddDialogueLine(string npcName, IReadOnlyList<string> lines, StardewTime now)
     {
+        if (RsvAiPolicy.IsBlockedNpcName(npcName))
+        {
+            return;
+        }
+
         var cleaned = StripSyntheticResponseLines(lines);
         if (cleaned.Count == 0)
         {
@@ -60,6 +65,13 @@ internal sealed class EngineHistoryWriter
     /// <summary>事件/节日台词；同时给每个在场者写第三方目击记录（仅内存，§4.14）。</summary>
     public void AddEventLine(string npcName, string eventName, IReadOnlyList<string> lines, IReadOnlyList<string> listenerNames, StardewTime now)
     {
+        if (RsvAiPolicy.IsBlockedNpcName(npcName)
+            || RsvAiPolicy.ContainsBlockedReference(eventName)
+            || RsvAiPolicy.IsBlockedDialogueKey(eventName))
+        {
+            return;
+        }
+
         var cleaned = StripSyntheticResponseLines(lines);
         if (cleaned.Count == 0)
         {
@@ -73,16 +85,22 @@ internal sealed class EngineHistoryWriter
             return;
         }
 
+        var allowedListeners = (listenerNames ?? Array.Empty<string>())
+            .Where(listener => !string.IsNullOrWhiteSpace(listener)
+                && !RsvAiPolicy.IsBlockedNpcName(listener)
+                && !RsvAiPolicy.ContainsBlockedReference(listener))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
         this.store.Append(npcName, new ExchangeRecord
         {
             Kind = ExchangeKind.EventLines,
             Time = now,
             EventName = eventName ?? string.Empty,
-            ListenerNames = listenerNames?.ToList() ?? new List<string>(),
+            ListenerNames = allowedListeners,
             Lines = cleaned.Select(text => new ExchangeLine(text, false)).ToList()
         });
 
-        foreach (string listener in listenerNames ?? Array.Empty<string>())
+        foreach (string listener in allowedListeners)
         {
             if (string.IsNullOrWhiteSpace(listener) || string.Equals(listener, npcName, StringComparison.OrdinalIgnoreCase))
             {
@@ -101,6 +119,11 @@ internal sealed class EngineHistoryWriter
     /// <summary>旁听记录；先删除同说话人重叠文本的旧条目（§4.14）。</summary>
     public void AddOverheardLine(string npcName, string speakerName, IReadOnlyList<string> lines, StardewTime now)
     {
+        if (RsvAiPolicy.IsBlockedNpcName(npcName) || RsvAiPolicy.IsBlockedNpcName(speakerName))
+        {
+            return;
+        }
+
         var cleaned = StripSyntheticResponseLines(lines);
         if (cleaned.Count == 0)
         {
@@ -129,7 +152,7 @@ internal sealed class EngineHistoryWriter
     /// <summary>每轮会话后整体 upsert（同 ID 覆盖）；删除文本与之重叠的 DialogueHistory 条目。</summary>
     public void UpsertConversation(string npcName, IReadOnlyList<ConversationTurn> turns, StardewTime now)
     {
-        if (turns == null || turns.Count == 0)
+        if (RsvAiPolicy.IsBlockedNpcName(npcName) || turns == null || turns.Count == 0)
         {
             return;
         }

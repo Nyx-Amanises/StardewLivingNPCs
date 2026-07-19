@@ -37,12 +37,18 @@ internal static class LivingNpcActionDecisionPass
             return LivingNpcActionDecisionResult.Skipped(analysis, "missing character or context");
         }
 
+        if (RsvPromptSanitizer.IsBlockedCharacter(character))
+        {
+            return LivingNpcActionDecisionResult.Skipped(analysis, "blocked third-party character");
+        }
+
         if (analysis.HasWorldActionOrHelpMetadata)
         {
             return LivingNpcActionDecisionResult.Skipped(analysis, "main response already had world-action/help metadata");
         }
 
-        if (string.IsNullOrWhiteSpace(context.LivingNpcExtraPrompt))
+        string livingNpcContext = RsvPromptSanitizer.SafeMultiline(context.LivingNpcExtraPrompt);
+        if (string.IsNullOrWhiteSpace(livingNpcContext))
         {
             return LivingNpcActionDecisionResult.Skipped(analysis, "missing LivingNPCs context");
         }
@@ -52,9 +58,15 @@ internal static class LivingNpcActionDecisionPass
             return LivingNpcActionDecisionResult.Skipped(analysis, "no parsed visible NPC reply");
         }
 
-        string visibleNpcReply = parsedLines[0] ?? string.Empty;
-        string playerText = context.ChatHistory?.LastOrDefault(line => line.IsPlayerLine)?.Text ?? string.Empty;
-        if (!LooksRelevant(playerText, visibleNpcReply, context.LivingNpcExtraPrompt))
+        string visibleNpcReply = RsvPromptSanitizer.SafeInline(parsedLines[0]);
+        if (string.IsNullOrWhiteSpace(visibleNpcReply))
+        {
+            return LivingNpcActionDecisionResult.Skipped(analysis, "blocked or empty visible NPC reply");
+        }
+
+        string playerText = RsvPromptSanitizer.SafeInline(
+            context.ChatHistory?.LastOrDefault(line => line.IsPlayerLine)?.Text);
+        if (!LooksRelevant(playerText, visibleNpcReply, livingNpcContext))
         {
             return LivingNpcActionDecisionResult.Skipped(analysis, "no action-relevant cue detected");
         }
@@ -79,7 +91,9 @@ internal static class LivingNpcActionDecisionPass
                 "You are a strict classifier for Stardew Valley mod action metadata. Return only compact JSON metadata; never write dialogue. "
                 + PromptDataBoundary.SystemRule,
                 string.Empty,
-                PromptDataBoundary.Wrap("action_npc_identity", $"NPC: {character.Name} ({character.StardewNpc?.displayName ?? character.Name})"),
+                PromptDataBoundary.Wrap(
+                    "action_npc_identity",
+                    $"NPC: {RsvPromptSanitizer.CharacterIdentity(character, "the villager")}"),
                 compactPrompt,
                 "!LIVINGNPCS_META ",
                 n_predict: 512,
@@ -162,21 +176,26 @@ internal static class LivingNpcActionDecisionPass
     private static string BuildPrompt(Character character, DialogueContext context, string playerText, string visibleNpcReply)
     {
         string compactContext = BuildCompactLivingNpcContext(context.LivingNpcExtraPrompt);
+        string npcIdentity = RsvPromptSanitizer.CharacterIdentity(character, "the villager");
+        string location = RsvPromptSanitizer.SafeInline(context.Location, "unknown");
+        string time = RsvPromptSanitizer.SafeInline(context.TimeOfDay, "unknown");
+        string activity = RsvPromptSanitizer.SafeInline(context.CurrentActivity);
+        string nextScheduleLocation = RsvPromptSanitizer.SafeInline(context.NextScheduleLocation);
         var prompt = new StringBuilder();
         prompt.AppendLine("Decide whether the visible NPC reply clearly commits to LivingNPCs world-action/help metadata that the main dialogue JSON omitted.");
         prompt.AppendLine("Use the compact context as constraints, not as text to quote. Do not invent actions, items, destinations, or rewards.");
         prompt.AppendLine(PromptDataBoundary.InstructionReminder);
         prompt.AppendLine();
         var facts = new StringBuilder();
-        facts.AppendLine($"- NPC: {character.StardewNpc?.displayName ?? character.Name} ({character.Name}).");
-        facts.AppendLine($"- Location: {context.Location ?? "unknown"}; time: {context.TimeOfDay ?? "unknown"}; hearts: {(context.Hearts?.ToString() ?? "unknown")}.");
-        if (!string.IsNullOrWhiteSpace(context.CurrentActivity))
+        facts.AppendLine($"- NPC: {npcIdentity}.");
+        facts.AppendLine($"- Location: {location}; time: {time}; hearts: {(context.Hearts?.ToString() ?? "unknown")}.");
+        if (!string.IsNullOrWhiteSpace(activity))
         {
-            facts.AppendLine($"- Current visible activity: {context.CurrentActivity}.");
+            facts.AppendLine($"- Current visible activity: {activity}.");
         }
-        if (!string.IsNullOrWhiteSpace(context.NextScheduleLocation))
+        if (!string.IsNullOrWhiteSpace(nextScheduleLocation))
         {
-            facts.AppendLine($"- Next schedule destination: {context.NextScheduleLocation}; minutes until next schedule: {(context.MinutesUntilNextSchedule?.ToString() ?? "unknown")}.");
+            facts.AppendLine($"- Next schedule destination: {nextScheduleLocation}; minutes until next schedule: {(context.MinutesUntilNextSchedule?.ToString() ?? "unknown")}.");
         }
         prompt.AppendLine(PromptDataBoundary.Wrap("action_runtime_facts", facts.ToString()));
         prompt.AppendLine();
@@ -206,6 +225,15 @@ internal static class LivingNpcActionDecisionPass
         prompt.AppendLine("- Use fulfilled only when the farmer physically gives or hands over the requested item now. Saying they have it at home, will bring it later, will get it at the destination, or promising to bring it only means accepted/advanced at most; it is not fulfilled.");
         prompt.AppendLine("- Output no markdown, no explanation, and no visible dialogue.");
         return prompt.ToString();
+    }
+
+    internal static string BuildPromptForTesting(
+        Character character,
+        DialogueContext context,
+        string playerText,
+        string visibleNpcReply)
+    {
+        return BuildPrompt(character, context, playerText, visibleNpcReply);
     }
 
     internal static bool TryAddActionFromGiftDecisionForTesting(
@@ -397,6 +425,8 @@ internal static class LivingNpcActionDecisionPass
         string playerText,
         string visibleNpcReply)
     {
+        playerText = RsvPromptSanitizer.SafeInline(playerText);
+        visibleNpcReply = RsvPromptSanitizer.SafeInline(visibleNpcReply);
         TryAddActionFromGiftDecision(
             supplemental,
             responseText,
@@ -579,13 +609,14 @@ internal static class LivingNpcActionDecisionPass
 
     private static string BuildCompactLivingNpcContext(string fullContext)
     {
-        if (string.IsNullOrWhiteSpace(fullContext))
+        string safeContext = RsvPromptSanitizer.SafeMultiline(fullContext);
+        if (string.IsNullOrWhiteSpace(safeContext))
         {
             return "<none>";
         }
 
         return LivingNpcContextCompressor.BuildBriefContext(
-            fullContext,
+            safeContext,
             maxLines: 100,
             fallbackLines: 30,
             maxCharacters: MaxCompactContextCharacters);
@@ -673,6 +704,7 @@ internal static class LivingNpcActionDecisionPass
 
     private static string CleanForPrompt(string value)
     {
+        value = RsvPromptSanitizer.SafeInline(value);
         if (string.IsNullOrWhiteSpace(value))
         {
             return "<empty>";

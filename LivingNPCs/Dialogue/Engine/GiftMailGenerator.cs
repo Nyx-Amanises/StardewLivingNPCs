@@ -13,6 +13,7 @@ internal sealed record GiftMailRequest(
     string NpcName,
     string NpcDisplayName,
     string Motive,
+    string ItemId,
     string ItemLabel,
     string SourceGift,
     string Tier,
@@ -42,12 +43,12 @@ internal sealed class GiftMailGenerator
     /// <summary>Generates a validated mail body, or null on any failure (caller keeps its template).</summary>
     public async Task<string?> GenerateAsync(GiftMailRequest request, CancellationToken ct)
     {
-        if (request == null || string.IsNullOrWhiteSpace(request.NpcName))
+        if (ShouldBypassRequest(request))
         {
             return null;
         }
 
-        string motive = string.IsNullOrWhiteSpace(request.Motive) ? "reciprocal" : request.Motive;
+        string motive = NormalizeMotive(request.Motive);
         int timeoutSeconds = Math.Clamp(request.TimeoutSeconds, 5, 120);
 
         if (LegacyLlm.Instance == null || LegacyLlm.Instance is LegacyLlmDummy)
@@ -57,10 +58,18 @@ internal sealed class GiftMailGenerator
 
         // Capture persona on the calling (game) thread; never touch game state past the first await.
         Character character = DialogueBuilder.Instance.GetCharacterByName(request.NpcName);
-        string display = character?.StardewNpc?.displayName
-            ?? (string.IsNullOrWhiteSpace(request.NpcDisplayName) ? request.NpcName : request.NpcDisplayName);
-        string persona = BuildPersona(character);
+        if (RsvPromptSanitizer.IsBlockedCharacter(character))
+        {
+            return null;
+        }
+
         bool zh = IsChineseLocale();
+        string displayFallback = zh ? "这位村民" : "the villager";
+        string rawDisplay = string.IsNullOrWhiteSpace(request.NpcDisplayName)
+            ? character.DisplayName
+            : request.NpcDisplayName;
+        string display = RsvPromptSanitizer.SafeInline(rawDisplay, displayFallback);
+        string persona = BuildPersona(character);
         string system = BuildSystemPrompt(zh);
         string user = BuildUserPrompt(zh, display, persona, motive, request.ItemLabel, request.SourceGift);
 
@@ -133,6 +142,7 @@ internal sealed class GiftMailGenerator
             .Where(t => !string.IsNullOrWhiteSpace(t.Heading))
             .Take(3)
             .Select(t => string.IsNullOrWhiteSpace(t.Description) ? t.Heading : $"{t.Heading}: {t.Description}")
+            .Where(text => !RsvAiPolicy.ContainsBlockedReference(text))
             .ToList();
 
         return traits != null && traits.Count > 0 ? string.Join("; ", traits) : string.Empty;
@@ -149,8 +159,11 @@ internal sealed class GiftMailGenerator
     private static string BuildUserPrompt(bool zh, string display, string persona, string motive, string itemLabel, string sourceGift)
     {
         var prompt = new StringBuilder();
-        string item = string.IsNullOrWhiteSpace(itemLabel) ? (zh ? "一件小东西" : "a small gift") : itemLabel;
-        string source = string.IsNullOrWhiteSpace(sourceGift) ? (zh ? "你之前送的礼物" : "the gift you gave earlier") : sourceGift;
+        display = RsvPromptSanitizer.SafeInline(display, zh ? "这位村民" : "the villager");
+        persona = RsvPromptSanitizer.SafeInline(persona);
+        motive = NormalizeMotive(motive);
+        string item = RsvPromptSanitizer.SafeInline(itemLabel, zh ? "一件小东西" : "a small gift");
+        string source = RsvPromptSanitizer.SafeInline(sourceGift, zh ? "你之前送的礼物" : "the gift you gave earlier");
 
         if (zh)
         {
@@ -203,6 +216,31 @@ internal sealed class GiftMailGenerator
         string motive,
         string itemLabel,
         string sourceGift) => BuildUserPrompt(zh, display, persona, motive, itemLabel, sourceGift);
+
+    internal static bool ShouldBypassRequestForTesting(GiftMailRequest request)
+        => ShouldBypassRequest(request);
+
+    private static bool ShouldBypassRequest(GiftMailRequest? request)
+    {
+        return request == null
+            || string.IsNullOrWhiteSpace(request.NpcName)
+            || RsvAiPolicy.IsBlockedNpcName(request.NpcName)
+            || RsvAiPolicy.ContainsBlockedReference(request.NpcName)
+            || RsvAiPolicy.ContainsBlockedReference(request.NpcDisplayName)
+            || RsvAiPolicy.IsBlockedContentId(request.ItemId)
+            || RsvAiPolicy.ContainsBlockedReference(request.ItemLabel)
+            || RsvAiPolicy.ContainsBlockedReference(request.SourceGift);
+    }
+
+    private static string NormalizeMotive(string? motive)
+    {
+        return motive?.Trim().ToLowerInvariant() switch
+        {
+            "birthday" => "birthday",
+            "help_request_reward" => "help_request_reward",
+            _ => "reciprocal"
+        };
+    }
 
     private static string EnsureSalutation(string body, bool zh)
     {

@@ -13,7 +13,7 @@ namespace LivingNPCs.Tests;
 public sealed class DialogueEngineLinkTests
 {
     private static readonly GiftMailRequest MailRequest =
-        new("Abigail", "Abigail", "reciprocal", "Amethyst", "Leek", "small", 30);
+        new("Abigail", "Abigail", "reciprocal", "(O)66", "Amethyst", "Leek", "small", 30);
 
     private static readonly MemoryImpressionRequest ImpressionRequest =
         new("Abigail", "Abigail", "", new[] { "[-3d] Helped fix the fence." }, 45);

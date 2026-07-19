@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using LivingNPCs.Dialogue.Content;
 using LivingNPCs.Dialogue.Engine;
 using LivingNPCs.Dialogue.Llm;
 using StardewValley;
@@ -37,10 +38,20 @@ internal enum GenerationTrigger
 /// <summary>会话元素（文本 + 是否玩家行 + GUID；GUID 用于会话续接去重合并，§4.14）。</summary>
 internal sealed record ConversationTurn(string Text, bool IsPlayerLine, string Id);
 
+/// <summary>
+/// Content captured while the request is still on the game thread. NpcBio instances are treated as
+/// immutable after DialogueContentService finalizes them; invalidation replaces the cached object.
+/// </summary>
+internal sealed record GenerationContentSnapshot(
+    NpcBio Bio,
+    IReadOnlyDictionary<string, string> DialogueSamples);
+
 /// <summary>一次生成请求（WP10 §5.1）。快照由引擎入口在主线程采集。</summary>
 internal sealed class GenerationRequest
 {
     public string NpcName { get; init; } = string.Empty;
+    /// <summary>Captured on the game thread so generation workers never lazy-load NPC display data.</summary>
+    public string NpcDisplayName { get; init; } = string.Empty;
     public GenerationTrigger Trigger { get; init; }
     public string DialogueKey { get; init; } = string.Empty;
     public string OriginalLine { get; init; } = string.Empty;
@@ -54,6 +65,9 @@ internal sealed class GenerationRequest
     public string BehaviorContext { get; init; } = string.Empty;
 
     public GameStateSnapshot Snapshot { get; init; } = new();
+
+    /// <summary>主线程捕获的内容；测试或旧调用方为空时使用引擎的纯数据回退。</summary>
+    public GenerationContentSnapshot? ContentSnapshot { get; init; }
 }
 
 /// <summary>

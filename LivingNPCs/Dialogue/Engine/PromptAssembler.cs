@@ -126,13 +126,16 @@ internal sealed class PromptAssembler
 
     public AssembledPrompt Assemble()
     {
-        string system = this.BuildSystem();
-        string game = this.BuildGameConstantContext();
-        string npc = this.BuildNpcConstantContext();
-        string core = this.BuildCorePrompt();
-        string instructions = this.BuildInstructions();
-        string command = this.BuildCommand();
-        string responseStart = this.Text("responseStart") ?? string.Empty;
+        // Keep a final policy boundary at the actual LLM hand-off. Individual collectors filter
+        // structured RSV data too, but this also covers legacy prompt overrides and future prompt
+        // sections which may not yet know where their text originated.
+        string system = SanitizePromptText(this.BuildSystem());
+        string game = SanitizePromptText(this.BuildGameConstantContext());
+        string npc = SanitizePromptText(this.BuildNpcConstantContext());
+        string core = SanitizePromptText(this.BuildCorePrompt());
+        string instructions = SanitizePromptText(this.BuildInstructions());
+        string command = SanitizePromptText(this.BuildCommand());
+        string responseStart = SanitizePromptText(this.Text("responseStart") ?? string.Empty);
 
         this.lengths["System"] = system.Length;
         this.lengths["GameConstantContext"] = game.Length;
@@ -322,6 +325,8 @@ internal sealed class PromptAssembler
             build(builder);
             content = builder.ToString();
         }
+
+        content = SanitizePromptText(content);
 
         // 同名小节可能出现两次（Spouse 在已婚/未婚分支各一次），累计长度。
         this.lengths[name] = this.lengths.TryGetValue(name, out int existing) ? existing + content.Length : content.Length;
@@ -657,6 +662,9 @@ internal sealed class PromptAssembler
             _ => string.Empty
         };
     }
+
+    private static string SanitizePromptText(string text)
+        => RsvAiPolicy.RemoveBlockedLines(text);
     private string? SpecificLocationText()
     {
         var s = this.input.S;
@@ -840,7 +848,7 @@ internal sealed class PromptAssembler
 
     private void BuildLivingNpcExtraPrompt(StringBuilder builder)
     {
-        string context = this.input.Request.BehaviorContext;
+        string context = RsvAiPolicy.RemoveBlockedLines(this.input.Request.BehaviorContext);
         if (string.IsNullOrWhiteSpace(context))
         {
             return;
@@ -960,8 +968,26 @@ internal sealed class PromptAssembler
             var transcript = new StringBuilder();
             foreach (var turn in cleaned)
             {
+                if (RsvAiPolicy.IsWithheldPlayerMessage(turn.Text))
+                {
+                    AppendLine(
+                        transcript,
+                        $"{farmerLabel}: [latest message unavailable; do not infer its contents or answer an earlier turn]");
+                    continue;
+                }
+
+                if (string.IsNullOrWhiteSpace(turn.Text))
+                {
+                    continue;
+                }
+
                 // 剔除疑似错误语言的行（§4.6.4.20）。
                 if (ConversationTextPostProcessor.LooksLikeWrongLanguage(turn.Text))
+                {
+                    continue;
+                }
+
+                if (RsvAiPolicy.ContainsBlockedReference(turn.Text))
                 {
                     continue;
                 }

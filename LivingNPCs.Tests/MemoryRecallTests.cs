@@ -88,6 +88,43 @@ public sealed class MemoryRecallTests
         Assert.Contains("quartz", plan.LongTermMemories[0].Memory.Summary, StringComparison.OrdinalIgnoreCase);
     }
 
+    [Fact]
+    public void RsvLongTermAndPreferenceMemoriesAreExcludedBeforeRecall()
+    {
+        var state = TestScenarios.TrustedState();
+        state.LongTermMemories.Add(TestScenarios.Memory(
+            "Met Torts near the ridge.",
+            importance: 100,
+            subject: "Torts",
+            tags: ["RSV"]));
+        state.LongTermMemories.Add(TestScenarios.Memory(
+            "The farmer enjoys coffee in the library.",
+            importance: 80,
+            tags: "coffee"));
+        state.PlayerPreferenceMemories.Add(new PlayerPreferenceFact
+        {
+            PreferenceKind = "liked_item",
+            Subject = "Rafseazz.RSVCP_Aurorean_Iris",
+            Summary = "The farmer likes the Aurorean Iris.",
+            Tags = new List<string> { "RSV" },
+            Importance = 100,
+            CreatedTotalDays = TestScenarios.Today - 1,
+            LastUpdatedTotalDays = TestScenarios.Today - 1
+        });
+
+        MemoryRecallPlan plan = new BehaviorMemory().BuildMemoryRecallPlanForTesting(
+            state,
+            TestScenarios.World(),
+            Array.Empty<BehaviorMemoryEntry>(),
+            longTermCount: 5,
+            preferenceCount: 5,
+            currentTotalDays: TestScenarios.Today);
+
+        Assert.Single(plan.LongTermMemories);
+        Assert.Contains("coffee", plan.LongTermMemories[0].Memory.Summary, StringComparison.OrdinalIgnoreCase);
+        Assert.Empty(plan.PlayerPreferences);
+    }
+
     private static MemoryRecallPlan Recall(LivingNpcState state, WorldContextSnapshot world)
     {
         return new BehaviorMemory().BuildMemoryRecallPlanForTesting(

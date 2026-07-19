@@ -328,23 +328,53 @@ internal sealed class DialogueEngine : IDialogueEngine
     {
         var config = DialogueServices.Config ?? new DialogueConfig();
         var snapshot = request.Snapshot;
-        var bio = this.services.GetBio(request.NpcName);
-        string displayName = this.services.GetNpcDisplayName(request.NpcName);
+        var bio = request.ContentSnapshot?.Bio ?? this.services.GetBio(request.NpcName);
+        string displayName = string.IsNullOrWhiteSpace(request.NpcDisplayName)
+            ? this.services.GetNpcDisplayName(request.NpcName)
+            : request.NpcDisplayName;
 
         // 会话续接：与上次会话上下文按元素 GUID 去重合并（§4.3/§4.14）。
         List<ConversationTurn> conversation = request.Trigger == GenerationTrigger.Conversation
             ? this.services.History.BuildMergedConversationContext(request.NpcName, request.Conversation)
             : new List<ConversationTurn>(request.Conversation);
-        string lastPlayerLine = conversation.LastOrDefault(turn => turn.IsPlayerLine)?.Text ?? string.Empty;
+        int latestPlayerIndex = conversation.FindLastIndex(turn => turn.IsPlayerLine);
+        bool latestPlayerMessageWithheld = latestPlayerIndex >= 0
+            && RsvAiPolicy.ContainsBlockedReference(conversation[latestPlayerIndex].Text);
+
+        // If the current question itself contains unavailable third-party data, don't expose an
+        // older question as the apparent latest turn. Keep one explicit prompt marker and remove
+        // the preceding transcript for this exceptional reply; the original conversation remains
+        // available for normal history bookkeeping and is filtered again on every future prompt.
+        List<ConversationTurn> promptConversation = latestPlayerMessageWithheld
+            ? new List<ConversationTurn>
+            {
+                new(RsvAiPolicy.WithheldPlayerMessage, true, conversation[latestPlayerIndex].Id)
+            }
+            : conversation
+                .Select(turn => RsvAiPolicy.ContainsBlockedReference(turn.Text)
+                    ? new ConversationTurn(string.Empty, turn.IsPlayerLine, turn.Id)
+                    : turn)
+                .ToList();
+        string lastPlayerLine = latestPlayerMessageWithheld
+            ? string.Empty
+            : promptConversation.LastOrDefault(turn => turn.IsPlayerLine)?.Text ?? string.Empty;
+
+        List<ConversationTurn> routingConversation = promptConversation
+            .Select(turn => RsvAiPolicy.IsWithheldPlayerMessage(turn.Text)
+                ? new ConversationTurn(string.Empty, turn.IsPlayerLine, turn.Id)
+                : turn)
+            .ToList();
 
         // 决策通道输入（搬运件消费的上下文视图）。
         var context = new DialogueContext
         {
-            Accept = request.Trigger == GenerationTrigger.Gift ? request.GiftItemId : null,
-            ChatHistory = conversation
+            Accept = request.Trigger == GenerationTrigger.Gift && !RsvAiPolicy.IsBlockedContentId(request.GiftItemId)
+                ? request.GiftItemId
+                : null,
+            ChatHistory = routingConversation
                 .Select(turn => new ConversationElement(turn.Text, turn.IsPlayerLine) { Id = turn.Id })
                 .ToList(),
-            LivingNpcExtraPrompt = request.BehaviorContext,
+            LivingNpcExtraPrompt = RsvAiPolicy.RemoveBlockedLines(request.BehaviorContext),
             Hearts = snapshot.FriendshipExists ? snapshot.Hearts : null,
             Location = snapshot.LocationName,
             TimeOfDay = $"{GameStateSnapshot.ClockText(snapshot.TimeOfDay)}",
@@ -354,7 +384,7 @@ internal sealed class DialogueEngine : IDialogueEngine
             MinutesUntilNextSchedule = snapshot.MinutesUntilNextSchedule
         };
 
-        var character = new Character(request.NpcName, TryGetNpc(request.NpcName))
+        var character = new Character(request.NpcName, displayName: displayName)
         {
             Bio = ToCharacterBio(bio)
         };
@@ -383,7 +413,12 @@ internal sealed class DialogueEngine : IDialogueEngine
         };
 
         var samples = plan.Include(ContextModule.SampleDialogue)
-            ? this.SelectSamples(request.NpcName, bio, currentFacts, snapshot)
+            ? this.SelectSamples(
+                request.NpcName,
+                bio,
+                currentFacts,
+                snapshot,
+                request.ContentSnapshot?.DialogueSamples)
             : new List<DialogueSample>();
 
         // 历史采样。
@@ -405,6 +440,10 @@ internal sealed class DialogueEngine : IDialogueEngine
             && snapshot.IsMarriedToFarmer)
         {
             givingGiftId = SpouseGiftPicker?.Invoke(request.NpcName, snapshot) ?? string.Empty;
+            if (RsvAiPolicy.IsBlockedContentId(givingGiftId))
+            {
+                givingGiftId = string.Empty;
+            }
         }
 
         var variantGender = bio.ResolvedGender;
@@ -418,12 +457,13 @@ internal sealed class DialogueEngine : IDialogueEngine
             NpcGender = variantGender,
             Samples = samples,
             HistoryLines = historyLines,
-            Conversation = conversation,
+            Conversation = promptConversation,
             JustSpoke = justSpoke,
             WorldSummaryFull = this.services.GetWorldSummaryText(config.UseOptimizedPrompts),
             WorldSummaryBrief = this.services.GetWorldSummaryText(true),
-            PreoccupationTopic = this.PickPreoccupation(request.NpcName, bio, conversation.Count),
+            PreoccupationTopic = this.PickPreoccupation(request.NpcName, bio, promptConversation.Count),
             GiftDisplayName = request.Trigger == GenerationTrigger.Gift
+                && !RsvAiPolicy.IsBlockedContentId(request.GiftItemId)
                 ? this.services.GetItemDisplayName(request.GiftItemId)
                 : string.Empty,
             GivingGiftDisplayName = string.IsNullOrWhiteSpace(givingGiftId)
@@ -464,13 +504,20 @@ internal sealed class DialogueEngine : IDialogueEngine
         return prepared;
     }
 
-    private List<DialogueSample> SelectSamples(string npcName, NpcBio bio, DialogueKeyFacts current, GameStateSnapshot snapshot)
+    private List<DialogueSample> SelectSamples(
+        string npcName,
+        NpcBio bio,
+        DialogueKeyFacts current,
+        GameStateSnapshot snapshot,
+        IReadOnlyDictionary<string, string>? capturedSamples)
     {
         lock (this.gate)
         {
             if (!this.sampleLibraries.TryGetValue(npcName, out var library))
             {
-                library = SampleSelector.BuildLibrary(this.services.GetSamples(npcName, bio));
+                IReadOnlyDictionary<string, string> source = capturedSamples
+                    ?? this.services.GetSamples(npcName, bio);
+                library = SampleSelector.BuildLibrary(source);
                 this.sampleLibraries[npcName] = library;
             }
 
@@ -653,7 +700,9 @@ internal sealed class DialogueEngine : IDialogueEngine
         if (request.Trigger is GenerationTrigger.Conversation or GenerationTrigger.Gift)
         {
             string playerText = request.Trigger == GenerationTrigger.Gift
-                ? $"The farmer gave {request.NpcName} item {request.GiftItemId}; gift taste code {request.GiftTaste}."
+                ? RsvAiPolicy.IsBlockedContentId(request.GiftItemId)
+                    ? "The farmer gave the NPC an unsupported third-party item; no item text is available."
+                    : $"The farmer gave {request.NpcName} item {request.GiftItemId}; gift taste code {request.GiftTaste}."
                 : prepared.LastPlayerLine;
             try
             {
@@ -926,18 +975,6 @@ internal sealed class DialogueEngine : IDialogueEngine
             StardewModdingAPI.LogLevel.Debug);
     }
 
-    private static NPC? TryGetNpc(string npcName)
-    {
-        try
-        {
-            return Game1.getCharacterFromName(npcName);
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     private static CharacterBio? ToCharacterBio(NpcBio bio)
     {
         if (bio == null || bio.Traits.Count == 0)
@@ -967,17 +1004,50 @@ internal static class DialogueEngineHost
     /// <summary>用真实服务装配引擎（游戏侧调用；测试自行构造 DialogueEngine）。</summary>
     public static DialogueEngine CreateDefault(DialogueContentService content)
     {
+        var contentSnapshotGate = new object();
+        var contentSnapshots = new Dictionary<
+            string,
+            (NpcBio Bio, bool ExpansionCompatible, bool RsvBlocked, string Locale, GenerationContentSnapshot Snapshot)>(
+                StringComparer.OrdinalIgnoreCase);
+        GameHooks.GenerationRequests.ContentSnapshotProvider = npc =>
+        {
+            NpcBio bio = content.GetBio(npc.Name);
+            bool expansionCompatible = SveContentRules.IsExpansionCompatibilityEnabled(
+                SveContentRules.NormalizeName(npc.Name),
+                DialogueServices.Config?.EnableSveCompatibility ?? true);
+            bool rsvBlocked = RsvAiPolicy.IsBlockedNpc(npc);
+            string locale = DialogueServices.Helper?.GameContent.CurrentLocale ?? string.Empty;
+            lock (contentSnapshotGate)
+            {
+                if (contentSnapshots.TryGetValue(npc.Name, out var cached)
+                    && ReferenceEquals(cached.Bio, bio)
+                    && cached.ExpansionCompatible == expansionCompatible
+                    && cached.RsvBlocked == rsvBlocked
+                    && string.Equals(cached.Locale, locale, StringComparison.OrdinalIgnoreCase))
+                {
+                    return cached.Snapshot;
+                }
+            }
+
+            IReadOnlyDictionary<string, string> samples = DialogueSampleLoader.GetSamples(
+                npc,
+                bio,
+                expansionCompatible);
+            var snapshot = new GenerationContentSnapshot(bio, samples);
+            lock (contentSnapshotGate)
+            {
+                contentSnapshots[npc.Name] = (bio, expansionCompatible, rsvBlocked, locale, snapshot);
+            }
+
+            return snapshot;
+        };
+
         var services = new DialogueEngineServices
         {
             GetBio = content.GetBio,
             LookupPrompt = (key, bio, variant, tokens) => content.LookupPrompt(key, bio, variant, tokens, returnNull: true),
             GetWorldSummaryText = content.GetWorldSummaryText,
-            GetSamples = (npcName, bio) => DialogueSampleLoader.GetSamples(
-                TryGetNpc(npcName),
-                bio,
-                SveContentRules.IsExpansionCompatibilityEnabled(
-                    SveContentRules.NormalizeName(npcName),
-                    DialogueServices.Config?.EnableSveCompatibility ?? true)),
+            GetSamples = (_, bio) => DialogueSampleLoader.GetBioOnlySamples(bio),
             GetClient = () => LlmClientHost.Instance.Current
         };
         var engine = new DialogueEngine(services);
@@ -985,15 +1055,4 @@ internal static class DialogueEngineHost
         return engine;
     }
 
-    private static NPC? TryGetNpc(string npcName)
-    {
-        try
-        {
-            return Game1.getCharacterFromName(npcName);
-        }
-        catch
-        {
-            return null;
-        }
-    }
 }

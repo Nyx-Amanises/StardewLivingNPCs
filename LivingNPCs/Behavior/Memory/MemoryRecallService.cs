@@ -17,7 +17,9 @@ internal static class MemoryRecallService
     {
         MemoryRecallContext context = BuildContext(state, world, recentEntries);
         var longTermMemories = state.LongTermMemories
-            .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
+            .Where(memory => memory != null
+                && !string.IsNullOrWhiteSpace(memory.Summary)
+                && IsPromptSafeMemory(memory.Subject, memory.Summary, memory.Tags))
             .Select(LongTermMemoryStore.NormalizeForStore)
             .Select(memory => ScoreLongTermMemory(memory, context, currentTotalDays))
             .Where(selection => selection.Score >= 45)
@@ -28,7 +30,9 @@ internal static class MemoryRecallService
             .Take(System.Math.Max(0, longTermCount))
             .ToList();
         var playerPreferences = state.PlayerPreferenceMemories
-            .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary))
+            .Where(memory => memory != null
+                && !string.IsNullOrWhiteSpace(memory.Summary)
+                && IsPromptSafeMemory(memory.Subject, memory.Summary, memory.Tags))
             .Select(PlayerPreferenceMemoryStore.NormalizeForStore)
             .Select(memory => ScorePlayerPreferenceMemory(memory, context, currentTotalDays))
             .Where(selection => selection.Score >= 45)
@@ -42,12 +46,22 @@ internal static class MemoryRecallService
         return new MemoryRecallPlan(context, longTermMemories, playerPreferences);
     }
 
+    private static bool IsPromptSafeMemory(string? subject, string? summary, IEnumerable<string>? tags)
+    {
+        return !RsvAiPolicy.ContainsBlockedReference(subject)
+            && !RsvAiPolicy.ContainsBlockedReference(summary)
+            && !(tags ?? Enumerable.Empty<string>()).Any(RsvAiPolicy.ContainsBlockedReference);
+    }
+
     public static IReadOnlyList<CommunityImpressionSelection> BuildCommunityImpressionPlan(
         LivingNpcState state,
         int maxCount,
         int currentTotalDays)
     {
         return state.CommunityImpressions
+            .Where(memory => !RsvAiPolicy.IsBlockedNpcName(memory.SubjectNpcName)
+                && !RsvAiPolicy.IsBlockedNpcName(memory.HeardFromNpcName)
+                && !RsvAiPolicy.ContainsBlockedReference(memory.Summary))
             .Select(memory => ScoreCommunityImpression(memory, currentTotalDays))
             .Where(selection => selection.Score >= 45)
             .OrderByDescending(selection => selection.Score)

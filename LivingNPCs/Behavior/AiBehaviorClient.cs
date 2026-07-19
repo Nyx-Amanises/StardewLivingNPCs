@@ -32,12 +32,12 @@ internal sealed class AiBehaviorClient
 
     public async Task<BehaviorIntent?> ChooseIntentAsync(NPC npc, BehaviorTrigger trigger, CancellationToken cancellationToken)
     {
-        if (!this.CanUse)
+        if (!this.CanUse || npc == null || RsvAiPolicy.IsBlockedNpc(npc))
         {
             return null;
         }
 
-        string prompt = this.BuildPrompt(npc, trigger);
+        string prompt = RsvAiPolicy.RemoveBlockedLines(this.BuildPrompt(npc, trigger));
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Max(1, this.config.AiPlannerTimeoutSeconds)));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
 
@@ -51,7 +51,7 @@ internal sealed class AiBehaviorClient
                 new
                 {
                     role = "system",
-                    content = PromptFragments.Planner.SystemMessage
+                    content = RsvAiPolicy.RemoveBlockedLines(PromptFragments.Planner.SystemMessage)
                 },
                 new
                 {

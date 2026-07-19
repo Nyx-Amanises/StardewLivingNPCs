@@ -69,6 +69,11 @@ internal sealed class ValleyTalkContextService
 
     public string BuildPromptContext(NPC npc)
     {
+        if (npc == null || RsvAiPolicy.IsBlockedNpc(npc))
+        {
+            return string.Empty;
+        }
+
         string promptContext = this.memory.BuildPromptContext(
             npc,
             this.config.PromptMemoryEntries,
@@ -102,7 +107,7 @@ internal sealed class ValleyTalkContextService
             promptContext = $"{promptContext}\n{immediatePromptContext}";
         }
 
-        return promptContext;
+        return RsvAiPolicy.RemoveBlockedLines(promptContext);
     }
 
     private string BuildGiftOpportunityPromptContext(NPC npc)
