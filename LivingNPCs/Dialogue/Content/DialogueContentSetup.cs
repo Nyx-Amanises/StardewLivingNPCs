@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using LivingNPCs.Dialogue.Engine;
 using LivingNPCs.Dialogue.Llm;
 using LivingNPCs.Dialogue.Persistence;
 using StardewModdingAPI;
@@ -152,6 +153,15 @@ internal static class DialogueContentSetup
 
     private static void OnAssetsInvalidated(object? sender, AssetsInvalidatedEventArgs e)
     {
+        foreach (IAssetName name in e.NamesWithoutLocale)
+        {
+            if (name.StartsWith("Portraits/"))
+            {
+                DialogueEngineHost.InvalidatePortraitCaches();
+                break;
+            }
+        }
+
         DialogueContentService? service = DialogueContentService.Instance;
         if (service == null)
         {

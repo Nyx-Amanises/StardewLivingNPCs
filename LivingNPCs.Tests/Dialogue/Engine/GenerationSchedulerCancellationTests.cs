@@ -173,6 +173,39 @@ public sealed class GenerationSchedulerCancellationTests : IDisposable
         Assert.DoesNotContain(elements, element => element.Text == "old save response");
     }
 
+    [Fact]
+    public async Task PresentationRevalidatesPortraitMarkersBeforeDrawing()
+    {
+        var drawn = new List<string>();
+        GenerationRequest? revalidatedRequest = null;
+        var scheduler = new GenerationScheduler(
+            this.engine,
+            subscribeEvents: false,
+            drawOverride: (_, _, text) =>
+            {
+                drawn.Add(text);
+                return true;
+            },
+            portraitRevalidatorOverride: (_, request, text) =>
+            {
+                revalidatedRequest = request;
+                return ResponseParser.DowngradePortraitMarkersToNeutral(text);
+            });
+        GenerationRequest request = Request("show a changed portrait safely");
+
+        Assert.True(scheduler.Enqueue(null!, request));
+        scheduler.OnUpdateTicked();
+        DelayedClient.PendingCall call = await this.client.WaitForCallAsync();
+        Task worker = scheduler.ActiveTaskForTests
+            ?? throw new InvalidOperationException("scheduler did not expose its active worker");
+
+        call.Complete("portrait response$h");
+        await worker.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Same(request, revalidatedRequest);
+        Assert.Equal("portrait response$0", Assert.Single(drawn));
+    }
+
     private static GenerationRequest Request(string playerText)
     {
         return new GenerationRequest

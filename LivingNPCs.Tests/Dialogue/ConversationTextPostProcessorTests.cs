@@ -48,9 +48,20 @@ public sealed class ConversationTextPostProcessorTests
     [Theory]
     [InlineData("听你这么说$h#$b看来我没看错人。#$e对了，你发现石英了吗？", "听你这么说$h#$b#看来我没看错人。#$e#对了，你发现石英了吗？")]
     [InlineData("#$b开头也要正常", "#$b#开头也要正常")]
+    [InlineData("#b#bare #e#markers", "#$b#bare #$e#markers")]
+    [InlineData("##$B#duplicate hash", "#$b#duplicate hash")]
     public void NormalizesUnclosedDialogueBreakCommands(string input, string expected)
     {
         Assert.Equal(expected, ConversationTextPostProcessor.NormalizeStardewDialogueCommands(input));
+    }
+
+    [Theory]
+    [InlineData("I am $blushing now.")]
+    [InlineData("I feel $embarrassed about that.")]
+    [InlineData("#$blush should not become a page break.")]
+    public void DoesNotTreatNamedEmotionLabelsAsPageCommands(string input)
+    {
+        Assert.Equal(input, ConversationTextPostProcessor.NormalizeStardewDialogueCommands(input));
     }
     [Theory]
     [InlineData("zh-CN", "That pink cake you gave me was seriously the cutest thing ever. I found this gorgeous sunflower and thought of you.", true)]

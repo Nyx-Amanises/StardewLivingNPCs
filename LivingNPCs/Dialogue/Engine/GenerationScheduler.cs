@@ -21,6 +21,7 @@ internal sealed class GenerationScheduler
 {
     private readonly DialogueEngine engine;
     private readonly Func<NPC?, string, string, bool> draw;
+    private readonly Func<NPC?, GenerationRequest, string, string> revalidatePortraitMarkers;
     private readonly object gate = new();
 
     private GenerationRequest? pendingRequest;
@@ -33,10 +34,13 @@ internal sealed class GenerationScheduler
     public GenerationScheduler(
         DialogueEngine engine,
         bool subscribeEvents = true,
-        Func<NPC?, string, string, bool>? drawOverride = null)
+        Func<NPC?, string, string, bool>? drawOverride = null,
+        Func<NPC?, GenerationRequest, string, string>? portraitRevalidatorOverride = null)
     {
         this.engine = engine;
         this.draw = drawOverride ?? this.Draw;
+        this.revalidatePortraitMarkers = portraitRevalidatorOverride
+            ?? DialogueEngineHost.RevalidatePortraitMarkers;
         if (subscribeEvents && DialogueServices.Helper != null)
         {
             DialogueServices.Helper.Events.GameLoop.UpdateTicked += (_, _) => this.OnUpdateTicked();
@@ -255,6 +259,8 @@ internal sealed class GenerationScheduler
             {
                 text = text[EngineConstants.SkipPrefix.Length..];
             }
+
+            text = this.revalidatePortraitMarkers(npc, request, text);
 
             if (this.draw(npc, result.DialogueKey, text))
             {

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using LivingNPCs.Dialogue.Content;
 using Newtonsoft.Json;
@@ -65,6 +66,19 @@ public sealed class ContentAssetValidationTests
         {
             NpcBio bio = Deserialize<NpcBio>(file);
             Assert.False(string.IsNullOrWhiteSpace(bio.Biography), $"{file} has a blank Biography");
+            Assert.All(
+                bio.ExtraPortraits.Keys,
+                key => Assert.True(
+                    key == "!" || PortraitMarkerRules.NormalizeExtraMarker(key) != null,
+                    $"{file} contains unsupported ExtraPortraits key '{key}'"));
+            if (bio.ExtraPortraits.TryGetValue("u", out string? uniquePortrait)
+                && !string.IsNullOrWhiteSpace(uniquePortrait)
+                && !string.IsNullOrWhiteSpace(bio.Unique))
+            {
+                Assert.False(
+                    string.Equals(uniquePortrait.Trim(), bio.Unique.Trim(), StringComparison.OrdinalIgnoreCase),
+                    $"{file} appears to synthesize ExtraPortraits.u from Unique");
+            }
         }
     }
 
@@ -150,6 +164,142 @@ public sealed class ContentAssetValidationTests
         {
             Assert.Contains(femaleKey[..^".FemaleNpc".Length] + ".MaleNpc", zh.Keys);
         }
+    }
+
+    [Fact]
+    public void PortraitFrameSemantics_CatalogHasReviewedFullFrameSchema()
+    {
+        string catalogPath = Path.Combine(AssetRoot, "portrait-frame-semantics.json");
+        Assert.Equal(
+            "AAE63F678A4171402B51F851BE267EC28FB8F5E5CD37BDC621D01A8ED2EF75E1",
+            Convert.ToHexString(SHA256.HashData(File.ReadAllBytes(catalogPath))));
+
+        JObject catalog = JObject.Parse(File.ReadAllText(catalogPath));
+        Assert.Equal(2, catalog.Value<int>("Version"));
+        Assert.Equal(64, catalog.Value<int>("TileSize"));
+        Assert.Null(catalog["FrameIndex"]);
+        Assert.Null(catalog["Frames"]);
+        Assert.Null(catalog["Profiles"]);
+
+        var frames = Assert.IsType<JArray>(catalog["FrameEntries"]);
+        Assert.NotEmpty(frames);
+
+        var indexedHashes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var representedSources = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var decisions = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var allowedMeaningsByAssetHash = new Dictionary<string, (int Index, string English, string Chinese)>(
+            StringComparer.OrdinalIgnoreCase);
+        foreach (JToken frameToken in frames)
+        {
+            var frame = Assert.IsType<JObject>(frameToken);
+            int index = frame.Value<int>("index");
+            string marker = Assert.IsType<string>(frame["marker"]?.ToObject<string>());
+            string hash = Assert.IsType<string>(frame["hash"]?.ToObject<string>());
+            bool enabled = Assert.IsType<bool>(frame["enabled"]?.ToObject<bool>());
+            string decision = Assert.IsType<string>(frame["decision"]?.ToObject<string>());
+
+            Assert.InRange(index, 0, PortraitMarkerRules.MaxSupportedFrameIndex);
+            Assert.Equal(PortraitMarkerRules.MarkerForIndex(index), marker);
+            Assert.Matches("^[0-9A-F]{64}$", hash);
+            Assert.True(indexedHashes.Add($"{index}:{hash}"), $"duplicate portrait index/hash entry: {index}:{hash}");
+            Assert.Contains(decision, new[] { "allow", "deny", "unknown" });
+            Assert.Equal(decision == "allow", enabled);
+            Assert.False(string.IsNullOrWhiteSpace(frame.Value<string>("en")));
+            Assert.False(string.IsNullOrWhiteSpace(frame.Value<string>("zh")));
+            decisions.Add(decision);
+
+            string[] frameProfiles = frame["profiles"]?.Values<string>().OfType<string>().ToArray() ?? Array.Empty<string>();
+            string[] frameAssets = frame["assets"]?.Values<string>().OfType<string>().ToArray() ?? Array.Empty<string>();
+            Assert.NotEmpty(frameProfiles);
+            Assert.NotEmpty(frameAssets);
+            Assert.Equal(frameProfiles.Length, frameProfiles.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            Assert.Equal(frameAssets.Length, frameAssets.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+            foreach (string asset in frameAssets)
+            {
+                representedSources.Add(asset.Split('/')[0]);
+                if (enabled)
+                {
+                    string assetHash = asset + "\n" + hash;
+                    var meaning = (
+                        Index: index,
+                        English: frame.Value<string>("en") ?? string.Empty,
+                        Chinese: frame.Value<string>("zh") ?? string.Empty);
+                    if (allowedMeaningsByAssetHash.TryGetValue(assetHash, out var existing))
+                    {
+                        Assert.True(
+                            string.Equals(existing.English, meaning.English, StringComparison.Ordinal)
+                            && string.Equals(existing.Chinese, meaning.Chinese, StringComparison.Ordinal),
+                            $"same pixels have conflicting enabled meanings in {asset}: "
+                            + $"frame {existing.Index} ({existing.English}) vs frame {index} ({meaning.English})");
+                    }
+                    else
+                    {
+                        allowedMeaningsByAssetHash[assetHash] = meaning;
+                    }
+                }
+            }
+
+            if (enabled)
+            {
+                Assert.True(string.IsNullOrWhiteSpace(frame.Value<string>("reason")));
+            }
+            else
+            {
+                Assert.False(string.IsNullOrWhiteSpace(frame.Value<string>("reason")));
+            }
+        }
+
+        Assert.Contains("allow", decisions);
+        Assert.Contains("deny", decisions);
+        Assert.Contains("unknown", decisions);
+        Assert.Equal(3048, frames.Count);
+        Assert.Equal(2730, frames.Count(token => token.Value<string>("decision") == "allow"));
+        Assert.Equal(226, frames.Count(token => token.Value<string>("decision") == "deny"));
+        Assert.Equal(92, frames.Count(token => token.Value<string>("decision") == "unknown"));
+        Assert.DoesNotContain(frames, token =>
+            token.Value<int>("index") >= 6
+            && token.Value<string>("decision") == "unknown");
+        Assert.DoesNotContain(frames, token =>
+            token.Value<bool>("enabled")
+            && token["assets"]?.Values<string>().Any(asset =>
+                asset != null
+                && (asset.Contains("/NoPortraits/", StringComparison.OrdinalIgnoreCase)
+                    || asset.Contains("404", StringComparison.OrdinalIgnoreCase))) == true);
+        Assert.Contains(frames, token => token.Value<bool>("enabled") && token.Value<int>("index") == 0);
+        Assert.Contains(frames, token => token.Value<bool>("enabled") && token.Value<string>("marker") == "h");
+        Assert.Contains(frames, token => token.Value<bool>("enabled") && token.Value<string>("marker") == "s");
+        Assert.Contains(frames, token => token.Value<bool>("enabled") && token.Value<string>("marker") == "u");
+        Assert.Contains(frames, token => token.Value<bool>("enabled") && token.Value<string>("marker") == "l");
+        Assert.Contains(frames, token =>
+            token.Value<bool>("enabled")
+            && token.Value<string>("marker") == "a"
+            && token.Value<string>("en")?.Contains("anger", StringComparison.OrdinalIgnoreCase) == true
+            && token.Value<string>("zh")?.Contains("生气", StringComparison.Ordinal) == true);
+        Assert.Contains(frames, token =>
+            token.Value<int>("index") >= 6
+            && token.Value<string>("marker") == token.Value<int>("index").ToString(System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Contains(frames, token => token.Value<bool>("enabled") && token.Value<int>("index") >= 6);
+        Assert.Contains(frames, token =>
+            token.Value<bool>("enabled")
+            && token.Value<string>("marker") == "u"
+            && (token.Value<string>("en")?.Contains("angry", StringComparison.OrdinalIgnoreCase) == true
+                || token.Value<string>("en")?.Contains("anger", StringComparison.OrdinalIgnoreCase) == true
+                || token.Value<string>("en")?.Contains("scowl", StringComparison.OrdinalIgnoreCase) == true));
+        Assert.Contains("Vanilla", representedSources);
+        Assert.Contains("OhoDavi", representedSources);
+        Assert.Contains("SVE", representedSources);
+        Assert.Contains("SeasonalCuteSVE", representedSources);
+        Assert.Contains("OhoDaviSVEAddon", representedSources);
+        Assert.Contains("RomanceableRasmodia", representedSources);
+        Assert.DoesNotContain(frames, token =>
+            token["assets"]?.Values<string>().Any(asset =>
+                asset != null
+                && (asset.EndsWith("/Sophia_older_overlay.png", StringComparison.OrdinalIgnoreCase)
+                    || asset.EndsWith("/Sophia_older_mu_overlay.png", StringComparison.OrdinalIgnoreCase))) == true);
+        Assert.Contains(frames, token =>
+            token.Value<bool>("enabled")
+            && token["assets"]?.Values<string>().Any(asset =>
+                asset?.Contains("+Sophia_older", StringComparison.OrdinalIgnoreCase) == true) == true);
     }
 
     [Theory]

@@ -26,4 +26,5 @@ internal static class ContentAssetNames
     public const string PromptsZhFile = AssetRoot + "/prompts/zh.json";
     public const string SveRelationshipPatchesFile = AssetRoot + "/sve-relationship-patches.json";
     public const string SveRelationshipPatchesZhFile = AssetRoot + "/sve-relationship-patches-zh.json";
+    public const string PortraitFrameSemanticsFile = AssetRoot + "/portrait-frame-semantics.json";
 }

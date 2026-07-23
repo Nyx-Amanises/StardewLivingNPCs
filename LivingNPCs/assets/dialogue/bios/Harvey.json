@@ -41,9 +41,7 @@
   },
   "BiographyEnd": "Harvey speaks carefully, with medical caution and nervous warmth.",
   "Unique": "nervously kind",
-  "ExtraPortraits": {
-    "u": "nervously kind"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "clinic paperwork",
     "fresh coffee",

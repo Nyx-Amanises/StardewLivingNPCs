@@ -41,9 +41,7 @@
   },
   "BiographyEnd": "Morgan speaks in careful young lines, mixing study words, wonder, and uncertainty.",
   "Unique": "young arcane wonder",
-  "ExtraPortraits": {
-    "u": "young arcane wonder"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "spell lessons",
     "old books",

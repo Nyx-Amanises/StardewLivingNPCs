@@ -41,9 +41,7 @@
   },
   "BiographyEnd": "Jolyne speaks with command presence, concise judgment, and controlled warmth.",
   "Unique": "commanding but human",
-  "ExtraPortraits": {
-    "u": "commanding but human"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "mission reports",
     "guild readiness",

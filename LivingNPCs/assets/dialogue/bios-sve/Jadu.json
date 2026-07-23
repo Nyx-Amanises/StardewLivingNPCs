@@ -41,9 +41,7 @@
   },
   "BiographyEnd": "Jadu speaks with measured curiosity, quiet formality, and subtle magical confidence.",
   "Unique": "measured magical curiosity",
-  "ExtraPortraits": {
-    "u": "measured magical curiosity"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "arcane errands",
     "regional lore",

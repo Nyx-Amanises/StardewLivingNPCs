@@ -41,9 +41,7 @@
   },
   "BiographyEnd": "Alesia speaks with disciplined confidence, tactical clarity, and restrained warmth.",
   "Unique": "battle-ready composure",
-  "ExtraPortraits": {
-    "u": "battle-ready composure"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "guild patrols",
     "weapon upkeep",

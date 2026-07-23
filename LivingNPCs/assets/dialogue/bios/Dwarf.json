@@ -41,9 +41,7 @@
   },
   "BiographyEnd": "The Dwarf speaks with direct curiosity, odd assumptions, and flashes of ancient memory.",
   "Unique": "watchful from behind the counter",
-  "ExtraPortraits": {
-    "u": "watchful from behind the counter"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "dwarvish artifacts",
     "rare gems",

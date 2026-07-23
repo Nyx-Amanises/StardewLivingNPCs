@@ -41,9 +41,7 @@
   },
   "BiographyEnd": "Gus speaks with easy hospitality, practical warmth, and occasional cook's specificity.",
   "Unique": "warm behind the counter",
-  "ExtraPortraits": {
-    "u": "warm behind the counter"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "tonight's special",
     "saloon regulars",

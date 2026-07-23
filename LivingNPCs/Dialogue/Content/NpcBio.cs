@@ -25,10 +25,10 @@ internal sealed class NpcBio
     /// </summary>
     public string Gender { get; set; } = string.Empty;
 
-    /// <summary>NPC 独有的附加肖像描述；非空时自动注册为 ExtraPortraits["u"]。</summary>
+    /// <summary>NPC 独有的描述短语；不会自动注册为肖像标记。</summary>
     public string Unique { get; set; } = string.Empty;
 
-    /// <summary>额外肖像帧：键为肖像代号（如 "7"、"u"），值为该表情的英文短描述。</summary>
+    /// <summary>额外肖像帧：键为明确配置的肖像代号（如 "7"、"u"），值为该表情的英文短描述。</summary>
     public Dictionary<string, string> ExtraPortraits { get; set; } = new();
 
     /// <summary>可选"近期心事"话题池（加载后与最爱/最恨礼物名合并为 TopicPool）。</summary>
@@ -58,7 +58,7 @@ internal sealed class NpcBio
     [JsonIgnore]
     public List<string> TopicPool { get; set; } = new();
 
-    /// <summary>派生：有效肖像集 = {h,s,l,a} ∪ ExtraPortraits 键集。</summary>
+    /// <summary>派生：有效肖像集 = {0,h,s,l,a}，再加明确配置的 u 或数字 ExtraPortraits 键。</summary>
     [JsonIgnore]
     public HashSet<string> ValidPortraits { get; set; } = new();
 }

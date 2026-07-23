@@ -75,11 +75,61 @@ public sealed class DialogueContentServiceTests : IDisposable
         NpcBio bio = service.GetBio("Abigail");
 
         Assert.False(bio.Missing);
-        Assert.Equal("special portrait", bio.ExtraPortraits["u"]);
-        Assert.Superset(new HashSet<string> { "0", "h", "s", "l", "a", "7", "u" }, bio.ValidPortraits);
+        Assert.DoesNotContain("u", bio.ExtraPortraits.Keys);
+        Assert.Superset(new HashSet<string> { "0", "h", "s", "l", "a", "7" }, bio.ValidPortraits);
+        Assert.DoesNotContain("u", bio.ValidPortraits);
         // 话题池 = 心事 ∪ 礼物名，忽略大小写去重。
         Assert.Equal(new[] { "the mines", "music", "Amethyst", "Clay" }, bio.TopicPool);
         Assert.Equal(PromptGender.Female, bio.ResolvedGender);
+    }
+
+    [Fact]
+    public void GetBio_UniqueAloneDoesNotBecomePortraitAlias()
+    {
+        this.pipeline.Bios["Abigail"] = new NpcBio
+        {
+            Biography = "bio text",
+            Unique = "softly distinctive persona"
+        };
+        this.pipeline.Characters["Abigail"] = Character(StardewValley.Gender.Female);
+        DialogueContentService service = this.CreateService();
+
+        NpcBio bio = service.GetBio("Abigail");
+
+        Assert.Equal("softly distinctive persona", bio.Unique);
+        Assert.DoesNotContain("u", bio.ValidPortraits);
+        Assert.DoesNotContain("u", bio.ExtraPortraits.Keys);
+    }
+
+    [Fact]
+    public void GetBio_AllowsGamePortraitsAndNumbers_ButRejectsUnknownKeys()
+    {
+        this.pipeline.Bios["Abigail"] = new NpcBio
+        {
+            Biography = "bio text",
+            Unique = "softly distinctive persona",
+            ExtraPortraits =
+            {
+                ["u"] = "explicit unique frame",
+                ["7"] = "wink",
+                ["11"] = "alternate frame",
+                ["x"] = "unsupported letter",
+                ["smile"] = "unsupported word",
+                ["!"] = "disable teaching"
+            }
+        };
+        this.pipeline.Characters["Abigail"] = Character(StardewValley.Gender.Female);
+        DialogueContentService service = this.CreateService();
+
+        NpcBio bio = service.GetBio("Abigail");
+
+        Assert.Contains("u", bio.ValidPortraits);
+        Assert.Equal("explicit unique frame", bio.ExtraPortraits["u"]);
+        Assert.Contains("7", bio.ValidPortraits);
+        Assert.Contains("11", bio.ValidPortraits);
+        Assert.DoesNotContain("x", bio.ValidPortraits);
+        Assert.DoesNotContain("smile", bio.ValidPortraits);
+        Assert.DoesNotContain("!", bio.ValidPortraits);
     }
 
     [Fact]

@@ -53,6 +53,9 @@ internal sealed class GameStateSnapshot
     // ---- 天气（按当前位置判定的标志列表：rain/snow/lightning/green rain） ----
     public IReadOnlyList<string> WeatherFlags { get; init; } = Array.Empty<string>();
 
+    /// <summary>游戏全局绿雨日标志；用于复现 Dialogue.getPortraitIndex 的强制肖像规则。</summary>
+    public bool IsGreenRain { get; init; }
+
     // ---- 好感与关系 ----
     /// <summary>好感点原始值；-1 = 无好感数据。</summary>
     public int FriendshipPoints { get; init; } = -1;
@@ -72,6 +75,9 @@ internal sealed class GameStateSnapshot
     /// <summary>已订婚时距婚期的天数。</summary>
     public int DaysUntilWedding { get; init; }
     public bool IsDivorced { get; init; }
+
+    /// <summary>NPC 当前应使用姜岛服装；离婚时游戏会禁用该服装的 $u 帧。</summary>
+    public bool NpcShouldWearIslandAttire { get; init; }
 
     /// <summary>当天运行时日程是否可可靠读取；Missing/ReadFailed 不等于“确认没有日程”。</summary>
     public ScheduleAvailability ScheduleAvailability { get; init; } = ScheduleAvailability.Missing;

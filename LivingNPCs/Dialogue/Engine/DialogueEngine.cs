@@ -447,11 +447,18 @@ internal sealed class DialogueEngine : IDialogueEngine
         }
 
         var variantGender = bio.ResolvedGender;
+        IReadOnlyList<PortraitFrameSemantics.Match> portraitFrames =
+            request.ContentSnapshot?.ResolvedPortraitFrames ?? Array.Empty<PortraitFrameSemantics.Match>();
+        int portraitFrameCount = request.ContentSnapshot?.PortraitFrameCount ?? 0;
+        portraitFrames = ApplyGamePortraitOverrides(request, portraitFrames, ref portraitFrameCount);
         var input = new PromptAssemblyInput
         {
             Request = request,
             Plan = plan,
             Bio = bio,
+            PortraitFrames = portraitFrames,
+            PortraitFrameCount = portraitFrameCount,
+            UsesRuntimePortraitWhitelist = request.UsesRuntimePortraitWhitelist || request.ContentSnapshot != null,
             NpcName = request.NpcName,
             NpcDisplayName = displayName,
             NpcGender = variantGender,
@@ -480,6 +487,42 @@ internal sealed class DialogueEngine : IDialogueEngine
                 key, bio, new PromptVariant(variantGender, optimized), tokens)
         };
 
+        HashSet<string> validPortraits;
+        bool usesRuntimePortraitWhitelist = request.UsesRuntimePortraitWhitelist
+            || request.ContentSnapshot != null;
+        if (!usesRuntimePortraitWhitelist)
+        {
+            // Tests and legacy callers without a game-thread snapshot retain the content contract.
+            validPortraits = new HashSet<string>(bio.ValidPortraits, StringComparer.OrdinalIgnoreCase);
+        }
+        else
+        {
+            // A captured runtime texture is fail-closed: neutral is always safe; every other marker
+            // must either match a reviewed frame or be an explicit, physically present bio frame.
+            validPortraits = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "0" };
+            foreach (PortraitFrameSemantics.Match frame in portraitFrames)
+            {
+                if (PortraitMarkerRules.NormalizeGameMarker(frame.Marker) is { } marker)
+                {
+                    validPortraits.Add(marker);
+                }
+            }
+
+            int frameCount = portraitFrameCount;
+            if (frameCount > 0)
+            {
+                foreach (string configuredMarker in bio.ExtraPortraits.Keys)
+                {
+                    if (PortraitMarkerRules.NormalizeExtraMarker(configuredMarker) is { } marker
+                        && PortraitMarkerRules.TryGetFrameIndex(marker, out int frameIndex)
+                        && frameIndex < frameCount)
+                    {
+                        validPortraits.Add(marker);
+                    }
+                }
+            }
+        }
+
         var prepared = new PreparedGeneration
         {
             Request = request,
@@ -492,16 +535,43 @@ internal sealed class DialogueEngine : IDialogueEngine
             Conversation = conversation,
             LastPlayerLine = lastPlayerLine,
             GivingGiftItemId = givingGiftId,
-            ValidPortraits = new HashSet<string>(bio.ValidPortraits, StringComparer.OrdinalIgnoreCase),
+            ValidPortraits = validPortraits,
             FixPunctuation = this.services.GetLocale().StartsWith("zh", StringComparison.OrdinalIgnoreCase)
         };
         prepared.Prompt = new PromptAssembler(input).Assemble();
         if (prepared.ValidPortraits.Count == 0)
         {
-            prepared.ValidPortraits.UnionWith(new[] { "h", "s", "l", "a" });
+            prepared.ValidPortraits.Add("0");
         }
 
         return prepared;
+    }
+
+    private static IReadOnlyList<PortraitFrameSemantics.Match> ApplyGamePortraitOverrides(
+        GenerationRequest request,
+        IReadOnlyList<PortraitFrameSemantics.Match> portraitFrames,
+        ref int portraitFrameCount)
+    {
+        GameStateSnapshot snapshot = request.Snapshot;
+        if (string.Equals(request.NpcName, "Demetrius", StringComparison.OrdinalIgnoreCase)
+            && snapshot.Year == 1
+            && snapshot.IsGreenRain)
+        {
+            // Stardew Dialogue.getPortraitIndex ignores every dialogue marker in this state.
+            // Frame 7 is a forced hazmat costume, not an emotion the model can select.
+            portraitFrameCount = 0;
+            return Array.Empty<PortraitFrameSemantics.Match>();
+        }
+
+        if (snapshot.IsDivorced && snapshot.NpcShouldWearIslandAttire)
+        {
+            // Stardew prepareDialogueForDisplay forcibly changes $u to neutral for divorced NPCs
+            // wearing island attire. Suppress that frame and explicit unchecked overrides.
+            portraitFrameCount = 0;
+            return portraitFrames.Where(frame => frame.FrameIndex != 3).ToArray();
+        }
+
+        return portraitFrames;
     }
 
     private List<DialogueSample> SelectSamples(
@@ -758,23 +828,25 @@ internal sealed class DialogueEngine : IDialogueEngine
         }
 
         // 后处理（§4.11）。
-        string dialogueLine = ConversationTextPostProcessor.NormalizeImmediateNicknameReply(
+        string visibleDialogueLine = ConversationTextPostProcessor.NormalizeImmediateNicknameReply(
             parsed.DialogueLine, prepared.LastPlayerLine);
-        bool ended = ResponseFormatter.IsConversationEnded(analysis, prepared.LastPlayerLine, dialogueLine);
+        bool ended = ResponseFormatter.IsConversationEnded(analysis, prepared.LastPlayerLine, visibleDialogueLine);
 
-        // 主动送礼标记：成功生成才附加 [物品ID]（裁决 4）。
+        // 可信送礼命令只进入原生 Stardew 对话串。解析产物、历史和流式 UI 始终保留
+        // 纯可见文本，避免把控制串画出来，也防止它污染后续模型上下文。
+        string nativeDialogueLine = visibleDialogueLine;
         if (!string.IsNullOrWhiteSpace(prepared.GivingGiftItemId))
         {
-            dialogueLine += $"[{prepared.GivingGiftItemId}]";
+            nativeDialogueLine += $"[{prepared.GivingGiftItemId}]";
         }
 
         bool allowTypedFallback = string.Equals(typedResponses, "With Generated", StringComparison.OrdinalIgnoreCase)
             && options.Count > 0;
         string formatted = ResponseFormatter.BuildFormattedLine(
-            dialogueLine, options, typedResponses, ended, allowTypedFallback, dontSkipNext: false);
+            nativeDialogueLine, options, typedResponses, ended, allowTypedFallback, dontSkipNext: false);
         formatted = ConversationTextPostProcessor.NormalizeImmediateNicknameReply(formatted, prepared.LastPlayerLine);
 
-        var parsedLines = new List<string> { dialogueLine };
+        var parsedLines = new List<string> { visibleDialogueLine };
         parsedLines.AddRange(options);
 
         var result = new GenerationResult
@@ -790,7 +862,7 @@ internal sealed class DialogueEngine : IDialogueEngine
                 Request = request,
                 NpcDisplayName = prepared.NpcDisplayName,
                 LastPlayerLine = prepared.LastPlayerLine,
-                DialogueLine = dialogueLine,
+                DialogueLine = visibleDialogueLine,
                 Conversation = prepared.Conversation.ToList()
             }
         };
@@ -1001,14 +1073,102 @@ internal static class DialogueEngineHost
 {
     public static DialogueEngine? Instance { get; set; }
 
+    private static PortraitFrameSemantics portraitSemantics = PortraitFrameSemantics.Empty;
+    private static Action? invalidatePortraitSnapshots;
+
+    /// <summary>清空 final-portrait observations after a content or save-scope invalidation.</summary>
+    public static void InvalidatePortraitCaches()
+    {
+        portraitSemantics.Invalidate();
+        invalidatePortraitSnapshots?.Invoke();
+    }
+
+    /// <summary>
+    /// Revalidate the final portrait on the game thread immediately before display. A different
+    /// signature means the model selected expressions against another sheet, so only neutral is
+    /// safe; menu, page, and trusted item commands remain untouched.
+    /// </summary>
+    internal static string RevalidatePortraitMarkers(
+        NPC? npc,
+        GenerationRequest request,
+        string formattedLine)
+    {
+        GenerationContentSnapshot? snapshot = request.ContentSnapshot;
+        if (npc == null || snapshot == null || string.IsNullOrWhiteSpace(snapshot.PortraitSignature))
+        {
+            return formattedLine;
+        }
+
+        return RevalidatePortraitSignature(
+            formattedLine,
+            snapshot.PortraitSignature,
+            () =>
+            {
+                portraitSemantics.ResolveAllFresh(
+                    npc.Portrait,
+                    locale: null,
+                    out string currentSignature,
+                    out _);
+                return currentSignature;
+            });
+    }
+
+    /// <summary>
+    /// Compare a captured portrait signature with a fresh game-thread read. Texture reads are an
+    /// optional safety check, so a disposed/replaced GPU resource must not discard valid dialogue.
+    /// Fail closed to neutral portraits while preserving all non-portrait dialogue commands.
+    /// </summary>
+    internal static string RevalidatePortraitSignature(
+        string formattedLine,
+        string expectedSignature,
+        Func<string> readCurrentSignature)
+    {
+        try
+        {
+            string currentSignature = readCurrentSignature();
+            return string.Equals(expectedSignature, currentSignature, StringComparison.Ordinal)
+                ? formattedLine
+                : ResponseParser.DowngradePortraitMarkersToNeutral(formattedLine);
+        }
+        catch (Exception)
+        {
+            return ResponseParser.DowngradePortraitMarkersToNeutral(formattedLine);
+        }
+    }
+
     /// <summary>用真实服务装配引擎（游戏侧调用；测试自行构造 DialogueEngine）。</summary>
     public static DialogueEngine CreateDefault(DialogueContentService content)
     {
+        portraitSemantics = PortraitFrameSemantics.Empty;
+        try
+        {
+            string catalogPath = System.IO.Path.Combine(
+                DialogueServices.Helper!.DirectoryPath,
+                ContentAssetNames.PortraitFrameSemanticsFile);
+            portraitSemantics = PortraitFrameSemantics.FromJson(System.IO.File.ReadAllText(catalogPath));
+        }
+        catch (Exception ex)
+        {
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.assetLoadFailed",
+                    new { asset = ContentAssetNames.PortraitFrameSemanticsFile, error = ex.Message },
+                    $"Failed to load content asset '{ContentAssetNames.PortraitFrameSemanticsFile}': {ex.Message}"),
+                StardewModdingAPI.LogLevel.Warn);
+        }
+
         var contentSnapshotGate = new object();
         var contentSnapshots = new Dictionary<
             string,
-            (NpcBio Bio, bool ExpansionCompatible, bool RsvBlocked, string Locale, GenerationContentSnapshot Snapshot)>(
+            (NpcBio Bio, bool ExpansionCompatible, bool RsvBlocked, string Locale, string PortraitSignature, GenerationContentSnapshot Snapshot)>(
                 StringComparer.OrdinalIgnoreCase);
+        invalidatePortraitSnapshots = () =>
+        {
+            lock (contentSnapshotGate)
+            {
+                contentSnapshots.Clear();
+            }
+        };
         GameHooks.GenerationRequests.ContentSnapshotProvider = npc =>
         {
             NpcBio bio = content.GetBio(npc.Name);
@@ -1017,12 +1177,18 @@ internal static class DialogueEngineHost
                 DialogueServices.Config?.EnableSveCompatibility ?? true);
             bool rsvBlocked = RsvAiPolicy.IsBlockedNpc(npc);
             string locale = DialogueServices.Helper?.GameContent.CurrentLocale ?? string.Empty;
+            IReadOnlyList<PortraitFrameSemantics.Match> portraitFrames = portraitSemantics.ResolveAll(
+                npc.Portrait,
+                locale,
+                out string portraitSignature,
+                out int portraitFrameCount);
             lock (contentSnapshotGate)
             {
                 if (contentSnapshots.TryGetValue(npc.Name, out var cached)
                     && ReferenceEquals(cached.Bio, bio)
                     && cached.ExpansionCompatible == expansionCompatible
                     && cached.RsvBlocked == rsvBlocked
+                    && string.Equals(cached.PortraitSignature, portraitSignature, StringComparison.Ordinal)
                     && string.Equals(cached.Locale, locale, StringComparison.OrdinalIgnoreCase))
                 {
                     return cached.Snapshot;
@@ -1033,10 +1199,15 @@ internal static class DialogueEngineHost
                 npc,
                 bio,
                 expansionCompatible);
-            var snapshot = new GenerationContentSnapshot(bio, samples);
+            var snapshot = new GenerationContentSnapshot(
+                bio,
+                samples,
+                portraitFrames,
+                portraitFrameCount,
+                portraitSignature);
             lock (contentSnapshotGate)
             {
-                contentSnapshots[npc.Name] = (bio, expansionCompatible, rsvBlocked, locale, snapshot);
+                contentSnapshots[npc.Name] = (bio, expansionCompatible, rsvBlocked, locale, portraitSignature, snapshot);
             }
 
             return snapshot;

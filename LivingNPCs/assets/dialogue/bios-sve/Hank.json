@@ -41,9 +41,7 @@
   },
   "BiographyEnd": "Hank speaks plainly, with adult steadiness, protective warmth, and little patience for nonsense.",
   "Unique": "plainspoken steadiness",
-  "ExtraPortraits": {
-    "u": "plainspoken steadiness"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "family errands",
     "regional travel",

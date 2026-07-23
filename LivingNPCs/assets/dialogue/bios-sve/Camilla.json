@@ -41,9 +41,7 @@
   },
   "BiographyEnd": "Camilla speaks with elegant confidence, sly humor, and arcane authority.",
   "Unique": "sly arcane elegance",
-  "ExtraPortraits": {
-    "u": "sly arcane elegance"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "spellwork",
     "Castle Village",

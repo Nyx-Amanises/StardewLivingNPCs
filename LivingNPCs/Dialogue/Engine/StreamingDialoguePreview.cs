@@ -1,8 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using StardewValley;
 
+using LivingNPCs.Dialogue.Content;
 using LivingNPCs.Dialogue.Diagnostics;
 using LivingNPCs.Dialogue.Llm;
 using LivingNPCs.Dialogue.Persistence;
@@ -10,12 +12,23 @@ namespace LivingNPCs.Dialogue.Engine;
 
 internal static class StreamingDialoguePreview
 {
-    private static readonly Regex EmotionTokenPattern = new(@"\$[A-Za-z0-9]+", RegexOptions.Compiled);
+    private static readonly Regex EmotionTokenPattern = new(
+        @"\$(?<token>[A-Za-z0-9_]+)",
+        RegexOptions.Compiled);
+    private static readonly Regex PageBoundaryPattern = new(
+        @"#\$(?:b|e)#|\f",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex MetadataPattern = new(@"!+LIVINGNPCS_META\s*\{.*", RegexOptions.Compiled | RegexOptions.Singleline);
     private static readonly Regex BareMetadataTailPattern = new(
         @"(?im)^\s*(rapportDelta|endConversation|ambientFollowUp|emotionImpact|actions|behaviorInfluences|helpRequests|helpRequestUpdates|conflicts|memories)\s*[:=].*$",
         RegexOptions.Compiled);
     private static readonly Regex DialogueCommandPattern = new(@"#\$(?:q|r|c)\b.*", RegexOptions.Compiled | RegexOptions.Singleline | RegexOptions.IgnoreCase);
+    private static readonly Regex MarkdownHeadingPattern = new(
+        @"(?m)(?:^|[ \t])##(?!\$[be]#)",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex TrailingItemCommandPattern = new(
+        @"(?:\[\([A-Za-z]+\)[^\]\r\n]+\]|\[\d+\])\s*$",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly string[] InlineResponseMarkers =
     {
         "##回应",
@@ -30,6 +43,13 @@ internal static class StreamingDialoguePreview
         "回应：",
         "回应:"
     };
+
+    /// <summary>
+    /// A visible dialogue segment and the portrait frame selected for that segment. The frame is
+    /// derived only from text which has already passed the response parser; malformed markers map
+    /// to neutral so a streaming UI can never expose an arbitrary numeric frame.
+    /// </summary>
+    internal sealed record DisplaySegment(string Text, int PortraitFrameIndex);
 
     public static string ExtractVisibleText(string rawText)
     {
@@ -62,30 +82,67 @@ internal static class StreamingDialoguePreview
 
     public static string PrepareDisplayText(string text)
     {
+        return string.Join(
+            "\f",
+            PrepareDisplaySegments(text).Select(segment => segment.Text));
+    }
+
+    /// <summary>
+    /// Prepare final, parser-validated dialogue for the streaming window while retaining the
+    /// portrait frame for each logical page. Raw token previews should use this only after the
+    /// response parser has accepted the complete line; incomplete streams intentionally have no
+    /// expression information and therefore use neutral frames.
+    /// </summary>
+    internal static IReadOnlyList<DisplaySegment> PrepareDisplaySegments(string text)
+    {
         if (string.IsNullOrWhiteSpace(text))
         {
-            return string.Empty;
+            return Array.Empty<DisplaySegment>();
         }
 
         string display = StripHiddenAndResponseTail(ConversationTextPostProcessor.RemoveInvisibleCharacters(text));
+        display = TrailingItemCommandPattern.Replace(display, string.Empty);
         display = display.Trim().TrimStart('-', ' ', '"', '“').TrimEnd('"', '”');
         display = display.Replace("#b#", "#$b#", StringComparison.OrdinalIgnoreCase);
         display = display.Replace("#e#", "#$e#", StringComparison.OrdinalIgnoreCase);
-        display = display.Replace("##$b#", "#$b#", StringComparison.Ordinal);
-        display = display.Replace("##$e#", "#$e#", StringComparison.Ordinal);
-        display = display.Replace("#$b#", "\f", StringComparison.Ordinal);
-        display = display.Replace("#$e#", "\f", StringComparison.Ordinal);
+        display = display.Replace("##$b#", "#$b#", StringComparison.OrdinalIgnoreCase);
+        display = display.Replace("##$e#", "#$e#", StringComparison.OrdinalIgnoreCase);
         display = display.Replace("@", Game1.player?.Name ?? string.Empty, StringComparison.Ordinal);
-        display = EmotionTokenPattern.Replace(display, string.Empty);
-        display = display.Replace("$", string.Empty, StringComparison.Ordinal);
-        display = Regex.Replace(display, @"(?<!\f)#(?!\$)", " ");
 
-        var segments = display
-            .Split('\f')
-            .Select(segment => Regex.Replace(segment, @"\s+", " ").Trim())
-            .Where(segment => !string.IsNullOrWhiteSpace(segment));
+        var segments = new List<DisplaySegment>();
+        foreach (string rawSegment in PageBoundaryPattern.Split(display))
+        {
+            if (string.IsNullOrWhiteSpace(rawSegment))
+            {
+                continue;
+            }
 
-        return string.Join("\f", segments);
+            MatchCollection emotionMatches = EmotionTokenPattern.Matches(rawSegment);
+            int frameIndex = emotionMatches.Count == 0
+                ? 0
+                : ResolvePortraitFrameIndex(emotionMatches[^1].Groups["token"].Value);
+
+            string visible = EmotionTokenPattern.Replace(rawSegment, string.Empty);
+            visible = visible.Replace("$", string.Empty, StringComparison.Ordinal);
+            visible = Regex.Replace(visible, @"(?<!\f)#(?!\$)", " ");
+            visible = Regex.Replace(visible, @"\s+", " ").Trim();
+            if (!string.IsNullOrWhiteSpace(visible))
+            {
+                segments.Add(new DisplaySegment(visible, frameIndex));
+            }
+        }
+
+        return segments;
+    }
+
+    /// <summary>Convert a validated marker token to a Stardew frame index; invalid values are neutral.</summary>
+    internal static int ResolvePortraitFrameIndex(string? marker)
+    {
+        string? normalized = PortraitMarkerRules.NormalizeGameMarker(marker);
+        return normalized != null
+            && PortraitMarkerRules.TryGetFrameIndex(normalized, out int frameIndex)
+            ? frameIndex
+            : 0;
     }
 
     public static string StripHiddenAndResponseTail(string text)
@@ -106,10 +163,10 @@ internal static class StreamingDialoguePreview
             cleaned = cleaned[..percentIndex];
         }
 
-        int doubleHashIndex = cleaned.IndexOf("##", StringComparison.Ordinal);
-        if (doubleHashIndex >= 0)
+        Match markdownHeading = MarkdownHeadingPattern.Match(cleaned);
+        if (markdownHeading.Success)
         {
-            cleaned = cleaned[..doubleHashIndex];
+            cleaned = cleaned[..markdownHeading.Index];
         }
 
         foreach (string marker in InlineResponseMarkers)

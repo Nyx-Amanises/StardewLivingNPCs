@@ -110,7 +110,9 @@ SVE 扩展包（`dandm1.ValleyTalkSVE`，文件夹 `ValleyTalk for SVE`）全部
 磁盘布局（01 §1）：`assets/dialogue/world/GameSummary.json`、
 `world/GameSummaryOptimized.json`、`bios/<Name>.json`（原版 33 个）、
 `bios-sve/<Name>.json`（SVE 集）、`prompts/default.json` + `prompts/zh.json`
-（提示词骨架，键组织见 §3.5）。磁盘文件即资产的纯数据形式，
+（提示词骨架，键组织见 §3.5），以及 `portrait-frame-semantics.json`（按
+`帧索引 + 最终预乘 RGBA SHA-256`匹配的审核目录；生成器采用 SMAPI/Skia 相同的
+alpha 预乘规则，运行时只解析 `decision=allow` 项）。磁盘文件即资产的纯数据形式，
 **不再带 CP 的 `Changes/Action/Target` 包裹层**。
 
 ### 3.3 GameSummary 资产形状（字段级）
@@ -149,8 +151,8 @@ SVE 扩展包（`dandm1.ValleyTalkSVE`，文件夹 `ValleyTalk for SVE`）全部
 | `Traits` | `Dictionary<string, ListEntry>` | 性格特质，同 ListEntry 形状 |
 | `BiographyEnd` | string | 传记收尾段（拼在人际/特质之后） |
 | `Gender` | string（可缺省） | 仅当值等于本地化的"男/女"词（提示词键 `generalMale`/`generalFemale` 的值，忽略大小写）才覆盖性别；否则忽略。正常情况下性别由游戏 `Gender` 数据按 NPC 名自动推导，资产字段只是覆盖口 |
-| `Unique` | string | NPC 独有的附加肖像描述；非空时自动注册为 `ExtraPortraits["u"]` |
-| `ExtraPortraits` | `Dictionary<string,string>` | 额外肖像帧：键为肖像代号（如 `"7"`、`"u"`），值为该表情的英文短描述。有效肖像集 = 固定 `{h,s,l,a}` ∪ 本字典键集 |
+| `Unique` | string | NPC 独有的描述短语；不会自动注册为肖像标记 |
+| `ExtraPortraits` | `Dictionary<string,string>` | 内容作者明确配置的额外肖像帧：游戏原生字母键仅支持 `u`，也支持数字帧（如 `"7"`、`"11"`）；其它字母键不会进入提示词或有效肖像集。游戏运行时另外按最终 `NPC.Portrait` 的帧索引与 RGBA 哈希生成动态白名单；未知/读取失败纹理只保留 `$0`。固定标准集为 `{0,h,s,l,a}` |
 | `Preoccupations` | `List<string>` | 可选"近期心事"话题池（拼进提示词键 `preoccupation`；池中另混入该 NPC 最爱/最恨礼物名，见 §4.3） |
 | `Dialogue` | `Dictionary<string,string>` | 补充对话样本：键为原版对话键（如 `Mon`），值为原版对话格式字符串（支持 `#` 分行、`^` 性别分支、`$表情` 命令、`[礼物ID列表]`——解析规则归 WP10 的 DialogueFile 对应物）；**覆盖**同键的游戏对话样本 |
 | `HomeLocationBed` | bool（默认 false） | 标记 NPC 家中卧床位置可用于就寝语境。旧世界唯一消费点已被注释掉，纯保留字段 |
@@ -243,7 +245,7 @@ SVE 扩展包（`dandm1.ValleyTalkSVE`，文件夹 `ValleyTalk for SVE`）全部
    `Relationships` 取 `FriendsAndFamily` 前 8 条；`Preoccupations` 取
    家乡/性情枚举词 + 亲友名。`Data/Characters` 里也没有该 NPC（或被 RSV
    策略屏蔽，§4.6）→ 构造 `Missing=true` 的空传记并警告"无传记文件"。
-4. **加载后**：有效肖像集 = `{h,s,l,a}` ∪ `ExtraPortraits` 键；话题池 =
+4. **加载后**：没有运行时纹理快照的纯内容测试路径使用 `{0,h,s,l,a}` ∪ `ExtraPortraits` 中游戏支持的 `u`/数字键；游戏路径改由最终肖像的审核哈希白名单决定，并仅把物理范围内的显式 `ExtraPortraits` 作为受信覆盖；话题池 =
    `Preoccupations` ∪ 最爱/最恨礼物显示名（解析 `Game1.NPCGiftTastes` 的
    第 1、7 段，段数 <8 时记 Debug 日志并跳过）。
 5. **缓存失效**：传记缓存记录"加载时的扩展兼容开关值"；开关翻转、资产失效、

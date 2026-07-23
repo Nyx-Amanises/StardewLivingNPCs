@@ -46,9 +46,7 @@
   },
   "BiographyEnd": "Marlon speaks with gravelly restraint, veteran caution, and mentor-like authority.",
   "Unique": "scarred guild vigilance",
-  "ExtraPortraits": {
-    "u": "scarred guild vigilance"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "guild reports",
     "monster threats",

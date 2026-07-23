@@ -46,9 +46,7 @@
   },
   "BiographyEnd": "Penny speaks softly and carefully, with bookish kindness, restraint, and quiet conviction.",
   "Unique": "soft but steady",
-  "ExtraPortraits": {
-    "u": "soft but steady"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "library books",
     "Jas and Vincent",

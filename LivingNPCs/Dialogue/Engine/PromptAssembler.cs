@@ -20,6 +20,9 @@ internal sealed class PromptAssemblyInput
     public GameStateSnapshot S => this.Request.Snapshot;
     public ContextRoutingPlan Plan { get; init; } = ContextRoutingPlan.Full();
     public NpcBio Bio { get; init; } = new();
+    public IReadOnlyList<PortraitFrameSemantics.Match> PortraitFrames { get; init; } = Array.Empty<PortraitFrameSemantics.Match>();
+    public int PortraitFrameCount { get; init; }
+    public bool UsesRuntimePortraitWhitelist { get; init; }
     public string NpcName { get; init; } = string.Empty;
     public string NpcDisplayName { get; init; } = string.Empty;
     public PromptGender NpcGender { get; init; }
@@ -1025,18 +1028,57 @@ internal sealed class PromptAssembler
         AppendLine(builder, this.Text("instructionsDialogueOnly"));
 
         // 情绪肖像指示：传记 ExtraPortraits 不含键 "!" 时输出（§4.6.5）。
+        // Runtime matches are derived from the final portrait texture, so a third-party pack can
+        // only expose markers whose pixels were independently reviewed for that exact index.
         var bio = this.input.Bio;
         if (!bio.ExtraPortraits.ContainsKey("!"))
         {
-            var extraLines = bio.ExtraPortraits
-                .Select(pair => this.Text("instructionsExtraPortraitLine", new { key = pair.Key, value = pair.Value }))
-                .Where(line => !string.IsNullOrWhiteSpace(line))
-                .ToList();
+            var extraLines = new List<string>();
+            var listedMarkers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            // Explicit bio entries are author-reviewed and take precedence over an automatic
+            // description for the same marker.
+            foreach ((string key, string value) in bio.ExtraPortraits)
+            {
+                string? marker = PortraitMarkerRules.NormalizeExtraMarker(key);
+                if (marker == null
+                    || this.input.UsesRuntimePortraitWhitelist
+                        && (this.input.PortraitFrameCount <= 0
+                            || !PortraitMarkerRules.TryGetFrameIndex(marker, out int frameIndex)
+                            || frameIndex >= this.input.PortraitFrameCount)
+                    || !listedMarkers.Add(marker))
+                {
+                    continue;
+                }
+
+                AppendPortraitDescription(extraLines, marker, value);
+            }
+
+            foreach (PortraitFrameSemantics.Match frame in this.input.PortraitFrames.OrderBy(frame => frame.FrameIndex))
+            {
+                string? marker = PortraitMarkerRules.NormalizeGameMarker(frame.Marker);
+                if (marker == null || !listedMarkers.Add(marker))
+                {
+                    continue;
+                }
+
+                AppendPortraitDescription(extraLines, marker, frame.Description);
+            }
+
             AppendLine(builder, this.Text("instructionsEmotion", new { extraPortraits = string.Join("\n", extraLines) }));
         }
 
         AppendLine(builder, this.input.ExtraInstructions);
         return builder.ToString();
+    }
+
+    private void AppendPortraitDescription(List<string> lines, string marker, string description)
+    {
+        string? line = this.Text("instructionsExtraPortraitLine", new { key = marker, value = description });
+        if (!string.IsNullOrWhiteSpace(line))
+        {
+            lines.Add(line);
+        }
     }
 
     // ---- 段 6：Command ----

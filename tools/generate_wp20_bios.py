@@ -114,7 +114,7 @@ def build(spec: dict, lang: str) -> OrderedDict:
         ("Traits", trait_entries(spec["traits"], lang)),
         ("BiographyEnd", spec[lang][7]),
         ("Unique", unique),
-        ("ExtraPortraits", OrderedDict([("u", unique)])),
+        ("ExtraPortraits", OrderedDict()),
         ("Preoccupations", spec["pre_en"] if lang == "en" else spec["pre_zh"]),
         ("Dialogue", OrderedDict()),
         ("HomeLocationBed", spec["home"]),

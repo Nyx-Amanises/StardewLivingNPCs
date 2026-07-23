@@ -332,14 +332,19 @@ public class PromptAssemblerTests
         ContextRoutingPlan? plan = null,
         List<(string Key, bool Optimized)>? requested = null,
         bool useOptimized = false,
-        IReadOnlyList<ConversationTurn>? conversation = null)
+        IReadOnlyList<ConversationTurn>? conversation = null,
+        NpcBio? bio = null,
+        PromptTextLookup? lookup = null,
+        IReadOnlyList<PortraitFrameSemantics.Match>? portraitFrames = null,
+        int portraitFrameCount = 0,
+        bool usesRuntimePortraitWhitelist = false)
     {
         DialogueServices.Initialize(null!, null!, new DialogueConfig());
         return new PromptAssemblyInput
         {
             Request = request ?? new GenerationRequest { NpcName = "Abigail", Snapshot = new GameStateSnapshot() },
             Plan = plan ?? ContextRoutingPlan.Full(),
-            Bio = new NpcBio
+            Bio = bio ?? new NpcBio
             {
                 Biography = "A long biography text for Abigail exceeding ten characters.",
                 Traits = new Dictionary<string, BioListEntry>(StringComparer.OrdinalIgnoreCase)
@@ -349,16 +354,19 @@ public class PromptAssemblerTests
             },
             NpcName = "Abigail",
             NpcDisplayName = "Abigail",
+            PortraitFrames = portraitFrames ?? Array.Empty<PortraitFrameSemantics.Match>(),
+            PortraitFrameCount = portraitFrameCount,
+            UsesRuntimePortraitWhitelist = usesRuntimePortraitWhitelist,
             Samples = new List<DialogueSample> { new(new DialogueKeyFacts(), "Sample line.") },
             Conversation = conversation ?? Array.Empty<ConversationTurn>(),
             WorldSummaryFull = "FULL-WORLD",
             WorldSummaryBrief = "BRIEF-WORLD",
             UseOptimizedPrompts = useOptimized,
-            Lookup = (key, _, optimized) =>
+            Lookup = lookup ?? ((key, _, optimized) =>
             {
                 requested?.Add((key, optimized));
                 return $"[{key}]";
-            }
+            })
         };
     }
 
@@ -376,6 +384,109 @@ public class PromptAssemblerTests
         Assert.Equal("[responseStart]", prompt.ResponseStart);
         Assert.True(prompt.SectionLengths["CoreHeader"] > 0);
         Assert.True(prompt.SectionLengths.ContainsKey("Location"));
+    }
+
+    [Fact]
+    public void EmotionInstructions_ListOnlyExplicitPortraits()
+    {
+        var bio = new NpcBio
+        {
+            Biography = "A long biography text for Abigail exceeding ten characters.",
+            Unique = "persona prose",
+            ExtraPortraits =
+            {
+                ["u"] = "explicit unique frame",
+                ["7"] = "wink",
+                ["x"] = "unsupported letter",
+                ["smile"] = "unsupported word"
+            }
+        };
+        string? Lookup(string key, object? tokens, bool optimized)
+        {
+            if (key == "instructionsExtraPortraitLine")
+            {
+                return PromptTable.ReplaceTokens("portrait {{Key}} = {{Value}}", tokens);
+            }
+
+            if (key == "instructionsEmotion")
+            {
+                return PromptTable.ReplaceTokens("emotion rules\n{{extraPortraits}}", tokens);
+            }
+
+            return $"[{key}]";
+        }
+
+        AssembledPrompt prompt = new PromptAssembler(Input(bio: bio, lookup: Lookup)).Assemble();
+
+        Assert.Contains("portrait 7 = wink", prompt.Instructions, StringComparison.Ordinal);
+        Assert.Contains("portrait u = explicit unique frame", prompt.Instructions, StringComparison.Ordinal);
+        Assert.DoesNotContain("persona prose", prompt.Instructions, StringComparison.Ordinal);
+        Assert.DoesNotContain("portrait x", prompt.Instructions, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("portrait smile", prompt.Instructions, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public void EmotionInstructions_IncludeAllReviewedRuntimeFramesInIndexOrder()
+    {
+        var frames = new[]
+        {
+            new PortraitFrameSemantics.Match("7", "a custom numeric expression", new string('C', 64), 7),
+            new PortraitFrameSemantics.Match("a", "clear anger", new string('B', 64), 5),
+            new PortraitFrameSemantics.Match("h", "a bright smile", new string('A', 64), 1)
+        };
+
+        AssembledPrompt prompt = new PromptAssembler(Input(portraitFrames: frames, lookup: (key, tokens, _) =>
+        {
+            if (key == "instructionsExtraPortraitLine")
+            {
+                return PromptTable.ReplaceTokens("portrait {{Key}} = {{Value}}", tokens);
+            }
+
+            if (key == "instructionsEmotion")
+            {
+                return PromptTable.ReplaceTokens("emotion rules\n{{extraPortraits}}", tokens);
+            }
+
+            return $"[{key}]";
+        })).Assemble();
+
+        Assert.Contains("portrait h = a bright smile", prompt.Instructions, StringComparison.Ordinal);
+        Assert.Contains("portrait a = clear anger", prompt.Instructions, StringComparison.Ordinal);
+        Assert.Contains("portrait 7 = a custom numeric expression", prompt.Instructions, StringComparison.Ordinal);
+        Assert.True(
+            prompt.Instructions.IndexOf("portrait h", StringComparison.Ordinal)
+            < prompt.Instructions.IndexOf("portrait a", StringComparison.Ordinal));
+        Assert.True(
+            prompt.Instructions.IndexOf("portrait a", StringComparison.Ordinal)
+            < prompt.Instructions.IndexOf("portrait 7", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void EmotionInstructions_RuntimeSnapshotFailureDoesNotTeachExplicitExtraFrames()
+    {
+        var bio = new NpcBio
+        {
+            Biography = "A sufficiently long biography for the test.",
+            ExtraPortraits =
+            {
+                ["u"] = "an explicit unique expression",
+                ["7"] = "an explicit numeric expression"
+            }
+        };
+
+        AssembledPrompt prompt = new PromptAssembler(Input(
+            bio: bio,
+            portraitFrameCount: 0,
+            usesRuntimePortraitWhitelist: true,
+            lookup: (key, tokens, _) => key switch
+            {
+                "instructionsExtraPortraitLine" => PromptTable.ReplaceTokens("portrait {{Key}} = {{Value}}", tokens),
+                "instructionsEmotion" => PromptTable.ReplaceTokens("emotion rules\n{{extraPortraits}}", tokens),
+                _ => $"[{key}]"
+            })).Assemble();
+
+        Assert.DoesNotContain("explicit unique expression", prompt.Instructions, StringComparison.Ordinal);
+        Assert.DoesNotContain("explicit numeric expression", prompt.Instructions, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -611,7 +722,8 @@ public class DialogueEngineGenerateTests
     private static (DialogueEngine Engine, FakeClient Client, DialogueHistoryStore Store) Create(
         string? replyText = null,
         Func<string, NpcBio>? getBio = null,
-        Func<string, NpcBio, IReadOnlyDictionary<string, string>>? getSamples = null)
+        Func<string, NpcBio, IReadOnlyDictionary<string, string>>? getSamples = null,
+        Func<string, object?, string?>? lookupPrompt = null)
     {
         DialogueServices.Initialize(null!, null!, new DialogueConfig
         {
@@ -635,7 +747,7 @@ public class DialogueEngineGenerateTests
                     Biography = "A biography for testing.",
                     ValidPortraits = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "h", "s", "l", "a" }
                 }),
-            LookupPrompt = (key, _, _, _) => $"[{key}]",
+            LookupPrompt = (key, _, _, tokens) => lookupPrompt?.Invoke(key, tokens) ?? $"[{key}]",
             GetWorldSummaryText = optimized => optimized ? "BRIEF" : "FULL",
             GetSamples = getSamples ?? ((_, _) => new Dictionary<string, string>()),
             GetClient = () => client,
@@ -812,6 +924,269 @@ public class DialogueEngineGenerateTests
         Assert.Contains("Captured biography.", transmitted, StringComparison.Ordinal);
         Assert.Contains("Captured sample.", transmitted, StringComparison.Ordinal);
         Assert.DoesNotContain("Worker fallback", transmitted, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ReviewedRuntimePortraitsArePromptedAndAcceptedAcrossPages()
+    {
+        var (engine, client, _) = Create(
+            replyText: "- A warm hello.$h#$b#That crossed a line.$a#$b#A private smile.$7",
+            lookupPrompt: (key, tokens) => key switch
+            {
+                "instructionsExtraPortraitLine" => PromptTable.ReplaceTokens("portrait {{Key}} = {{Value}}", tokens),
+                "instructionsEmotion" => PromptTable.ReplaceTokens("emotion rules\n{{extraPortraits}}", tokens),
+                _ => $"[{key}]"
+            });
+        var capturedBio = new NpcBio
+        {
+            Biography = "Captured biography.",
+            ValidPortraits = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "0", "h", "s", "u", "l", "a" }
+        };
+        var frames = new[]
+        {
+            new PortraitFrameSemantics.Match("h", "a reviewed warm smile", new string('A', 64), 1),
+            new PortraitFrameSemantics.Match("a", "reviewed genuine anger", new string('B', 64), 5),
+            new PortraitFrameSemantics.Match("7", "a reviewed private smile", new string('C', 64), 7)
+        };
+
+        GenerationResult result = await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Penny",
+            Trigger = GenerationTrigger.Conversation,
+            Conversation = new List<ConversationTurn> { new("Good morning.", true, "portrait-turn") },
+            Snapshot = new GameStateSnapshot { FarmerName = "Yuki" },
+            ContentSnapshot = new GenerationContentSnapshot(
+                capturedBio,
+                new Dictionary<string, string>(),
+                PortraitFrames: frames,
+                PortraitFrameCount: 8)
+        }, CancellationToken.None);
+
+        Assert.Equal(
+            "A warm hello.$h#$b#That crossed a line.$a#$b#A private smile.$7",
+            result.ParsedLines[0]);
+        Assert.NotNull(client.LastRequest);
+        Assert.Contains("a reviewed warm smile", client.LastRequest!.Tail, StringComparison.Ordinal);
+        Assert.Contains("reviewed genuine anger", client.LastRequest.Tail, StringComparison.Ordinal);
+        Assert.Contains("a reviewed private smile", client.LastRequest.Tail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task YearOneGreenRainDemetriusDoesNotExposeForcedCostumeFrameAsAnEmotion()
+    {
+        var (engine, client, _) = Create(
+            replyText: "- Warm.$h#$b#Studying the strange rain.$7",
+            lookupPrompt: (key, tokens) => key switch
+            {
+                "instructionsExtraPortraitLine" => PromptTable.ReplaceTokens("portrait {{Key}} = {{Value}}", tokens),
+                "instructionsEmotion" => PromptTable.ReplaceTokens("emotion rules\n{{extraPortraits}}", tokens),
+                _ => $"[{key}]"
+            });
+        var bio = new NpcBio { Biography = "Captured biography." };
+        var frames = new[]
+        {
+            new PortraitFrameSemantics.Match("h", "ordinary warm smile", new string('A', 64), 1),
+            new PortraitFrameSemantics.Match("7", "forced green-rain concern", new string('B', 64), 7)
+        };
+
+        GenerationResult result = await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Demetrius",
+            Trigger = GenerationTrigger.Conversation,
+            Conversation = new List<ConversationTurn> { new("How is the rain?", true, "green-rain") },
+            Snapshot = new GameStateSnapshot
+            {
+                Year = 1,
+                IsGreenRain = true,
+                FarmerName = "Yuki"
+            },
+            ContentSnapshot = new GenerationContentSnapshot(
+                bio,
+                new Dictionary<string, string>(),
+                PortraitFrames: frames,
+                PortraitFrameCount: 8)
+        }, CancellationToken.None);
+
+        Assert.Equal("Warm.$0#$b#Studying the strange rain.$0", result.ParsedLines[0]);
+        Assert.DoesNotContain("forced green-rain concern", client.LastRequest!.Tail, StringComparison.Ordinal);
+        Assert.DoesNotContain("ordinary warm smile", client.LastRequest.Tail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PortraitSignatureReadFailureKeepsDialogueAndNeutralizesOnlyPortraitMarkers()
+    {
+        const string formatted =
+            "Warm.$h#$b#Custom.$7#$e#Neutral.$0"
+            + "#$q 20001 SLD_Default#Respond"
+            + "#$r -999998 0 SLD_Next#Answer"
+            + "[(O)395]";
+
+        string safe = DialogueEngineHost.RevalidatePortraitSignature(
+            formatted,
+            expectedSignature: new string('A', 64),
+            readCurrentSignature: () => throw new InvalidOperationException("portrait texture was disposed"));
+
+        Assert.Equal(
+            "Warm.$0#$b#Custom.$0#$e#Neutral.$0"
+            + "#$q 20001 SLD_Default#Respond"
+            + "#$r -999998 0 SLD_Next#Answer"
+            + "[(O)395]",
+            safe);
+    }
+
+    [Fact]
+    public async Task DivorcedIslandAttireSuppressesUniquePortraitFrame()
+    {
+        var (engine, client, _) = Create(
+            replyText: "- Awkward.$u#$b#Fine.$h",
+            lookupPrompt: (key, tokens) => key switch
+            {
+                "instructionsExtraPortraitLine" => PromptTable.ReplaceTokens("portrait {{Key}} = {{Value}}", tokens),
+                "instructionsEmotion" => PromptTable.ReplaceTokens("emotion rules\n{{extraPortraits}}", tokens),
+                _ => $"[{key}]"
+            });
+        var bio = new NpcBio { Biography = "Captured biography." };
+        var frames = new[]
+        {
+            new PortraitFrameSemantics.Match("u", "unique island expression", new string('A', 64), 3),
+            new PortraitFrameSemantics.Match("h", "ordinary warm smile", new string('B', 64), 1)
+        };
+
+        GenerationResult result = await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Penny",
+            Trigger = GenerationTrigger.Conversation,
+            Conversation = new List<ConversationTurn> { new("Hello.", true, "island-divorce") },
+            Snapshot = new GameStateSnapshot
+            {
+                IsDivorced = true,
+                NpcShouldWearIslandAttire = true,
+                FarmerName = "Yuki"
+            },
+            ContentSnapshot = new GenerationContentSnapshot(
+                bio,
+                new Dictionary<string, string>(),
+                PortraitFrames: frames,
+                PortraitFrameCount: 8)
+        }, CancellationToken.None);
+
+        Assert.Equal("Awkward.$0#$b#Fine.$h", result.ParsedLines[0]);
+        Assert.DoesNotContain("unique island expression", client.LastRequest!.Tail, StringComparison.Ordinal);
+        Assert.Contains("ordinary warm smile", client.LastRequest.Tail, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task UnreviewedRuntimePortraitFallsBackToNeutral()
+    {
+        var (engine, _, _) = Create(replyText: "- I am not sure.$u");
+        var capturedBio = new NpcBio
+        {
+            Biography = "Captured biography.",
+            ValidPortraits = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "0", "h", "s", "u", "l", "a" }
+        };
+
+        GenerationResult result = await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Penny",
+            Trigger = GenerationTrigger.Conversation,
+            Conversation = new List<ConversationTurn> { new("Good morning.", true, "unknown-portrait-turn") },
+            Snapshot = new GameStateSnapshot { FarmerName = "Yuki" },
+            ContentSnapshot = new GenerationContentSnapshot(
+                capturedBio,
+                new Dictionary<string, string>(),
+                PortraitFrames: Array.Empty<PortraitFrameSemantics.Match>(),
+                PortraitFrameCount: 6)
+        }, CancellationToken.None);
+
+        Assert.Equal("I am not sure.$0", result.ParsedLines[0]);
+    }
+
+    [Fact]
+    public async Task MissingRuntimeSnapshotStillUsesFailClosedPortraitWhitelist()
+    {
+        var (engine, _, _) = Create(replyText: "- Happy.$h#$b#Custom.$7");
+
+        GenerationResult result = await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Penny",
+            Trigger = GenerationTrigger.Conversation,
+            Conversation = new List<ConversationTurn> { new("Good morning.", true, "missing-portrait-snapshot") },
+            Snapshot = new GameStateSnapshot { FarmerName = "Yuki" },
+            UsesRuntimePortraitWhitelist = true
+        }, CancellationToken.None);
+
+        Assert.Equal("Happy.$0#$b#Custom.$0", result.ParsedLines[0]);
+    }
+
+    [Fact]
+    public async Task TrustedSpouseGiftCommandStaysOutOfVisibleAndStoredDialogue()
+    {
+        var previousPicker = DialogueEngine.SpouseGiftPicker;
+        DialogueEngine.SpouseGiftPicker = (_, _) => "(O)395";
+        try
+        {
+            var (engine, _, store) = Create(replyText: "- I brought you something.$h");
+            GenerationResult result = await engine.GenerateAsync(new GenerationRequest
+            {
+                NpcName = "Penny",
+                Trigger = GenerationTrigger.Scheduled,
+                OriginalLine = string.Empty,
+                Snapshot = new GameStateSnapshot { IsMarriedToFarmer = true, FarmerName = "Yuki" }
+            }, CancellationToken.None);
+
+            Assert.Contains("[(O)395]", result.FormattedLine, StringComparison.Ordinal);
+            Assert.Equal("I brought you something.$h", result.ParsedLines[0]);
+            Assert.DoesNotContain("[(O)395]", result.ParsedLines[0], StringComparison.Ordinal);
+            Assert.NotNull(result.Commit);
+            Assert.Equal("I brought you something.$h", result.Commit!.DialogueLine);
+
+            Assert.True(engine.CommitResult(result));
+            Assert.Empty(store.GetHistory("Penny").DialogueHistory);
+        }
+        finally
+        {
+            DialogueEngine.SpouseGiftPicker = previousPicker;
+        }
+    }
+
+    [Fact]
+    public async Task ExplicitNumericPortraitMustExistInTheRuntimeSheet()
+    {
+        var (engine, client, _) = Create(
+            replyText: "- Too far.$11#$b#Available.$7",
+            lookupPrompt: (key, tokens) => key switch
+            {
+                "instructionsExtraPortraitLine" => PromptTable.ReplaceTokens("portrait {{Key}} = {{Value}}", tokens),
+                "instructionsEmotion" => PromptTable.ReplaceTokens("emotion rules\n{{extraPortraits}}", tokens),
+                _ => $"[{key}]"
+            });
+        var capturedBio = new NpcBio
+        {
+            Biography = "Captured biography.",
+            ExtraPortraits =
+            {
+                ["7"] = "an explicitly described frame",
+                ["11"] = "a frame outside this runtime sheet"
+            }
+        };
+
+        GenerationResult result = await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Penny",
+            Trigger = GenerationTrigger.Conversation,
+            Conversation = new List<ConversationTurn> { new("Show me.", true, "numeric-bounds-turn") },
+            Snapshot = new GameStateSnapshot { FarmerName = "Yuki" },
+            ContentSnapshot = new GenerationContentSnapshot(
+                capturedBio,
+                new Dictionary<string, string>(),
+                PortraitFrames: Array.Empty<PortraitFrameSemantics.Match>(),
+                PortraitFrameCount: 8)
+        }, CancellationToken.None);
+
+        Assert.Equal("Too far.$0#$b#Available.$7", result.ParsedLines[0]);
+        Assert.NotNull(client.LastRequest);
+        Assert.Contains("portrait 7 = an explicitly described frame", client.LastRequest!.Tail, StringComparison.Ordinal);
+        Assert.DoesNotContain("portrait 11", client.LastRequest.Tail, StringComparison.Ordinal);
     }
 
     [Fact]

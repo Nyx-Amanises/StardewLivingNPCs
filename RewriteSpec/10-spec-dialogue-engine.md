@@ -51,7 +51,12 @@ PromptLogExporter、ContextRoutingLogExporter、ConversationTranscriptExporter�
    `conflicts`。子字段结构以搬运件类型定义为准。
 
 台词行内允许出现 Stardew 对话控制记号（见 3.2）与肖像情绪记号
-`$h $s $l $a`（外加传记 `ExtraPortraits` 定义的自定义键）。
+`$0 $h $s $l $a`；运行时只会把当前 NPC 最终肖像纹理中经过审核的
+`(帧索引, RGBA 像素哈希)`标记加入白名单（标准帧也必须匹配最终纹理）。
+传记 `ExtraPortraits` 显式定义的 `u`/数字帧是内容作者的受信覆盖，但仍受实际
+物理帧范围约束；未知或读取失败的纹理只允许 `$0`。
+第一年绿雨中的 Demetrius 由游戏无条件强制显示第 7 帧防化服；该帧不是可选情绪，
+不会加入模型白名单。离婚且穿姜岛服装的 NPC 则不允许模型选择 `$u`。
 
 ### 3.2 Stardew 对话字符串格式（引擎产出 ↔ 游戏）
 
@@ -290,8 +295,10 @@ Scheduled 触发且 `originalLine` 为空时允许"配偶主动送礼"抽取（`
    农夫名指代、分段规则、单行规则、回应选项规则；随后 6 条 LivingNPCs 元数据
    指示键：`instructionsLivingNpcMetadata`、`…GiftIds`、`…ImmediateTravel`、
    `…TravelConsent`、`…HelpRequests`、`…EmotionDepth`（优化开关影响见 4.8）；
-   传记 `ExtraPortraits` 不含键 `"!"` 时输出情绪肖像指示（逐个额外肖像行
-   `instructionsExtraPortraitLine` 内嵌进 `instructionsEmotion`）；最后追加
+   传记 `ExtraPortraits` 不含键 `"!"` 时输出情绪肖像指示：先列运行时最终纹理
+   哈希审核通过的标记，再列物理范围内的受信 `u`/纯数字额外肖像；逐个额外肖像行
+   `instructionsExtraPortraitLine` 内嵌进 `instructionsEmotion`。未列出的标记禁止，
+   生气/不悦/皱眉等负面描述只能用于台词确实表达对应怒意；最后追加
    WP11 客户端声明的 `ExtraInstructions`（如有）。
 6. **Command**：标题 + 引言；`ReplaceSchedule` 小节（可 Override）——仅当
    `originalLine` 非空、无会话历史、且 NPC 并非刚刚说过话时输出"替换这句
@@ -320,6 +327,10 @@ Scheduled 触发且 `originalLine` 为空时允许"配偶主动送礼"抽取（`
 - 台词样本缓存：键 =（季节, 季节日, 心数）三元组，变则重算（见 4.6.14）。
 - 历史截断点缓存：按游戏日期缓存（见 4.15）。
 - 传记/原版对话缓存：随资产失效与 SVE 兼容开关变化而重载（WP15 交互）。
+- 最终肖像解析缓存：按 `Texture2D` 弱引用、纹理尺寸、当前资产失效纪元和已审核帧
+  哈希签名缓存；目录生成器先按 SMAPI/Skia 的预乘 alpha 规则规范 RGBA，确保半透明
+  像素与 `Texture2D.GetData` 一致。Content Patcher 失效或语言切换会重新解析，异常
+  读取 fail-closed 为 `$0`。
 
 ### 4.8 优化提示词开关（UseOptimizedPrompts）
 
@@ -367,7 +378,9 @@ Scheduled 触发且 `originalLine` 为空时允许"配偶主动送礼"抽取（`
    `StripHiddenAndResponseTail`）；去首部 `- " “ %` 等符号、去尾部引号、
    剥首尾 `#$b#`/`#$e#`、删除所有引号；规范 Stardew 命令（搬运件）；删除
    `#$c .5#`；`@@`→`@`；`#$<肖像>` 修为 `$<肖像>`；扫描全部 `$` 记号——
-   `$e/$c/$b` 保留，`$<合法肖像键>` 保留，其余 `$片段` 整体删除。
+   `$e/$b` 保留，`$<合法肖像键>` 保留，裸 `$c` 与其余 `$片段` 整体删除；
+   每个页面最多保留一个肖像标记，未消费或未知的 `$` 记号删除，必要时回退 `$0`，
+   避免 SpriteText 将其显示为金币符号。
 5. **超长拆分**：按 `#` 分段后任一段 >200 字符时，在句号/叹号/问号处回溯
    切分为多段（保持段尾肖像记号粘附）；切分后仍有 >200 的段 → 整行作废
    （宽松校验模式跳过此作废，见 §8 开放问题 3）。

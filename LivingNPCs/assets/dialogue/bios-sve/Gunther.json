@@ -46,9 +46,7 @@
   },
   "BiographyEnd": "Gunther speaks carefully, with curator precision, dry wit, and restrained enthusiasm.",
   "Unique": "curator's quiet spark",
-  "ExtraPortraits": {
-    "u": "curator's quiet spark"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "artifact catalogues",
     "library dust",

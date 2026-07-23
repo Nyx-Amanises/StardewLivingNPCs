@@ -46,9 +46,7 @@
   },
   "BiographyEnd": "The Wizard speaks formally and cryptically, with scholarly gravity and restrained loneliness.",
   "Unique": "arcane and watchful",
-  "ExtraPortraits": {
-    "u": "arcane and watchful"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "arcane research",
     "forest spirits",

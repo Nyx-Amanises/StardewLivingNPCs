@@ -117,8 +117,8 @@ Olivia→Caroline,Jodi,Pam,Leah；Sophia→Emily,Haley；Susan→Lewis,Marnie。
 | `Relationships` | `{ 键 → {id, Heading, Description} }` | 人际关系列表；Heading=对方名/称谓，Description=关系一句话 |
 | `Traits` | `{ 键 → {id, Heading, Description} }` | 性格特质列表；Heading=特质词，Description=一句展开。精简路由档只取前 4 条，**故最重要的特质排前面** |
 | `BiographyEnd` | string | 收尾段：概括该 NPC 的说话风格/语气要点（紧跟在关系与特质之后输出） |
-| `Unique` | string | 该 NPC 独有立绘（索引 `u`）的表情描述短语（如"显得暴躁"这类）；会自动并入 ExtraPortraits |
-| `ExtraPortraits` | `{ 立绘索引 → 表情描述 }` | 超出通用集($h/$s/$0/$l/$a)的额外表情立绘；索引是数字或字母；特殊键 `"!"` 表示"此 NPC 禁用表情指令教学" |
+| `Unique` | string | 该 NPC 独有的描述短语；不会自动并入肖像标记 |
+| `ExtraPortraits` | `{ 立绘索引 → 表情描述 }` | 内容作者受信配置的额外表情立绘；游戏原生仅支持字母 `u` 或纯数字索引，其它字母键会忽略，且运行时仍检查物理帧范围。内置角色通常留空，由最终肖像 `(索引, RGBA 哈希)`目录动态提供；特殊键 `"!"` 表示"此 NPC 禁用表情指令教学" |
 | `Preoccupations` | `string[]` | 3 个左右"近日挂心的话题"（地点、爱好、喜好物品等名词短语）；无对话历史时按日随机选一个注入 |
 | `Dialogue` | `{ 日程键 → 台词 }` | 可选：补充进采样池的手写风格台词（旧库仅 Abigail 有一条 Mon 键）；一般留空对象 |
 | `HomeLocationBed` | bool | 是否住集体/店铺建筑内有私人床位（影响"在家"措辞的功能开关，照实填） |
@@ -350,7 +350,7 @@ relationshipWord)、`specialRelationshipDatingPublic`/`DatingDiscrete`（恋情�
 | `instructionsLivingNpcHelpRequests` | 求助请求教学（完整版约 2.4K）：`helpRequests`/`helpRequestUpdates` 字段结构照 §3.2；只在上下文明说"今天可以开口求助"且可见台词真的求了才建；只允许 `item_request` 且 requestedItemId 只能取上下文"当前合理物品"表；`dueInDays` 1–7；不得求跑腿/送信/改日程/问答类；新请求默认 requiresAcceptance=true（仅农夫主动提出帮忙且 NPC 应允时为 false 直接进任务日志）；状态流转 accepted/declined/advanced/fulfilled 的判定；steps 至多 3 步且每步都是物品步；followUpPotential 取 none 或 deeper_relationship |
 | `instructionsLivingNpcEmotionDepth` | 情绪深度与信任边界：jealous/worried/grateful/disappointed 四情绪的适用情形；尊重上下文给的信任档与秘密分享深度（低信任不得突然掏心）；严重矛盾的 repairDelta 必须对应真正的修复性对话，一句道歉不能抹平长链修复 |
 | `instructionsExtraPortraitLine`(Key,Value) | 单条额外表情的列举格式（拼进下一键） |
-| `instructionsEmotion`(extraPortraits) | 表情记号教学：段末缀 `$h`(大喜)/`$0`(中性)/`$s`(伤心)/传记额外表情记号；记号放在其适用的分段内、前面不加 `#`；禁用 emoji、星号动作等其它情绪表达 |
+| `instructionsEmotion`(extraPortraits) | 表情记号教学：只列当前最终肖像纹理哈希审核通过的 `$0/$h/$s/$l/$a` 与数字/`$u`帧，以及物理范围内的受信 `ExtraPortraits`；普通或不明确时不加标记/用 `$0`，负面描述只在台词确实表达对应怒意时使用；每页最多一个标记，禁用 emoji、星号动作等其它情绪表达 |
 
 以上 6 个 `instructionsLivingNpc*` 键各配 `Optimized` 精简变体（要点不删、示例与解释压缩；
 旧库 HelpRequests/EmotionDepth 的 Optimized 曾缺失依赖回退——新版**六个都要写全**）。
@@ -443,7 +443,7 @@ Yuki 原创的全量中文骨架（950 键，与 default 同键集）。**保留
 | 台词行 | `instructionsSingleLine` | 单行、`- ` 前缀 |
 | 农夫名占位 | `instructionsFarmersName` | `@` |
 | 分屏 | `instructionsBreaks` | `#$b#`、`#$e#`，间隔 ≤24 词 |
-| 表情 | `instructionsEmotion`(+`instructionsExtraPortraitLine`) | 段尾 `$h/$0/$s/$l/$a` + 传记 `ExtraPortraits` 键；`ExtraPortraits` 含 `"!"` 键的 NPC 整节不教 |
+| 表情 | `instructionsEmotion`(+`instructionsExtraPortraitLine`) | 默认不加标记或使用 `$0`；只使用最终肖像哈希白名单中列出的标记，未知/读取失败纹理回退普通表情；只有台词确实表达怒意才用 `$a` 或被描述为生气/不悦的额外帧；`ExtraPortraits` 含 `"!"` 键的 NPC 整节不教 |
 | 回应选项 | `instructionsResponses` | 每行 `% ` 前缀、2–4 项、≤12 词 |
 | 元数据行 | `instructionsLivingNpcMetadata` 族 | 末尾一行 `!LIVINGNPCS_META{…}`，JSON 顶层键：`rapportDelta`(int 0–30), `endConversation`(bool), `ambientFollowUp{text,delayMinutes}`, `emotionImpact{emotion∈happy\|calm\|jealous\|worried\|grateful\|disappointed\|uneasy\|upset\|angry\|sad\|none, intensityDelta, apology, repairDelta, reason}`, `behaviorInfluences[{type∈visit_location\|comforted\|offended\|give_space\|stay_near\|pause_to_talk, summary, targetLocation, targetLocationLabel, durationDays, intensity, maxTriggers}]`, `actions[{type∈give_small_gift\|give_meaningful_gift\|give_money\|companion_outing\|festival_interaction, amount, durationMinutes, delayMinutes, targetLocation, travelConsent, itemId, itemLabel, reason}]`, `conflicts[{causeKind∈dialogue\|gift\|boundary\|promise, summary, severity}]`, `memories[{kind∈fact\|preference\|promise\|boundary\|relationship, summary, importance, playerPreference, playerPreferenceKind∈liked_item_category\|disliked_item\|habit\|value\|goal\|none, subject, tags[…canonical]}]`, `helpRequests[{type:"item_request", summary, requiresAcceptance, requestedItemId, requestedItemLabel, questionTopic, dueInDays, reason, steps[≤3], followUpPotential∈none\|deeper_relationship}]`, `helpRequestUpdates[{summary, status∈accepted\|declined\|advanced\|fulfilled, resolution}]` |
 | targetLocation 枚举 | Metadata/Travel 两节 | `Farm, Town, Mountain, Beach, Forest, BusStop, Saloon, SeedShop, ArchaeologyHouse, Hospital` |

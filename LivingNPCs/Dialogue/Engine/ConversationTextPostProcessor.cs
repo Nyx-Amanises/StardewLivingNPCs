@@ -21,6 +21,12 @@ internal static class ConversationTextPostProcessor
     private static readonly Regex InvisibleFormatPattern = new(
         @"[\u200B-\u200D\u2060\uFEFF\u00AD\u202A-\u202E\u2066-\u2069]",
         RegexOptions.Compiled);
+    private static readonly Regex BarePageCommandPattern = new(
+        @"#(?<command>[be])#",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly Regex DollarPageCommandPattern = new(
+        @"(?:#+)?\$(?<command>[be])(?:#|(?=[^A-Za-z0-9_#]|$))",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     public static string NormalizeImmediateNicknameReply(string dialogue, string playerText)
     {
@@ -72,20 +78,12 @@ internal static class ConversationTextPostProcessor
             return string.Empty;
         }
 
-        string normalized = text
-            .Replace("#b#", "#$b#", StringComparison.OrdinalIgnoreCase)
-            .Replace("#e#", "#$e#", StringComparison.OrdinalIgnoreCase)
-            .Replace("$e", "#$e", StringComparison.Ordinal)
-            .Replace("$b", "#$b", StringComparison.Ordinal)
-            .Replace("##$e", "#$e", StringComparison.Ordinal)
-            .Replace("##$b", "#$b", StringComparison.Ordinal);
-
-        normalized = Regex.Replace(
+        string normalized = BarePageCommandPattern.Replace(
+            text,
+            match => "#$" + match.Groups["command"].Value.ToLowerInvariant() + "#");
+        return DollarPageCommandPattern.Replace(
             normalized,
-            @"#\$(?<command>[be])(?!#)",
-            match => "#$" + match.Groups["command"].Value + "#",
-            RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-        return normalized;
+            match => "#$" + match.Groups["command"].Value.ToLowerInvariant() + "#");
     }
 
     public static string RemoveInvisibleCharacters(string text)

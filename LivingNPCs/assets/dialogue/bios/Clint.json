@@ -41,9 +41,7 @@
   },
   "BiographyEnd": "Clint speaks in hesitant practical sentences with dry self-doubt; keep him awkward, lonely, and capable.",
   "Unique": "nervous behind the forge heat",
-  "ExtraPortraits": {
-    "u": "nervous behind the forge heat"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "geodes",
     "the forge",

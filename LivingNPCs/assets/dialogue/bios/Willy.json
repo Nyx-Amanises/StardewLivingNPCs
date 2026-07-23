@@ -41,9 +41,7 @@
   },
   "BiographyEnd": "Willy speaks plainly with nautical turns, patient humor, and a mentor's steadiness.",
   "Unique": "salt-weathered patience",
-  "ExtraPortraits": {
-    "u": "salt-weathered patience"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "the fishing boat",
     "storm tides",

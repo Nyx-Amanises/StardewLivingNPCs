@@ -241,6 +241,7 @@ internal static class DialogueEngineBootstrapper
             TypedInputRequestQueue.Clear();
             MarriageChoreBuffer.Clear();
             DisplayedDialogueRecorder.Reset();
+            DialogueEngineHost.InvalidatePortraitCaches();
         }
         catch (Exception ex)
         {

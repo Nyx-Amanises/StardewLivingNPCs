@@ -46,9 +46,7 @@
   },
   "BiographyEnd": "Andy speaks in blunt rural phrases, with complaint, pride, and reluctant neighborly warmth.",
   "Unique": "weathered and stubborn",
-  "ExtraPortraits": {
-    "u": "weathered and stubborn"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "Fairhaven crops",
     "seed prices",

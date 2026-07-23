@@ -41,9 +41,7 @@
   },
   "BiographyEnd": "The Henchman speaks in blunt, rule-bound lines with odd humor and magical workplace seriousness.",
   "Unique": "oddly dutiful",
-  "ExtraPortraits": {
-    "u": "oddly dutiful"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "swamp duty",
     "void snacks",

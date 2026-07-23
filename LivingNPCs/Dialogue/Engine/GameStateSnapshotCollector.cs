@@ -76,6 +76,7 @@ internal static class GameStateSnapshotCollector
             DayOfMonth = Game1.dayOfMonth,
             TimeOfDay = Game1.timeOfDay,
             WeatherFlags = CollectWeather(npc?.currentLocation ?? player.currentLocation),
+            IsGreenRain = TryGet(() => Game1.isGreenRain),
 
             FriendshipPoints = friendship?.Points ?? -1,
             IsMarriedToFarmer = TryGet(() => friendship?.IsMarried() == true && !friendship.IsRoommate()),
@@ -87,6 +88,7 @@ internal static class GameStateSnapshotCollector
             IsEngaged = TryGet(() => friendship?.IsEngaged() == true),
             DaysUntilWedding = TryGet(() => friendship?.CountdownToWedding ?? 0),
             IsDivorced = TryGet(() => friendship?.IsDivorced() == true),
+            NpcShouldWearIslandAttire = TryGet(() => npc?.shouldWearIslandAttire.Value == true),
             ProposalRejected = TryGet(() => friendship?.ProposalRejected == true),
 
             NpcIsChild = TryGet(() => npc?.Age == NPC.child),

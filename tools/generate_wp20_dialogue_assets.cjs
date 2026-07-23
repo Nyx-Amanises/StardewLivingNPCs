@@ -582,14 +582,14 @@ add("instructionsResponses", [
   "Higher familiarity can use options more often; cold or closed lines may have no options.",
   "Options must not contain @, portrait marks, metadata, or special formatting.",
   "Example with options:",
-  "- I was just thinking the rain makes the whole road smell like wet leaves.$0",
+  "- I was just thinking the rain makes the whole road smell like wet leaves.",
   "% I like that smell too.",
   "% Makes chores messier, though.",
   "% You sound peaceful today.",
   "Example without options:",
-  "- Morning. I need to finish this before the shop opens.$0",
+  "- Morning. I need to finish this before the shop opens.",
   "Example cold refusal:",
-  "- Not today. I don't have the patience for small talk.$s",
+  "- Not today. I don't have the patience for small talk.",
 ].join("\n"), [
   "如果台词邀请回应，请在村民台词后加入2到4个农夫回应选项。",
   "每个选项必须以% 开头，使用农夫第一人称口吻，英文不超过12词；中文保持同等简短。",
@@ -597,14 +597,14 @@ add("instructionsResponses", [
   "熟悉度越高越常出现选项；冷淡或封闭的台词可以没有选项。",
   "选项中不得包含@、表情标记、元数据或特殊格式。",
   "带选项示例：",
-  "- 我刚才在想，雨天的路闻起来像湿叶子。$0",
+  "- 我刚才在想，雨天的路闻起来像湿叶子。",
   "% 我也喜欢那个味道。",
   "% 但干活会更麻烦。",
   "% 你今天听起来很安静。",
   "无选项示例：",
-  "- 早。我得在开店前把这个弄完。$0",
+  "- 早。我得在开店前把这个弄完。",
   "冷淡拒绝示例：",
-  "- 今天不行。我没耐心闲聊。$s",
+  "- 今天不行。我没耐心闲聊。",
 ].join("\n"));
 
 add("instructionsDialogueOnly", "Output only the visible villager line and any % farmer response options. Do not output JSON, metadata, analysis, hidden fields, or !LIVINGNPCS_META. Mention a gift or specific item request only when the supplied context explicitly allows that opportunity and item. When accepting travel now, make the present consent and destination clear; later, another day, or by mail must not sound immediate. Never invent an item, destination, reward, task, or world action.", "只输出可见的村民台词和可选的%农夫回应，不要输出JSON、元数据、分析、隐藏字段或!LIVINGNPCS_META。只有上下文明示当前存在相应机会和物品时，才能提到送礼或具体物品求助。若答应现在出行，要明确当下同意和目的地；晚点、改天或邮寄不能说得像立即执行。不得编造物品、目的地、奖励、任务或世界动作。");
@@ -659,8 +659,8 @@ add("instructionsLivingNpcHelpRequests", "Create helpRequests only when context 
 add("instructionsLivingNpcHelpRequestsOptimized", "helpRequests only when context permits and visible dialogue asks. Only item_request, IDs from current item list, dueInDays 1-7, max 3 item steps. Use updates only for clear accepted/declined/advanced/fulfilled changes.", "只有上下文允许且可见台词提出时才写helpRequests。只允许item_request，ID来自当前物品列表，dueInDays 1-7，最多3个物品步骤。只有明确accepted/declined/advanced/fulfilled变化时才写updates。");
 add("instructionsLivingNpcEmotionDepth", "Respect trust and secrecy limits. jealousy, worried, grateful, and disappointed require a real cause in context. Low trust must not become sudden confession or deep vulnerability. Serious conflicts need real repair before repairDelta rises; a single apology line cannot erase a long rupture.", "尊重信任与秘密分享边界。jealous、worried、grateful、disappointed必须有上下文中的真实原因。低信任不能突然变成深度告白或脆弱袒露。严重矛盾需要真正修复后repairDelta才可提高；一句道歉不能抹平长期破裂。");
 add("instructionsLivingNpcEmotionDepthOptimized", "Use emotional depth only when earned by trust and context. No sudden confession at low trust. repairDelta requires real repair, not one polite apology.", "只有在信任和上下文支撑时才使用情绪深度。低信任不突然告白。repairDelta需要真实修复，不是一句礼貌道歉。");
-add("instructionsExtraPortraitLine", "{{Key}} means {{Value}}.", "{{Key}}表示{{Value}}。");
-add("instructionsEmotion", "You may add one portrait mark at the end of a dialogue segment: $h very happy, $0 neutral, $s sad, $l love or warmth, $a anger or frustration, plus any extra marks listed here: {{extraPortraits}}. Put the mark inside the segment it applies to, without # before it. Do not use emoji, stage directions, asterisks, or prose actions as emotion markers.", "你可以在对话片段末尾添加一个肖像标记：$h非常高兴，$0中性，$s难过，$l爱意或温暖，$a生气或烦躁，以及这里列出的额外标记：{{extraPortraits}}。标记放在适用片段内，前面不要加#。不要用emoji、舞台说明、星号动作或散文动作来表示情绪。");
+add("instructionsExtraPortraitLine", "- ${{Key}}: {{Value}}", "- ${{Key}}：{{Value}}");
+add("instructionsEmotion", "Portrait marks are optional. Use no mark or $0 for the normal/default portrait. Use only a reviewed marker listed below, and only when the visible dialogue on that page clearly matches its description; an unlisted marker is forbidden. Use $a, or any other marker described as angry, irritated, furious, displeased, confrontational, or scowling, only for genuine matching anger; never use a negative marker for ordinary complaints, shyness, anxiety, surprise, gratitude, or minor disagreement. Stardew shows one portrait per dialogue page: put at most one marker at the end of the page it applies to. If the emotional expression changes, use #$b# to start a new page before choosing another marker. Available reviewed markers for the final portrait texture:\n{{extraPortraits}}\nDo not use emoji, stage directions, asterisks, prose actions, or a # prefix as emotion markers.", "肖像标记是可选的；普通或不明确的神情不加标记或使用$0。只能使用下方列出的、已经按当前最终肖像贴图审核过的标记，而且当前页的可见台词必须确实符合对应描述；未列出的标记禁止使用。$a以及任何描述为生气、恼怒、暴怒、不悦、冲突或皱眉的其他标记，都只能在台词确实表达对应怒意时使用；普通抱怨、害羞、紧张、惊讶、感谢或轻微分歧不得使用负面标记。星露谷每个对话页只显示一个肖像：标记放在对应页面末尾，每页最多一个。若情绪发生变化，先用#$b#另起一页，再选择新的标记。当前最终肖像可用的已审核标记：\n{{extraPortraits}}\n不要用emoji、舞台说明、星号动作、散文动作或带#前缀的写法表示情绪。");
 
 add("responseStart", "Here is {{Name}}'s next line:", "以下是{{Name}}的下一句台词：");
 

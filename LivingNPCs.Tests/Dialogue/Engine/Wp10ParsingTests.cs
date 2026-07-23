@@ -200,8 +200,101 @@ public class ResponseParserTests
     [Fact]
     public void Removes_Invalid_Dollar_Tokens_Keeps_Valid_Portraits()
     {
-        var parsed = ResponseParser.Parse("- Fine day$h and weird$zz token", Portraits, "Yuki", false);
-        Assert.Equal("Fine day and weird token$h", parsed.DialogueLine);
+        var parsed = ResponseParser.Parse("- Fine day$h and weird$zz token with stray$c command", Portraits, "Yuki", false);
+        Assert.Equal("Fine day and weird token with stray command$h", parsed.DialogueLine);
+    }
+
+    [Fact]
+    public void Removes_Unavailable_U_Portrait_From_LegacyOutput()
+    {
+        var portraitsWithoutU = new HashSet<string>(Portraits, StringComparer.OrdinalIgnoreCase);
+        portraitsWithoutU.Remove("u");
+
+        var parsed = ResponseParser.Parse("- 谢谢你……$u", portraitsWithoutU, "Yuki", false);
+
+        Assert.True(parsed.Success);
+        Assert.Equal("谢谢你……$0", parsed.DialogueLine);
+        Assert.DoesNotContain("$u", parsed.DialogueLine, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void UnavailableStandardExpressionsFallBackToNeutralPerPage()
+    {
+        var onlyNeutralAndHappy = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "0", "h" };
+
+        var parsed = ResponseParser.Parse(
+            "- sad$s#$b#unique$u#$b#angry$a#$b#happy$h",
+            onlyNeutralAndHappy,
+            "Yuki",
+            false);
+
+        Assert.True(parsed.Success);
+        Assert.Equal("sad$0#$b#unique$0#$b#angry$0#$b#happy$h", parsed.DialogueLine);
+    }
+
+    [Fact]
+    public void NumericOneThroughFiveNeverAliasStandardExpressions()
+    {
+        var parsed = ResponseParser.Parse(
+            "- Price one$1#$b#Price five$5",
+            Portraits,
+            "Yuki",
+            false);
+
+        Assert.True(parsed.Success);
+        Assert.Equal("Price one#$b#Price five", parsed.DialogueLine);
+        Assert.DoesNotContain("$h", parsed.DialogueLine, StringComparison.Ordinal);
+        Assert.DoesNotContain("$a", parsed.DialogueLine, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void RejectsUnsupportedConfiguredLetters_AndNormalizesBuiltInCase()
+    {
+        var configured = new HashSet<string>(Portraits, StringComparer.OrdinalIgnoreCase)
+        {
+            "7", "11", "x", "smile"
+        };
+
+        var parsed = ResponseParser.Parse(
+            "- odd$x word$smile numeric$7 alternate$11 happy$H",
+            configured,
+            "Yuki",
+            false);
+
+        Assert.True(parsed.Success);
+        Assert.Equal("odd word numeric alternate happy$h", parsed.DialogueLine);
+        Assert.DoesNotContain("$x", parsed.DialogueLine, StringComparison.Ordinal);
+        Assert.DoesNotContain("$smile", parsed.DialogueLine, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void PreservesExplicitNumericPortraitsOnSeparatePages()
+    {
+        var configured = new HashSet<string>(Portraits, StringComparer.OrdinalIgnoreCase) { "7", "11" };
+
+        var parsed = ResponseParser.Parse(
+            "- numeric$7#$b#alternate$11",
+            configured,
+            "Yuki",
+            false);
+
+        Assert.True(parsed.Success);
+        Assert.Equal("numeric$7#$b#alternate$11", parsed.DialogueLine);
+    }
+
+    [Fact]
+    public void KeepsTheLastAvailableExpressionIndependentlyOnEveryPage()
+    {
+        var configured = new HashSet<string>(Portraits, StringComparer.OrdinalIgnoreCase) { "7" };
+
+        var parsed = ResponseParser.Parse(
+            "- First$h then$7#$b#Second$a then$s#$b#No expression",
+            configured,
+            "Yuki",
+            false);
+
+        Assert.True(parsed.Success);
+        Assert.Equal("First then$7#$b#Second then$s#$b#No expression", parsed.DialogueLine);
     }
 
     [Fact]
@@ -214,6 +307,19 @@ public class ResponseParserTests
         Assert.Equal(
             "早上好，@。你起得真早……明天呢？$u#$b#第二页还在继续$a#$e#最后一句仍继续$0",
             parsed.DialogueLine);
+    }
+
+    [Fact]
+    public void NormalizesUppercasePageCommandsWithoutLeavingBareHashes()
+    {
+        var parsed = ResponseParser.Parse(
+            "- First$h#$B#Second$s#$E#Last$u",
+            Portraits,
+            "Yuki",
+            fixPunctuation: false);
+
+        Assert.True(parsed.Success);
+        Assert.Equal("First$h#$b#Second$s#$e#Last$u", parsed.DialogueLine);
     }
 
     [Fact]
@@ -265,6 +371,76 @@ public class ResponseParserTests
     }
 
     [Fact]
+    public void AutoSplitPagesInheritTheOriginalPortraitMarker()
+    {
+        string sentence = new string('x', 90) + ". ";
+        var parsed = ResponseParser.Parse("- " + sentence + sentence + sentence + "$a", Portraits, "Yuki", false);
+
+        Assert.True(parsed.Success);
+        string[] pages = parsed.DialogueLine.Split("#$b#");
+        Assert.True(pages.Length > 1);
+        Assert.All(pages, page => Assert.EndsWith("$a", page, StringComparison.Ordinal));
+        Assert.All(pages, page => Assert.True(page.Length <= ResponseParser.MaxSegmentLength));
+    }
+
+    [Fact]
+    public void LongSegmentSplitPreservesExplicitEndPageBoundary()
+    {
+        string sentence = new string('x', 90) + ". ";
+        var parsed = ResponseParser.Parse(
+            "- " + sentence + sentence + sentence + "$h#$e#Final page.$s",
+            Portraits,
+            "Yuki",
+            false);
+
+        Assert.True(parsed.Success);
+        Assert.Contains("#$e#Final page.$s", parsed.DialogueLine, StringComparison.Ordinal);
+        Assert.All(
+            parsed.DialogueLine.Split(new[] { "#$b#", "#$e#" }, StringSplitOptions.None),
+            page => Assert.True(page.Length <= ResponseParser.MaxSegmentLength));
+    }
+
+    [Fact]
+    public void NamedEmotionLabelsAreRemovedWithoutCreatingExtraPages()
+    {
+        var parsed = ResponseParser.Parse(
+            "- I am $blushing and $embarrassed about that.",
+            Portraits,
+            "Yuki",
+            false);
+
+        Assert.True(parsed.Success);
+        Assert.Equal("I am  and  about that.", parsed.DialogueLine);
+        Assert.DoesNotContain("#$b#", parsed.DialogueLine, StringComparison.Ordinal);
+        Assert.DoesNotContain("#$e#", parsed.DialogueLine, StringComparison.Ordinal);
+    }
+
+    [Theory]
+    [InlineData("- Here you go[(O)395]$h", "Here you go$h")]
+    [InlineData("- Here you go[395]$h", "Here you go$h")]
+    [InlineData("- Please do not show [stage directions].$s", "Please do not show .$s")]
+    public void RemovesModelSuppliedBracketCommands(string raw, string expected)
+    {
+        var parsed = ResponseParser.Parse(raw, Portraits, "Yuki", false);
+
+        Assert.True(parsed.Success);
+        Assert.Equal(expected, parsed.DialogueLine);
+    }
+
+    [Fact]
+    public void TrimsRepeatedMixedCasePageMarkersAtBothEnds()
+    {
+        var parsed = ResponseParser.Parse(
+            "- #$B##$e#Actual line$h#$E##$b#",
+            Portraits,
+            "Yuki",
+            false);
+
+        Assert.True(parsed.Success);
+        Assert.Equal("Actual line$h", parsed.DialogueLine);
+    }
+
+    [Fact]
     public void Rejects_Unsplittable_Overlong_Segment()
     {
         string raw = "- " + new string('x', 260);
@@ -290,10 +466,49 @@ public class ResponseParserTests
         string fixedText = ResponseParser.FixSegmentPunctuation("你好呀$h", Portraits);
         Assert.Equal("你好呀。$h", fixedText);
     }
+
+    [Fact]
+    public void FixPunctuationHandlesBothPageBoundaryCommands()
+    {
+        string fixedText = ResponseParser.FixSegmentPunctuation(
+            "First$h#$e#Second$s#$b#Third$a",
+            Portraits);
+
+        Assert.Equal("First.$h#$e#Second.$s#$b#Third.$a", fixedText);
+    }
+
+    [Fact]
+    public void PresentationFallbackNeutralizesOnlyPortraitTokens()
+    {
+        string formatted =
+            "Warm$h#$b#Custom$7#$e#Neutral$0"
+            + "#$q 20001 SLD_Default#Respond"
+            + "#$r -999998 0 SLD_Next#Answer"
+            + "[(O)395]";
+
+        string safe = ResponseParser.DowngradePortraitMarkersToNeutral(formatted);
+
+        Assert.Equal(
+            "Warm$0#$b#Custom$0#$e#Neutral$0"
+            + "#$q 20001 SLD_Default#Respond"
+            + "#$r -999998 0 SLD_Next#Answer"
+            + "[(O)395]",
+            safe);
+    }
 }
 
 public class StreamingDialoguePreviewTests
 {
+    [Fact]
+    public void RawStreamingPreviewDoesNotTrustPortraitMarkers()
+    {
+        string preview = StreamingDialoguePreview.ExtractVisibleText("- Hello$h#$b#Still streaming$7");
+        var segments = StreamingDialoguePreview.PrepareDisplaySegments(preview);
+
+        Assert.Equal(new[] { "Hello", "Still streaming" }, segments.Select(segment => segment.Text));
+        Assert.All(segments, segment => Assert.Equal(0, segment.PortraitFrameIndex));
+    }
+
     [Fact]
     public void PrepareDisplayText_Removes_All_Dollar_Signs_After_Converting_Page_Markers()
     {
@@ -301,6 +516,41 @@ public class StreamingDialoguePreviewTests
 
         Assert.Equal("Hello world\fNext\fLast", display);
         Assert.DoesNotContain('$', display);
+    }
+
+    [Fact]
+    public void PrepareDisplaySegmentsKeepsValidatedPortraitPerPage()
+    {
+        var segments = StreamingDialoguePreview.PrepareDisplaySegments(
+            "- Warm$h#$b#Private$7#$e#Unknown$zz");
+
+        Assert.Equal(new[] { "Warm", "Private", "Unknown" }, segments.Select(segment => segment.Text));
+        Assert.Equal(new[] { 1, 7, 0 }, segments.Select(segment => segment.PortraitFrameIndex));
+        Assert.DoesNotContain(segments, segment => segment.Text.Contains('$', StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("A gift for you.$h[(O)395]")]
+    [InlineData("A gift for you.$h[395]")]
+    public void FinalDisplayHidesTrailingItemCommands(string dialogue)
+    {
+        var segments = StreamingDialoguePreview.PrepareDisplaySegments(dialogue);
+
+        var segment = Assert.Single(segments);
+        Assert.Equal("A gift for you.", segment.Text);
+        Assert.Equal(1, segment.PortraitFrameIndex);
+    }
+
+    [Theory]
+    [InlineData("h", 1)]
+    [InlineData("7", 7)]
+    [InlineData("0", 0)]
+    [InlineData("1", 0)]
+    [InlineData("4096", 0)]
+    [InlineData("not-a-marker", 0)]
+    public void InvalidStreamingPortraitMarkersFallbackToNeutral(string marker, int expectedFrame)
+    {
+        Assert.Equal(expectedFrame, StreamingDialoguePreview.ResolvePortraitFrameIndex(marker));
     }
 }
 

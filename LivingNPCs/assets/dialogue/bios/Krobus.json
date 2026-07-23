@@ -41,9 +41,7 @@
   },
   "BiographyEnd": "Krobus speaks softly and formally, with humble warmth, old fear, and odd underground assumptions.",
   "Unique": "softly shadowed",
-  "ExtraPortraits": {
-    "u": "softly shadowed"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "void mayonnaise",
     "the sewer shop",

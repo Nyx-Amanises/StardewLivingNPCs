@@ -8,6 +8,7 @@ using StardewValley;
 using StardewValley.BellsAndWhistles;
 using StardewValley.Menus;
 
+using LivingNPCs.Dialogue.Content;
 using LivingNPCs.Dialogue.Engine;
 using GameDialogue = StardewValley.Dialogue;
 namespace LivingNPCs.Dialogue.Ui;
@@ -22,15 +23,17 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
 
     private readonly object sync = new();
     private readonly NPC npc;
+    private readonly StreamingDialogueUpdateQueue pendingUpdates = new();
     private readonly List<string> pages = new();
+    private readonly List<int> pagePortraitFrameIndexes = new();
+    private readonly List<StreamingDialoguePreview.DisplaySegment> displaySegments = new();
     private readonly List<StreamingResponseOption> responseOptions = new();
     private readonly List<Rectangle> responseOptionBounds = new();
-    private string rawText = string.Empty;
     private string displayText = string.Empty;
     private bool generationComplete;
     private bool showingResponses;
-    private Action onFinished;
-    private Action<StreamingResponseOption> onResponseSelected;
+    private Action? onFinished;
+    private Action<StreamingResponseOption>? onResponseSelected;
     private int currentPageIndex;
     private int selectedResponseIndex;
     private int animationFrame;
@@ -39,7 +42,8 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
     private float revealTimer;
     private int lastTextWidth;
     private int lastTextHeight;
-    private DialogueBox dialogueShell;
+    private DialogueBox? dialogueShell;
+    private GameDialogue? portraitDialogue;
     private int lastViewportWidth;
     private int lastViewportHeight;
 
@@ -51,46 +55,23 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
 
     public void AppendToken(string token)
     {
-        if (string.IsNullOrEmpty(token))
-        {
-            return;
-        }
-
-        lock (this.sync)
-        {
-            this.rawText += token;
-            this.RebuildPages(StreamingDialoguePreview.ExtractVisibleText(this.rawText));
-        }
+        this.pendingUpdates.AppendToken(token);
     }
 
     public void Complete(
-        string finalText,
+        GenerationResult result,
         IEnumerable<StreamingResponseOption> responseOptions,
         Action<StreamingResponseOption> onResponseSelected,
         Action onFinished)
     {
-        lock (this.sync)
-        {
-            this.generationComplete = true;
-            this.onFinished = onFinished;
-            this.onResponseSelected = onResponseSelected;
-            this.responseOptions.Clear();
-            if (responseOptions != null)
-            {
-                this.responseOptions.AddRange(responseOptions.Where(option => option != null && !string.IsNullOrWhiteSpace(option.Text)));
-            }
-            this.RebuildPages(StreamingDialoguePreview.PrepareDisplayText(finalText));
-            if (this.pages.Count == 0)
-            {
-                this.pages.Add("...");
-            }
-        }
+        this.pendingUpdates.Complete(result, responseOptions, onResponseSelected, onFinished);
     }
 
     public override void update(GameTime time)
     {
         base.update(time);
         this.UpdateLayout(rebuildIfNeeded: true);
+        this.ApplyPendingUpdates();
         this.animationTimer += (float)time.ElapsedGameTime.TotalMilliseconds;
         if (this.animationTimer >= 350f)
         {
@@ -220,7 +201,7 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
 
     private void Advance()
     {
-        Action finished = null;
+        Action? finished = null;
         lock (this.sync)
         {
             if (this.pages.Count > 0)
@@ -262,26 +243,39 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
         finished?.Invoke();
     }
 
-    private void RebuildPages(string displayText)
+    private void RebuildPages(IReadOnlyList<StreamingDialoguePreview.DisplaySegment> segments)
     {
         this.UpdateLayout();
-        this.displayText = displayText ?? string.Empty;
+        var stableSegments = (segments ?? Array.Empty<StreamingDialoguePreview.DisplaySegment>())
+            .Where(segment => segment != null && !string.IsNullOrWhiteSpace(segment.Text))
+            .ToList();
+        this.displaySegments.Clear();
+        this.displaySegments.AddRange(stableSegments);
+        this.displayText = string.Join("\f", stableSegments.Select(segment => segment.Text));
         var rebuilt = new List<string>();
+        var rebuiltPortraitFrames = new List<int>();
         Rectangle textBounds = this.GetTextBounds();
         int lineHeight = GetSpriteTextLineHeight(textBounds.Width);
         int maxLines = Math.Max(1, textBounds.Height / lineHeight);
 
-        foreach (string segment in this.displayText.Split('\f', StringSplitOptions.RemoveEmptyEntries))
+        foreach (StreamingDialoguePreview.DisplaySegment segment in stableSegments)
         {
-            var lines = WrapSpriteText(segment, textBounds.Width);
+            var lines = WrapSpriteText(segment.Text, textBounds.Width);
             for (int i = 0; i < lines.Length; i += maxLines)
             {
                 rebuilt.Add(string.Join("\n", lines.Skip(i).Take(maxLines)));
+                rebuiltPortraitFrames.Add(segment.PortraitFrameIndex);
             }
         }
 
         this.pages.Clear();
+        this.pagePortraitFrameIndexes.Clear();
         this.pages.AddRange(rebuilt.Where(page => !string.IsNullOrWhiteSpace(page)));
+        this.pagePortraitFrameIndexes.AddRange(
+            rebuilt
+                .Select((page, index) => (page, index))
+                .Where(item => !string.IsNullOrWhiteSpace(item.page))
+                .Select(item => rebuiltPortraitFrames[item.index]));
         this.currentPageIndex = Math.Clamp(this.currentPageIndex, 0, Math.Max(this.pages.Count - 1, 0));
         if (this.pages.Count == 0)
         {
@@ -302,7 +296,7 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
     private void SelectResponse(int index)
     {
         StreamingResponseOption selected;
-        Action<StreamingResponseOption> selectedCallback;
+        Action<StreamingResponseOption>? selectedCallback;
 
         lock (this.sync)
         {
@@ -392,7 +386,7 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
         if (this.dialogueShell == null || viewportWidth != this.lastViewportWidth || viewportHeight != this.lastViewportHeight)
         {
             this.dialogueShell = this.npc != null
-                ? new DialogueBox(new GameDialogue(this.npc, EngineConstants.KeyStreaming, " "))
+                ? new DialogueBox(this.portraitDialogue = new GameDialogue(this.npc, EngineConstants.KeyStreaming, " "))
                 : new DialogueBox(" ");
             this.lastViewportWidth = viewportWidth;
             this.lastViewportHeight = viewportHeight;
@@ -410,7 +404,10 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
 
         if (rebuildIfNeeded && textBoundsChanged && !string.IsNullOrWhiteSpace(this.displayText))
         {
-            this.RebuildPages(this.displayText);
+            lock (this.sync)
+            {
+                this.RebuildPages(this.displaySegments.ToArray());
+            }
         }
     }
 
@@ -435,7 +432,82 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
 
         int textPanelWidth = Math.Max(120, this.width - PortraitPanelWidth);
         Game1.drawDialogueBox(this.xPositionOnScreen, this.yPositionOnScreen, textPanelWidth, this.height, false, true);
+        this.UpdatePortraitEmotion();
         this.dialogueShell?.drawPortrait(b);
+    }
+
+    private void ApplyPendingUpdates()
+    {
+        StreamingDialogueUpdateQueue.PendingUpdate pending = this.pendingUpdates.Drain();
+        if (!pending.HasValue)
+        {
+            return;
+        }
+
+        if (pending.Final is { } final)
+        {
+            string parsedDialogueLine = final.Result.ParsedLines.FirstOrDefault() ?? string.Empty;
+            if (final.Result.Commit?.Request is { } request)
+            {
+                parsedDialogueLine = DialogueEngineHost.RevalidatePortraitMarkers(
+                    this.npc,
+                    request,
+                    parsedDialogueLine);
+            }
+
+            IReadOnlyList<StreamingDialoguePreview.DisplaySegment> finalSegments =
+                StreamingDialoguePreview.PrepareDisplaySegments(parsedDialogueLine);
+            lock (this.sync)
+            {
+                this.generationComplete = true;
+                this.onFinished = final.OnFinished;
+                this.onResponseSelected = final.OnResponseSelected;
+                this.responseOptions.Clear();
+                this.responseOptions.AddRange(final.ResponseOptions);
+                this.RebuildPages(finalSegments);
+                if (this.pages.Count == 0)
+                {
+                    this.RebuildPages(new[] { new StreamingDialoguePreview.DisplaySegment("...", 0) });
+                }
+            }
+
+            return;
+        }
+
+        string preview = StreamingDialoguePreview.ExtractVisibleText(pending.PreviewRawText ?? string.Empty);
+        IReadOnlyList<StreamingDialoguePreview.DisplaySegment> previewSegments =
+            StreamingDialoguePreview.PrepareDisplaySegments(preview);
+        lock (this.sync)
+        {
+            this.RebuildPages(previewSegments);
+        }
+    }
+
+    private void UpdatePortraitEmotion()
+    {
+        int frameIndex;
+        lock (this.sync)
+        {
+            frameIndex = this.currentPageIndex >= 0
+                && this.currentPageIndex < this.pagePortraitFrameIndexes.Count
+                ? this.pagePortraitFrameIndexes[this.currentPageIndex]
+                : 0;
+        }
+
+        Texture2D? portrait = this.npc?.Portrait;
+        int physicalFrameCount = portrait == null
+            ? 0
+            : PortraitFrameSemantics.GetPhysicalFrameCount(portrait.Width, portrait.Height);
+        if (frameIndex < 0 || frameIndex >= physicalFrameCount)
+        {
+            frameIndex = 0;
+        }
+
+        string marker = PortraitMarkerRules.MarkerForIndex(frameIndex) ?? "0";
+        if (this.portraitDialogue != null)
+        {
+            this.portraitDialogue.CurrentEmotion = "$" + marker;
+        }
     }
 
     private void DrawSpriteTextBlock(SpriteBatch b, string text, Rectangle bounds, Color color)

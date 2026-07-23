@@ -77,7 +77,8 @@ internal static class GenerationRequests
             OriginalLine = originalLine ?? string.Empty,
             BehaviorContext = SafeConversationContext(npc),
             Snapshot = snapshot,
-            ContentSnapshot = contentSnapshot
+            ContentSnapshot = contentSnapshot,
+            UsesRuntimePortraitWhitelist = true
         };
     }
 
@@ -95,7 +96,8 @@ internal static class GenerationRequests
             Conversation = conversation,
             BehaviorContext = SafeConversationContext(npc),
             Snapshot = snapshot,
-            ContentSnapshot = contentSnapshot
+            ContentSnapshot = contentSnapshot,
+            UsesRuntimePortraitWhitelist = true
         };
     }
 
@@ -115,7 +117,8 @@ internal static class GenerationRequests
             GiftTaste = taste,
             BehaviorContext = SafeGiftContext(npc, itemId, displayName, taste),
             Snapshot = snapshot,
-            ContentSnapshot = contentSnapshot
+            ContentSnapshot = contentSnapshot,
+            UsesRuntimePortraitWhitelist = true
         };
     }
 

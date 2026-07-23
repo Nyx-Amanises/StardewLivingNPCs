@@ -46,9 +46,7 @@
   },
   "BiographyEnd": "Maru speaks brightly and precisely, with technical curiosity and warm competence.",
   "Unique": "bright with invention",
-  "ExtraPortraits": {
-    "u": "bright with invention"
-  },
+  "ExtraPortraits": {},
   "Preoccupations": [
     "battery packs",
     "clinic shifts",

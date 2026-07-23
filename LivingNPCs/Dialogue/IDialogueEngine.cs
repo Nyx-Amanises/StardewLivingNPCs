@@ -44,7 +44,14 @@ internal sealed record ConversationTurn(string Text, bool IsPlayerLine, string I
 /// </summary>
 internal sealed record GenerationContentSnapshot(
     NpcBio Bio,
-    IReadOnlyDictionary<string, string> DialogueSamples);
+    IReadOnlyDictionary<string, string> DialogueSamples,
+    IReadOnlyList<PortraitFrameSemantics.Match>? PortraitFrames = null,
+    int PortraitFrameCount = 0,
+    string PortraitSignature = "missing")
+{
+    public IReadOnlyList<PortraitFrameSemantics.Match> ResolvedPortraitFrames =>
+        this.PortraitFrames ?? System.Array.Empty<PortraitFrameSemantics.Match>();
+}
 
 /// <summary>一次生成请求（WP10 §5.1）。快照由引擎入口在主线程采集。</summary>
 internal sealed class GenerationRequest
@@ -57,6 +64,12 @@ internal sealed class GenerationRequest
     public string OriginalLine { get; init; } = string.Empty;
     public IReadOnlyList<ConversationTurn> Conversation { get; init; } = new List<ConversationTurn>();
     public string GiftItemId { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Whether this request originated from the game-thread capture path and must therefore use
+    /// the final-portrait whitelist even if content snapshot capture failed.
+    /// </summary>
+    public bool UsesRuntimePortraitWhitelist { get; init; }
 
     /// <summary>礼物口味：0 喜爱 / 2 喜欢 / 4 不喜欢 / 6 讨厌 / 其他 中性（§4.1）。</summary>
     public int GiftTaste { get; init; } = 8;

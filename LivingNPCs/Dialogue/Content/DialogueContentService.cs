@@ -279,13 +279,16 @@ internal sealed class DialogueContentService : IDialogueContent
     /// <summary>加载后派生（§4.3 步骤 4）：肖像集、话题池、性别。</summary>
     private void FinalizeBio(string normalized, NpcBio bio)
     {
-        if (!string.IsNullOrWhiteSpace(bio.Unique))
-        {
-            bio.ExtraPortraits["u"] = bio.Unique;
-        }
+        bio.ExtraPortraits ??= new Dictionary<string, string>();
 
         bio.ValidPortraits = new HashSet<string>(BasePortraits, StringComparer.OrdinalIgnoreCase);
-        bio.ValidPortraits.UnionWith(bio.ExtraPortraits.Keys);
+        foreach (string key in bio.ExtraPortraits.Keys)
+        {
+            if (PortraitMarkerRules.NormalizeExtraMarker(key) is { } marker)
+            {
+                bio.ValidPortraits.Add(marker);
+            }
+        }
 
         bio.TopicPool = new List<string>(bio.Preoccupations);
         var giftNames = this.pipeline.GetGiftTasteNames(normalized);

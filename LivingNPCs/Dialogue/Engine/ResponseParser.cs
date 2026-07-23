@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
+using LivingNPCs.Dialogue.Content;
 using LivingNPCs.Dialogue.Diagnostics;
 using LivingNPCs.Dialogue.Llm;
 using LivingNPCs.Dialogue.Persistence;
@@ -49,6 +50,7 @@ internal static class ResponseParser
     private static readonly Regex EmotionCommandFixPattern = new(@"#\$(?<token>[A-Za-z0-9]+)", RegexOptions.Compiled);
     private static readonly Regex DollarTokenPattern = new(@"\$(?<token>[A-Za-z0-9_]+)", RegexOptions.Compiled);
     private static readonly Regex BareDollarPattern = new(@"\$(?![A-Za-z0-9_])", RegexOptions.Compiled);
+    private static readonly Regex BracketCommandPattern = new(@"\[[^\]\r\n]*\]", RegexOptions.Compiled);
     private static readonly Regex PageMarkerPattern = new(@"(#\$[be]#)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
     private static readonly Regex OptionPrefixPattern = new(
         @"^(?:[-*•\d.、)）\s]*)?(?:玩家回应|玩家回复|回应|回复|选项|response|reply|option)\s*\d*\s*[:：.、\-]?\s*",
@@ -168,29 +170,42 @@ internal static class ResponseParser
         string text = StreamingDialoguePreview.StripHiddenAndResponseTail(line);
         text = text.TrimStart('-', ' ', '"', '“', '%');
         text = text.TrimEnd('"', '”', ' ');
-        text = TrimPageMarkers(text);
         text = text.Replace("\"", string.Empty).Replace("“", string.Empty).Replace("”", string.Empty);
         text = ConversationTextPostProcessor.NormalizeStardewDialogueCommands(text);
+        text = TrimPageMarkers(text);
         text = text.Replace("#$c .5#", string.Empty, StringComparison.Ordinal);
         text = text.Replace("@@", "@", StringComparison.Ordinal);
+        text = BracketCommandPattern.Replace(text, string.Empty)
+            .Replace("[", string.Empty, StringComparison.Ordinal)
+            .Replace("]", string.Empty, StringComparison.Ordinal);
 
         // #$<肖像> → $<肖像>（$b/$e 已由 Normalize 处理为 #$b#/#$e#，不在此列）。
         text = EmotionCommandFixPattern.Replace(text, match =>
         {
             string token = match.Groups["token"].Value;
-            return token is "b" or "e" ? match.Value : "$" + token;
+            if (token.Equals("b", StringComparison.OrdinalIgnoreCase)
+                || token.Equals("e", StringComparison.OrdinalIgnoreCase))
+            {
+                return "#$" + token.ToLowerInvariant();
+            }
+
+            return "$" + token;
         });
 
-        // 扫描全部 $ 记号：$e/$c/$b 与合法肖像键保留，其余整体删除。
+        // 扫描全部 $ 记号：规范化后的分页命令与合法肖像键保留，其余整体删除。
         text = DollarTokenPattern.Replace(text, match =>
         {
             string token = match.Groups["token"].Value;
-            if (token is "e" or "c" or "b")
+            if (token is "e" or "b")
             {
                 return match.Value;
             }
 
-            return validPortraits.Contains(token) ? match.Value : string.Empty;
+            return TryGetAvailablePortrait(token, validPortraits, out string marker)
+                ? "$" + marker
+                : ShouldFallBackToNeutral(token) && validPortraits.Contains("0")
+                    ? "$0"
+                    : string.Empty;
         });
 
         // Stardew 每个 DialogueLine 只消费一个肖像标记；同一页保留多个不同标记时，
@@ -219,16 +234,24 @@ internal static class ResponseParser
 
             var portraitMatches = DollarTokenPattern.Matches(parts[i])
                 .Cast<Match>()
-                .Where(match => validPortraits.Contains(match.Groups["token"].Value))
+                .Select(match => new
+                {
+                    Marker = TryGetAvailablePortrait(match.Groups["token"].Value, validPortraits, out string marker)
+                        ? marker
+                        : null
+                })
+                .Where(item => item.Marker != null)
                 .ToList();
             if (portraitMatches.Count == 0)
             {
                 continue;
             }
 
-            string lastPortrait = portraitMatches[^1].Value;
+            string lastPortrait = "$" + portraitMatches[^1].Marker;
             string visibleText = DollarTokenPattern.Replace(parts[i], match =>
-                validPortraits.Contains(match.Groups["token"].Value) ? string.Empty : match.Value);
+                TryGetAvailablePortrait(match.Groups["token"].Value, validPortraits, out _)
+                    ? string.Empty
+                    : match.Value);
             visibleText = visibleText.TrimEnd();
             parts[i] = visibleText.Length == 0 ? string.Empty : visibleText + lastPortrait;
         }
@@ -239,17 +262,32 @@ internal static class ResponseParser
     private static string TrimPageMarkers(string text)
     {
         string trimmed = text.Trim();
-        foreach (string marker in new[] { "#$b#", "#$e#" })
+        while (true)
         {
-            while (trimmed.StartsWith(marker, StringComparison.Ordinal))
+            Match first = PageMarkerPattern.Match(trimmed);
+            if (!first.Success || first.Index != 0)
             {
-                trimmed = trimmed[marker.Length..].TrimStart();
+                break;
             }
 
-            while (trimmed.EndsWith(marker, StringComparison.Ordinal))
+            trimmed = trimmed[first.Length..].TrimStart();
+        }
+
+        while (true)
+        {
+            MatchCollection matches = PageMarkerPattern.Matches(trimmed);
+            if (matches.Count == 0)
             {
-                trimmed = trimmed[..^marker.Length].TrimEnd();
+                break;
             }
+
+            Match last = matches[^1];
+            if (last.Index + last.Length != trimmed.Length)
+            {
+                break;
+            }
+
+            trimmed = trimmed[..last.Index].TrimEnd();
         }
 
         return trimmed;
@@ -258,39 +296,68 @@ internal static class ResponseParser
     /// <summary>按 #$b#/#$e# 分段；任一段 &gt;200 字符时在句界回溯切分；仍超长返回 null。</summary>
     internal static string? SplitLongSegments(string dialogue)
     {
-        string[] segments = dialogue.Split("#$b#", StringSplitOptions.None);
-        var rebuilt = new List<string>();
-        foreach (string segment in segments)
+        string[] parts = PageMarkerPattern.Split(dialogue);
+        var rebuilt = new StringBuilder(dialogue.Length);
+        string? pendingBoundary = null;
+        foreach (string part in parts)
         {
-            string trimmed = segment.Trim();
-            if (trimmed.Length <= MaxSegmentLength)
+            if (PageMarkerPattern.IsMatch(part))
             {
-                rebuilt.Add(trimmed);
+                pendingBoundary = part.Equals("#$e#", StringComparison.OrdinalIgnoreCase)
+                    ? "#$e#"
+                    : "#$b#";
                 continue;
             }
 
-            foreach (string piece in SplitAtSentences(trimmed))
+            string trimmed = part.Trim();
+            if (trimmed.Length == 0)
             {
-                if (piece.Length > MaxSegmentLength)
+                continue;
+            }
+
+            string portraitSuffix = ExtractPortraitSuffix(ref trimmed);
+            int visibleLimit = MaxSegmentLength - portraitSuffix.Length;
+            IEnumerable<string> pieces = trimmed.Length + portraitSuffix.Length <= MaxSegmentLength
+                ? new[] { trimmed }
+                : SplitAtSentences(trimmed, visibleLimit);
+
+            bool firstPiece = true;
+            foreach (string piece in pieces)
+            {
+                string rebuiltPiece = piece + portraitSuffix;
+                if (rebuiltPiece.Length > MaxSegmentLength)
                 {
                     return null;
                 }
 
-                rebuilt.Add(piece);
+                if (rebuilt.Length > 0)
+                {
+                    rebuilt.Append(firstPiece && pendingBoundary != null ? pendingBoundary : "#$b#");
+                }
+
+                rebuilt.Append(rebuiltPiece);
+                firstPiece = false;
             }
+
+            pendingBoundary = null;
         }
 
-        return string.Join("#$b#", rebuilt.Where(segment => segment.Length > 0));
+        return rebuilt.ToString();
     }
 
-    private static IEnumerable<string> SplitAtSentences(string segment)
+    private static IEnumerable<string> SplitAtSentences(string segment, int maxLength)
     {
+        if (maxLength <= 0)
+        {
+            return new[] { segment };
+        }
+
         var pieces = new List<string>();
         var current = new StringBuilder();
         for (int i = 0; i < segment.Length; i++)
         {
             current.Append(segment[i]);
-            if (current.Length >= MaxSegmentLength || !IsSentenceEnd(segment[i]))
+            if (current.Length >= maxLength || !IsSentenceEnd(segment[i]))
             {
                 continue;
             }
@@ -323,6 +390,21 @@ internal static class ResponseParser
         return pieces.Where(piece => piece.Length > 0);
     }
 
+    private static string ExtractPortraitSuffix(ref string segment)
+    {
+        Match match = Regex.Match(segment, @"\$(?<token>[A-Za-z0-9_]+)\s*$");
+        string? marker = match.Success
+            ? PortraitMarkerRules.NormalizeGameMarker(match.Groups["token"].Value)
+            : null;
+        if (marker == null)
+        {
+            return string.Empty;
+        }
+
+        segment = segment[..match.Index].TrimEnd();
+        return "$" + marker;
+    }
+
     private static bool IsSentenceEnd(char c)
     {
         return c is '.' or '!' or '?' or '。' or '！' or '？';
@@ -331,15 +413,24 @@ internal static class ResponseParser
     /// <summary>每段在肖像记号前若不以句末标点结尾则补句号（§4.10.6）。</summary>
     internal static string FixSegmentPunctuation(string dialogue, IReadOnlySet<string> validPortraits)
     {
-        string[] segments = dialogue.Split("#$b#", StringSplitOptions.None);
-        for (int i = 0; i < segments.Length; i++)
+        string[] parts = PageMarkerPattern.Split(dialogue);
+        for (int i = 0; i < parts.Length; i++)
         {
-            string segment = segments[i].TrimEnd();
+            if (PageMarkerPattern.IsMatch(parts[i]))
+            {
+                parts[i] = parts[i].Equals("#$e#", StringComparison.OrdinalIgnoreCase)
+                    ? "#$e#"
+                    : "#$b#";
+                continue;
+            }
+
+            string segment = parts[i].TrimEnd();
             string portraitSuffix = string.Empty;
             var match = Regex.Match(segment, @"\$(?<token>[A-Za-z0-9_]+)\s*$");
-            if (match.Success && validPortraits.Contains(match.Groups["token"].Value))
+            if (match.Success
+                && TryGetAvailablePortrait(match.Groups["token"].Value, validPortraits, out string marker))
             {
-                portraitSuffix = match.Value;
+                portraitSuffix = "$" + marker;
                 segment = segment[..match.Index].TrimEnd();
             }
 
@@ -348,10 +439,59 @@ internal static class ResponseParser
                 segment += ContainsCjk(segment) ? "。" : ".";
             }
 
-            segments[i] = segment + portraitSuffix;
+            parts[i] = segment + portraitSuffix;
         }
 
-        return string.Join("#$b#", segments);
+        return string.Concat(parts);
+    }
+
+    /// <summary>
+    /// Fail closed when the final portrait texture changed after generation. The formatted line has
+    /// already passed the normal parser, so preserve Stardew's page/menu/item commands verbatim and
+    /// only replace tokens that can denote portrait frame indexes.
+    /// </summary>
+    internal static string DowngradePortraitMarkersToNeutral(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        return DollarTokenPattern.Replace(text, match =>
+        {
+            string token = match.Groups["token"].Value;
+            return PortraitMarkerRules.TryGetFrameIndex(token, out _)
+                ? "$0"
+                : match.Value;
+        });
+    }
+
+    private static bool TryGetAvailablePortrait(
+        string token,
+        IReadOnlySet<string> validPortraits,
+        out string marker)
+    {
+        marker = PortraitMarkerRules.NormalizeGameMarker(token) ?? string.Empty;
+        return marker.Length > 0 && validPortraits.Contains(marker);
+    }
+
+    private static bool ShouldFallBackToNeutral(string token)
+    {
+        string trimmed = token.Trim();
+        if (trimmed.Length == 1
+            && char.ToLowerInvariant(trimmed[0]) is 'h' or 's' or 'u' or 'l' or 'a')
+        {
+            return true;
+        }
+
+        if (!PortraitMarkerRules.TryGetFrameIndex(trimmed, out int frameIndex))
+        {
+            return false;
+        }
+
+        // Numeric 1-5 are deliberately treated as ordinary/unsafe dollar tokens. Custom numeric
+        // portrait markers start at 6 and fall back to neutral when absent from the runtime sheet.
+        return frameIndex == 0 || frameIndex >= 6;
     }
 
     private static bool ContainsCjk(string text)
