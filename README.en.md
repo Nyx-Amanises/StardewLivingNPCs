@@ -135,6 +135,7 @@ If generation fails, times out, or returns unusable content, the mod falls back 
 - **Companion outings.** After a clearly accepted invitation, an NPC can temporarily leave their schedule, walk through real map boundaries to a supported destination, stay a while, and then resume. Festivals, story events, sleep, bad weather, and unsafe map states are blocked.
 - **Progress awareness.** The AI context can see the date, time, season, weather, festivals, location, relationships, the NPC's current activity, and part of the game progress, so characters talk about what is actually happening.
 - **Small behaviors and world actions.** Dialogue can influence restrained behaviors (facing you, emotes, stepping closer, keeping distance). Every world-affecting action passes a whitelist and a second local validation; the model can never run arbitrary commands.
+- **In-game Memory Book.** Press `LeftShift + J` to open a book with every NPC you know: a relationship card (emotion, closeness, trust, nickname, unresolved tension, the settled "relationship impression"), grouped long-term memories, past AI conversations by date, and shared moments (outings, favors, gifts). Mouse wheel and gamepad supported.
 
 ## SVE and custom NPCs
 
@@ -177,9 +178,9 @@ The following advanced options **can only be edited in `config.json`** (close th
 
 - `LeftAlt` + click/interact: open free-text AI dialogue.
 - `LeftShift + H`: manually trigger one small behavior on a nearby NPC (mainly for testing).
-- `LeftShift + J`: print a nearby NPC's state and memory summary to the SMAPI console.
+- `LeftShift + J`: open the in-game Memory Book (relationship card, long-term memories, past conversations, shared moments).
 
-The dialogue and inspect-memory hotkeys can be changed in GMCM; the behavior test key is `BehaviorHotkey` in `config.json`.
+The dialogue and memory-book hotkeys can be changed in GMCM; the behavior test key is `BehaviorHotkey` in `config.json`. Console state summaries remain available via the `livingnpcs_debug` command.
 
 ## Debug and evaluation tools
 

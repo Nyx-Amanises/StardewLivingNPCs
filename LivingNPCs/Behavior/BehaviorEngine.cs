@@ -281,7 +281,7 @@ internal sealed class BehaviorEngine
             if (this.config.InspectMemoryHotkey.JustPressed())
             {
                 this.helper.Input.Suppress(e.Button);
-                this.debugCommands.ShowNearestNpcMemory();
+                this.OpenMemoryBook();
                 return;
             }
 
@@ -308,6 +308,22 @@ internal sealed class BehaviorEngine
                 }
             }
         });
+    }
+
+    /// <summary>
+    /// 打开游戏内记忆手册（原快捷键行为是控制台摘要，现由 livingnpcs_debug 命令承担）。
+    /// 还没有任何可展示 NPC 时给 HUD 提示而不是弹一本空书。
+    /// </summary>
+    private void OpenMemoryBook()
+    {
+        Ui.MemoryBookMenu? menu = Ui.MemoryBookMenu.TryCreate(this.memory);
+        if (menu == null)
+        {
+            this.feedback.Show(I18n.Get("book.hud.empty"));
+            return;
+        }
+
+        Game1.activeClickableMenu = menu;
     }
 
     private void OnMenuChanged(object? sender, MenuChangedEventArgs e)
