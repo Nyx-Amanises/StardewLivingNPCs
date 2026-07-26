@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using LivingNPCs.Dialogue.Llm;
 using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewValley;
@@ -41,28 +42,13 @@ internal sealed class AiBehaviorClient
         using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(Math.Max(1, this.config.AiPlannerTimeoutSeconds)));
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, timeout.Token);
 
-        var payload = new
-        {
-            model = this.config.AiPlannerModel,
-            temperature = 0.2,
-            max_tokens = 120,
-            messages = new object[]
-            {
-                new
-                {
-                    role = "system",
-                    content = RsvAiPolicy.RemoveBlockedLines(PromptFragments.Planner.SystemMessage)
-                },
-                new
-                {
-                    role = "user",
-                    content = prompt
-                }
-            }
-        };
+        string payloadJson = BuildPayloadJson(
+            this.config.AiPlannerModel,
+            RsvAiPolicy.RemoveBlockedLines(PromptFragments.Planner.SystemMessage),
+            prompt);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, this.config.AiPlannerEndpoint);
-        request.Content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
+        request.Content = new StringContent(payloadJson, Encoding.UTF8, "application/json");
         if (!string.IsNullOrWhiteSpace(this.config.AiPlannerApiKey))
         {
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", this.config.AiPlannerApiKey);
@@ -91,6 +77,32 @@ internal sealed class AiBehaviorClient
             this.monitor.Log(I18n.Get("log.aiPlanner.failed", new { error = ex.Message }), LogLevel.Warn);
             return null;
         }
+    }
+
+    /// <summary>
+    /// 组 chat/completions 请求体。端点与模型名都来自用户配置（OpenAI 兼容形态），
+    /// 按模型名走同一推理模型判定：gpt-5/o 系拒绝 max_tokens 与非默认 temperature，
+    /// 改发 max_completion_tokens 并省略 temperature；其余模型保持原字段不变。
+    /// </summary>
+    internal static string BuildPayloadJson(string model, string systemContent, string userContent)
+    {
+        var payload = new Dictionary<string, object>
+        {
+            ["model"] = model,
+            [LlmThinking.OpenAiMaxTokensFieldName(model)] = 120,
+            ["messages"] = new object[]
+            {
+                new { role = "system", content = systemContent },
+                new { role = "user", content = userContent }
+            }
+        };
+
+        if (!LlmThinking.IsOpenAiReasoningModel(model))
+        {
+            payload["temperature"] = 0.2;
+        }
+
+        return JsonSerializer.Serialize(payload);
     }
 
     private string BuildPrompt(NPC npc, BehaviorTrigger trigger)

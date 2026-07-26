@@ -287,7 +287,8 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         var body = new JObject
         {
             ["model"] = EffectiveModelName,
-            ["max_tokens"] = request.MaxTokens,
+            // gpt-5/o 系推理模型拒绝 max_tokens（400），须发 max_completion_tokens；其余模型保持 max_tokens。
+            [LlmThinking.OpenAiMaxTokensFieldName(EffectiveModelName)] = request.MaxTokens,
             ["messages"] = messages
         };
         // 不发送 temperature/top_p：沿用各端点默认采样（现状行为，保留）。

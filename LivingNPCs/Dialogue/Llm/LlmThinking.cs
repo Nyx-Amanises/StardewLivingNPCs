@@ -158,11 +158,42 @@ internal static class LlmThinking
         };
     }
 
+    /// <summary>
+    /// OpenAI 推理模型判定：gpt-5 全系 + o 系（o1/o3/o4…）。o 系按"段首 o+数字+边界"识别
+    /// （段分隔符取 '/'，兼容 openai/o3-mini 这类网关前缀；边界为串尾或 '-'，
+    /// 归一化已把 '.'/'_' 折为 '-'），避免误伤 gpt-4o、olmo、orca 等含字母 o 的普通模型名。
+    /// </summary>
     public static bool IsOpenAiReasoningModel(string modelName)
     {
         string normalized = NormalizeModelName(modelName);
-        return normalized.Contains("gpt5", StringComparison.OrdinalIgnoreCase)
-            || normalized.Contains("gpt-5", StringComparison.OrdinalIgnoreCase);
+        if (normalized.Contains("gpt5", StringComparison.OrdinalIgnoreCase)
+            || normalized.Contains("gpt-5", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        foreach (string segment in normalized.Split('/'))
+        {
+            if (segment.Length >= 2
+                && (segment[0] == 'o' || segment[0] == 'O')
+                && segment[1] is >= '1' and <= '9'
+                && (segment.Length == 2 || segment[2] == '-'))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// chat/completions 输出上限字段名：推理模型（gpt-5 全系与 o 系）拒绝 max_tokens
+    /// （HTTP 400，要求 max_completion_tokens）；其余模型保持 max_tokens，
+    /// 兼容端点（vLLM 等自建服务）上的普通模型名不受影响。
+    /// </summary>
+    public static string OpenAiMaxTokensFieldName(string modelName)
+    {
+        return IsOpenAiReasoningModel(modelName) ? "max_completion_tokens" : "max_tokens";
     }
 
     public static bool IsGeminiThinkingModel(string modelName)
