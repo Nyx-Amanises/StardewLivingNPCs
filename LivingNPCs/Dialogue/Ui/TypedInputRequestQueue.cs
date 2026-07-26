@@ -36,6 +36,9 @@ internal static class TypedInputRequestQueue
     /// <summary>测试注入：生成入队（null → GenerationRequests.Enqueue）。</summary>
     internal static Func<NPC, GenerationRequest, bool>? EnqueueForTests;
 
+    /// <summary>测试注入：忙时丢弃的玩家可见提示（null → LlmHudNotifier.Show）。</summary>
+    internal static Action<string>? HudNotifierForTests;
+
     public static bool HasPending
     {
         get
@@ -54,6 +57,7 @@ internal static class TypedInputRequestQueue
         InputStarterForTests = null;
         FriendshipGranterForTests = null;
         EnqueueForTests = null;
+        HudNotifierForTests = null;
     }
 
     /// <summary>提交请求；覆盖之前尚未消费的请求（只保留最后一个）。</summary>
@@ -127,15 +131,14 @@ internal static class TypedInputRequestQueue
         NativeDialogueTextInputController.Start(request.Prompt, request.Npc, text => HandleSubmitted(request, text));
     }
 
-    /// <summary>提交回调（§4.4）：空白 → 无副作用；非空 → 好感 + 会话生成。</summary>
+    /// <summary>提交回调（§4.4 + F11）：空白 → 无副作用；非空 → 先入队，入队成功才发好感；
+    /// 入队失败（调度器忙）不发好感并给玩家可见提示，文本不静默消失。</summary>
     internal static void HandleSubmitted(TypedInputRequest request, string text)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
             return;
         }
-
-        GrantFriendship(request.Npc);
 
         var turns = new List<ConversationTurn>(request.Conversation ?? Array.Empty<ConversationTurn>())
         {
@@ -144,7 +147,30 @@ internal static class TypedInputRequestQueue
 
         var generationRequest = GenerationRequests.BuildConversation(request.Npc, request.DialogueKey, turns);
         var enqueue = EnqueueForTests ?? GenerationRequests.Enqueue;
-        enqueue(request.Npc, generationRequest);
+        if (!enqueue(request.Npc, generationRequest))
+        {
+            NotifyDroppedBusy(request.Npc);
+            return;
+        }
+
+        GrantFriendship(request.Npc);
+    }
+
+    /// <summary>忙时丢弃的玩家可见反馈（F11）：HUD 提示这句话没有发送（调度器已另记 Warn 日志）。</summary>
+    private static void NotifyDroppedBusy(NPC npc)
+    {
+        string message = Util.GetConsoleString(
+            "dialogue.hud.inputDroppedBusy",
+            new { npc = npc?.displayName ?? npc?.Name ?? "?" },
+            "LivingNPCs: the previous AI reply is still generating, so what you typed was not sent. Please try again in a moment.");
+        Action<string>? notifier = HudNotifierForTests;
+        if (notifier != null)
+        {
+            notifier(message);
+            return;
+        }
+
+        Llm.LlmHudNotifier.Show(message);
     }
 
     private static void GrantFriendship(NPC npc)

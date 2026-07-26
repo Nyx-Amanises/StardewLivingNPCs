@@ -64,7 +64,9 @@ public sealed class LegacySaveDataMigratorTests : IDisposable
         Assert.Empty(result.FailedKeys);
 
         // 小写物理键反查回原名：Marlon Fay → marlonfay；新键带原名冗余。
-        string newKey = FakePersistenceEnvironment.PhysicalKey("dialogue.history.v1_marlonfay");
+        // F8：含空格的名字落到 v2 无碰撞键（合法头 + 全名 UTF-16 逐码元 hex）。
+        string newKey = FakePersistenceEnvironment.PhysicalKey(
+            "dialogue.history.v1_marlonfay-u004d00610072006c006f006e0020004600610079");
         Assert.True(this.env.CustomData.ContainsKey(newKey));
         Assert.Equal("Marlon Fay", JObject.Parse(this.env.CustomData[newKey]).Value<string>("npcName"));
 

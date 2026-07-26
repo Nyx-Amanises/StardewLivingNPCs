@@ -56,7 +56,14 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
         this.env = env;
     }
 
+    /// <summary>v2 无碰撞键（F8）：常规名字与 v1 完全一致；含非法字符/超长的名字改用单射编码。</summary>
     public static string HistoryLogicalKey(string npcName)
+    {
+        return HistoryKeyPrefix + SaveNameSanitizer.SanitizeUniqueLower(npcName);
+    }
+
+    /// <summary>v1 旧键（可碰撞的删字符/低字节截断形态）：仅供读取回退与迁移改名（F8）。</summary>
+    internal static string LegacyHistoryLogicalKey(string npcName)
     {
         return HistoryKeyPrefix + SaveNameSanitizer.SanitizeLower(npcName);
     }
@@ -317,12 +324,29 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
 
         try
         {
-            JObject? root = this.env.IsMainPlayer
-                ? this.env.ReadSaveJson(HistoryLogicalKey(npcName))
-                : this.FindFarmhandEntry(npcName);
+            JObject? root;
+            string? migrateFromLegacyKey = null;
+            if (this.env.IsMainPlayer)
+            {
+                root = this.env.ReadSaveJson(HistoryLogicalKey(npcName));
+                if (root == null)
+                {
+                    root = this.TryReadLegacySlugRoot(npcName, out migrateFromLegacyKey);
+                }
+            }
+            else
+            {
+                root = this.FindFarmhandEntry(npcName);
+            }
+
             var history = HistoryJson.Parse(root, npcName);
             // 回档保护：删除晚于当前游戏时间的条目。
             history.RemoveAfter(this.env.Now);
+            if (migrateFromLegacyKey != null)
+            {
+                this.MigrateLegacySlug(npcName, migrateFromLegacyKey, history);
+            }
+
             return history;
         }
         catch (Exception ex)
@@ -365,6 +389,63 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
         }
 
         return this.PersistFarmhandEntries(new[] { npcName });
+    }
+
+    /// <summary>
+    /// v1 旧键回退读取（F8）：仅当 v2 键与 v1 键不同、旧槽存在、且旧槽记录的 npcName
+    /// 属于本 NPC（或旧数据未记名）时返回旧槽内容；撞键槽属于别的 NPC 时视为无数据，
+    /// 绝不继承他人历史、也不动那个槽（留给真正的主人迁移）。
+    /// </summary>
+    private JObject? TryReadLegacySlugRoot(string npcName, out string? legacyKey)
+    {
+        legacyKey = null;
+        string v1Key = LegacyHistoryLogicalKey(npcName);
+        if (string.Equals(v1Key, HistoryLogicalKey(npcName), StringComparison.Ordinal))
+        {
+            return null;
+        }
+
+        JObject? legacy = this.env.ReadSaveJson(v1Key);
+        if (legacy == null)
+        {
+            return null;
+        }
+
+        string? owner = legacy.Value<string>("npcName");
+        if (!string.IsNullOrWhiteSpace(owner) && !string.Equals(owner, npcName, StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        legacyKey = v1Key;
+        return legacy;
+    }
+
+    /// <summary>把 v1 旧槽迁往 v2 无碰撞键（写新、删旧一次完成，同一次保存原子生效）；
+    /// 失败则保留旧槽不动，下次读取重试。</summary>
+    private void MigrateLegacySlug(string npcName, string legacyKey, StardewEventHistory history)
+    {
+        try
+        {
+            history.NpcName = npcName;
+            this.env.WriteSaveData(HistoryLogicalKey(npcName), history);
+            this.env.WriteSaveData(legacyKey, null);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.historySlugMigrated",
+                    new { npc = npcName },
+                    $"Migrated the dialogue history of {npcName} to a collision-free save key."),
+                LogLevel.Info);
+        }
+        catch (Exception ex)
+        {
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = $"migrate the dialogue history key of {npcName}", error = ex.Message },
+                    $"Failed to migrate the dialogue history key of {npcName}: {ex.Message}"),
+                LogLevel.Warn);
+        }
     }
 
     private void PersistHost(string npcName)

@@ -907,6 +907,8 @@
   "dialogue.log.placeholderFallback": "生成正忙：{{npc}} 本次改为显示原版台词，不再改道 AI 生成。",
   "dialogue.log.presentDropped": "已丢弃为 {{npc}} 生成的台词：游戏正在保存/过日或有其他菜单在前台。",
   "dialogue.log.farmhandHistoryQuarantined": "帮工对话历史文件 '{{file}}' 已损坏，已改名隔离为 '{{backup}}'，从空历史重新开始以恢复后续保存：{{error}}",
+  "dialogue.log.historySlugMigrated": "已把 {{npc}} 的对话历史迁移到无碰撞的存档键。",
+  "dialogue.hud.inputDroppedBusy": "LivingNPCs：上一条 AI 回复仍在生成，这句话没有发送，请稍后再试。",
   "dialogue.log.historyLoadFailed": "读取 {{npc}} 的对话历史失败，按空历史处理：{{error}}",
   "dialogue.log.historyPruned": "{{npc}} 的对话历史超过 {{kb}} KB，保存前已强制修剪。",
   "dialogue.log.saveDataLarge": "LivingNPCs 的存档数据共 {{kb}} KB（超过 {{mb}} MB），保存可能变慢。可考虑让部分 NPC 忘记对话历史。",

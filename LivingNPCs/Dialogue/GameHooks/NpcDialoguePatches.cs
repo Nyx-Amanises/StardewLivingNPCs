@@ -91,6 +91,14 @@ internal static class NPC_CurrentDialogue_Patch
                 return;
             }
 
+            // 热路径廉价前置检查（性能项）：本 mod 的思考占位一律带 temporaryDialogueKey
+            //（Start 里设置），键不匹配就不进控制器做逐行文本判定；键丢失的极端残留仍由
+            // 交互时的 RemoveStale 全谓词兜底清理。
+            if (!string.Equals(__result.Peek()?.temporaryDialogueKey, EngineConstants.KeyThinking, StringComparison.Ordinal))
+            {
+                return;
+            }
+
             ThinkingDialogueController.TryDiscardInactiveTop(__instance, __result);
         }
         catch

@@ -52,7 +52,9 @@ public sealed class DialogueHistoryStoreTests : IDisposable
 
         this.store.FlushOnSaving();
 
-        string physical = FakePersistenceEnvironment.PhysicalKey("dialogue.history.v1_marlonfay");
+        // F8：名字含非法字符（空格被删）→ v2 无碰撞键（合法头 + 全名 UTF-16 逐码元 hex）。
+        string physical = FakePersistenceEnvironment.PhysicalKey(
+            "dialogue.history.v1_marlonfay-u004d00610072006c006f006e0020004600610079");
         Assert.True(this.env.CustomData.ContainsKey(physical));
         var root = JObject.Parse(this.env.CustomData[physical]);
         Assert.Equal(1, root.Value<int>("schemaVersion"));

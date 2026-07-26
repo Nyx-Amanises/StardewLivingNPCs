@@ -18,6 +18,10 @@ internal static class MarriageChoreBuffer
 {
     private static readonly object gate = new();
     private static readonly List<string> lines = new();
+    private static int bufferDay = -1;
+
+    /// <summary>测试注入的游戏日戳；null 走 Game1（与 DisplayedDialogueRecorder 同款缝）。</summary>
+    internal static Func<int>? DayStampForTests;
 
     public static int Count
     {
@@ -25,6 +29,7 @@ internal static class MarriageChoreBuffer
         {
             lock (gate)
             {
+                DiscardStaleLocked();
                 return lines.Count;
             }
         }
@@ -39,6 +44,7 @@ internal static class MarriageChoreBuffer
 
         lock (gate)
         {
+            DiscardStaleLocked();
             lines.Add(text);
         }
     }
@@ -48,6 +54,7 @@ internal static class MarriageChoreBuffer
     {
         lock (gate)
         {
+            DiscardStaleLocked();
             var drained = new List<string>(lines);
             lines.Clear();
             return drained;
@@ -59,6 +66,40 @@ internal static class MarriageChoreBuffer
         lock (gate)
         {
             lines.Clear();
+            bufferDay = -1;
+        }
+    }
+
+    /// <summary>
+    /// 日界清理（F9）：晨间家务播报只在"当天"的婚后生成里有意义。婚后频率抽签不过、
+    /// 被动开关关闭等情况会让缓冲滞留，跨日后每次读写先丢弃前日残留，陈旧家务不再
+    /// 混入之后某天的生成参考。调用方持有 gate。
+    /// </summary>
+    private static void DiscardStaleLocked()
+    {
+        int today = CurrentDayStamp();
+        if (today != bufferDay)
+        {
+            lines.Clear();
+            bufferDay = today;
+        }
+    }
+
+    private static int CurrentDayStamp()
+    {
+        Func<int>? stamp = DayStampForTests;
+        if (stamp != null)
+        {
+            return stamp();
+        }
+
+        try
+        {
+            return (Game1.year * 112 * 4) + (Game1.seasonIndex * 28) + Game1.dayOfMonth;
+        }
+        catch
+        {
+            return 0;
         }
     }
 }

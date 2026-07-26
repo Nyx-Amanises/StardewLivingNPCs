@@ -907,6 +907,8 @@
   "dialogue.log.placeholderFallback": "Generation is busy; showing the vanilla line for {{npc}} instead of an AI reroute.",
   "dialogue.log.presentDropped": "Dropped a generated line for {{npc}}: the game is saving, transitioning days, or another menu is open.",
   "dialogue.log.farmhandHistoryQuarantined": "The farmhand dialogue history file '{{file}}' is corrupt and was quarantined to '{{backup}}'; starting fresh so future saves work again: {{error}}",
+  "dialogue.log.historySlugMigrated": "Migrated the dialogue history of {{npc}} to a collision-free save key.",
+  "dialogue.hud.inputDroppedBusy": "LivingNPCs: the previous AI reply is still generating, so what you typed was not sent. Please try again in a moment.",
   "dialogue.log.historyLoadFailed": "Failed to load dialogue history for {{npc}}; treating as empty: {{error}}",
   "dialogue.log.historyPruned": "Dialogue history for {{npc}} exceeded {{kb}} KB; forced a prune before saving.",
   "dialogue.log.saveDataLarge": "LivingNPCs save data totals {{kb}} KB (> {{mb}} MB); saving may slow down. Consider forgetting some NPC histories.",

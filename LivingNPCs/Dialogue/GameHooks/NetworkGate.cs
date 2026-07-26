@@ -24,7 +24,9 @@ internal static class NetworkGate
     internal static Task? LastBackgroundProbe;
 
     private static int probeInFlight;
-    private static volatile bool cachedAvailable = true;
+
+    /// <summary>最近一次后台重试探测（HTTP 实测）是否确认网络可用；初始 false（尚未验证过）。</summary>
+    private static volatile bool cachedAvailable;
 
     internal static void ResetForTests()
     {
@@ -32,7 +34,7 @@ internal static class NetworkGate
         BackgroundProbeForTests = null;
         LastBackgroundProbe = null;
         probeInFlight = 0;
-        cachedAvailable = true;
+        cachedAvailable = false;
     }
 
     public static bool IsAvailableForGeneration()
@@ -53,12 +55,16 @@ internal static class NetworkGate
             return true;
         }
 
-        // 首查失败：立即判不可用（调用方放行原版），后台探测刷新缓存标志。
+        // 即时接口查询失败但后台重试探测此前确认过可用：判为 Android 误报（F7 自愈），
+        // 本次放行，同时踢一次后台复核刷新缓存；复核失败会把缓存翻回 false 恢复拦截。
         if (cachedAvailable)
         {
-            cachedAvailable = false;
+            BeginBackgroundProbe();
+            return true;
         }
 
+        // 从未验证成功（或复核已失败）：立即判不可用（调用方放行原版、绝不阻塞游戏线程），
+        // 后台探测刷新缓存标志供下次使用。
         BeginBackgroundProbe();
         return false;
     }
