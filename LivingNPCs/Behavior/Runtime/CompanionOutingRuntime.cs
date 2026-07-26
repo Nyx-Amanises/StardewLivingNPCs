@@ -28,6 +28,7 @@ internal sealed class CompanionOutingRuntime
     private readonly BehaviorFeedbackService feedback;
     private readonly CommunityRippleRuntime communityRipples;
     private readonly CanUseWorldActionHandler canUseWorldAction;
+    private readonly Func<GameLocation, Point, NPC?, bool> isSafeDestinationTile;
     private readonly CompanionOutingAnchorSelector anchorSelector;
     private readonly TryResolveNpcScheduleTargetHandler tryResolveScheduleTarget;
     private readonly Func<NPC, bool, bool> returnNpcToSchedule;
@@ -54,6 +55,7 @@ internal sealed class CompanionOutingRuntime
         this.feedback = feedback;
         this.communityRipples = communityRipples;
         this.canUseWorldAction = canUseWorldAction;
+        this.isSafeDestinationTile = isSafeDestinationTile;
         this.anchorSelector = new CompanionOutingAnchorSelector(isSafeDestinationTile);
         this.tryResolveScheduleTarget = tryResolveScheduleTarget;
         this.returnNpcToSchedule = returnNpcToSchedule;
@@ -144,6 +146,12 @@ internal sealed class CompanionOutingRuntime
         if (string.IsNullOrWhiteSpace(targetLocation) || !TravelLocationRules.IsKnownPublicOutingTarget(targetLocation))
         {
             reason = "a supported outing destination is required";
+            return false;
+        }
+
+        if (!OutingVehicleRules.IsUnlockedInCurrentSave(targetLocation, out string lockedReason))
+        {
+            reason = lockedReason;
             return false;
         }
 
@@ -238,9 +246,19 @@ internal sealed class CompanionOutingRuntime
         this.pendingOutings.Add(outing);
 
         var routeAttempts = new List<string>();
-        bool routeAssigned = IsFarmTarget(targetLocation) && npc.currentLocation != destination
-            ? this.TryAssignInitialFarmRoute(npc, outing, routeAttempts)
-            : this.TryAssignInitialStandardRoute(
+        bool routeAssigned;
+        if (IsFarmTarget(targetLocation) && npc.currentLocation != destination)
+        {
+            routeAssigned = this.TryAssignInitialFarmRoute(npc, outing, routeAttempts);
+        }
+        else if (OutingVehicleRules.TryGetVehicle(targetLocation, out OutingVehicle vehicle)
+            && npc.currentLocation != destination)
+        {
+            routeAssigned = this.TryAssignInitialVehicleRoute(npc, outing, vehicle, action.Reason, routeAttempts);
+        }
+        else
+        {
+            routeAssigned = this.TryAssignInitialStandardRoute(
                 npc,
                 outing,
                 destination,
@@ -251,6 +269,7 @@ internal sealed class CompanionOutingRuntime
                 reservedTiles,
                 routeAttempts
             );
+        }
 
         if (!routeAssigned)
         {
@@ -443,6 +462,12 @@ internal sealed class CompanionOutingRuntime
             return;
         }
 
+        if (outing.Phase == CompanionOutingPhase.TravelingToVehicleGateway)
+        {
+            this.UpdateTravelingToVehicleGateway(npc, outing, destination);
+            return;
+        }
+
         this.TryShowArrivalRemarkNearAnchor(npc, outing, destination);
         if (IsAtTile(npc, destination, outing.AnchorTile))
         {
@@ -614,6 +639,13 @@ internal sealed class CompanionOutingRuntime
         );
         outing.LastObservedTimeOfDay = this.world.TimeOfDay;
         outing.RouteRetryCount = 0;
+        outing.NextChatTimeOfDay = OutingCompanionshipRules.NextChatTimeOfDay(
+            outing.NpcName,
+            outing.TargetLocation,
+            outing.TotalDays,
+            outing.ChatRemarksShown,
+            this.world.TimeOfDay
+        );
 
         var state = this.memory.GetState(npc);
         if (state != null)
@@ -654,8 +686,15 @@ internal sealed class CompanionOutingRuntime
 
         if (!npcAtDestination)
         {
-            // The NPC was moved off-map mid-stay (event scripts, other mods). Assign the walk
-            // back once and wait for it, instead of re-running cross-map pathfinding every tick.
+            // The NPC was moved off-map mid-stay (event scripts, other mods). Vehicle
+            // destinations are not walkable from anywhere, so ride back with the same warp the
+            // arrival used; otherwise assign the walk back once and wait for it.
+            if (OutingVehicleRules.IsVehicleTarget(outing.TargetLocation))
+            {
+                Game1.warpCharacter(npc, destination, new Vector2(outing.AnchorTile.X, outing.AnchorTile.Y));
+                return;
+            }
+
             if (npc.controller != null && npc.controller == outing.LastAssignedController)
             {
                 return;
@@ -670,6 +709,12 @@ internal sealed class CompanionOutingRuntime
         }
 
         this.TryShowArrivalRemark(npc, outing);
+        this.TryShowOutingSmallTalk(npc, outing, destination);
+        if (this.TryStrollBesideFarmer(npc, outing, destination))
+        {
+            this.TryShowSettledEmote(npc, outing, destination);
+            return;
+        }
 
         bool occupiedByAnotherNpc = destination.characters.Any(candidate =>
             candidate != npc && candidate.TilePoint == outing.AnchorTile);
@@ -744,6 +789,24 @@ internal sealed class CompanionOutingRuntime
         {
             this.BeginFarmBoundaryReturn(npc, outing);
             return;
+        }
+
+        // Vehicle destinations: ride back to the gateway map first, so the schedule return below
+        // starts from a map the vanilla route graph can actually path from.
+        if (OutingVehicleRules.IsVehicleTarget(outing.TargetLocation)
+            && !string.IsNullOrWhiteSpace(outing.VehicleGatewayLocationName))
+        {
+            GameLocation? gateway = ResolveLocation(outing.VehicleGatewayLocationName);
+            if (gateway != null && npc.currentLocation != gateway)
+            {
+                npc.controller = null;
+                npc.DirectionsToNewLocation = null;
+                npc.Halt();
+                Point rideBackTile = outing.VehicleBoardingTile == Point.Zero
+                    ? npc.TilePoint
+                    : outing.VehicleBoardingTile;
+                Game1.warpCharacter(npc, gateway, new Vector2(rideBackTile.X, rideBackTile.Y));
+            }
         }
 
         outing.Phase = CompanionOutingPhase.Returning;
@@ -1064,6 +1127,179 @@ internal sealed class CompanionOutingRuntime
         outing.SettledEmoteShown = true;
     }
 
+    /// <summary>
+    /// Side-by-side stroll during the stay: while the farmer wanders the destination map, the NPC
+    /// walks along beside them instead of standing frozen at the anchor. Returns true when the
+    /// stroll owns this tick (the anchor-snap logic is skipped); anchor behavior resumes as soon
+    /// as the farmer leaves the map or the feature is disabled.
+    /// </summary>
+    private bool TryStrollBesideFarmer(NPC npc, PendingCompanionOuting outing, GameLocation destination)
+    {
+        if (!this.config.AllowOutingSideBySideStroll || Game1.player == null)
+        {
+            return false;
+        }
+
+        int nowTicks = Game1.ticks;
+        Point farmerTile = Game1.player.TilePoint;
+        if (farmerTile != outing.LastFarmerTile)
+        {
+            outing.LastFarmerTile = farmerTile;
+            outing.LastFarmerMoveTick = nowTicks;
+        }
+
+        float distance = Vector2.Distance(npc.Tile, Game1.player.Tile);
+        OutingStrollStep step = OutingCompanionshipRules.PlanStrollStep(
+            strollEnabled: true,
+            farmerAtDestination: Game1.player.currentLocation == destination,
+            npcAtDestination: npc.currentLocation == destination,
+            distance,
+            ticksSinceFarmerMoved: outing.LastFarmerMoveTick == int.MinValue
+                ? int.MaxValue
+                : nowTicks - outing.LastFarmerMoveTick
+        );
+        switch (step)
+        {
+            case OutingStrollStep.FollowFarmer:
+                this.TryFollowFarmerStep(npc, outing, destination, farmerTile, nowTicks);
+                return true;
+            case OutingStrollStep.SettleBesideFarmer:
+                if (npc.controller == null)
+                {
+                    npc.Halt();
+                    npc.faceGeneralDirection(Game1.player.getStandingPosition());
+                }
+
+                return true;
+            default:
+                return false;
+        }
+    }
+
+    private void TryFollowFarmerStep(
+        NPC npc,
+        PendingCompanionOuting outing,
+        GameLocation destination,
+        Point farmerTile,
+        int nowTicks)
+    {
+        bool targetDrifted = outing.StrollTargetTile == Point.Zero
+            || Math.Abs(outing.StrollTargetTile.X - farmerTile.X) + Math.Abs(outing.StrollTargetTile.Y - farmerTile.Y) > 2;
+        if (npc.controller != null && npc.controller == outing.LastAssignedController && !targetDrifted)
+        {
+            // Keep walking the current follow path.
+            return;
+        }
+
+        if (outing.LastStrollRepathTick != int.MinValue
+            && nowTicks - outing.LastStrollRepathTick < OutingCompanionshipRules.StrollRepathIntervalTicks)
+        {
+            return;
+        }
+
+        Point target = this.PickTileBesideFarmer(npc, destination, farmerTile);
+        if (target == Point.Zero)
+        {
+            return;
+        }
+
+        outing.LastStrollRepathTick = nowTicks;
+        outing.StrollTargetTile = target;
+        this.TryAssignRoute(npc, outing, destination, target, FacingTowards(target, farmerTile));
+    }
+
+    /// <summary>Side-by-side spots first (left/right of the farmer's facing), then just behind.</summary>
+    private Point PickTileBesideFarmer(NPC npc, GameLocation destination, Point farmerTile)
+    {
+        int facing = Game1.player?.FacingDirection is >= 0 and <= 3 ? Game1.player!.FacingDirection : 2;
+        foreach (Point candidate in GetBesideFarmerCandidates(farmerTile, facing))
+        {
+            if (candidate == npc.TilePoint || this.isSafeDestinationTile(destination, candidate, npc))
+            {
+                return candidate;
+            }
+        }
+
+        return Point.Zero;
+    }
+
+    private static IEnumerable<Point> GetBesideFarmerCandidates(Point farmerTile, int facingDirection)
+    {
+        if (facingDirection is 0 or 2)
+        {
+            // Farmer walks vertically: stand to their left/right, else fall in just behind.
+            yield return new Point(farmerTile.X - 1, farmerTile.Y);
+            yield return new Point(farmerTile.X + 1, farmerTile.Y);
+            yield return new Point(farmerTile.X, farmerTile.Y + (facingDirection == 0 ? 1 : -1));
+        }
+        else
+        {
+            yield return new Point(farmerTile.X, farmerTile.Y - 1);
+            yield return new Point(farmerTile.X, farmerTile.Y + 1);
+            yield return new Point(farmerTile.X + (facingDirection == 3 ? 1 : -1), farmerTile.Y);
+        }
+    }
+
+    private static int FacingTowards(Point from, Point towards)
+    {
+        int deltaX = towards.X - from.X;
+        int deltaY = towards.Y - from.Y;
+        return Math.Abs(deltaX) >= Math.Abs(deltaY)
+            ? (deltaX >= 0 ? 1 : 3)
+            : (deltaY >= 0 ? 2 : 0);
+    }
+
+    /// <summary>Periodic small-talk bubble while both are at the destination together.</summary>
+    private void TryShowOutingSmallTalk(NPC npc, PendingCompanionOuting outing, GameLocation destination)
+    {
+        if (Game1.player == null)
+        {
+            return;
+        }
+
+        bool farmerPresent = Game1.player.currentLocation == destination;
+        float distance = farmerPresent ? Vector2.Distance(npc.Tile, Game1.player.Tile) : float.MaxValue;
+        if (!OutingCompanionshipRules.ShouldShowChat(
+                this.config.AllowOutingSmallTalk,
+                farmerPresent,
+                outing.ArrivalRemarkShown,
+                outing.ChatRemarksShown,
+                this.world.TimeOfDay,
+                outing.NextChatTimeOfDay,
+                distance,
+                this.config.MaxInteractionDistanceTiles + 2))
+        {
+            return;
+        }
+
+        bool strollingNow = npc.controller != null && npc.isMoving();
+        string key = OutingCompanionshipRules.SelectChatKey(
+            outing.TargetLocation,
+            outing.ActivityStyle,
+            outing.NpcName,
+            outing.TotalDays,
+            outing.ChatRemarksShown,
+            outing.LastChatVariant,
+            strollingNow,
+            out int variant
+        );
+        string text = I18n.Get(key, new { time = GetSceneTimePrefix(this.world.TimeOfDay) });
+        if (!this.feedback.TryShowNpcSpeechBubble(npc, text, OutingSpeechCooldownMilliseconds))
+        {
+            return;
+        }
+
+        outing.ChatRemarksShown++;
+        outing.LastChatVariant = variant;
+        outing.NextChatTimeOfDay = OutingCompanionshipRules.NextChatTimeOfDay(
+            outing.NpcName,
+            outing.TargetLocation,
+            outing.TotalDays,
+            outing.ChatRemarksShown,
+            this.world.TimeOfDay
+        );
+    }
+
     private bool ShowOutingRemark(NPC npc, string text)
     {
         return this.feedback.TryShowNpcSpeechBubble(npc, text, OutingSpeechCooldownMilliseconds);
@@ -1169,6 +1405,135 @@ internal sealed class CompanionOutingRuntime
 
         routeAttempts.Add(FormatFarmBoundaryAttempt(boundary, boundaryTile, Game1.getFarm(), farmEntryTile));
         return false;
+    }
+
+    /// <summary>
+    /// Vehicle destinations (Desert / IslandSouth / MovieTheater / BathHouse_Entry) are outside
+    /// the vanilla NPC schedule route graph, exactly like the farm — the game itself moves
+    /// characters there by warping (the bus, Willy's boat, island visitor schedules). The outing
+    /// therefore walks the NPC to a boarding spot on the routable gateway map, shows a boarding
+    /// remark, and rides across with a warp; the destination anchor was already selected by the
+    /// normal anchor pipeline.
+    /// </summary>
+    private bool TryAssignInitialVehicleRoute(
+        NPC npc,
+        PendingCompanionOuting outing,
+        OutingVehicle vehicle,
+        string reason,
+        List<string> routeAttempts)
+    {
+        GameLocation? gateway = ResolveLocation(vehicle.GatewayLocation);
+        if (gateway == null)
+        {
+            routeAttempts.Add($"vehicle gateway {vehicle.GatewayLocation} was unavailable");
+            return false;
+        }
+
+        string sourceLocation = BehaviorMemory.NormalizeTravelLocation(npc.currentLocation?.Name ?? string.Empty, string.Empty);
+        outing.Phase = CompanionOutingPhase.TravelingToVehicleGateway;
+        outing.VehicleKind = vehicle.Kind;
+        outing.VehicleGatewayLocationName = gateway.Name;
+
+        var unavailableBoardingTiles = new HashSet<Point>();
+        for (int attempt = 0; attempt < 3; attempt++)
+        {
+            if (!this.anchorSelector.TrySelect(
+                    npc,
+                    gateway,
+                    vehicle.GatewayLocation,
+                    sourceLocation,
+                    "visit",
+                    reason,
+                    this.world.TotalDays + attempt,
+                    unavailableBoardingTiles,
+                    out CompanionOutingAnchor? boarding)
+                || boarding == null)
+            {
+                break;
+            }
+
+            outing.VehicleBoardingTile = boarding.Tile;
+            outing.VehicleBoardingFacingDirection = boarding.FacingDirection;
+            if (this.TryAssignRoute(npc, outing, gateway, boarding.Tile, boarding.FacingDirection))
+            {
+                return true;
+            }
+
+            routeAttempts.Add(FormatAnchorAttempt(gateway, boarding.Tile));
+            unavailableBoardingTiles.Add(boarding.Tile);
+        }
+
+        return false;
+    }
+
+    private void UpdateTravelingToVehicleGateway(
+        NPC npc,
+        PendingCompanionOuting outing,
+        GameLocation destination)
+    {
+        if (npc.currentLocation == destination)
+        {
+            // An event or another mod already dropped the NPC at the destination map: settle there.
+            if (!this.TryBeginDestinationEntryStay(npc, outing, destination))
+            {
+                this.Stop(outing, npc, returnToSchedule: true);
+            }
+
+            return;
+        }
+
+        GameLocation? gateway = ResolveLocation(outing.VehicleGatewayLocationName);
+        if (gateway == null || outing.VehicleBoardingTile == Point.Zero)
+        {
+            this.Stop(outing, npc, returnToSchedule: true);
+            return;
+        }
+
+        if (IsAtTile(npc, gateway, outing.VehicleBoardingTile))
+        {
+            this.ShowVehicleBoardingRemark(npc, outing);
+            this.RideVehicleToDestinationAnchor(npc, outing, destination);
+            return;
+        }
+
+        if (npc.controller != null && npc.controller == outing.LastAssignedController)
+        {
+            return;
+        }
+
+        if (outing.RouteRetryCount < 2
+            && this.TryAssignRoute(npc, outing, gateway, outing.VehicleBoardingTile, outing.VehicleBoardingFacingDirection))
+        {
+            outing.RouteRetryCount++;
+            return;
+        }
+
+        this.Stop(outing, npc, returnToSchedule: true);
+    }
+
+    private void RideVehicleToDestinationAnchor(
+        NPC npc,
+        PendingCompanionOuting outing,
+        GameLocation destination)
+    {
+        npc.controller = null;
+        npc.DirectionsToNewLocation = null;
+        npc.Halt();
+        Game1.warpCharacter(npc, destination, new Vector2(outing.AnchorTile.X, outing.AnchorTile.Y));
+        this.BeginStay(npc, outing);
+    }
+
+    private void ShowVehicleBoardingRemark(NPC npc, PendingCompanionOuting outing)
+    {
+        if (outing.VehicleBoardingRemarkShown)
+        {
+            return;
+        }
+
+        if (this.ShowOutingRemark(npc, BuildBoardingRemark(outing.VehicleKind)))
+        {
+            outing.VehicleBoardingRemarkShown = true;
+        }
     }
 
     private static bool TryPrepareFarmEntryBoundary(
@@ -1500,11 +1865,27 @@ internal sealed class CompanionOutingRuntime
         return false;
     }
 
+    private static string BuildBoardingRemark(string vehicleKind)
+    {
+        return vehicleKind switch
+        {
+            "bus" => I18n.Get("outing.board.bus"),
+            "boat" => I18n.Get("outing.board.boat"),
+            "theater" => I18n.Get("outing.board.theater"),
+            "spa" => I18n.Get("outing.board.spa"),
+            _ => I18n.Get("outing.start.default")
+        };
+    }
+
     private static string BuildStartRemark(string targetLocation, string activityStyle)
     {
         return targetLocation switch
         {
             "Beach" or "Custom_GrampletonCoast" => I18n.Get("outing.start.beach"),
+            "Desert" => I18n.Get("outing.start.desert"),
+            "IslandSouth" => I18n.Get("outing.start.island"),
+            "MovieTheater" => I18n.Get("outing.start.movieTheater"),
+            "BathHouse_Entry" => I18n.Get("outing.start.spa"),
             "SeedShop" => I18n.Get("outing.start.seedShop"),
             "ArchaeologyHouse" => I18n.Get("outing.start.archaeologyHouse"),
             "Saloon" => I18n.Get("outing.start.saloon"),
@@ -1525,6 +1906,10 @@ internal sealed class CompanionOutingRuntime
         return targetLocation switch
         {
             "Beach" or "Custom_GrampletonCoast" => I18n.Get("outing.arrival.beach", tokens),
+            "Desert" => I18n.Get("outing.arrival.desert", tokens),
+            "IslandSouth" => I18n.Get("outing.arrival.island", tokens),
+            "MovieTheater" => I18n.Get("outing.arrival.movieTheater", tokens),
+            "BathHouse_Entry" => I18n.Get("outing.arrival.spa", tokens),
             "SeedShop" => I18n.Get("outing.arrival.seedShop", tokens),
             "ArchaeologyHouse" => I18n.Get("outing.arrival.archaeologyHouse", tokens),
             "Saloon" => I18n.Get("outing.arrival.saloon", tokens),
@@ -1548,6 +1933,10 @@ internal sealed class CompanionOutingRuntime
         return targetLocation switch
         {
             "Beach" or "Custom_GrampletonCoast" => I18n.Get("outing.return.beach", tokens),
+            "Desert" => I18n.Get("outing.return.desert", tokens),
+            "IslandSouth" => I18n.Get("outing.return.island", tokens),
+            "MovieTheater" => I18n.Get("outing.return.movieTheater", tokens),
+            "BathHouse_Entry" => I18n.Get("outing.return.spa", tokens),
             "SeedShop" => I18n.Get("outing.return.seedShop", tokens),
             "ArchaeologyHouse" => I18n.Get("outing.return.archaeologyHouse", tokens),
             "Saloon" => I18n.Get("outing.return.saloon", tokens),

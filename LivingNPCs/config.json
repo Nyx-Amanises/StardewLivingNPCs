@@ -30,6 +30,8 @@
   "MaxAiMoneyGiftAmount": 250,
   "AllowAiCompanionOutings": true,
   "MinimumCompanionOutingStayMinutes": 60,
+  "AllowOutingSideBySideStroll": true,
+  "AllowOutingSmallTalk": true,
   "AllowAiFestivalInteractions": true,
   "EnableNpcState": true,
   "NpcStateDailyDecay": 12,

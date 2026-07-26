@@ -45,6 +45,8 @@ internal sealed class ModConfig
     public int MaxAiMoneyGiftAmount { get; set; } = 250;
     public bool AllowAiCompanionOutings { get; set; } = true;
     public int MinimumCompanionOutingStayMinutes { get; set; } = 60;
+    public bool AllowOutingSideBySideStroll { get; set; } = true;
+    public bool AllowOutingSmallTalk { get; set; } = true;
     public bool AllowAiFestivalInteractions { get; set; } = true;
     public bool EnableNpcState { get; set; } = true;
     public int NpcStateDailyDecay { get; set; } = 12;
@@ -320,6 +322,8 @@ internal sealed class ModConfig
         this.MaxAiMoneyGiftAmount = defaults.MaxAiMoneyGiftAmount;
         this.AllowAiCompanionOutings = defaults.AllowAiCompanionOutings;
         this.MinimumCompanionOutingStayMinutes = defaults.MinimumCompanionOutingStayMinutes;
+        this.AllowOutingSideBySideStroll = defaults.AllowOutingSideBySideStroll;
+        this.AllowOutingSmallTalk = defaults.AllowOutingSmallTalk;
         this.AllowAiFestivalInteractions = defaults.AllowAiFestivalInteractions;
         this.EnableNpcState = defaults.EnableNpcState;
         this.NpcStateDailyDecay = defaults.NpcStateDailyDecay;

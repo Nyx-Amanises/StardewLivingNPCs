@@ -32,7 +32,10 @@ internal enum CompanionOutingPhase
     AtDestination,
     Returning,
     ReturningToFarmBoundary,
-    ReturningFromFarmBoundary
+    ReturningFromFarmBoundary,
+
+    /// <summary>Walking to the boarding spot of a vehicle destination (bus/boat/theater/spa door).</summary>
+    TravelingToVehicleGateway
 }
 
 internal sealed class PendingCompanionOuting
@@ -104,4 +107,22 @@ internal sealed class PendingCompanionOuting
     public string FarmBoundaryLocationName { get; set; } = string.Empty;
     public Point FarmBoundarySourceTile { get; set; } = Point.Zero;
     public Point FarmBoundaryTargetTile { get; set; } = Point.Zero;
+
+    // ---- Vehicle-gateway leg (Desert / IslandSouth / MovieTheater / BathHouse_Entry) ----
+    public string VehicleKind { get; set; } = string.Empty;
+    public string VehicleGatewayLocationName { get; set; } = string.Empty;
+    public Point VehicleBoardingTile { get; set; } = Point.Zero;
+    public int VehicleBoardingFacingDirection { get; set; } = 2;
+    public bool VehicleBoardingRemarkShown { get; set; }
+
+    // ---- Side-by-side stroll bookkeeping (stay phase) ----
+    public Point LastFarmerTile { get; set; } = new Point(int.MinValue, int.MinValue);
+    public int LastFarmerMoveTick { get; set; } = int.MinValue;
+    public int LastStrollRepathTick { get; set; } = int.MinValue;
+    public Point StrollTargetTile { get; set; } = Point.Zero;
+
+    // ---- Small-talk bubble bookkeeping ----
+    public int NextChatTimeOfDay { get; set; }
+    public int ChatRemarksShown { get; set; }
+    public int LastChatVariant { get; set; }
 }

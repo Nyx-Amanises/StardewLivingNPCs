@@ -30,6 +30,12 @@ internal static class TravelLocationRules
         "FishShop",
         "WizardHouse",
         "Tent",
+        // Vehicle destinations (bus/boat/door): unreachable by vanilla schedule pathfinding, so
+        // CompanionOutingRuntime rides them via OutingVehicleRules gateways instead of walking.
+        "Desert",
+        "IslandSouth",
+        "MovieTheater",
+        "BathHouse_Entry",
         // Note: "FlowerDance" is intentionally NOT an outing target. No GameLocation with that
         // name exists (the festival loads on a Temp map), so an outing there can never resolve;
         // it remains a valid festival-anchor target for DirectWorldActionRuntime, which paths
@@ -176,7 +182,36 @@ internal static class TravelLocationRules
         ["祝尼魔森林"] = "Custom_JunimoWoods",
         ["Custom_EnchantedGrove"] = "Custom_EnchantedGrove",
         ["Enchanted Grove"] = "Custom_EnchantedGrove",
-        ["魔法林地"] = "Custom_EnchantedGrove"
+        ["魔法林地"] = "Custom_EnchantedGrove",
+        ["Desert"] = "Desert",
+        ["The Desert"] = "Desert",
+        ["Calico Desert"] = "Desert",
+        ["沙漠"] = "Desert",
+        ["卡利科沙漠"] = "Desert",
+        ["卡利可沙漠"] = "Desert",
+        ["IslandSouth"] = "IslandSouth",
+        ["Ginger Island"] = "IslandSouth",
+        ["GingerIsland"] = "IslandSouth",
+        ["Island South"] = "IslandSouth",
+        ["姜岛"] = "IslandSouth",
+        ["生姜岛"] = "IslandSouth",
+        ["姜之岛"] = "IslandSouth",
+        ["MovieTheater"] = "MovieTheater",
+        ["Movie Theater"] = "MovieTheater",
+        ["Movie Theatre"] = "MovieTheater",
+        ["Cinema"] = "MovieTheater",
+        ["电影院"] = "MovieTheater",
+        ["影院"] = "MovieTheater",
+        ["BathHouse_Entry"] = "BathHouse_Entry",
+        ["BathHouse"] = "BathHouse_Entry",
+        ["Bath House"] = "BathHouse_Entry",
+        ["Bathhouse"] = "BathHouse_Entry",
+        ["Spa"] = "BathHouse_Entry",
+        ["Hot Spring"] = "BathHouse_Entry",
+        ["Hot Springs"] = "BathHouse_Entry",
+        ["温泉"] = "BathHouse_Entry",
+        ["澡堂"] = "BathHouse_Entry",
+        ["浴场"] = "BathHouse_Entry"
     };
 
     public static IReadOnlyCollection<string> KnownPublicOutingTargets { get; } =
@@ -274,6 +309,10 @@ internal static class TravelLocationRules
             "Custom_GrandpasShedOutside" => "Grandpa's shed",
             "Custom_JunimoWoods" => "Junimo Woods",
             "Custom_EnchantedGrove" => "the enchanted grove",
+            "Desert" => "the Calico Desert",
+            "IslandSouth" => "Ginger Island's beach",
+            "MovieTheater" => "the movie theater",
+            "BathHouse_Entry" => "the spa by the railroad",
             _ => locationName
         };
     }
@@ -315,6 +354,10 @@ internal static class TravelLocationRules
             "Custom_GrandpasShedOutside" => "location.grandpasShed",
             "Custom_JunimoWoods" => "location.junimoWoods",
             "Custom_EnchantedGrove" => "location.enchantedGrove",
+            "Desert" => "location.desert",
+            "IslandSouth" => "location.islandSouth",
+            "MovieTheater" => "location.movieTheater",
+            "BathHouse_Entry" => "location.bathHouse",
             _ => string.Empty
         };
 
@@ -357,6 +400,10 @@ internal static class TravelLocationRules
             "Custom_GrandpasShedOutside" => "爷爷的棚屋",
             "Custom_JunimoWoods" => "祝尼魔森林",
             "Custom_EnchantedGrove" => "魔法林地",
+            "Desert" => "卡利科沙漠",
+            "IslandSouth" => "姜岛海滩",
+            "MovieTheater" => "电影院",
+            "BathHouse_Entry" => "铁路温泉",
             _ => locationName
         };
     }

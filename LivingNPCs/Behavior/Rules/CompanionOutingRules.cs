@@ -72,7 +72,8 @@ internal static class CompanionOutingRules
         {
             CompanionOutingPhase.Traveling
                 or CompanionOutingPhase.TravelingToFarmBoundary
-                or CompanionOutingPhase.TravelingFromFarmBoundary => CompanionOutingTickPlan.AdvanceTravel,
+                or CompanionOutingPhase.TravelingFromFarmBoundary
+                or CompanionOutingPhase.TravelingToVehicleGateway => CompanionOutingTickPlan.AdvanceTravel,
             CompanionOutingPhase.AtDestination => CompanionOutingTickPlan.AdvanceStay,
             _ => CompanionOutingTickPlan.AdvanceReturn
         };
@@ -82,7 +83,8 @@ internal static class CompanionOutingRules
     {
         return phase is CompanionOutingPhase.Traveling
             or CompanionOutingPhase.TravelingToFarmBoundary
-            or CompanionOutingPhase.TravelingFromFarmBoundary;
+            or CompanionOutingPhase.TravelingFromFarmBoundary
+            or CompanionOutingPhase.TravelingToVehicleGateway;
     }
 
     public static string DetermineActivityStyle(string targetLocation, string reason)
@@ -98,6 +100,18 @@ internal static class CompanionOutingRules
             || IsSocialTarget(targetLocation))
         {
             return "social";
+        }
+
+        if (ContainsAny(text, "电影", "看片", "影院", "movie", "film", "cinema")
+            || targetLocation == "MovieTheater")
+        {
+            return "browse";
+        }
+
+        if (ContainsAny(text, "温泉", "泡汤", "泡澡", "泡一泡", "spa", "hot spring", "bath house", "bathhouse", "soak")
+            || targetLocation == "BathHouse_Entry")
+        {
+            return "quiet";
         }
 
         if (ContainsAny(text, "风景", "景色", "看看海", "看海", "看浪", "海浪", "浪花", "散心", "看风景", "瀑布", "山顶", "scenery", "view", "sightseeing", "shore", "waves", "waterfall"))
@@ -269,12 +283,13 @@ internal static class CompanionOutingRules
 
     private static bool IsBrowseTarget(string targetLocation)
     {
-        return targetLocation is "SeedShop" or "ArchaeologyHouse" or "Blacksmith" or "FishShop";
+        return targetLocation is "SeedShop" or "ArchaeologyHouse" or "Blacksmith" or "FishShop" or "MovieTheater";
     }
 
     private static bool IsScenicTarget(string targetLocation)
     {
         return targetLocation is "Beach" or "Mountain" or "Forest" or "Farm"
+            or "Desert" or "IslandSouth"
             or "Custom_GrampletonCoast" or "Custom_BlueMoonVineyard" or "Custom_AuroraVineyard"
             or "Custom_ForestWest" or "Custom_SVESummit" or "Custom_GrandpasShedOutside"
             or "Custom_JunimoWoods" or "Custom_EnchantedGrove";

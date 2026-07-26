@@ -227,6 +227,32 @@ internal sealed class CompanionOutingAnchorSelector
                 new(new Point(20, 14), 3, "near the grove path without blocking the nexus", ["scenic", "quiet", "visit"]),
                 new(new Point(14, 24), 1, "along the quieter side of the enchanted grove", ["scenic", "quiet", "visit"])
             ],
+            // Vehicle destinations: coordinates are best-effort against the vanilla maps; every
+            // authored anchor is still validated by IsUsable at runtime and quietly falls back to
+            // the live map scan when a map edit moved things around.
+            ["Desert"] =
+            [
+                new(new Point(20, 30), 2, "on the open calico sand with the dunes all around", ["scenic", "quiet", "visit"], ["sand"], 26),
+                new(new Point(28, 38), 2, "out where the desert opens wide under the sky", ["scenic", "quiet", "visit"], ["sand"], 22),
+                new(new Point(12, 33), 1, "on the quieter side of the desert flats", ["scenic", "quiet", "visit"], ["sand"], 18)
+            ],
+            ["IslandSouth"] =
+            [
+                new(new Point(14, 22), 2, "on the warm island sand facing the open sea", ["scenic", "quiet", "visit"], ["shore", "waves"], 28),
+                new(new Point(24, 27), 2, "along the island shoreline where the surf rolls in", ["scenic", "quiet", "visit"], ["shore", "waves"], 24),
+                new(new Point(28, 18), 1, "near the palm shade at the edge of the island beach", ["scenic", "quiet", "visit"], ["shore"], 20)
+            ],
+            ["MovieTheater"] =
+            [
+                new(new Point(7, 8), 0, "in the middle of the theater lobby", ["browse", "social", "quiet", "visit"], ["lobby"], 26),
+                new(new Point(4, 7), 0, "near the concession counter without blocking the line", ["browse", "social", "visit"], ["counter"], 22),
+                new(new Point(10, 8), 3, "by the movie posters along the lobby wall", ["browse", "quiet", "visit"], ["display"], 18)
+            ],
+            ["BathHouse_Entry"] =
+            [
+                new(new Point(4, 5), 0, "in the spa's quiet entry hall", ["quiet", "visit"], ["spa"], 26),
+                new(new Point(6, 6), 3, "beside the spa benches where the steam drifts past", ["quiet", "visit"], ["spa", "bench"], 22)
+            ],
         };
 
     // Anchors for maps that SVE replaces. Every coordinate below was verified against the actual

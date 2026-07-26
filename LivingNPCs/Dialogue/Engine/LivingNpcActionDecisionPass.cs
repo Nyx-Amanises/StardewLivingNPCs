@@ -207,7 +207,7 @@ internal static class LivingNpcActionDecisionPass
         prompt.AppendLine(PromptDataBoundary.Wrap("action_npc_reply", CleanForPrompt(visibleNpcReply)));
         prompt.AppendLine();
         prompt.AppendLine("Return exactly one line beginning with !LIVINGNPCS_META followed by compact JSON using this schema:");
-        prompt.AppendLine("{\"travelDecision\":{\"isTravelReply\":false,\"consent\":\"accepted_now|accepted_later|declined|tentative|none\",\"targetLocation\":\"Farm|Town|Mountain|Beach|Forest|BusStop|Saloon|SeedShop|ArchaeologyHouse|Hospital\",\"delayMinutes\":0,\"durationMinutes\":0,\"reason\":\"short evidence from visible reply\"},\"giftDecision\":{\"isGiftReply\":false,\"timing\":\"now|later|mail|promise|none\",\"tier\":\"small|meaningful\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"short evidence from visible reply\"},\"actions\":[{\"type\":\"give_small_gift|give_meaningful_gift|give_money|companion_outing|festival_interaction\",\"amount\":0,\"durationMinutes\":0,\"delayMinutes\":0,\"targetLocation\":\"\",\"travelConsent\":\"accepted_now|accepted_later|declined|tentative|none\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"short evidence from visible reply\"}],\"helpRequests\":[{\"type\":\"item_request\",\"summary\":\"short concrete ask\",\"requiresAcceptance\":true,\"requestedItemId\":\"\",\"requestedItemLabel\":\"\",\"questionTopic\":\"\",\"dueInDays\":1,\"reason\":\"short evidence\",\"followUpPotential\":\"none|deeper_relationship\"}],\"helpRequestUpdates\":[{\"summary\":\"matching existing request\",\"status\":\"accepted|declined|advanced|fulfilled\",\"resolution\":\"short result\"}]}");
+        prompt.AppendLine("{\"travelDecision\":{\"isTravelReply\":false,\"consent\":\"accepted_now|accepted_later|declined|tentative|none\",\"targetLocation\":\"Farm|Town|Mountain|Beach|Forest|BusStop|Saloon|SeedShop|ArchaeologyHouse|Hospital|Desert|IslandSouth|MovieTheater|BathHouse_Entry\",\"delayMinutes\":0,\"durationMinutes\":0,\"reason\":\"short evidence from visible reply\"},\"giftDecision\":{\"isGiftReply\":false,\"timing\":\"now|later|mail|promise|none\",\"tier\":\"small|meaningful\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"short evidence from visible reply\"},\"actions\":[{\"type\":\"give_small_gift|give_meaningful_gift|give_money|companion_outing|festival_interaction\",\"amount\":0,\"durationMinutes\":0,\"delayMinutes\":0,\"targetLocation\":\"\",\"travelConsent\":\"accepted_now|accepted_later|declined|tentative|none\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"short evidence from visible reply\"}],\"helpRequests\":[{\"type\":\"item_request\",\"summary\":\"short concrete ask\",\"requiresAcceptance\":true,\"requestedItemId\":\"\",\"requestedItemLabel\":\"\",\"questionTopic\":\"\",\"dueInDays\":1,\"reason\":\"short evidence\",\"followUpPotential\":\"none|deeper_relationship\"}],\"helpRequestUpdates\":[{\"summary\":\"matching existing request\",\"status\":\"accepted|declined|advanced|fulfilled\",\"resolution\":\"short result\"}]}");
         prompt.AppendLine("Rules:");
         prompt.AppendLine("- Always fill travelDecision and giftDecision, even when actions is empty. This is a classifier, not dialogue.");
         prompt.AppendLine("- For travelDecision, accepted_now means the NPC agrees to go now. Short preparation still counts as accepted_now: wait five minutes, let me change clothes, get my coat, grab an umbrella, I will be right out.");
@@ -890,12 +890,21 @@ internal static class LivingNpcActionDecisionPass
             "seedshop" or "seed shop" or "皮埃尔" or "杂货店" => "SeedShop",
             "archaeologyhouse" or "museum" or "library" or "博物馆" or "图书馆" => "ArchaeologyHouse",
             "hospital" or "clinic" or "医院" or "诊所" => "Hospital",
+            "desert" or "calico desert" or "沙漠" or "卡利科沙漠" => "Desert",
+            "islandsouth" or "island south" or "ginger island" or "island" or "姜岛" or "生姜岛" => "IslandSouth",
+            "movietheater" or "movie theater" or "movie theatre" or "cinema" or "电影院" or "影院" => "MovieTheater",
+            "bathhouse" or "bathhouse_entry" or "bath house" or "spa" or "hot spring" or "温泉" or "澡堂" or "浴场" => "BathHouse_Entry",
             _ => normalized
         };
     }
 
     private static string InferTravelTargetFromText(string text)
     {
+        // Vehicle destinations first: "姜岛海滩/island beach" must not fall into the Beach bucket.
+        if (ContainsAny(text, "姜岛", "生姜岛", "ginger island")) return "IslandSouth";
+        if (ContainsAny(text, "沙漠", "desert")) return "Desert";
+        if (ContainsAny(text, "电影院", "影院", "看电影", "movie", "cinema")) return "MovieTheater";
+        if (ContainsAny(text, "温泉", "泡汤", "澡堂", "浴场", "spa", "hot spring", "bathhouse", "bath house")) return "BathHouse_Entry";
         if (ContainsAny(text, "农场", "farm")) return "Farm";
         if (ContainsAny(text, "海边", "海滩", "看海", "大海", "beach", "shore")) return "Beach";
         if (ContainsAny(text, "图书馆", "博物馆", "library", "museum")) return "ArchaeologyHouse";

@@ -812,11 +812,11 @@ internal static class PromptFragments
                     prompt.AppendLine("- This is a brief escort or short visit, not a full outing.");
                 }
             }
-            else if (outing.Phase is CompanionOutingPhase.Traveling
-                or CompanionOutingPhase.TravelingToFarmBoundary
-                or CompanionOutingPhase.TravelingFromFarmBoundary)
+            else if (CompanionOutingRules.IsTravelingPhase(outing.Phase))
             {
-                prompt.AppendLine("- The NPC is walking there through normal doors and map exits; this is not a teleport or an escort task.");
+                prompt.AppendLine(outing.Phase == CompanionOutingPhase.TravelingToVehicleGateway
+                    ? "- The NPC is walking to where they will ride across together (bus, boat, or entrance); the ride itself is instant, like the farmer's own trip."
+                    : "- The NPC is walking there through normal doors and map exits; this is not a teleport or an escort task.");
             }
             else
             {
@@ -830,9 +830,7 @@ internal static class PromptFragments
 
         public static string PhaseText(CompanionOutingPhase phase) => phase switch
         {
-            CompanionOutingPhase.Traveling
-                or CompanionOutingPhase.TravelingToFarmBoundary
-                or CompanionOutingPhase.TravelingFromFarmBoundary => "traveling naturally toward the destination",
+            _ when CompanionOutingRules.IsTravelingPhase(phase) => "traveling naturally toward the destination",
             CompanionOutingPhase.AtDestination => "spending time together at the destination",
             _ => "returning to the normal daily schedule"
         };
