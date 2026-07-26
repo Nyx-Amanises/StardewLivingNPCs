@@ -74,6 +74,28 @@ public class Wp12PatchTargetSignatureTests
     }
 
     [Fact]
+    public void GamePad_Cancel_Patch_Target_Is_Declared_On_IClickableMenu()
+    {
+        // 手柄取消补丁必须指向声明处：DialogueBox 未覆写 receiveGamePadButton，
+        // Harmony 特性寻址不沿继承链上溯，指向 DialogueBox 会在运行时 "Undefined target
+        // method" 并中止整个 PatchAll（进游戏冒烟实测踩过）。若某次游戏更新让 DialogueBox
+        // 自己声明了覆写，本断言变红，提醒把补丁改回子类目标。
+        // 测试工程不引用 MonoGame，Buttons 类型经参数名反射校验。
+        var target = typeof(StardewValley.Menus.IClickableMenu)
+            .GetMethods(All)
+            .SingleOrDefault(method => method.Name == "receiveGamePadButton");
+        Assert.NotNull(target);
+        Assert.Equal(typeof(StardewValley.Menus.IClickableMenu), target!.DeclaringType);
+        var parameter = Assert.Single(target.GetParameters());
+        Assert.Equal("Buttons", parameter.ParameterType.Name);
+
+        bool subclassDeclares = typeof(StardewValley.Menus.DialogueBox)
+            .GetMethods(All | BindingFlags.DeclaredOnly)
+            .Any(method => method.Name == "receiveGamePadButton");
+        Assert.False(subclassDeclares);
+    }
+
+    [Fact]
     public void Dialogue_And_Game1_Patch_Targets_Exist()
     {
         // P9
