@@ -85,7 +85,10 @@ Supported providers:
 | Provider | Typical required fields |
 | --- | --- |
 | OpenAI | API key, model name |
-| OpenAI-compatible | API key, model name, server address (the base address is enough, e.g. OpenRouter `https://openrouter.ai/api/v1`, local Ollama `http://localhost:11434/v1`, Zhipu `https://open.bigmodel.cn/api/paas/v4`; follow your provider's docs) |
+| OpenAI-compatible | API key, model name, server address (for custom gateways; the base address is enough — `/v1` suffixes are normalized automatically) |
+| OpenRouter | API key (endpoint and default model built in; one key reaches many models, including free ones) |
+| Zhipu (GLM), Moonshot (Kimi), Alibaba DashScope (Qwen), SiliconFlow | API key (endpoints built in; leave the model name empty for each provider's default — Zhipu's default `glm-4-flash` is free) |
+| Ollama, LM Studio (local) | No API key; just run the local server (endpoints built in, set the model name to a locally installed model) |
 | Anthropic (Claude) | API key, model name |
 | Google (Gemini) | API key, model name |
 | DeepSeek | API key, model name |
@@ -101,6 +104,16 @@ LivingNPCs performs a non-blocking self-check after saving connection settings. 
 - timeouts: check the server address, network, or request timeout setting.
 
 Stronger models are generally more consistent at roleplay, long-term memory, and the hidden structured information the mod relies on. Smaller or cheaper models can work, but drift and unstable action decisions become more likely.
+
+### Free 5-minute setup
+
+Don't want to pay before trying it? All three of these start free (quotas and policies are up to each provider):
+
+1. **Google Gemini (free tier):** create an API key at <https://aistudio.google.com>, pick the "Google (Gemini)" provider, paste the key, and leave the model name empty (defaults to `gemini-2.5-flash`).
+2. **OpenRouter (free models):** create a key at <https://openrouter.ai>, pick the "OpenRouter" provider, and set the model name to any model tagged `:free` on their model list.
+3. **Local Ollama (fully free, offline, private):** install <https://ollama.com>, run `ollama pull qwen3:8b`, pick the "Ollama (local)" provider, and leave everything else empty. Needs a reasonably strong PC; small local models are noticeably weaker at roleplay and structured output than large cloud models.
+
+Free options are great for a first taste; for long-term play a stronger model gives clearly better dialogue quality, memory stability, and action decisions.
 
 ## How to talk to NPCs
 

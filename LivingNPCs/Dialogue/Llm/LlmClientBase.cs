@@ -22,7 +22,6 @@ internal abstract class LlmClientBase : ILlmClient, ILlmCapabilities
     {
         Settings = settings;
         ApiKey = settings.ApiKey ?? string.Empty;
-        EffectiveModelName = string.IsNullOrWhiteSpace(settings.ModelName) ? DefaultModelName : settings.ModelName.Trim();
     }
 
     public abstract string ProviderId { get; }
@@ -37,8 +36,14 @@ internal abstract class LlmClientBase : ILlmClient, ILlmCapabilities
 
     protected string ApiKey { get; }
 
-    /// <summary>配置模型名（空则取提供商默认），组请求体与诊断都用它。</summary>
-    public string EffectiveModelName { get; }
+    /// <summary>
+    /// 配置模型名（空则取提供商默认），组请求体与诊断都用它。
+    /// 惰性计算而非构造期赋值：DefaultModelName 是虚属性，构造期读取会拿不到
+    /// 派生类字段里的预设默认值（OpenAiPresetClient）。
+    /// </summary>
+    public string EffectiveModelName => string.IsNullOrWhiteSpace(Settings.ModelName)
+        ? DefaultModelName
+        : Settings.ModelName.Trim();
 
     protected virtual TimeSpan RetryDelay => RetryDelayOverrideForTests ?? TimeSpan.FromMilliseconds(100);
 

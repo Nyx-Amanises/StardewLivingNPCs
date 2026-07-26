@@ -43,6 +43,7 @@ internal static class LlmClientFactory
         Register(
             new LlmProviderMetadata { ProviderId = "OpenAiCompatible", RequiresApiKey = true, RequiresModelName = true, RequiresServerAddress = true, SupportsModelList = true, SupportsThinkingLevels = true },
             settings => new OpenAiCompatibleClient(settings));
+        RegisterOpenAiPreset("OpenRouter", "https://openrouter.ai/api/v1", "openai/gpt-4o-mini", requiresApiKey: true);
         Register(
             new LlmProviderMetadata { ProviderId = "Anthropic", RequiresApiKey = true, RequiresModelName = true, SupportsModelList = true },
             settings => new ClaudeClient(settings));
@@ -58,6 +59,12 @@ internal static class LlmClientFactory
         Register(
             new LlmProviderMetadata { ProviderId = "VolcEngine", RequiresApiKey = true, RequiresModelName = true, SupportsModelList = true },
             settings => new VolcEngineClient(settings));
+        RegisterOpenAiPreset("Zhipu", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", requiresApiKey: true);
+        RegisterOpenAiPreset("Moonshot", "https://api.moonshot.cn/v1", "kimi-latest", requiresApiKey: true);
+        RegisterOpenAiPreset("DashScope", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus", requiresApiKey: true);
+        RegisterOpenAiPreset("SiliconFlow", "https://api.siliconflow.cn/v1", "Qwen/Qwen3-8B", requiresApiKey: true);
+        RegisterOpenAiPreset("Ollama", "http://localhost:11434/v1", "qwen3:8b", requiresApiKey: false);
+        RegisterOpenAiPreset("LMStudio", "http://localhost:1234/v1", "local-model", requiresApiKey: false);
         Register(
             new LlmProviderMetadata { ProviderId = "LlamaCpp", RequiresServerAddress = true, RequiresPromptFormat = true },
             settings => new LlamaCppClient(settings));
@@ -106,5 +113,23 @@ internal static class LlmClientFactory
     {
         Registry.Add(metadata.ProviderId, (metadata, create));
         OrderedMetadata.Add(metadata);
+    }
+
+    /// <summary>
+    /// OpenAI 兼容"预设"提供商：端点与默认模型内置（ServerAddress 留空用预设，config.json 可覆盖），
+    /// 玩家通常只填 API Key；本地预设（Ollama / LM Studio）不需要 Key。
+    /// </summary>
+    private static void RegisterOpenAiPreset(string providerId, string presetBaseAddress, string defaultModel, bool requiresApiKey)
+    {
+        Register(
+            new LlmProviderMetadata
+            {
+                ProviderId = providerId,
+                RequiresApiKey = requiresApiKey,
+                RequiresModelName = true,
+                SupportsModelList = true,
+                SupportsThinkingLevels = true
+            },
+            settings => new OpenAiPresetClient(settings, providerId, presetBaseAddress, defaultModel));
     }
 }

@@ -505,6 +505,57 @@ public sealed class LlmClientFactoryTests : LlmTestBase
         Assert.Equal(string.Empty, ((ILlmCapabilities)LlmClientFactory.TryCreate(Settings("OpenAI"))!).ExtraInstructions);
     }
 
+    [Fact]
+    public void PresetProvidersAreRegisteredWithExpectedRequirements()
+    {
+        // OpenAI 兼容预设：云端要 Key、本地不要；都不再要求玩家填服务器地址。
+        foreach (string cloudPreset in new[] { "OpenRouter", "Zhipu", "Moonshot", "DashScope", "SiliconFlow" })
+        {
+            Assert.True(LlmClientFactory.TryGetMetadata(cloudPreset, out LlmProviderMetadata metadata), cloudPreset);
+            Assert.True(metadata.RequiresApiKey, cloudPreset);
+            Assert.False(metadata.RequiresServerAddress, cloudPreset);
+            Assert.True(metadata.SupportsModelList, cloudPreset);
+        }
+
+        foreach (string localPreset in new[] { "Ollama", "LMStudio" })
+        {
+            Assert.True(LlmClientFactory.TryGetMetadata(localPreset, out LlmProviderMetadata metadata), localPreset);
+            Assert.False(metadata.RequiresApiKey, localPreset);
+            Assert.False(metadata.RequiresServerAddress, localPreset);
+            // 本地预设空 Key + 空地址也视为配置完整（不会触发"未配置"拦截）。
+            Assert.False(LlmClientHost.IsConnectionIncomplete(Settings(localPreset, apiKey: "", serverAddress: "")));
+        }
+
+        Assert.True(LlmClientHost.IsConnectionIncomplete(Settings("Zhipu", apiKey: "", serverAddress: "")));
+    }
+
+    [Fact]
+    public async Task PresetProvidersUseBuiltInEndpointAndDefaultModel()
+    {
+        string completion = "{\"choices\":[{\"message\":{\"content\":\"hi\"}}]}";
+
+        Http.EnqueueJson(completion);
+        var openRouter = LlmClientFactory.TryCreate(Settings("OpenRouter", serverAddress: ""))!;
+        Assert.Equal("OpenRouter", openRouter.ProviderId);
+        LlmReply reply = await openRouter.CompleteAsync(Request(allowRetry: false), CancellationToken.None);
+        Assert.True(reply.IsSuccess);
+        Assert.Equal("https://openrouter.ai/api/v1/chat/completions", Http.Requests[^1].Url);
+        Assert.Contains("openai/gpt-4o-mini", Http.Requests[^1].Body);
+
+        // config.json 显式填写地址仍可覆盖预设端点。
+        Http.EnqueueJson(completion);
+        var overridden = LlmClientFactory.TryCreate(Settings("OpenRouter", serverAddress: "https://proxy.example/v1"))!;
+        await overridden.CompleteAsync(Request(allowRetry: false), CancellationToken.None);
+        Assert.Equal("https://proxy.example/v1/chat/completions", Http.Requests[^1].Url);
+
+        // 本地预设默认端点。
+        Http.EnqueueJson(completion);
+        var ollama = LlmClientFactory.TryCreate(Settings("Ollama", apiKey: "", serverAddress: ""))!;
+        await ollama.CompleteAsync(Request(allowRetry: false), CancellationToken.None);
+        Assert.Equal("http://localhost:11434/v1/chat/completions", Http.Requests[^1].Url);
+        Assert.Contains("qwen3:8b", Http.Requests[^1].Body);
+    }
+
 #if DEBUG
     [Fact]
     public void DummyIsRegisteredInDebugBuilds()

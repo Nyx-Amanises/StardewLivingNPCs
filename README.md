@@ -98,7 +98,10 @@ LivingNPCs **不附带模型，也不会自动提供免费 API**。速度、费�
 | 提供商 | 常见必填项 |
 | --- | --- |
 | OpenAI | API Key、模型名 |
-| OpenAI-compatible | API Key、模型名、服务器地址（填基础地址即可，例如 OpenRouter <code>https://openrouter.ai/api/v1</code>、Ollama 本地 <code>http://localhost:11434/v1</code>、智谱 <code>https://open.bigmodel.cn/api/paas/v4</code>，以服务商文档为准） |
+| OpenAI-compatible | API Key、模型名、服务器地址（自定义网关/中转用；填基础地址即可，代码会自动规整 <code>/v1</code> 等后缀） |
+| OpenRouter | API Key（端点与默认模型已内置；一个 Key 可以调用多家模型，含免费模型） |
+| 智谱（GLM）、月之暗面（Kimi）、阿里云百炼（通义千问）、硅基流动 | API Key（端点已内置；模型名留空使用各家默认，智谱默认 <code>glm-4-flash</code> 为免费模型） |
+| Ollama、LM Studio（本地） | 无需 API Key；本机启动服务即可（端点已内置，模型名按本地已装模型填写） |
 | Anthropic（Claude） | API Key、模型名 |
 | Google（Gemini） | API Key、模型名 |
 | DeepSeek | API Key、模型名 |
@@ -114,6 +117,16 @@ LivingNPCs 会在保存连接设置后进行非阻塞自检。自检失败不会
 - 连接超时：服务器地址、网络或请求超时设置需要检查。
 
 较强的模型通常更能稳定处理角色扮演、长期记忆和隐藏的结构化行为信息。较小或便宜的模型也可以使用，但更容易出现忘记上下文、角色偏移或动作判断不稳定。
+
+### 5 分钟免费上手
+
+不想先花钱？下面三个方案都可以免费开始（额度与政策以各服务商当前页面为准）：
+
+1. **智谱 GLM（国内直连，有免费模型）**：在 <https://open.bigmodel.cn> 注册并创建 API Key → 提供商选「智谱（GLM）」→ 填入 Key，模型名留空（默认 <code>glm-4-flash</code>，免费）。
+2. **Google Gemini（免费额度）**：在 <https://aistudio.google.com> 创建 API Key → 提供商选「Google（Gemini）」→ 填入 Key，模型名留空（默认 <code>gemini-2.5-flash</code>）。需要网络能正常访问 Google。
+3. **本地 Ollama（完全免费、离线、无隐私顾虑）**：安装 <https://ollama.com> → 命令行运行 <code>ollama pull qwen3:8b</code> → 提供商选「Ollama（本地）」，其余留空。需要较好的电脑配置；小模型的角色扮演和结构化输出明显弱于云端大模型。
+
+免费方案适合先体验玩法；长期游玩建议换更强的模型，对话质量、记忆稳定性和行为判断会明显更好。
 
 ## 如何与 NPC 交谈
 
