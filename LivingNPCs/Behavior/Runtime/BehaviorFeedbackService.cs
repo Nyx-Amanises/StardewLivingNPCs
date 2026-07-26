@@ -7,6 +7,18 @@ using StardewValley;
 
 namespace LivingNPCs.Behavior;
 
+/// <summary>What to do with one pending ambient remark on this update tick.</summary>
+internal enum AmbientRemarkTickPlan
+{
+    /// <summary>The remark is from another day; drop it.</summary>
+    Drop,
+
+    /// <summary>Its conditions are not met yet; keep it pending.</summary>
+    Wait,
+
+    Show
+}
+
 internal sealed class BehaviorFeedbackService
 {
     private readonly ModConfig config;
@@ -77,23 +89,27 @@ internal sealed class BehaviorFeedbackService
 
         foreach (var remark in this.pendingAmbientRemarks.ToList())
         {
-            if (remark.TotalDays != Game1.Date.TotalDays)
+            NPC? npc = Game1.currentLocation?.characters.FirstOrDefault(candidate => candidate.Name == remark.NpcName);
+            float? distanceToPlayer = npc != null && Game1.player != null
+                ? Vector2.Distance(npc.Tile, Game1.player.Tile)
+                : null;
+            var plan = PlanRemarkTick(
+                remark.TotalDays,
+                remark.NotBeforeTimeOfDay,
+                remark.LocationName,
+                Game1.Date.TotalDays,
+                Game1.timeOfDay,
+                npc != null,
+                npc?.currentLocation?.Name,
+                distanceToPlayer,
+                this.config.MaxInteractionDistanceTiles);
+            if (plan == AmbientRemarkTickPlan.Drop)
             {
                 this.pendingAmbientRemarks.Remove(remark);
                 continue;
             }
 
-            if (Game1.timeOfDay < remark.NotBeforeTimeOfDay)
-            {
-                continue;
-            }
-
-            NPC? npc = Game1.currentLocation?.characters.FirstOrDefault(candidate => candidate.Name == remark.NpcName);
-            if (npc == null
-                || npc.currentLocation?.Name != remark.LocationName
-                || Game1.player == null
-                || Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles
-                || npc.Tile == remark.OriginTile)
+            if (plan != AmbientRemarkTickPlan.Show || npc == null)
             {
                 continue;
             }
@@ -110,6 +126,42 @@ internal sealed class BehaviorFeedbackService
                 this.monitor.Log(I18n.Get("log.feedback.ambientFollowUp", new { npc = npc.Name, text = remark.Text }), LogLevel.Debug);
             }
         }
+    }
+
+    /// <summary>
+    /// Per-remark visibility decision, extracted for tests. Deliberately does NOT compare the
+    /// NPC's tile with the tile the remark was queued from (PendingAmbientRemark.OriginTile is
+    /// informational only): counter NPCs such as Gus, Clint, Willy, or Penny stand on one tile
+    /// for hours, and the old "wait until the NPC left the original tile" condition silently
+    /// swallowed their delay-0 help-request thanks and dialogue follow-ups until the day change
+    /// dropped them unseen.
+    /// </summary>
+    internal static AmbientRemarkTickPlan PlanRemarkTick(
+        int remarkTotalDays,
+        int remarkNotBeforeTimeOfDay,
+        string remarkLocationName,
+        int currentTotalDays,
+        int currentTimeOfDay,
+        bool npcFound,
+        string? npcLocationName,
+        float? distanceToPlayerTiles,
+        float maxDistanceTiles)
+    {
+        if (remarkTotalDays != currentTotalDays)
+        {
+            return AmbientRemarkTickPlan.Drop;
+        }
+
+        if (currentTimeOfDay < remarkNotBeforeTimeOfDay
+            || !npcFound
+            || !string.Equals(npcLocationName, remarkLocationName, StringComparison.Ordinal)
+            || distanceToPlayerTiles == null
+            || distanceToPlayerTiles > maxDistanceTiles)
+        {
+            return AmbientRemarkTickPlan.Wait;
+        }
+
+        return AmbientRemarkTickPlan.Show;
     }
 
     public void Show(string message)

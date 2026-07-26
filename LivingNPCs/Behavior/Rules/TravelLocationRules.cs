@@ -185,6 +185,17 @@ internal static class TravelLocationRules
     public static string Normalize(string value, string fallback)
     {
         string candidate = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
+        if (string.IsNullOrWhiteSpace(candidate))
+        {
+            // Deliberately no "Town" last-resort: a blank value with a blank fallback stays
+            // blank, so downstream guards and fallbacks can actually fire — the companion-outing
+            // "a supported outing destination is required" rejection, the behavior-influence
+            // store's current-location fallback, and the festival anchor's current-map fallback
+            // all rely on blank staying blank. Call sites that want a "Town" default pass "Town"
+            // explicitly as the fallback (e.g. DialogueBehaviorInfluenceStore.NormalizeForStore).
+            return string.Empty;
+        }
+
         if (Aliases.TryGetValue(candidate, out string? mapped))
         {
             return mapped;
@@ -197,7 +208,7 @@ internal static class TravelLocationRules
             return mapped;
         }
 
-        return string.IsNullOrWhiteSpace(candidate) ? "Town" : candidate;
+        return candidate;
     }
 
     private static string CollapseAdjacentDuplicateCharacters(string value)

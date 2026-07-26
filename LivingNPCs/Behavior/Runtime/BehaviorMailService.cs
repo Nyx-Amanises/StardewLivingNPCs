@@ -163,6 +163,21 @@ internal sealed class BehaviorMailService
             return false;
         }
 
+        if (!Game1.IsMasterGame)
+        {
+            // Host-only, mirroring the companion-outing gate: the letter body comes from this
+            // player's in-memory GiftMails facts (via the Data/mail edit), but a farmhand cannot
+            // persist behavior memory (save data is host-only), while the mailForTomorrow key
+            // WOULD persist through the host's save. After the farmhand rejoins, that key would
+            // point at a letter with no Data/mail entry — an empty orphan letter and a lost
+            // attachment — so skip scheduling entirely on farmhands. Callers already treat a
+            // false return as "mail unavailable" and degrade gracefully.
+            LivingNPCs.Dialogue.DialogueServices.Monitor?.Log(
+                $"Skipped scheduling AI gift mail from {npc.Name} ({motive}): gift mail only runs for the host player.",
+                LogLevel.Trace);
+            return false;
+        }
+
         state.GiftMails ??= new List<NpcGiftMailFact>();
         string itemLabel = selection.DebugName;
         try
@@ -362,7 +377,11 @@ internal sealed class BehaviorMailService
 
     public void QueueDueGiftMailsForTomorrow()
     {
-        if (!Context.IsWorldReady || Game1.player == null)
+        // The IsMasterGame check is defense in depth for the ScheduleGiftMail gate: a farmhand
+        // must never write LivingNPCs mail keys into mailForTomorrow (they persist through the
+        // host's save while the backing Data/mail entries live only in this session's memory).
+        // Silent by design — this runs every save-load/day-start.
+        if (!Context.IsWorldReady || Game1.player == null || !Game1.IsMasterGame)
         {
             return;
         }
