@@ -61,6 +61,25 @@ internal sealed class NpcBio
     /// <summary>派生：有效肖像集 = {0,h,s,l,a}，再加明确配置的 u 或数字 ExtraPortraits 键。</summary>
     [JsonIgnore]
     public HashSet<string> ValidPortraits { get; set; } = new();
+
+    /// <summary>
+    /// 反序列化后归一：第三方传记 JSON 里显式写 null 的字段会被 Json.NET 覆盖掉属性初始化器
+    /// （NRT 管不到反序列化），一律回退空实例，保证加载链与消费端拿到的集合/字符串永不为 null。
+    /// 幂等，可重复调用。
+    /// </summary>
+    public void NormalizeNullFields()
+    {
+        this.Biography ??= string.Empty;
+        this.Relationships ??= new Dictionary<string, BioListEntry>();
+        this.Traits ??= new Dictionary<string, BioListEntry>();
+        this.BiographyEnd ??= string.Empty;
+        this.Gender ??= string.Empty;
+        this.Unique ??= string.Empty;
+        this.ExtraPortraits ??= new Dictionary<string, string>();
+        this.Preoccupations ??= new List<string>();
+        this.Dialogue ??= new Dictionary<string, string>();
+        this.PromptOverrides ??= new Dictionary<string, string>();
+    }
 }
 
 /// <summary>人际关系/性格特质条目（旧名 ListEntry，JSON 字段名为兼容契约）。</summary>

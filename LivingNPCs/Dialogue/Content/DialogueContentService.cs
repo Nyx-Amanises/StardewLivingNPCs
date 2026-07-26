@@ -234,6 +234,9 @@ internal sealed class DialogueContentService : IDialogueContent
         if (expansionCompatible)
         {
             bio = this.pipeline.LoadBioAsset(normalized);
+            // 第三方传记 JSON 可能显式写 null 字段；在 SVE 关系增补等任何消费之前先归一，
+            // 否则一个坏字段会让该 NPC 的 AI 对话整体报错（§4.3.2 挂载点防御）。
+            bio?.NormalizeNullFields();
         }
         else
         {
@@ -276,10 +279,10 @@ internal sealed class DialogueContentService : IDialogueContent
         return bio;
     }
 
-    /// <summary>加载后派生（§4.3 步骤 4）：肖像集、话题池、性别。</summary>
+    /// <summary>加载后派生（§4.3 步骤 4）：肖像集、话题池、性别。入口先做 null 字段归一。</summary>
     private void FinalizeBio(string normalized, NpcBio bio)
     {
-        bio.ExtraPortraits ??= new Dictionary<string, string>();
+        bio.NormalizeNullFields();
 
         bio.ValidPortraits = new HashSet<string>(BasePortraits, StringComparer.OrdinalIgnoreCase);
         foreach (string key in bio.ExtraPortraits.Keys)

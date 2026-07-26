@@ -43,7 +43,8 @@ internal static class DialogueSampleLoader
             }
         }
 
-        MergeAllowed(bio.Dialogue, samples, keyPrefix: null);
+        // GetBio 已归一 null 字段；这里再防御一层，保护直接构造 NpcBio 的调用方/测试。
+        MergeAllowed(bio.Dialogue ?? new Dictionary<string, string>(), samples, keyPrefix: null);
 
         return samples;
     }

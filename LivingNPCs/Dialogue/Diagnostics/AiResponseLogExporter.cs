@@ -159,9 +159,8 @@ internal static class AiResponseLogExporter
     }
     private static void AppendFence(StringBuilder builder, string text, string language)
     {
-        builder.AppendLine($"~~~{language}");
-        builder.AppendLine(string.IsNullOrWhiteSpace(text) ? "<empty>" : text.TrimEnd());
-        builder.AppendLine("~~~");
+        // Fence length adapts to the content so raw LLM output cannot break out (see the writer).
+        DiagnosticMarkdownLogWriter.AppendFencedBlock(builder, text, language);
     }
 
     private static string PrettyJson(string json)

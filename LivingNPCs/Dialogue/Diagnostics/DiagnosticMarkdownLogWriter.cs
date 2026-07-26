@@ -51,6 +51,34 @@ internal static class DiagnosticMarkdownLogWriter
         return builder.Length == 0 ? "unknown-npc" : builder.ToString();
     }
 
+    /// <summary>
+    /// Append a fenced code block whose fence is always longer than any tilde run inside the
+    /// content, so LLM output containing "~~~" lines cannot close the fence early and corrupt the
+    /// log structure. Shared by every diagnostics exporter.
+    /// </summary>
+    public static void AppendFencedBlock(StringBuilder builder, string? text, string language)
+    {
+        string content = string.IsNullOrWhiteSpace(text) ? "<empty>" : text.TrimEnd();
+        string fence = new string('~', Math.Max(3, LongestTildeRun(content) + 1));
+        builder.Append(fence).AppendLine(language);
+        builder.AppendLine(content);
+        builder.AppendLine(fence);
+    }
+
+    /// <summary>Length of the longest run of consecutive '~' characters anywhere in the text.</summary>
+    internal static int LongestTildeRun(string text)
+    {
+        int longest = 0;
+        int current = 0;
+        foreach (char character in text)
+        {
+            current = character == '~' ? current + 1 : 0;
+            longest = Math.Max(longest, current);
+        }
+
+        return longest;
+    }
+
     private static DiagnosticRunInfo CaptureRunInfo(string? explicitModVersion = null)
     {
         Assembly assembly = typeof(DiagnosticMarkdownLogWriter).Assembly;
