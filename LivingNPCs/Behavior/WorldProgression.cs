@@ -81,13 +81,19 @@ internal static class WorldProgression
     {
         Farmer farmer = Game1.getPlayerOrEventFarmer();
         var previousActivities = farmer.previousActiveDialogueEvents.FirstOrDefault();
+        Func<string, bool> isTopicActive = key => farmer.activeDialogueEvents.ContainsKey(key);
 
-        bool communityCenterRestored = HasActivity(previousActivities, "cc_Complete");
+        // Facility conversation topics are route-specific (cc_* on the community-center route,
+        // joja_* on the Joja route) and live in activeDialogueEvents for their first days before
+        // expiring into previousActiveDialogueEvents — so both key variants and both sets must be
+        // checked, or Joja saves would report the bus/greenhouse/minecarts as never repaired and
+        // every save would miss the days right after a repair.
+        bool communityCenterRestored = HasFacilityTopic(isTopicActive, previousActivities, "cc_Complete");
         bool jojaMember = HasMail(farmer, "JojaMember");
-        bool busRepaired = HasActivity(previousActivities, "cc_Bus");
-        bool greenhouseRepaired = HasActivity(previousActivities, "cc_Greenhouse");
-        bool minecartsRepaired = HasActivity(previousActivities, "cc_Minecart");
-        bool movieTheaterOpen = HasActivity(previousActivities, "movieTheater");
+        bool busRepaired = HasFacilityTopic(isTopicActive, previousActivities, "cc_Bus", "joja_Bus");
+        bool greenhouseRepaired = HasFacilityTopic(isTopicActive, previousActivities, "cc_Greenhouse", "joja_Greenhouse");
+        bool minecartsRepaired = HasFacilityTopic(isTopicActive, previousActivities, "cc_Minecart", "joja_Minecart");
+        bool movieTheaterOpen = HasFacilityTopic(isTopicActive, previousActivities, "movieTheater");
         bool gingerIslandUnlocked = HasMail(farmer, "willyBoat")
             || farmer.locationsVisited.Contains("IslandSouth");
 
@@ -239,9 +245,25 @@ internal static class WorldProgression
         );
     }
 
-    private static bool HasActivity(IDictionary<string, int>? activities, string key)
+    /// <summary>
+    /// Whether any of the given conversation-topic keys is currently active or has already
+    /// expired into the previous-activities history. Extracted so the route-specific key pairs
+    /// (cc_* / joja_*) and the active-window coverage can be tested without game state.
+    /// </summary>
+    internal static bool HasFacilityTopic(
+        Func<string, bool> isTopicActive,
+        IDictionary<string, int>? previousActivities,
+        params string[] topicKeys)
     {
-        return activities?.ContainsKey(key) == true;
+        foreach (string key in topicKeys)
+        {
+            if (previousActivities?.ContainsKey(key) == true || isTopicActive(key))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static bool HasMail(Farmer farmer, string key)

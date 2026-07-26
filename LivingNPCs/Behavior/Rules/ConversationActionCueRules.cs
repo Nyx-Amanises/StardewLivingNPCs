@@ -393,25 +393,27 @@ internal static class ConversationActionCueRules
         return true;
     }
 
+    private static readonly string[] PreparationPhraseFragments =
+    [
+        "等我一下",
+        "稍等",
+        "一会儿",
+        "准备一下",
+        "换件衣服",
+        "拿件衣服",
+        "拿衣服",
+        "雨衣",
+        "带把伞",
+        "拿把伞",
+        "wait a moment",
+        "get my coat",
+        "grab my coat",
+        "umbrella"
+    ];
+
     public static int DetectPreparationDelayMinutes(string npcResponse)
     {
-        return ContainsAny(
-            npcResponse,
-            "等我一下",
-            "稍等",
-            "一会儿",
-            "准备一下",
-            "换件衣服",
-            "拿件衣服",
-            "拿衣服",
-            "雨衣",
-            "带把伞",
-            "拿把伞",
-            "wait a moment",
-            "get my coat",
-            "grab my coat",
-            "umbrella"
-        )
+        return ContainsAny(npcResponse, PreparationPhraseFragments)
             ? 10
             : 0;
     }
@@ -797,18 +799,40 @@ internal static class ConversationActionCueRules
         string combinedText = $"{playerText} {npcResponse}";
         string rejectionNpcResponse = RemoveNonTravelFarewells(npcResponse);
         string rejectionCombinedText = RemoveNonTravelFarewells(combinedText);
-        if (ContainsAny(rejectionNpcResponse, TravelRejectionFragments)
-            || ContainsAny(rejectionCombinedText, FutureTravelPlanFragments))
-        {
-            return true;
-        }
-
-        if (DetectPreparationDelayMinutes(npcResponse) > 0)
+        if (!ContainsAny(rejectionNpcResponse, TravelRejectionFragments)
+            && !ContainsAny(rejectionCombinedText, FutureTravelPlanFragments))
         {
             return false;
         }
 
-        return false;
+        // Preparation wording ("坐一会儿再走吧" / "稍等，我拿把伞") overlaps rejection fragments
+        // such as "一会儿再". When the reply contains a preparation phrase AND stripping those
+        // phrases removes every rejection cue, the "rejection" was only the preparation wording —
+        // treat it as leaving in a moment, not a refusal. An explicit deferral that survives the
+        // stripping ("稍等……还是改天吧") stays a rejection.
+        if (DetectPreparationDelayMinutes(npcResponse) > 0
+            && !ContainsAny(RemovePhrases(rejectionNpcResponse, PreparationPhraseFragments), TravelRejectionFragments)
+            && !ContainsAny(RemovePhrases(rejectionCombinedText, PreparationPhraseFragments), FutureTravelPlanFragments))
+        {
+            return false;
+        }
+
+        return true;
+    }
+
+    private static string RemovePhrases(string text, string[] fragments)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        foreach (string fragment in fragments)
+        {
+            text = text.Replace(fragment, string.Empty, StringComparison.OrdinalIgnoreCase);
+        }
+
+        return text;
     }
 
     private static string RemoveNonTravelFarewells(string text)

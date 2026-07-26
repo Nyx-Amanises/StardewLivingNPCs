@@ -631,7 +631,6 @@ internal sealed class CompanionOutingRuntime
 
     private void UpdateStay(NPC npc, PendingCompanionOuting outing)
     {
-        this.AccumulateSharedTime(outing);
         GameLocation? destination = ResolveLocation(outing.TargetLocation);
         if (destination == null)
         {
@@ -639,13 +638,21 @@ internal sealed class CompanionOutingRuntime
             return;
         }
 
+        // Shared minutes only accrue while the NPC is actually at the destination: an event
+        // script or another mod can pull the NPC off-map mid-stay, and the farmer waiting there
+        // alone must not keep counting toward the shared-experience memory. The call still runs
+        // every tick so the observation clock stays in sync and the away window is never
+        // credited retroactively once the NPC walks back.
+        bool npcAtDestination = npc.currentLocation == destination;
+        this.AccumulateSharedTime(outing, npcAtDestination);
+
         if (this.world.TimeOfDay >= outing.StayUntilTimeOfDay)
         {
             this.BeginReturn(npc, outing);
             return;
         }
 
-        if (npc.currentLocation != destination)
+        if (!npcAtDestination)
         {
             // The NPC was moved off-map mid-stay (event scripts, other mods). Assign the walk
             // back once and wait for it, instead of re-running cross-map pathfinding every tick.
@@ -688,23 +695,42 @@ internal sealed class CompanionOutingRuntime
         this.TryShowSettledEmote(npc, outing, destination);
     }
 
-    private void AccumulateSharedTime(PendingCompanionOuting outing)
+    private void AccumulateSharedTime(PendingCompanionOuting outing, bool npcAtDestination = true)
     {
         if (outing.LastObservedTimeOfDay == this.world.TimeOfDay)
         {
             return;
         }
 
-        int elapsedMinutes = BehaviorTimeMath.GetElapsedMinutes(
+        outing.SharedMinutesAtDestination += ComputeSharedMinutesGain(
+            npcAtDestination,
+            IsPlayerAtLocation(outing.TargetLocation),
             outing.LastObservedTimeOfDay,
             this.world.TimeOfDay
         );
-        if (IsPlayerAtLocation(outing.TargetLocation))
+
+        // Always advance the clock, even when nothing was credited: otherwise the next credited
+        // window would retroactively include the minutes the NPC (or the farmer) was away.
+        outing.LastObservedTimeOfDay = this.world.TimeOfDay;
+    }
+
+    /// <summary>
+    /// Shared time counts only while both the NPC and the farmer are at the outing destination.
+    /// Extracted so the "NPC pulled off-map mid-stay must not keep accruing" rule is testable
+    /// without game state.
+    /// </summary>
+    internal static int ComputeSharedMinutesGain(
+        bool npcAtDestination,
+        bool farmerAtDestination,
+        int lastObservedTimeOfDay,
+        int currentTimeOfDay)
+    {
+        if (!npcAtDestination || !farmerAtDestination)
         {
-            outing.SharedMinutesAtDestination += elapsedMinutes;
+            return 0;
         }
 
-        outing.LastObservedTimeOfDay = this.world.TimeOfDay;
+        return BehaviorTimeMath.GetElapsedMinutes(lastObservedTimeOfDay, currentTimeOfDay);
     }
 
     private void BeginReturn(NPC npc, PendingCompanionOuting outing)

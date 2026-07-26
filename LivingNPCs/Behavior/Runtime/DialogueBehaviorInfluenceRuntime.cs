@@ -108,8 +108,26 @@ internal sealed class DialogueBehaviorInfluenceRuntime
         }
     }
 
+    /// <summary>
+    /// Influence types whose expression moves or halts the NPC via PathFindController / Halt,
+    /// which only the host simulates. On farmhands they would either do nothing or fall back to
+    /// a local face/emote while still recording a "DialogueDrivenBehavior" memory describing a
+    /// movement that never happened, so they are skipped there (the influence stays pending
+    /// instead of being consumed). The location reaction (visit_location: facing plus a speech
+    /// bubble) is purely local rendering and stays available on farmhands.
+    /// </summary>
+    internal static bool InfluenceRequiresHostSimulation(string influenceType)
+    {
+        return influenceType is "stay_near" or "comforted" or "offended" or "give_space" or "pause_to_talk";
+    }
+
     private bool CanTry(NPC npc, DialogueBehaviorInfluenceFact influence)
     {
+        if (!Game1.IsMasterGame && InfluenceRequiresHostSimulation(influence.Type))
+        {
+            return false;
+        }
+
         float distance = Vector2.Distance(npc.Tile, Game1.player.Tile);
         return influence.Type switch
         {

@@ -58,7 +58,10 @@ internal static class BehaviorActionExecutor
 
     public static bool TryApproachPlayer(NPC npc, bool allowApproachPlayer, bool allowFacePlayer)
     {
-        if (!allowApproachPlayer || Game1.currentLocation == null)
+        // Host-only: PathFindController.update only runs on the host, so a controller assigned
+        // on a farmhand never moves the NPC. Callers gate earlier (BehaviorEngine.CanExecute,
+        // DialogueBehaviorInfluenceRuntime.CanTry); this is defense in depth at the choke point.
+        if (!allowApproachPlayer || Game1.currentLocation == null || !Game1.IsMasterGame)
         {
             return false;
         }
@@ -81,7 +84,8 @@ internal static class BehaviorActionExecutor
 
     public static bool TryStepAway(NPC npc, bool allowApproachPlayer, bool allowFacePlayer)
     {
-        if (!allowApproachPlayer || Game1.currentLocation == null)
+        // Host-only for the same reason as TryApproachPlayer: the controller would be inert.
+        if (!allowApproachPlayer || Game1.currentLocation == null || !Game1.IsMasterGame)
         {
             return false;
         }

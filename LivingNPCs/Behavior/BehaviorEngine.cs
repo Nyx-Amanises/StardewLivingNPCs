@@ -885,6 +885,15 @@ internal sealed class BehaviorEngine
             return false;
         }
 
+        if (!Game1.IsMasterGame && RequiresHostSimulation(intent.Type))
+        {
+            // Mirrors the companion-outing host gate: rejecting here (instead of letting the
+            // executor fail silently) also skips the memory entry, the state update, and the
+            // daily-budget charge that would otherwise describe a movement that never happened.
+            reason = "movement behaviors only run for the host player";
+            return false;
+        }
+
         if (Game1.eventUp)
         {
             reason = "an event is active";
@@ -935,6 +944,20 @@ internal sealed class BehaviorEngine
 
         reason = string.Empty;
         return true;
+    }
+
+    /// <summary>
+    /// Whether this intent manipulates NPC movement state (PathFindController / Halt) that only
+    /// the host simulates. On farmhands these are no-ops — the host keeps driving the NPC — yet
+    /// they used to be recorded and charged against the daily budget, leaving "they stepped
+    /// closer" style memories for movements that never happened. Purely visual intents (facing,
+    /// emotes, glances) render locally and stay allowed on farmhands.
+    /// </summary>
+    internal static bool RequiresHostSimulation(BehaviorIntentType intentType)
+    {
+        return intentType is BehaviorIntentType.ApproachPlayer
+            or BehaviorIntentType.StepAway
+            or BehaviorIntentType.Pause;
     }
 
     private string DescribeIntent(BehaviorIntentType intentType)
