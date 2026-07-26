@@ -104,7 +104,36 @@ internal static class GiftCatalog
         new("(O)649", "Fiddlehead Risotto", "意式蕨菜炖饭", GiftTier.Meaningful, ["food", "nature", "refined", "special"]),
         new("(O)730", "Lobster Bisque", "龙虾浓汤", GiftTier.Meaningful, ["food", "fish", "refined", "special"]),
         new("(O)733", "Shrimp Cocktail", "虾鸡尾酒", GiftTier.Meaningful, ["food", "fish", "refined", "special"]),
-        new("(O)907", "Tropical Curry", "热带咖喱", GiftTier.Meaningful, ["food", "adventurous", "refined", "special"])
+        new("(O)907", "Tropical Curry", "热带咖喱", GiftTier.Meaningful, ["food", "adventurous", "refined", "special"]),
+
+        // —— 2026-07 扩容：个性池专属条目（不入公共池；口味依据原版 loved/liked 事实） ——
+        new("(O)16", "Wild Horseradish", "野山葵", GiftTier.Small, ["forage", "nature", "practical"], "spring"),
+        new("(O)20", "Leek", "韭葱", GiftTier.Small, ["forage", "food", "practical"], "spring"),
+        new("(O)24", "Parsnip", "防风草", GiftTier.Small, ["food", "nature", "practical"], "spring"),
+        new("(O)80", "Quartz", "石英", GiftTier.Small, ["mineral", "scholarly", "magical"]),
+        new("(O)88", "Coconut", "椰子", GiftTier.Small, ["food", "nature", "adventurous"]),
+        new("(O)90", "Cactus Fruit", "仙人掌果", GiftTier.Small, ["food", "nature", "sweet"]),
+        new("(O)154", "Sea Cucumber", "海参", GiftTier.Small, ["fish", "nature", "adventurous"]),
+        new("(O)244", "Roots Platter", "根茎拼盘", GiftTier.Small, ["food", "nature", "practical"]),
+        new("(O)260", "Hot Pepper", "辣椒", GiftTier.Small, ["food", "adventurous", "nature"], "summer"),
+        new("(O)284", "Beet", "甜菜", GiftTier.Small, ["food", "nature", "homestyle"], "fall"),
+        new("(O)305", "Void Egg", "虚空蛋", GiftTier.Small, ["magical", "adventurous", "nature"]),
+        new("(O)398", "Grape", "葡萄", GiftTier.Small, ["food", "sweet", "nature"]),
+        new("(O)635", "Orange", "橙子", GiftTier.Small, ["food", "sweet", "nature"], "summer"),
+        new("(O)636", "Peach", "桃子", GiftTier.Small, ["food", "sweet", "nature"], "summer"),
+        new("(O)637", "Pomegranate", "石榴", GiftTier.Small, ["food", "sweet", "artistic"], "fall"),
+        new("(O)715", "Lobster", "龙虾", GiftTier.Small, ["fish", "refined"]),
+        new("(O)729", "Escargot", "焗蜗牛", GiftTier.Small, ["food", "refined", "adventurous"]),
+        new("(O)768", "Solar Essence", "太阳精华", GiftTier.Small, ["magical", "mineral"]),
+        new("(O)769", "Void Essence", "虚空精华", GiftTier.Small, ["magical", "mineral"]),
+
+        new("(O)128", "Pufferfish", "河豚", GiftTier.Meaningful, ["fish", "adventurous", "special"]),
+        new("(O)143", "Catfish", "鲶鱼", GiftTier.Meaningful, ["fish", "nature", "special"]),
+        new("(O)254", "Melon", "甜瓜", GiftTier.Meaningful, ["food", "sweet", "special"], "summer"),
+        new("(O)308", "Void Mayonnaise", "虚空蛋黄酱", GiftTier.Meaningful, ["magical", "artisan", "special"]),
+        new("(O)428", "Cloth", "布料", GiftTier.Meaningful, ["artisan", "artistic", "practical"]),
+        new("(O)440", "Wool", "羊毛", GiftTier.Meaningful, ["animal", "artistic", "comfort"]),
+        new("(O)575", "Obsidian", "黑曜石", GiftTier.Meaningful, ["mineral", "magical", "adventurous"])
     ];
 
     private static readonly IReadOnlyDictionary<string, GiftCandidate> CandidatesById =
@@ -134,40 +163,61 @@ internal static class GiftCatalog
     private static readonly IReadOnlyDictionary<string, NpcGiftPool> VanillaNpcPools =
         new Dictionary<string, NpcGiftPool>(StringComparer.OrdinalIgnoreCase)
         {
-            ["Abigail"] = new("阿比盖尔", ["(O)203"], ["(O)66", "(O)84", "(O)226"]),
+            ["Abigail"] = new("阿比盖尔", ["(O)203"], ["(O)66", "(O)84", "(O)226", "(O)128"]),
             ["Alex"] = new("亚历克斯", ["(O)201", "(O)215", "(O)350"], ["(O)204", "(O)226"]),
             ["Caroline"] = new("卡洛琳", ["(O)207", "(O)376", "(O)606", "(O)609"], ["(O)60"]),
             ["Clint"] = new("克林特", ["(O)205", "(O)243"], ["(O)68", "(O)82", "(O)86"]),
             ["Demetrius"] = new("德米特里厄斯", ["(O)205", "(O)350", "(O)606"], ["(O)60", "(O)394"]),
             ["Dwarf"] = new("矮人", ["(O)203", "(O)243"], ["(O)68", "(O)82", "(O)86"]),
-            ["Elliott"] = new("艾利欧特", ["(O)202", "(O)218", "(O)350"], ["(O)62", "(O)394", "(O)445"]),
-            ["Emily"] = new("艾米丽", ["(O)350", "(O)376", "(O)606"], ["(O)60", "(O)66", "(O)70"]),
-            ["Evelyn"] = new("艾芙琳", ["(O)222", "(O)604", "(O)611"], ["(O)446"]),
-            ["George"] = new("乔治", ["(O)199", "(O)205", "(O)208"], ["(O)231"]),
-            ["Gus"] = new("格斯", ["(O)197", "(O)605", "(O)732"], ["(O)231", "(O)445"]),
-            ["Haley"] = new("海莉", ["(O)222", "(O)350", "(O)376"], ["(O)62", "(O)394", "(O)446"]),
+            ["Elliott"] = new("艾利欧特", ["(O)202", "(O)218", "(O)350", "(O)637", "(O)715"], ["(O)62", "(O)394", "(O)445"]),
+            ["Emily"] = new("艾米丽", ["(O)350", "(O)376", "(O)606"], ["(O)60", "(O)66", "(O)70", "(O)428", "(O)440"]),
+            ["Evelyn"] = new("艾芙琳", ["(O)222", "(O)604", "(O)611", "(O)284"], ["(O)446"]),
+            ["George"] = new("乔治", ["(O)199", "(O)205", "(O)208", "(O)20"], ["(O)231"]),
+            ["Gus"] = new("格斯", ["(O)197", "(O)605", "(O)732", "(O)635"], ["(O)231", "(O)445"]),
+            ["Haley"] = new("海莉", ["(O)222", "(O)350", "(O)376", "(O)88"], ["(O)62", "(O)394", "(O)446"]),
             ["Harvey"] = new("哈维", ["(O)342", "(O)350", "(O)609"], ["(O)62", "(O)204"]),
             ["Jas"] = new("贾斯", ["(O)222", "(O)604", "(O)611"], ["(O)446"]),
-            ["Jodi"] = new("乔迪", ["(O)197", "(O)208", "(O)605"], ["(O)231"]),
-            ["Kent"] = new("肯特", ["(O)199", "(O)208", "(O)238"], ["(O)204"]),
-            ["Krobus"] = new("科罗布斯", ["(O)203", "(O)205", "(O)342"], ["(O)84", "(O)86"]),
+            ["Jodi"] = new("乔迪", ["(O)197", "(O)208", "(O)605", "(O)211"], ["(O)231"]),
+            ["Kent"] = new("肯特", ["(O)199", "(O)208", "(O)238"], ["(O)204", "(O)649"]),
+            ["Krobus"] = new("科罗布斯", ["(O)203", "(O)205", "(O)342", "(O)16", "(O)305"], ["(O)84", "(O)86", "(O)308"]),
             ["Leah"] = new("莉亚", ["(O)605", "(O)606", "(O)609"], ["(O)60", "(O)231", "(O)394"]),
             ["Leo"] = new("雷欧", ["(O)202", "(O)213", "(O)350"], ["(O)265", "(O)394"]),
-            ["Lewis"] = new("刘易斯", ["(O)199", "(O)208", "(O)607"], ["(O)204", "(O)445"]),
-            ["Linus"] = new("莱纳斯", ["(O)205", "(O)342", "(O)607"], ["(O)86", "(O)394"]),
+            ["Lewis"] = new("刘易斯", ["(O)199", "(O)208", "(O)607", "(O)260"], ["(O)204", "(O)445"]),
+            ["Linus"] = new("莱纳斯", ["(O)205", "(O)342", "(O)607", "(O)90"], ["(O)86", "(O)394"]),
             ["Marnie"] = new("玛妮", ["(O)197", "(O)201", "(O)607"], ["(O)231", "(O)446"]),
             ["Maru"] = new("玛鲁", ["(O)201", "(O)243", "(O)350"], ["(O)60", "(O)68"]),
-            ["Pam"] = new("潘姆", ["(O)208", "(O)215", "(O)346"], ["(O)204", "(O)226"]),
-            ["Penny"] = new("潘妮", ["(O)222", "(O)376", "(O)611"], ["(O)60", "(O)62"]),
+            ["Pam"] = new("潘姆", ["(O)208", "(O)215", "(O)346", "(O)24", "(O)90"], ["(O)204", "(O)226"]),
+            ["Penny"] = new("潘妮", ["(O)222", "(O)376", "(O)611", "(O)244"], ["(O)60", "(O)62", "(O)254"]),
             ["Pierre"] = new("皮埃尔", ["(O)342", "(O)605", "(O)607"], ["(O)204", "(O)445"]),
-            ["Robin"] = new("罗宾", ["(O)197", "(O)201", "(O)215"], ["(O)68", "(O)86"]),
-            ["Sam"] = new("山姆", ["(O)215", "(O)350", "(O)732"], ["(O)64", "(O)226"]),
+            ["Robin"] = new("罗宾", ["(O)197", "(O)201", "(O)215", "(O)636"], ["(O)68", "(O)86"]),
+            ["Sam"] = new("山姆", ["(O)215", "(O)350", "(O)732", "(O)90"], ["(O)64", "(O)226"]),
             ["Sandy"] = new("桑迪", ["(O)222", "(O)350", "(O)376"], ["(O)62", "(O)394"]),
-            ["Sebastian"] = new("塞巴斯蒂安", ["(O)203", "(O)205", "(O)346"], ["(O)64", "(O)82", "(O)84"]),
-            ["Shane"] = new("谢恩", ["(O)201", "(O)215", "(O)346"], ["(O)204", "(O)226"]),
-            ["Vincent"] = new("文森特", ["(O)350", "(O)604", "(O)611"], ["(O)446"]),
-            ["Willy"] = new("威利", ["(O)202", "(O)212", "(O)213", "(O)214", "(O)225", "(O)732"], ["(O)265", "(O)394", "(O)445"]),
-            ["Wizard"] = new("法师", ["(O)203", "(O)205", "(O)243"], ["(O)66", "(O)82", "(O)84", "(O)86"])
+            ["Sebastian"] = new("塞巴斯蒂安", ["(O)203", "(O)205", "(O)346", "(O)305"], ["(O)64", "(O)82", "(O)84", "(O)575"]),
+            ["Shane"] = new("谢恩", ["(O)201", "(O)215", "(O)346", "(O)260"], ["(O)204", "(O)226"]),
+            ["Vincent"] = new("文森特", ["(O)350", "(O)604", "(O)611", "(O)398"], ["(O)446"]),
+            ["Willy"] = new("威利", ["(O)202", "(O)212", "(O)213", "(O)214", "(O)225", "(O)732", "(O)154", "(O)729"], ["(O)265", "(O)394", "(O)445", "(O)143"]),
+            ["Wizard"] = new("法师", ["(O)203", "(O)205", "(O)243", "(O)768", "(O)769"], ["(O)66", "(O)82", "(O)84", "(O)86"])
+        };
+
+    /// <summary>
+    /// SVE 核心角色个性池（2026-07 扩容）：口味按公开资料手写为事实数据，不复制内容包文本；
+    /// 未收录的扩展角色仍只用公共池。Morris 同时登记 SVE 内部名 MorrisTod。
+    /// </summary>
+    private static readonly IReadOnlyDictionary<string, NpcGiftPool> SveNpcPools =
+        new Dictionary<string, NpcGiftPool>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["Claire"] = new("克莱尔", ["(O)253", "(O)233", "(O)610"], ["(O)220"]),
+            ["Sophia"] = new("索菲亚", ["(O)595", "(O)611", "(O)612"], ["(O)221"]),
+            ["Andy"] = new("安迪", ["(O)346", "(O)350", "(O)210"], ["(O)240"]),
+            ["Susan"] = new("苏珊", ["(O)211", "(O)222", "(O)614"], ["(O)608"]),
+            ["Olivia"] = new("奥利维亚", ["(O)614", "(O)618", "(O)610"], ["(O)72", "(O)445"]),
+            ["Victor"] = new("维克托", ["(O)253", "(O)196", "(O)232"], ["(O)62"]),
+            ["Lance"] = new("兰斯", ["(O)241", "(O)218", "(O)213"], ["(O)907"]),
+            ["Scarlett"] = new("斯嘉丽", ["(O)340", "(O)344", "(O)421"], ["(O)424"]),
+            ["Gunther"] = new("冈瑟", ["(O)80", "(O)614"], ["(O)70", "(O)86"]),
+            ["Martin"] = new("马丁", ["(O)253", "(O)210", "(O)403"], ["(O)240"]),
+            ["Morris"] = new("莫里斯", ["(O)253", "(O)614", "(O)618"], ["(O)72"]),
+            ["MorrisTod"] = new("莫里斯", ["(O)253", "(O)614", "(O)618"], ["(O)72"])
         };
 
     static GiftCatalog()
@@ -179,11 +229,19 @@ internal static class GiftCatalog
             ValidateItemIds(pool.SmallItemIds, GiftTier.Small, $"{npcName} small");
             ValidateItemIds(pool.MeaningfulItemIds, GiftTier.Meaningful, $"{npcName} meaningful");
         }
+
+        foreach ((string npcName, NpcGiftPool pool) in SveNpcPools)
+        {
+            ValidateItemIds(pool.SmallItemIds, GiftTier.Small, $"{npcName} small");
+            ValidateItemIds(pool.MeaningfulItemIds, GiftTier.Meaningful, $"{npcName} meaningful");
+        }
     }
 
     public static int CandidateCount => Candidates.Count;
 
     public static IReadOnlyDictionary<string, NpcGiftPool> VanillaPersonalizedPools => VanillaNpcPools;
+
+    public static IReadOnlyDictionary<string, NpcGiftPool> SvePersonalizedPools => SveNpcPools;
 
     public static IReadOnlyList<GiftCandidate> GetCommonCandidates(GiftTier tier)
     {
@@ -197,7 +255,8 @@ internal static class GiftCatalog
 
     public static IReadOnlyList<GiftCandidate> GetPersonalizedCandidates(string npcName, GiftTier tier)
     {
-        if (!VanillaNpcPools.TryGetValue(npcName, out NpcGiftPool? pool))
+        if (!VanillaNpcPools.TryGetValue(npcName, out NpcGiftPool? pool)
+            && !SveNpcPools.TryGetValue(npcName, out pool))
         {
             return Array.Empty<GiftCandidate>();
         }

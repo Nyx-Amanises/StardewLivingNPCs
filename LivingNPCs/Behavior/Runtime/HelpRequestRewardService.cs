@@ -104,7 +104,9 @@ internal sealed class HelpRequestRewardService
             return false;
         }
 
-        GiftSelection selection = this.giftSelector.Choose(npc, state, request.Summary, request.Resolution);
+        // 谢礼按求助主题加权：把 NPC 的求助主题词并入话题文本（关键词表认英文 tag 词）。
+        string themeHint = HelpRequestAdvisor.BuildRewardGiftThemeHint(npc);
+        GiftSelection selection = this.giftSelector.Choose(npc, state, $"{request.Summary} {themeHint}", request.Resolution);
         SObject gift = ItemRegistry.Create<SObject>(selection.ItemId);
         string sourceGiftName = BuildHelpRequestRewardSourceGift(request);
         string giftReason = GiftActionRules.BuildGiftSelectionReason(

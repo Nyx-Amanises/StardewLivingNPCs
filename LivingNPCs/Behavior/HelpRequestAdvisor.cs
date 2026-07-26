@@ -201,6 +201,17 @@ internal static class HelpRequestAdvisor
         return $"theme {profile.Theme}; currently reasonable item requests: {itemText}; allowed help request type: item_request only; never create question_request; request relationship tier: {relationshipText}; request depth: {stageText}; world-stage constraint: {routeText}{chainText}; whenever the visible reply has this NPC ask the farmer to bring or find one of the listed items — whether the farmer offered first or the NPC raised it — you MUST also include exactly one hidden helpRequests entry with a concrete itemId from this list, and never leave the favor only in the spoken text; when the farmer agrees to such a favor, include a hidden helpRequestUpdates entry with status accepted; if no listed item naturally fits, keep the visible reply as ordinary conversation and do not open a hidden request.";
     }
 
+    /// <summary>
+    /// 谢礼主题词：把该 NPC 的求助主题与标签词并入礼物选择的话题文本
+    /// （GiftSelector 的关键词表直接认这些英文 tag 词），让求助谢礼更像"对口回礼"
+    /// ——Clint 谢矿石之恩回赠矿工向小礼，而不是随机一朵花。
+    /// </summary>
+    public static string BuildRewardGiftThemeHint(NPC npc)
+    {
+        var profile = GetProfile(npc);
+        return $"{profile.Theme} {string.Join(" ", profile.Tags)}";
+    }
+
     public static string BuildDebugLabel(NPC npc, WorldProgressSnapshot progression)
     {
         var profile = GetProfile(npc);

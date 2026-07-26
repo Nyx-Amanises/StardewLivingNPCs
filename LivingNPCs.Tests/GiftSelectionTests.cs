@@ -5,18 +5,20 @@ namespace LivingNPCs.Tests;
 public sealed class GiftSelectionTests
 {
     [Fact]
-    public void CatalogContainsNinetySixReachableGifts()
+    public void CatalogContainsOnlyReachableGifts()
     {
         var reachableIds = Enum.GetValues<GiftTier>()
             .SelectMany(tier => GiftCatalog.GetCommonCandidates(tier)
-                .Concat(GiftCatalog.VanillaPersonalizedPools.Keys.SelectMany(npcName =>
-                    GiftCatalog.GetPersonalizedCandidates(npcName, tier)
+                .Concat(GiftCatalog.VanillaPersonalizedPools.Keys
+                    .Concat(GiftCatalog.SvePersonalizedPools.Keys)
+                    .SelectMany(npcName => GiftCatalog.GetPersonalizedCandidates(npcName, tier)
                 )))
             .Select(candidate => candidate.ItemId)
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        Assert.Equal(96, GiftCatalog.CandidateCount);
+        // 2026-07 扩容：96 → 122（新增 26 件个性池专属条目）。
+        Assert.Equal(122, GiftCatalog.CandidateCount);
         Assert.Equal(GiftCatalog.CandidateCount, reachableIds.Count);
     }
 
@@ -42,13 +44,28 @@ public sealed class GiftSelectionTests
     }
 
     [Fact]
-    public void ModNpcUsesOnlySharedPoolForNow()
+    public void SveCoreCastHasPersonalizedPoolsAndUnknownModNpcStaysShared()
     {
-        Assert.Empty(GiftCatalog.GetPersonalizedCandidates("Sophia", GiftTier.Small));
+        // SVE 核心角色现在有个性池（含 Morris 的 SVE 内部名 MorrisTod）。
+        string[] sveNames =
+        [
+            "Claire", "Sophia", "Andy", "Susan", "Olivia", "Victor",
+            "Lance", "Scarlett", "Gunther", "Martin", "Morris", "MorrisTod"
+        ];
+        Assert.Equal(sveNames.Length, GiftCatalog.SvePersonalizedPools.Count);
+        foreach (string npcName in sveNames)
+        {
+            Assert.True(GiftCatalog.SvePersonalizedPools.ContainsKey(npcName));
+            Assert.NotEmpty(GiftCatalog.GetPersonalizedCandidates(npcName, GiftTier.Small));
+            Assert.NotEmpty(GiftCatalog.GetPersonalizedCandidates(npcName, GiftTier.Meaningful));
+        }
+
+        // 未收录的第三方 NPC 仍只用公共池。
+        Assert.Empty(GiftCatalog.GetPersonalizedCandidates("June", GiftTier.Small));
         Assert.Empty(GiftCatalog.GetPersonalizedCandidates("June", GiftTier.Meaningful));
         Assert.Equal(
             GiftCatalog.GetCommonCandidates(GiftTier.Small).Count,
-            GiftCatalog.GetAvailableCandidates("Sophia", GiftTier.Small).Count
+            GiftCatalog.GetAvailableCandidates("June", GiftTier.Small).Count
         );
     }
 
