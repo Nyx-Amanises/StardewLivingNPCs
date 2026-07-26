@@ -80,6 +80,16 @@ internal static class DialogueUiStateGuard
         return false;
     }
 
+    /// <summary>
+    /// 关闭/废弃临时会话（思考窗、输入框）后是否允许清理全局对话状态（纯函数，F1/F3 共用的
+    /// 三重守门）：仅当无任何菜单打开、说话人仍指向本 NPC、且该 NPC 的对白栈已空——三者同时
+    /// 成立才认定是本会话残留；任一不满足都不碰全局状态（绝不误关他人打开的菜单）。
+    /// </summary>
+    public static bool ShouldClearResidualDialogueState(bool menuIsNull, bool currentSpeakerIsOwnNpc, bool ownNpcStackEmpty)
+    {
+        return menuIsNull && currentSpeakerIsOwnNpc && ownNpcStackEmpty;
+    }
+
     public static void RemoveDialogue(NPC npc, GameDialogue dialogue)
     {
         if (dialogue == null)

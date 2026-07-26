@@ -83,7 +83,9 @@ internal static class DialogueDisplayInterceptor
         return true;
     }
 
-    /// <summary>占位改道（§4.2.2 第 4 步）：弹掉占位；断网压 ... 对白；否则以 # 后续行为参考发起基础生成并清栈。</summary>
+    /// <summary>占位改道（§4.2.2 第 4 步）：弹掉占位；断网压 ... 对白；否则以 # 后续行为参考发起基础生成并清栈。
+    /// 入队失败（调度器忙）绝不清栈、不置 currentSpeaker（F2）：有参考原文则还原成普通对白照常显示，
+    /// 无参考原文仅抑制本次显示（栈已弹掉占位，其余保持原样，下次交互可重试）。</summary>
     private static GameDialogue? InterceptPlaceholder(NPC speaker, GameDialogue placeholder)
     {
         DialogueUiStateGuard.RemoveDialogue(speaker, placeholder);
@@ -97,11 +99,58 @@ internal static class DialogueDisplayInterceptor
 
         string reference = DialoguePatchHelpers.JoinDialogueLines(placeholder.dialogues.Skip(1));
         string dialogueKey = DialoguePatchHelpers.ResolvePlaceholderKey(placeholder);
-        GenerationRequests.Enqueue(speaker, GenerationRequests.BuildScheduled(speaker, dialogueKey, reference));
-        Game1.currentSpeaker = speaker;
-        speaker.CurrentDialogue.Clear();
-        return null;
+        bool enqueued = GenerationRequests.Enqueue(speaker, GenerationRequests.BuildScheduled(speaker, dialogueKey, reference));
+        switch (ResolveInterceptOutcome(enqueued, !string.IsNullOrWhiteSpace(reference)))
+        {
+            case PlaceholderInterceptOutcome.RestoredOriginal:
+            {
+                // 调度器忙已由其记 Warn；这里把原版参考台词还原为普通对白照常显示。
+                DialogueServices.Monitor?.Log(
+                    Util.GetConsoleString(
+                        "dialogue.log.placeholderFallback",
+                        new { npc = speaker.Name },
+                        $"Generation is busy; showing the vanilla line for {speaker.Name} instead of an AI reroute."),
+                    LogLevel.Trace);
+                var restored = new GameDialogue(speaker, placeholder.TranslationKey, reference)
+                {
+                    removeOnNextMove = placeholder.removeOnNextMove,
+                    temporaryDialogueKey = placeholder.temporaryDialogueKey
+                };
+                speaker.CurrentDialogue.Push(restored);
+                return restored;
+            }
+
+            case PlaceholderInterceptOutcome.SuppressedWithoutReroute:
+                // 无参考原文可还原（裸占位）：仅吞掉本次显示，不动栈、不置 currentSpeaker。
+                return null;
+
+            default:
+                Game1.currentSpeaker = speaker;
+                speaker.CurrentDialogue.Clear();
+                return null;
+        }
     }
+
+    /// <summary>入队结果 → 处置（纯函数，F2 矩阵单测）。</summary>
+    internal static PlaceholderInterceptOutcome ResolveInterceptOutcome(bool enqueued, bool hasReferenceText)
+    {
+        if (enqueued)
+        {
+            return PlaceholderInterceptOutcome.Rerouted;
+        }
+
+        return hasReferenceText
+            ? PlaceholderInterceptOutcome.RestoredOriginal
+            : PlaceholderInterceptOutcome.SuppressedWithoutReroute;
+    }
+}
+
+/// <summary>占位拦截的三种处置：改道生成（清栈交给思考窗）；忙时还原原版台词；忙且无原文仅抑制。</summary>
+internal enum PlaceholderInterceptOutcome
+{
+    Rerouted,
+    RestoredOriginal,
+    SuppressedWithoutReroute
 }
 
 /// <summary>P11a：DrawDialogue(Dialogue) 重载（思考窗、DrawDialogue(NPC,String) 等路径汇入点）。</summary>

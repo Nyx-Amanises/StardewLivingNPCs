@@ -59,9 +59,19 @@ internal static class ThinkingDialogueController
         DialogueUiStateGuard.RemoveDialogue(npc, activeDialogue);
         RemoveStale(npc);
 
-        if (closingThinkingBox || DialogueUiStateGuard.HasEmptyDialogueStack(npc))
+        if (closingThinkingBox)
         {
-            DialogueUiStateGuard.ClearDialogueState(npc, closingThinkingBox ? dialogueBox : null);
+            // 当前菜单确是本思考窗：正常收窗并清理对话状态。
+            DialogueUiStateGuard.ClearDialogueState(npc, dialogueBox);
+        }
+        else if (DialogueUiStateGuard.ShouldClearResidualDialogueState(
+            menuIsNull: Game1.activeClickableMenu == null,
+            currentSpeakerIsOwnNpc: npc != null && ReferenceEquals(Game1.currentSpeaker, npc),
+            ownNpcStackEmpty: DialogueUiStateGuard.HasEmptyDialogueStack(npc)))
+        {
+            // 思考窗已被外力关闭：仅当全局状态确为本会话残留时清理（F3 三重守门），
+            // 绝不把事件/其他 mod 正在显示的 DialogueBox 置 null。
+            DialogueUiStateGuard.ClearDialogueState(npc);
         }
 
         Clear();

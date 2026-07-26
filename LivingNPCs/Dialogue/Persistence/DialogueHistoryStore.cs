@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
@@ -109,12 +110,7 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
 
         lock (this.gate)
         {
-            var existing = this.GetOrLoad(npcName);
-            bool hadContent = existing.Any() || existing.ThirdPartyHistory.Count > 0;
-            this.cache[npcName] = new StardewEventHistory { NpcName = npcName };
-            this.PersistOne(npcName);
-            this.dirty.Remove(npcName);
-            return hadContent;
+            return this.ForgetNoLockInternal(npcName);
         }
     }
 
@@ -138,8 +134,16 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
         var existing = this.GetOrLoad(npcName);
         bool hadContent = existing.Any() || existing.ThirdPartyHistory.Count > 0;
         this.cache[npcName] = new StardewEventHistory { NpcName = npcName };
-        this.PersistOne(npcName);
-        this.dirty.Remove(npcName);
+        if (this.PersistOne(npcName))
+        {
+            this.dirty.Remove(npcName);
+        }
+        else
+        {
+            // 立即落盘失败（如帮工文件暂不可写）：保留脏标记，下次保存重试（F6）。
+            this.dirty.Add(npcName);
+        }
+
         return hadContent;
     }
 
@@ -261,19 +265,32 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
 
             if (this.env.IsMainPlayer)
             {
+                // 脏标记只在该 NPC 确实写成功后清除（F6）：失败的留到下次保存重试。
                 foreach (string npcName in this.dirty.ToList())
                 {
-                    this.PersistHost(npcName);
+                    try
+                    {
+                        this.PersistHost(npcName);
+                        this.dirty.Remove(npcName);
+                    }
+                    catch (Exception ex)
+                    {
+                        DialogueServices.Monitor?.Log(
+                            Util.GetConsoleString(
+                                "dialogue.log.stepFailed",
+                                new { step = $"persist the dialogue history of {npcName}", error = ex.Message },
+                                $"Failed to persist the dialogue history of {npcName}: {ex.Message}"),
+                            LogLevel.Warn);
+                    }
                 }
 
                 this.WarnIfTotalSizeExceeded();
             }
-            else
+            else if (this.PersistFarmhandEntries(this.dirty.ToList()))
             {
-                this.PersistFarmhandEntries(this.dirty.ToList());
+                // 帮工历史是单文件整体写：只有写成功才清全部脏标记（F6）。
+                this.dirty.Clear();
             }
-
-            this.dirty.Clear();
         }
     }
 
@@ -320,21 +337,34 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
         }
     }
 
-    private void PersistOne(string npcName)
+    private bool PersistOne(string npcName)
     {
         if (!this.env.IsWorldReady)
         {
-            return;
+            // 未载入存档：无处可写，视为已处理（缓存即最终状态）。
+            return true;
         }
 
         if (this.env.IsMainPlayer)
         {
-            this.PersistHost(npcName);
+            try
+            {
+                this.PersistHost(npcName);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                DialogueServices.Monitor?.Log(
+                    Util.GetConsoleString(
+                        "dialogue.log.stepFailed",
+                        new { step = $"persist the dialogue history of {npcName}", error = ex.Message },
+                        $"Failed to persist the dialogue history of {npcName}: {ex.Message}"),
+                    LogLevel.Warn);
+                return false;
+            }
         }
-        else
-        {
-            this.PersistFarmhandEntries(new[] { npcName });
-        }
+
+        return this.PersistFarmhandEntries(new[] { npcName });
     }
 
     private void PersistHost(string npcName)
@@ -372,17 +402,18 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
         this.env.WriteSaveData(HistoryLogicalKey(npcName), history);
     }
 
-    private void PersistFarmhandEntries(IReadOnlyCollection<string> npcNames)
+    private bool PersistFarmhandEntries(IReadOnlyCollection<string> npcNames)
     {
         string? relativePath = this.MultiplayerRelativePath();
         if (relativePath == null)
         {
-            return;
+            return false;
         }
 
         try
         {
-            JObject root = this.env.ReadModJsonFile(relativePath) ?? new JObject();
+            // 读损坏时隔离坏文件后从空开始（F6）：写入立即恢复，不再每晚静默失败。
+            JObject root = this.ReadFarmhandRootTolerant(relativePath) ?? new JObject();
             foreach (string npcName in npcNames)
             {
                 if (!this.cache.TryGetValue(npcName, out var history))
@@ -404,6 +435,7 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
             }
 
             this.env.WriteModJsonFile(relativePath, root);
+            return true;
         }
         catch (Exception ex)
         {
@@ -413,7 +445,56 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
                     new { step = "write the farmhand dialogue history file", error = ex.Message },
                     $"Failed to write the farmhand dialogue history file: {ex.Message}"),
                 LogLevel.Error);
+            return false;
         }
+    }
+
+    /// <summary>
+    /// 容错读取帮工历史根对象（F6）：解析失败先把坏文件改名成 .corrupt-时间戳 备份
+    /// （绝不静默丢弃字节），再按"无文件"处理——后续读取干净、下次写入直接重建。
+    /// </summary>
+    private JObject? ReadFarmhandRootTolerant(string relativePath)
+    {
+        try
+        {
+            return this.env.ReadModJsonFile(relativePath);
+        }
+        catch (Exception ex)
+        {
+            this.QuarantineCorruptFarmhandFile(relativePath, ex);
+            return null;
+        }
+    }
+
+    private void QuarantineCorruptFarmhandFile(string relativePath, Exception cause)
+    {
+        string backupLabel;
+        try
+        {
+            string source = Path.Combine(this.env.ModDirectoryPath, relativePath);
+            string target = source + ".corrupt-" + DateTime.UtcNow.ToString("yyyyMMdd-HHmmssfff");
+            if (File.Exists(source))
+            {
+                File.Move(source, target);
+                backupLabel = target;
+            }
+            else
+            {
+                backupLabel = "(source file not found)";
+            }
+        }
+        catch (Exception moveEx)
+        {
+            // 改名失败也不致命：写入路径本就整文件覆盖，仅备份缺失。
+            backupLabel = $"(rename failed: {moveEx.Message})";
+        }
+
+        DialogueServices.Monitor?.Log(
+            Util.GetConsoleString(
+                "dialogue.log.farmhandHistoryQuarantined",
+                new { file = relativePath, backup = backupLabel, error = cause.Message },
+                $"The farmhand dialogue history file '{relativePath}' is corrupt and was quarantined to '{backupLabel}'; starting fresh so future saves work again: {cause.Message}"),
+            LogLevel.Warn);
     }
 
     private JObject? FindFarmhandEntry(string npcName)
@@ -424,7 +505,7 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
             return null;
         }
 
-        JObject? root = this.env.ReadModJsonFile(relativePath);
+        JObject? root = this.ReadFarmhandRootTolerant(relativePath);
         if (root == null)
         {
             return null;
@@ -456,7 +537,7 @@ internal sealed class DialogueHistoryStore : IDialogueHistory
         if (!this.env.IsMainPlayer)
         {
             string? relativePath = this.MultiplayerRelativePath();
-            var root = relativePath == null ? null : this.env.ReadModJsonFile(relativePath);
+            var root = relativePath == null ? null : this.ReadFarmhandRootTolerant(relativePath);
             return root?.Properties().Select(property => property.Name).ToList() ?? new List<string>();
         }
 

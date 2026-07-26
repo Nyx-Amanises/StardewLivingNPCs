@@ -19,6 +19,13 @@ internal sealed class TokenUsageTracker
 
     public static TokenUsageTracker Instance { get; } = new();
 
+    /// <summary>
+    /// 并发防线（F4）：Record 来自 LLM 后台线程（对话生成、礼物邮件、记忆压缩可并发），
+    /// OnSaving/控制台命令在主线程序列化同一账本。单一 gate 覆盖两本账的全部读写与
+    /// 序列化（含 WriteSaveData 在锁内），锁内不回调外部代码，无死锁路径。
+    /// </summary>
+    private readonly object gate = new();
+
     private TokenUsageLedger sessionLedger = new();
     private TokenUsageLedger saveLedger = new();
     private bool hasLoadedSaveLedger;
@@ -29,7 +36,16 @@ internal sealed class TokenUsageTracker
     }
 
     /// <summary>测试断言用：当前存档账本。</summary>
-    internal TokenUsageLedger SaveLedgerForTests => this.saveLedger;
+    internal TokenUsageLedger SaveLedgerForTests
+    {
+        get
+        {
+            lock (this.gate)
+            {
+                return this.saveLedger;
+            }
+        }
+    }
 
     public void RegisterEvents()
     {
@@ -66,11 +82,14 @@ internal sealed class TokenUsageTracker
             RecordedAtUtc = DateTime.UtcNow
         };
 
-        this.sessionLedger.Add(entry);
-        if (Context.IsWorldReady)
+        lock (this.gate)
         {
-            this.EnsureSaveLedgerLoaded();
-            this.saveLedger.Add(entry);
+            this.sessionLedger.Add(entry);
+            if (Context.IsWorldReady)
+            {
+                this.EnsureSaveLedgerLoaded();
+                this.saveLedger.Add(entry);
+            }
         }
     }
 
@@ -82,11 +101,22 @@ internal sealed class TokenUsageTracker
             return;
         }
 
-        this.saveLedger = ledger;
-        this.hasLoadedSaveLedger = true;
+        lock (this.gate)
+        {
+            this.saveLedger = ledger;
+            this.hasLoadedSaveLedger = true;
+        }
     }
 
     public string BuildConsoleSummary()
+    {
+        lock (this.gate)
+        {
+            return this.BuildConsoleSummaryLocked();
+        }
+    }
+
+    private string BuildConsoleSummaryLocked()
     {
         this.EnsureSaveLedgerLoaded();
 
@@ -145,35 +175,52 @@ internal sealed class TokenUsageTracker
 
     public string ExportCurrentSave()
     {
-        this.EnsureSaveLedgerLoaded();
         string exportPath = this.GetExportPath();
+        string content;
+        lock (this.gate)
+        {
+            this.EnsureSaveLedgerLoaded();
+            content = this.BuildMarkdownExport();
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(exportPath)!);
-        File.WriteAllText(exportPath, this.BuildMarkdownExport(), Encoding.UTF8);
+        File.WriteAllText(exportPath, content, Encoding.UTF8);
         return exportPath;
     }
 
     public void ResetCurrentSave()
     {
-        this.saveLedger = new TokenUsageLedger();
-        this.hasLoadedSaveLedger = true;
-        if (Context.IsWorldReady && Context.IsMainPlayer)
+        lock (this.gate)
         {
-            DialogueServices.Helper.Data.WriteSaveData(SaveDataKey, this.saveLedger);
+            this.saveLedger = new TokenUsageLedger();
+            this.hasLoadedSaveLedger = true;
+            if (Context.IsWorldReady && Context.IsMainPlayer)
+            {
+                DialogueServices.Helper.Data.WriteSaveData(SaveDataKey, this.saveLedger);
+            }
         }
     }
 
     private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
     {
-        this.hasLoadedSaveLedger = false;
-        this.EnsureSaveLedgerLoaded();
+        lock (this.gate)
+        {
+            this.hasLoadedSaveLedger = false;
+            this.EnsureSaveLedgerLoaded();
+        }
     }
 
     private void OnSaving(object? sender, SavingEventArgs e)
     {
-        this.EnsureSaveLedgerLoaded();
-        if (Context.IsMainPlayer)
+        lock (this.gate)
         {
-            DialogueServices.Helper.Data.WriteSaveData(SaveDataKey, this.saveLedger);
+            this.EnsureSaveLedgerLoaded();
+            if (Context.IsMainPlayer)
+            {
+                // 序列化在锁内进行：杜绝后台 Record 改写账本时 SMAPI 序列化炸出
+                // "Collection was modified"（F4 核心场景）。
+                DialogueServices.Helper.Data.WriteSaveData(SaveDataKey, this.saveLedger);
+            }
         }
 
         this.ExportCurrentSave();
@@ -181,10 +228,14 @@ internal sealed class TokenUsageTracker
 
     private void OnReturnedToTitle(object? sender, ReturnedToTitleEventArgs e)
     {
-        this.saveLedger = new TokenUsageLedger();
-        this.hasLoadedSaveLedger = false;
+        lock (this.gate)
+        {
+            this.saveLedger = new TokenUsageLedger();
+            this.hasLoadedSaveLedger = false;
+        }
     }
 
+    /// <summary>调用方必须已持有 gate。</summary>
     private void EnsureSaveLedgerLoaded()
     {
         if (this.hasLoadedSaveLedger || !Context.IsWorldReady)

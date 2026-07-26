@@ -162,9 +162,18 @@ internal static class NativeDialogueTextInputController
         bool closingInputBox = IsInputBox(dialogueBox);
 
         DialogueUiStateGuard.RemoveDialogue(npc, activeDialogue);
-        if (closingInputBox || DialogueUiStateGuard.HasEmptyDialogueStack(npc))
+        if (closingInputBox)
         {
-            DialogueUiStateGuard.ClearDialogueState(npc, closingInputBox ? dialogueBox : null);
+            DialogueUiStateGuard.ClearDialogueState(npc, dialogueBox);
+        }
+        else if (DialogueUiStateGuard.ShouldClearResidualDialogueState(
+            menuIsNull: Game1.activeClickableMenu == null,
+            currentSpeakerIsOwnNpc: npc != null && ReferenceEquals(Game1.currentSpeaker, npc),
+            ownNpcStackEmpty: DialogueUiStateGuard.HasEmptyDialogueStack(npc)))
+        {
+            // 输入框已被外力替换/关闭时的兜底：仅清理确属本会话的残留（F3 三重守门），
+            // 不动其他代码正在显示的菜单。
+            DialogueUiStateGuard.ClearDialogueState(npc);
         }
 
         ReleaseInput();
@@ -235,12 +244,12 @@ internal static class NativeDialogueTextInputController
     }
 
     /// <summary>
-    /// 废弃后是否清理全局对话状态（纯函数）：仅当无任何菜单打开、说话人仍指向本 NPC、
-    /// 且该 NPC 的对白栈已空——三者同时成立才认定是本会话残留；任一不满足都不碰全局状态。
+    /// 废弃后是否清理全局对话状态：转发共用三重守门
+    /// <see cref="DialogueUiStateGuard.ShouldClearResidualDialogueState"/>（F1/F3 同一套语义）。
     /// </summary>
     internal static bool ShouldClearAbandonedDialogueState(bool menuIsNull, bool currentSpeakerIsOwnNpc, bool ownNpcStackEmpty)
     {
-        return menuIsNull && currentSpeakerIsOwnNpc && ownNpcStackEmpty;
+        return DialogueUiStateGuard.ShouldClearResidualDialogueState(menuIsNull, currentSpeakerIsOwnNpc, ownNpcStackEmpty);
     }
 
     /// <summary>归还键盘输入：订阅者仍是本会话的才清（他人已接管则不夺回），并退订 tick 泵。</summary>

@@ -511,7 +511,22 @@ internal sealed class GenerationScheduler
             return;
         }
 
+        // 世界状态守卫（F3）：在关思考窗之前判定（关窗后无从得知菜单归属）。
+        bool canPresent = CanPresentNow();
+
         ThinkingDialogueController.Close();
+
+        if (!canPresent)
+        {
+            // 结算/过日/他人菜单在前台：丢弃本次结果（未展示的台词不入历史），只留日志。
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.presentDropped",
+                    new { npc = request.NpcName },
+                    $"Dropped a generated line for {request.NpcName}: the game is saving, transitioning days, or another menu is open."),
+                LogLevel.Info);
+            return;
+        }
 
         try
         {
@@ -565,6 +580,48 @@ internal sealed class GenerationScheduler
                     $"Failed to present generated dialogue: {ex}"),
                 LogLevel.Error);
         }
+    }
+
+    /// <summary>
+    /// 呈现前世界状态采集（F3）：读游戏静态并交给纯判定；读取失败按不可呈现处理（保守）。
+    /// </summary>
+    private static bool CanPresentNow()
+    {
+        if (DialogueServices.Helper == null)
+        {
+            // 无 SMAPI 环境（单元测试 / 极早期）：没有真实世界状态需要保护，按可呈现处理，
+            // 与本类其余 Helper==null 的就地执行约定一致。
+            return true;
+        }
+
+        try
+        {
+            var box = Game1.activeClickableMenu as StardewValley.Menus.DialogueBox;
+            return ShouldPresentResult(
+                worldReady: Context.IsWorldReady,
+                dayTransitionInProgress: Game1.newDay,
+                menuIsNull: Game1.activeClickableMenu == null,
+                menuIsOwnThinkingBox: ThinkingDialogueController.IsThinkingBox(box));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// 呈现许可判定（纯函数，F3 矩阵单测）：世界就绪、未在过日流程，且前台要么无菜单、
+    /// 要么正是本次生成的思考窗（关窗后接替显示）。事件中打开的思考窗同样满足第三条，
+    /// 事件内自由对话特性不受影响；ShippingMenu/他人 DialogueBox 在前台时一律丢弃。
+    /// </summary>
+    internal static bool ShouldPresentResult(bool worldReady, bool dayTransitionInProgress, bool menuIsNull, bool menuIsOwnThinkingBox)
+    {
+        if (!worldReady || dayTransitionInProgress)
+        {
+            return false;
+        }
+
+        return menuIsNull || menuIsOwnThinkingBox;
     }
 
     /// <summary>生成失败时的游戏内提示（占位行"..."之外的可见解释）；20 秒节流。</summary>

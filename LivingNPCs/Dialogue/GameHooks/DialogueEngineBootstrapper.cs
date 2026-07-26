@@ -83,9 +83,10 @@ internal static class DialogueEngineBootstrapper
         var engine = DialogueEngineHost.CreateDefault(DialogueContentService.Instance!);
         AsyncBuilder.Instance.Scheduler = new GenerationScheduler(engine);
 
-        // ⑤ 输入请求队列泵（§4.4）。
+        // ⑤ 输入请求队列泵（§4.4）；日终守卫（F3）：过日流程绝不允许残留在途生成/输入会话。
         modHelper.Events.GameLoop.UpdateTicked += OnUpdateTicked;
         modHelper.Events.Input.ButtonPressed += OnButtonPressed;
+        modHelper.Events.GameLoop.DayEnding += OnDayEnding;
 
         // ⑥ 控制台命令（§4.3.3：livingnpcs_tokens 新注册；对话遗忘并入 livingnpcs_forget）。
         DialogueConsoleCommands.Register(modHelper);
@@ -95,6 +96,29 @@ internal static class DialogueEngineBootstrapper
     {
         ConversationTranscriptExporter.ExportPending();
         TypedInputRequestQueue.OnUpdateTicked();
+    }
+
+    /// <summary>
+    /// 日终守卫（F3）：取消在途生成（迟到结果凭代际号丢弃、思考窗/流式窗关闭）、
+    /// 强制释放输入会话、丢弃未消费的输入请求——过日/结算流程里绝不再弹生成对话框。
+    /// </summary>
+    private static void OnDayEnding(object? sender, DayEndingEventArgs e)
+    {
+        try
+        {
+            AsyncBuilder.Instance.Scheduler?.CancelActiveGeneration();
+            NativeDialogueTextInputController.ForceClose();
+            TypedInputRequestQueue.Clear();
+        }
+        catch (Exception ex)
+        {
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "cancel in-flight dialogue work at day end", error = ex.Message },
+                    $"Failed to cancel in-flight dialogue work at day end: {ex.Message}"),
+                LogLevel.Warn);
+        }
     }
 
     /// <summary>
