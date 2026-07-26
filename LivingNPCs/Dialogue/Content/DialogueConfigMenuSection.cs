@@ -166,13 +166,6 @@ internal static class DialogueConfigMenuSection
 
         api.AddBoolOption(
             mod: manifest,
-            name: () => T("dialogue.config.streaming.name"),
-            tooltip: () => T("dialogue.config.streaming.tooltip"),
-            getValue: () => config.EnableStreamingDialogue,
-            setValue: value => config.EnableStreamingDialogue = value);
-
-        api.AddBoolOption(
-            mod: manifest,
             name: () => T("dialogue.config.normalRightClick.name"),
             tooltip: () => T("dialogue.config.normalRightClick.tooltip"),
             getValue: () => config.GenerateAiForNormalRightClick,

@@ -18,10 +18,8 @@ namespace LivingNPCs.Dialogue.Engine;
 /// 代际号取消、主线程 tick 交接、异常回退呈现。WP12 的补丁调用 <see cref="Enqueue"/>、
 /// <see cref="CancelActiveGeneration"/>；WP12 事件接线调用 <see cref="OnUpdateTicked"/>
 /// （或由构造函数自注册 SMAPI 事件）。
-/// 玩家自由输入会话（Trigger=Conversation）默认走流式路径：呈现仍是原版对话框——
-/// 生成期间"思考中"窗（本身就是原版 DialogueBox）经 <see cref="StreamingReplyPreview"/>
-/// 实时显示已生成的文字，定稿后与非流式共用同一条 Present 原版呈现路径（打字机/翻页/选项
-/// 全为原版行为）。其余触发与关闭流式开关时为"思考中点点点→整段显示"。
+/// 呈现一律走原版对话框（思考中点点点 → 完整回复交给原版打字机/翻页/选项）；
+/// 流式预览曾接入思考窗，实测造成"预览读完→正式框重放"的跳页观感，按用户裁决撤除。
 /// </summary>
 internal sealed class GenerationScheduler
 {
@@ -126,7 +124,6 @@ internal sealed class GenerationScheduler
             // The worker finished concurrently; generation invalidation still rejects its result.
         }
 
-        StreamingReplyPreview.End();
         ThinkingDialogueController.Close();
     }
 
@@ -159,20 +156,6 @@ internal sealed class GenerationScheduler
             this.activeCancellation = cancellation;
         }
 
-        if (npc != null && ShouldUseStreaming(request!))
-        {
-            // 流式：同一只思考窗承载实时预览（原版 DialogueBox 渲染），完成后走统一的 Present。
-            ThinkingDialogueController.Start(npc);
-            StreamingReplyPreview.Begin();
-            Task streamingTask = Task.Run(() => this.RunStreamingAsync(npc, request!, myGeneration, cancellation));
-            lock (this.gate)
-            {
-                this.activeTask = streamingTask;
-            }
-
-            return;
-        }
-
         if (npc != null)
         {
             ThinkingDialogueController.Start(npc);
@@ -182,93 +165,6 @@ internal sealed class GenerationScheduler
         lock (this.gate)
         {
             this.activeTask = task;
-        }
-    }
-
-    /// <summary>流式仅用于玩家自由输入会话（其余触发替换的是原版台词流程，维持经典呈现）。</summary>
-    private static bool ShouldUseStreaming(GenerationRequest request)
-    {
-        return DialogueServices.Config?.EnableStreamingDialogue == true
-            && request.Trigger == GenerationTrigger.Conversation;
-    }
-
-    /// <summary>
-    /// 流式 worker：token 进预览缓冲（思考窗每帧读取），定稿/失败与非流式共用同一条
-    /// 主线程 Present 路径（关思考窗、清预览、原版对话框呈现、失败兜底与 HUD、提交）。
-    /// </summary>
-    private async Task RunStreamingAsync(
-        NPC npc,
-        GenerationRequest request,
-        int myGeneration,
-        CancellationTokenSource cancellation)
-    {
-        GenerationResult? result = null;
-        Exception? failure = null;
-        try
-        {
-            var sink = new PreviewStreamSink();
-            await this.engine.StreamAsync(request, sink, cancellation.Token).ConfigureAwait(false);
-            result = sink.Result;
-        }
-        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
-        {
-            StreamingReplyPreview.End();
-            return;
-        }
-        catch (Exception ex)
-        {
-            failure = ex;
-        }
-        finally
-        {
-            lock (this.gate)
-            {
-                if (ReferenceEquals(this.activeCancellation, cancellation))
-                {
-                    this.activeCancellation = null;
-                }
-            }
-
-            cancellation.Dispose();
-        }
-
-        void Handler(object? sender, UpdateTickedEventArgs args)
-        {
-            DialogueServices.Helper!.Events.GameLoop.UpdateTicked -= Handler;
-            StreamingReplyPreview.End();
-            this.Present(npc, request, result, failure, myGeneration);
-        }
-
-        if (DialogueServices.Helper != null)
-        {
-            DialogueServices.Helper.Events.GameLoop.UpdateTicked += Handler;
-        }
-        else
-        {
-            StreamingReplyPreview.End();
-            this.Present(npc, request, result, failure, myGeneration);
-        }
-    }
-
-    /// <summary>引擎流式回调：token 喂预览缓冲（重试清空记号在缓冲侧处理），定稿结果暂存给 worker。</summary>
-    private sealed class PreviewStreamSink : IStreamSink
-    {
-        public GenerationResult? Result { get; private set; }
-
-        public void OnToken(string delta)
-        {
-            StreamingReplyPreview.Append(delta);
-        }
-
-        public void OnCompleted(GenerationResult result, IReadOnlyList<StreamingResponseOption> options)
-        {
-            // 应答选项由 Present 的原版 $q/$r 菜单呈现（FormattedLine 自带），此处忽略 options。
-            this.Result = result;
-        }
-
-        public void OnFailed()
-        {
-            this.Result = null;
         }
     }
 

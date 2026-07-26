@@ -117,7 +117,7 @@ Free options are great for a first taste; for long-term play a stronger model gi
 
 ## How to talk to NPCs
 
-- **Free-text AI dialogue:** hold `LeftAlt` (default) and click the NPC or use the interaction button. Replies **stream in word by word** by default; press `Esc` to cancel mid-generation, or turn off "Streaming replies" in GMCM to wait for the full reply in the classic dialogue box.
+- **Free-text AI dialogue:** hold `LeftAlt` (default) and click the NPC or use the interaction button. A "thinking..." box shows while generating (press `Esc` or gamepad B to cancel); the reply then appears in the classic dialogue box with the vanilla letter-by-letter reveal.
 - **Normal dialogue:** plain right-click still shows vanilla lines by default.
 - **Make plain right-click use AI too:** enable "AI for normal right-click dialogue" in GMCM.
 - **Gift and marriage lines:** the AI generation frequency can be set separately for each.
@@ -155,7 +155,6 @@ Settings actually available in Generic Mod Config Menu:
 | Semantic context routing | On by default; one lightweight call selects the context needed this turn (timeout and thinking level adjustable) |
 | Optimized world summary / concise prompt context | Reduce tokens; restore defaults if character detail drops |
 | Chat thinking level | Only affects models that support it |
-| Streaming replies | On by default; free-text conversation replies appear word by word as they generate |
 | AI for normal right-click | Off by default |
 | AI line frequencies | Separate general / gift / marriage settings |
 | Typed-dialogue hotkey / inspect-memory hotkey | Default `LeftAlt` and `LeftShift + J` |

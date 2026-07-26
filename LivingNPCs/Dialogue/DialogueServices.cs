@@ -35,7 +35,6 @@ internal sealed class DialogueConfig
     public bool Debug { get; set; }
     public bool ExportAiResponseLogs { get; set; }
     public bool EnableSemanticContextRouting { get; set; }
-    public bool EnableStreamingDialogue { get; set; } = true;
     public bool EnableLivingNpcActionDecisionPass { get; set; } = ActionDecisionPassDefault;
     public string Provider { get; set; } = "unset";
     public string ModelName { get; set; } = "unset";
@@ -67,7 +66,6 @@ internal sealed class DialogueConfig
         this.Debug = source.Debug;
         this.ExportAiResponseLogs = source.ExportAiResponseLogs;
         this.EnableSemanticContextRouting = source.EnableSemanticContextRouting;
-        this.EnableStreamingDialogue = source.EnableStreamingDialogue;
         this.Provider = source.Provider;
         this.ModelName = source.ModelName;
         this.ApiKey = source.ApiKey;
