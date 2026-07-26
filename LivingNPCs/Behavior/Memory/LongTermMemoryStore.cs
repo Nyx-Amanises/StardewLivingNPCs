@@ -70,7 +70,7 @@ internal static class LongTermMemoryStore
             return true;
         }
 
-        state.LongTermMemories.Add(new LongTermMemoryFact
+        var fact = new LongTermMemoryFact
         {
             Kind = NormalizeKind(candidate.Kind),
             Subject = candidate.Subject.Trim(),
@@ -82,7 +82,8 @@ internal static class LongTermMemoryStore
             LastUpdatedTotalDays = currentTotalDays,
             LastUpdatedTimeOfDay = currentTimeOfDay,
             TimesReinforced = 1
-        });
+        };
+        state.LongTermMemories.Add(fact);
 
         ApplyCapacity(
             state,
@@ -92,8 +93,10 @@ internal static class LongTermMemoryStore
                 .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
                 .ToList());
 
-        storedMemory = state.LongTermMemories.LastOrDefault(memory =>
-            BuildKey(memory.Kind, memory.Subject, memory.Summary) == normalizedKey);
+        // The capacity cap may have moved the new memory straight into the impression backlog; it
+        // is still retained (queued for LLM compression), so hand the caller the stored instance
+        // instead of a null lookup miss — nickname-state updates must not silently skip it.
+        storedMemory = fact;
         return true;
     }
 

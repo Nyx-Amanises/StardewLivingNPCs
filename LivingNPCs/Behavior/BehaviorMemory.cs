@@ -546,7 +546,8 @@ internal sealed class BehaviorMemory
             communityImpressions,
             maxPendingHelpRequestsPerNpc,
             helpRequestCooldownDays,
-            Game1.Date.TotalDays
+            Game1.Date.TotalDays,
+            Game1.timeOfDay
         );
         this.MarkMemoriesRecalled(recallPlan);
         this.MarkCommunityImpressionsRecalled(communityImpressions);

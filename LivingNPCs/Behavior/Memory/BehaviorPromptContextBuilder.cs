@@ -23,7 +23,8 @@ internal static class BehaviorPromptContextBuilder
         IReadOnlyList<CommunityImpressionSelection> communityImpressions,
         int maxPendingHelpRequestsPerNpc,
         int helpRequestCooldownDays,
-        int currentTotalDays)
+        int currentTotalDays,
+        int currentTimeOfDay)
     {
         if (ModEntry.ActiveConfig.ConcisePromptContext)
         {
@@ -131,6 +132,11 @@ internal static class BehaviorPromptContextBuilder
         foreach (string guidance in BuildReplyGuidance(state, world, emotionalStyle, currentTotalDays))
         {
             prompt.AppendLine($"- {guidance}");
+        }
+
+        if (state != null)
+        {
+            MarkFollowUpCuesMentioned(state, currentTotalDays, currentTimeOfDay);
         }
 
         return prompt.ToString();
@@ -398,19 +404,13 @@ internal static class BehaviorPromptContextBuilder
                 yield return PromptFragments.Context.ActiveHelpRequestCue(activeHelpRequest);
             }
 
-            var recentlyFulfilledHelpRequest = state.HelpRequests.FirstOrDefault(request =>
-                request.Status == "Fulfilled"
-                && request.FulfilledTotalDays >= currentTotalDays - 3
-                && request.LastMentionedTotalDays < 0
-            );
+            var recentlyFulfilledHelpRequest = SelectRecentlyFulfilledHelpRequestToMention(state, currentTotalDays);
             if (recentlyFulfilledHelpRequest != null)
             {
                 yield return PromptFragments.Context.FulfilledHelpRequestCue(recentlyFulfilledHelpRequest);
             }
 
-            var expiredHelpRequest = state.HelpRequests.FirstOrDefault(request =>
-                request.Status == "Expired"
-                && request.LastMentionedTotalDays < currentTotalDays);
+            var expiredHelpRequest = SelectExpiredHelpRequestToMention(state, currentTotalDays);
             if (expiredHelpRequest != null)
             {
                 string reaction = string.IsNullOrWhiteSpace(expiredHelpRequest.FailureReaction)
@@ -419,11 +419,7 @@ internal static class BehaviorPromptContextBuilder
                 yield return PromptFragments.Context.ExpiredHelpRequestCue(expiredHelpRequest, reaction);
             }
 
-            var sharedExperience = state.SharedExperiences.FirstOrDefault(experience =>
-                experience.FollowUpEligibleTotalDays <= currentTotalDays
-                && experience.FollowUpShownTotalDays < 0
-                && experience.CreatedTotalDays >= currentTotalDays - 7
-            );
+            var sharedExperience = SelectSharedExperienceFollowUp(state, currentTotalDays);
             if (sharedExperience != null)
             {
                 yield return PromptFragments.Context.SharedExperienceCue(sharedExperience);
@@ -452,11 +448,7 @@ internal static class BehaviorPromptContextBuilder
                 }
             }
 
-            var recoveredConflict = state.Conflicts.FirstOrDefault(conflict =>
-                conflict.Status == "Resolved"
-                && conflict.ResolvedTotalDays >= currentTotalDays - 3
-                && conflict.RecoveryMentionedTotalDays < 0
-            );
+            var recoveredConflict = SelectRecentlyResolvedConflictToMention(state, currentTotalDays);
             if (recoveredConflict != null)
             {
                 yield return PromptFragments.Context.ResolvedConflictCue(recoveredConflict, emotionalStyle.RepairPromptLabel);
@@ -532,9 +524,7 @@ internal static class BehaviorPromptContextBuilder
             yield return PromptFragments.Context.GuidancePreferenceMention;
         }
 
-        if (state.SharedExperiences.Any(experience =>
-                experience.FollowUpEligibleTotalDays <= currentTotalDays
-                && experience.FollowUpShownTotalDays < 0))
+        if (SelectSharedExperienceFollowUp(state, currentTotalDays) != null)
         {
             yield return PromptFragments.Context.GuidanceSharedExperience;
         }
@@ -548,10 +538,7 @@ internal static class BehaviorPromptContextBuilder
             }
         }
 
-        if (state.Conflicts.Any(conflict =>
-                conflict.Status == "Resolved"
-                && conflict.ResolvedTotalDays >= currentTotalDays - 3
-                && conflict.RecoveryMentionedTotalDays < 0))
+        if (SelectRecentlyResolvedConflictToMention(state, currentTotalDays) != null)
         {
             yield return PromptFragments.Context.GuidanceResolvedConflict(emotionalStyle.RepairPromptLabel);
         }
@@ -567,6 +554,90 @@ internal static class BehaviorPromptContextBuilder
         }
 
         yield return PromptFragments.Context.GuidanceWorldStage(world.ProgressionKnowledge.ReplyGuidance);
+    }
+
+    /// <summary>
+    /// The single recently-resolved conflict the full context asks the NPC to acknowledge once.
+    /// Shared by the priority cue, the reply guidance, and the post-build mark so the three can
+    /// never disagree about which conflict was mentioned.
+    /// </summary>
+    private static NpcConflictFact? SelectRecentlyResolvedConflictToMention(LivingNpcState state, int currentTotalDays)
+    {
+        return state.Conflicts.FirstOrDefault(conflict =>
+            conflict.Status == "Resolved"
+            && conflict.ResolvedTotalDays >= currentTotalDays - 3
+            && conflict.RecoveryMentionedTotalDays < 0);
+    }
+
+    /// <summary>The single recently-fulfilled help request the full context thanks the farmer for once.</summary>
+    private static NpcHelpRequestFact? SelectRecentlyFulfilledHelpRequestToMention(LivingNpcState state, int currentTotalDays)
+    {
+        return state.HelpRequests.FirstOrDefault(request =>
+            request.Status == "Fulfilled"
+            && request.FulfilledTotalDays >= currentTotalDays - 3
+            && request.LastMentionedTotalDays < 0);
+    }
+
+    /// <summary>The single expired help request the full context lets the NPC react to (at most once per day).</summary>
+    private static NpcHelpRequestFact? SelectExpiredHelpRequestToMention(LivingNpcState state, int currentTotalDays)
+    {
+        return state.HelpRequests.FirstOrDefault(request =>
+            request.Status == "Expired"
+            && request.LastMentionedTotalDays < currentTotalDays);
+    }
+
+    /// <summary>
+    /// The single shared experience whose one-shot follow-up is due. Freshness uses
+    /// LastUpdatedTotalDays (not CreatedTotalDays) so a repeated outing that re-arms its follow-up
+    /// (FollowUpShownTotalDays reset to -1) still qualifies even when the fact itself is old, and a
+    /// FollowUpEligibleTotalDays of -1 means "no follow-up planned" like it does for help requests.
+    /// </summary>
+    private static SharedExperienceFact? SelectSharedExperienceFollowUp(LivingNpcState state, int currentTotalDays)
+    {
+        return state.SharedExperiences.FirstOrDefault(experience =>
+            experience.FollowUpEligibleTotalDays >= 0
+            && experience.FollowUpEligibleTotalDays <= currentTotalDays
+            && experience.FollowUpShownTotalDays < 0
+            && experience.LastUpdatedTotalDays >= currentTotalDays - 7);
+    }
+
+    /// <summary>
+    /// Consumes the one-shot follow-up cues the full context just carried, so the next build stops
+    /// repeating them. This must run after the whole prompt is assembled (the guidance section
+    /// reads the same gates), and only for the full context — the concise context never emits
+    /// these cues. Marking used to happen at conversation start instead, but SMAPI raises
+    /// ButtonPressed before the click reaches NPC.checkAction and the dialogue generation that
+    /// builds this prompt, so the cues were suppressed in the very prompt meant to deliver them.
+    /// </summary>
+    private static void MarkFollowUpCuesMentioned(LivingNpcState state, int currentTotalDays, int currentTimeOfDay)
+    {
+        var recoveredConflict = SelectRecentlyResolvedConflictToMention(state, currentTotalDays);
+        if (recoveredConflict != null)
+        {
+            recoveredConflict.RecoveryMentionedTotalDays = currentTotalDays;
+            recoveredConflict.RecoveryMentionedTimeOfDay = currentTimeOfDay;
+        }
+
+        var fulfilledHelpRequest = SelectRecentlyFulfilledHelpRequestToMention(state, currentTotalDays);
+        if (fulfilledHelpRequest != null)
+        {
+            fulfilledHelpRequest.LastMentionedTotalDays = currentTotalDays;
+            fulfilledHelpRequest.LastMentionedTimeOfDay = currentTimeOfDay;
+        }
+
+        var expiredHelpRequest = SelectExpiredHelpRequestToMention(state, currentTotalDays);
+        if (expiredHelpRequest != null)
+        {
+            expiredHelpRequest.LastMentionedTotalDays = currentTotalDays;
+            expiredHelpRequest.LastMentionedTimeOfDay = currentTimeOfDay;
+        }
+
+        var sharedExperience = SelectSharedExperienceFollowUp(state, currentTotalDays);
+        if (sharedExperience != null)
+        {
+            sharedExperience.FollowUpShownTotalDays = currentTotalDays;
+            sharedExperience.FollowUpShownTimeOfDay = currentTimeOfDay;
+        }
     }
 
     private static string BuildHelpRequestReadinessLabel(

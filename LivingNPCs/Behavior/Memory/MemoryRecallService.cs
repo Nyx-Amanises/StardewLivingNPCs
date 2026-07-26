@@ -149,14 +149,14 @@ internal static class MemoryRecallService
             "CloseCircle" => 5,
             _ => 1
         };
-        int lifecycleScore = memory.FreshnessStage switch
+        int lifecycleScore = CommunityImpressionStore.GetFreshnessStage(memory, currentTotalDays) switch
         {
             "fresh" => 10,
             "settled" => 2,
             "fading" => -8,
             _ => -20
         };
-        int daysSinceRecall = memory.LastRecalledTotalDays > 0
+        int daysSinceRecall = memory.LastRecalledTotalDays >= 0
             ? currentTotalDays - memory.LastRecalledTotalDays
             : int.MaxValue;
         int recentRecallPenalty = daysSinceRecall switch

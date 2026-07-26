@@ -168,7 +168,6 @@ internal sealed class ConversationStartRecorder
         this.PushInteractionContext(
             npc,
             I18n.Get("log.interaction.conversationStarted", new { npc = npc.Name }));
-        this.MarkConflictFollowUpsMentionedAfterPrompt(npc);
     }
 
     /// <summary>
@@ -446,41 +445,6 @@ internal sealed class ConversationStartRecorder
     {
         return Game1.player.friendshipData.TryGetValue(npc.Name, out Friendship friendship)
             && (friendship.IsDating() || friendship.IsEngaged() || friendship.IsMarried());
-    }
-
-    private void MarkConflictFollowUpsMentionedAfterPrompt(NPC npc)
-    {
-        var state = this.memory.GetState(npc);
-        if (state == null)
-        {
-            return;
-        }
-
-        foreach (var conflict in state.Conflicts.Where(conflict =>
-                     conflict.Status == "Resolved"
-                     && conflict.ResolvedTotalDays >= Game1.Date.TotalDays - 3
-                     && conflict.RecoveryMentionedTotalDays < 0))
-        {
-            conflict.RecoveryMentionedTotalDays = Game1.Date.TotalDays;
-            conflict.RecoveryMentionedTimeOfDay = Game1.timeOfDay;
-        }
-
-        foreach (var request in state.HelpRequests.Where(request =>
-                     request.Status == "Expired"
-                     && request.LastMentionedTotalDays < Game1.Date.TotalDays))
-        {
-            request.LastMentionedTotalDays = Game1.Date.TotalDays;
-            request.LastMentionedTimeOfDay = Game1.timeOfDay;
-        }
-
-        foreach (var request in state.HelpRequests.Where(request =>
-                     request.Status == "Fulfilled"
-                     && request.FulfilledTotalDays >= Game1.Date.TotalDays - 3
-                     && request.LastMentionedTotalDays < 0))
-        {
-            request.LastMentionedTotalDays = Game1.Date.TotalDays;
-            request.LastMentionedTimeOfDay = Game1.timeOfDay;
-        }
     }
 
     private void PushInteractionContext(NPC npc, string debugMessage, string immediatePromptContext = "")

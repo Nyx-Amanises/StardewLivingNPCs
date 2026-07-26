@@ -92,13 +92,20 @@ internal static class CommunityImpressionStore
                 ? circleKey?.Trim() ?? string.Empty
                 : existing.CircleKey;
             existing.Importance = System.Math.Min(100, System.Math.Max(existing.Importance, importance) + 3);
+            // Hearing the story again keeps it alive: extend the expiry to what this fresh report
+            // would have earned on its own (mirrors MergeGroup taking the max of both expiries).
+            // Without this, a reinforced impression still died on its original schedule while a
+            // brand-new listener kept it much longer.
+            existing.ExpiresTotalDays = System.Math.Max(
+                existing.ExpiresTotalDays,
+                DetermineExpiry(normalizedSource, normalizedVisibility, normalizedDepth, currentTotalDays));
             existing.LastUpdatedTotalDays = currentTotalDays;
             existing.LastUpdatedTimeOfDay = currentTimeOfDay;
             existing.TimesReinforced += 1;
             return true;
         }
 
-        state.CommunityImpressions.Add(new CommunityImpressionFact
+        var fact = new CommunityImpressionFact
         {
             SubjectNpcName = subjectNpcName.Trim(),
             SubjectDisplayName = subjectDisplayName.Trim(),
@@ -123,13 +130,22 @@ internal static class CommunityImpressionStore
                 currentTotalDays
             ),
             TimesReinforced = 1
-        });
+        };
+        state.CommunityImpressions.Add(fact);
         state.CommunityImpressions = state.CommunityImpressions
             .OrderByDescending(memory => memory.Importance)
             .ThenByDescending(memory => memory.LastUpdatedTotalDays)
             .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
             .Take(MaxImpressionsPerNpc)
             .ToList();
+
+        if (!state.CommunityImpressions.Contains(fact))
+        {
+            // The list was already full of stronger impressions and the newcomer fell straight off
+            // the cap. Nothing was stored: report failure so the caller neither writes a diary
+            // entry for a non-existent impression nor counts this as a successful retelling.
+            return false;
+        }
 
         created = true;
         return true;
