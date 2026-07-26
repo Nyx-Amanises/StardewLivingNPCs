@@ -412,13 +412,15 @@ public sealed class EmptyOutingTargetTests : IDisposable
     [InlineData("NotARealPlace")]
     public void MissingOrUnknownTargetDoesNotCountAsImmediateOuting(string targetLocation)
     {
-        Assert.False(DialogueEngine.HasAcceptedImmediateCompanionOuting(OutingAnalysis(targetLocation)));
+        Assert.False(DialogueEngine.HasAcceptedImmediateCompanionOuting(
+            OutingAnalysis(targetLocation), "我们去海边吧", "好呀，我们走吧！"));
     }
 
     [Fact]
     public void KnownTargetStillCountsAsImmediateOuting()
     {
-        Assert.True(DialogueEngine.HasAcceptedImmediateCompanionOuting(OutingAnalysis("Beach")));
+        Assert.True(DialogueEngine.HasAcceptedImmediateCompanionOuting(
+            OutingAnalysis("Beach"), "我们去海边吧", "好呀，我们走吧！"));
     }
 
     [Fact]

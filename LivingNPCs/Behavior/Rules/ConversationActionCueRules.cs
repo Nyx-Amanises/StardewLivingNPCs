@@ -156,6 +156,76 @@ internal static class ConversationActionCueRules
         "possibly"
     ];
 
+    /// <summary>
+    /// The narrow veto list for model-confirmed accepted_now outings. Only phrase-anchored,
+    /// explicit refusals/deferrals belong here — never bare hedge words. The broad
+    /// <see cref="TravelRejectionFragments"/> list treats any "晚点"/"不能"/"下次" substring as a
+    /// rejection, which is right when consent is missing but wrong when the model explicitly said
+    /// accepted_now: a cheerful "走吧，晚点人就多了" or "可不能错过日落" must not cancel the
+    /// outing the reply just agreed to.
+    /// </summary>
+    private static readonly string[] StrongTravelRejectionFragments =
+    [
+        "今天不行",
+        "今天不可以",
+        "今天不太行",
+        "今天不合适",
+        "今天不适合",
+        "今天没空",
+        "今天去不了",
+        "今天先不",
+        "现在不行",
+        "现在不可以",
+        "现在不太行",
+        "现在不合适",
+        "现在不适合",
+        "现在没空",
+        "现在去不了",
+        "现在先不",
+        "去不了",
+        "去不成",
+        "不去了",
+        "没法去",
+        "无法去",
+        "不能去",
+        "改天吧",
+        "改天再",
+        "改日吧",
+        "改日再",
+        "下次吧",
+        "下次再去",
+        "下次再说",
+        "下次再约",
+        "下次一定",
+        "以后再说",
+        "以后再去",
+        "以后吧",
+        "过几天再",
+        "过些天再",
+        "还是算了",
+        "算了吧",
+        "还是别去",
+        "别去了",
+        "先不去",
+        "暂时不去",
+        "not today",
+        "not right now",
+        "some other time",
+        "another day",
+        "another time",
+        "can't go",
+        "cannot go",
+        "can't come",
+        "cannot come",
+        "can't make it",
+        "won't be able",
+        "rain check",
+        "maybe later",
+        "let's not",
+        "i'd rather not",
+        "i would rather not"
+    ];
+
     public static bool LooksLikeImmediateGiftOffer(string npcResponse)
     {
         return ContainsAny(
@@ -194,7 +264,8 @@ internal static class ConversationActionCueRules
     public static IReadOnlyList<ValleyTalkWorldActionRequest> FilterActionsContradictedByVisibleDialogue(
         IReadOnlyList<ValleyTalkWorldActionRequest> actions,
         string playerText,
-        string npcResponse
+        string npcResponse,
+        ICollection<string>? dropReasons = null
     )
     {
         if (actions.Count == 0)
@@ -202,10 +273,19 @@ internal static class ConversationActionCueRules
             return actions;
         }
 
-        var filtered = actions
-            .Where(action => ShouldKeepVisibleWorldAction(action, playerText, npcResponse))
-            .ToArray();
-        return filtered.Length == actions.Count ? actions : filtered;
+        var kept = new List<ValleyTalkWorldActionRequest>(actions.Count);
+        foreach (var action in actions)
+        {
+            if (TryGetVisibleWorldActionDropReason(action, playerText, npcResponse, out string reason))
+            {
+                dropReasons?.Add($"{action.Type}: {reason}");
+                continue;
+            }
+
+            kept.Add(action);
+        }
+
+        return kept.Count == actions.Count ? actions : kept;
     }
 
     public static bool LooksLikeGiftOfferRejection(string npcResponse)
@@ -428,30 +508,161 @@ internal static class ConversationActionCueRules
         return fragments.Any(fragment => text.Contains(fragment, StringComparison.OrdinalIgnoreCase));
     }
 
+    /// <summary>Like <see cref="ContainsAny"/>, but reports which fragment matched so filter drops
+    /// can name their evidence in the diagnostic log instead of a bare "unsupported".</summary>
+    private static bool TryFindAny(string text, string[] fragments, out string matched)
+    {
+        matched = string.Empty;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        foreach (string fragment in fragments)
+        {
+            if (text.Contains(fragment, StringComparison.OrdinalIgnoreCase))
+            {
+                matched = fragment;
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static bool ShouldKeepTravelAction(
         ValleyTalkWorldActionRequest action,
         string playerText,
         string npcResponse
     )
     {
+        return !TryGetTravelActionDropReason(action, playerText, npcResponse, out _);
+    }
+
+    /// <summary>
+    /// The single travel-action verdict, with the drop reason (matched check + fragment) for the
+    /// diagnostic log. Two tiers by consent metadata:
+    /// - consent == accepted_now: the model is the authority on intent; only an explicit,
+    ///   phrase-anchored contradiction (<see cref="StrongTravelRejectionFragments"/> in the reply,
+    ///   or a future-day plan in the conversation) may veto. Hedging decoration must not.
+    /// - consent missing (legacy): the visible text is all we have, so the broad invitation +
+    ///   deferral/uncertain checks stay as before.
+    /// </summary>
+    internal static bool TryGetTravelActionDropReason(
+        ValleyTalkWorldActionRequest action,
+        string playerText,
+        string npcResponse,
+        out string reason
+    )
+    {
         if (LooksLikeLocalCompanyWithoutTravel(playerText, npcResponse))
         {
-            return false;
+            reason = "the player asked to stay and keep company here, not to travel";
+            return true;
         }
 
         if (LooksLikeTravelExperienceQuestionWithoutInvitation(playerText))
         {
-            return false;
+            reason = "the player asked about past travel without inviting an outing";
+            return true;
         }
 
         string consent = BehaviorValueNormalizer.NormalizeTravelConsent(action.TravelConsent);
         if (!string.IsNullOrWhiteSpace(consent))
         {
-            return consent == "accepted_now" && !LooksLikeDeferredRejectedOrUncertainTravel(playerText, npcResponse);
+            if (!string.Equals(consent, "accepted_now", StringComparison.OrdinalIgnoreCase))
+            {
+                reason = $"travel consent '{consent}' is not an immediate acceptance";
+                return true;
+            }
+
+            if (TryFindStrongTravelContradiction(playerText, npcResponse, out string cue, out string source))
+            {
+                reason = $"accepted_now contradicted by {source} wording '{cue}'";
+                return true;
+            }
+
+            reason = string.Empty;
+            return false;
         }
 
-        return LooksLikeImmediateTravelInvitation(playerText, npcResponse)
-            && !LooksLikeDeferredRejectedOrUncertainTravel(playerText, npcResponse);
+        if (!LooksLikeImmediateTravelInvitation(playerText, npcResponse))
+        {
+            reason = "no travel consent metadata and no visible immediate invitation";
+            return true;
+        }
+
+        if (TryGetDeferredRejectedOrUncertainReason(playerText, npcResponse, out string vetoReason))
+        {
+            reason = vetoReason;
+            return true;
+        }
+
+        reason = string.Empty;
+        return false;
+    }
+
+    /// <summary>
+    /// Shared verdict for "this exchange really launches an immediate outing". The dialogue
+    /// engine's force-close decision and the behavior engine's execution keep MUST agree — when
+    /// they diverge the conversation snaps shut as if departing while the action is silently
+    /// vetoed, and the player watches the NPC agree and then stand still.
+    /// </summary>
+    public static bool IsConfirmedImmediateOutingAcceptance(
+        string? targetLocation,
+        string? travelConsent,
+        string playerText,
+        string npcVisibleLine
+    )
+    {
+        string consent = BehaviorValueNormalizer.NormalizeTravelConsent(travelConsent ?? string.Empty);
+        return string.Equals(consent, "accepted_now", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(targetLocation)
+            && TravelLocationRules.IsKnownPublicOutingTarget(targetLocation)
+            && !TryFindStrongTravelContradiction(playerText ?? string.Empty, npcVisibleLine ?? string.Empty, out _, out _);
+    }
+
+    /// <summary>
+    /// The narrow accepted_now veto: an explicit refusal/deferral phrase in the (farewell-stripped)
+    /// reply, or a future-day plan anywhere in the conversation. Reuses the preparation-wording
+    /// exemption: "稍等，我拿把伞" overlapping a cue is departure prep, but an explicit deferral
+    /// that survives stripping ("稍等……还是改天吧") stays a contradiction.
+    /// </summary>
+    private static bool TryFindStrongTravelContradiction(
+        string playerText,
+        string npcResponse,
+        out string cue,
+        out string source
+    )
+    {
+        string npcClean = RemoveNonTravelFarewells(npcResponse);
+        string combinedClean = RemoveNonTravelFarewells($"{playerText} {npcResponse}");
+
+        bool found = TryFindAny(npcClean, StrongTravelRejectionFragments, out cue);
+        source = "reply refusal/deferral";
+        if (!found)
+        {
+            found = TryFindAny(combinedClean, FutureTravelPlanFragments, out cue);
+            source = "conversation future-plan";
+        }
+
+        if (!found)
+        {
+            cue = string.Empty;
+            source = string.Empty;
+            return false;
+        }
+
+        if (DetectPreparationDelayMinutes(npcResponse) > 0
+            && !ContainsAny(RemovePhrases(npcClean, PreparationPhraseFragments), StrongTravelRejectionFragments)
+            && !ContainsAny(RemovePhrases(combinedClean, PreparationPhraseFragments), FutureTravelPlanFragments))
+        {
+            cue = string.Empty;
+            source = string.Empty;
+            return false;
+        }
+
+        return true;
     }
 
     private static bool ShouldKeepVisibleWorldAction(
@@ -460,13 +671,47 @@ internal static class ConversationActionCueRules
         string npcResponse
     )
     {
-        return action.Type switch
+        return !TryGetVisibleWorldActionDropReason(action, playerText, npcResponse, out _);
+    }
+
+    private static bool TryGetVisibleWorldActionDropReason(
+        ValleyTalkWorldActionRequest action,
+        string playerText,
+        string npcResponse,
+        out string reason
+    )
+    {
+        switch (action.Type)
         {
-            "companion_outing" => ShouldKeepTravelAction(action, playerText, npcResponse),
-            "give_small_gift" or "give_meaningful_gift" => ShouldKeepGiftAction(action, npcResponse),
-            "give_money" => LooksLikeImmediateMoneyOffer(npcResponse),
-            _ => true
-        };
+            case "companion_outing":
+                return TryGetTravelActionDropReason(action, playerText, npcResponse, out reason);
+
+            case "give_small_gift" or "give_meaningful_gift":
+                if (ShouldKeepGiftAction(action, npcResponse))
+                {
+                    reason = string.Empty;
+                    return false;
+                }
+
+                reason = LooksLikeGiftOfferRejection(npcResponse)
+                    ? "the reply visibly declines or defers the gift offer"
+                    : "no visible immediate gift offer supports the gift action";
+                return true;
+
+            case "give_money":
+                if (LooksLikeImmediateMoneyOffer(npcResponse))
+                {
+                    reason = string.Empty;
+                    return false;
+                }
+
+                reason = "no visible immediate money offer supports the give_money action";
+                return true;
+
+            default:
+                reason = string.Empty;
+                return false;
+        }
     }
 
     private static bool ShouldKeepGiftAction(ValleyTalkWorldActionRequest action, string npcResponse)
@@ -796,12 +1041,26 @@ internal static class ConversationActionCueRules
 
     public static bool LooksLikeDeferredOrRejectedTravel(string playerText, string npcResponse)
     {
+        return TryGetDeferredOrRejectedTravelReason(playerText, npcResponse, out _);
+    }
+
+    private static bool TryGetDeferredOrRejectedTravelReason(string playerText, string npcResponse, out string reason)
+    {
         string combinedText = $"{playerText} {npcResponse}";
         string rejectionNpcResponse = RemoveNonTravelFarewells(npcResponse);
         string rejectionCombinedText = RemoveNonTravelFarewells(combinedText);
-        if (!ContainsAny(rejectionNpcResponse, TravelRejectionFragments)
-            && !ContainsAny(rejectionCombinedText, FutureTravelPlanFragments))
+
+        bool found = TryFindAny(rejectionNpcResponse, TravelRejectionFragments, out string cue);
+        string source = "reply deferral/refusal";
+        if (!found)
         {
+            found = TryFindAny(rejectionCombinedText, FutureTravelPlanFragments, out cue);
+            source = "conversation future-plan";
+        }
+
+        if (!found)
+        {
+            reason = string.Empty;
             return false;
         }
 
@@ -814,10 +1073,29 @@ internal static class ConversationActionCueRules
             && !ContainsAny(RemovePhrases(rejectionNpcResponse, PreparationPhraseFragments), TravelRejectionFragments)
             && !ContainsAny(RemovePhrases(rejectionCombinedText, PreparationPhraseFragments), FutureTravelPlanFragments))
         {
+            reason = string.Empty;
             return false;
         }
 
+        reason = $"{source} wording '{cue}'";
         return true;
+    }
+
+    private static bool TryGetDeferredRejectedOrUncertainReason(string playerText, string npcResponse, out string reason)
+    {
+        if (TryGetDeferredOrRejectedTravelReason(playerText, npcResponse, out reason))
+        {
+            return true;
+        }
+
+        if (TryFindAny(npcResponse, UncertainTravelFragments, out string hedge))
+        {
+            reason = $"uncertain wording '{hedge}' in the reply";
+            return true;
+        }
+
+        reason = string.Empty;
+        return false;
     }
 
     private static string RemovePhrases(string text, string[] fragments)
@@ -855,8 +1133,7 @@ internal static class ConversationActionCueRules
 
     private static bool LooksLikeDeferredRejectedOrUncertainTravel(string playerText, string npcResponse)
     {
-        return LooksLikeDeferredOrRejectedTravel(playerText, npcResponse)
-            || ContainsAny(npcResponse, UncertainTravelFragments);
+        return TryGetDeferredRejectedOrUncertainReason(playerText, npcResponse, out _);
     }
 
     private static string TryDetectTravelTargetLocation(NPC? npc, string text)

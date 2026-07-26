@@ -729,10 +729,12 @@ internal sealed class BehaviorEngine
     {
         if (actions.Count > 0)
         {
+            List<string>? dropReasons = this.config.Debug ? new List<string>() : null;
             var visibleSafeActions = ConversationActionCueRules.FilterActionsContradictedByVisibleDialogue(
                 actions,
                 playerText,
-                npcResponse
+                npcResponse,
+                dropReasons
             );
             if (this.config.Debug && visibleSafeActions.Count < actions.Count)
             {
@@ -747,6 +749,13 @@ internal sealed class BehaviorEngine
                     ),
                     LogLevel.Debug
                 );
+                foreach (string detail in dropReasons ?? [])
+                {
+                    this.monitor.Log(
+                        I18n.Get("log.worldAction.filteredDetail", new { npc = npc.Name, detail }),
+                        LogLevel.Debug
+                    );
+                }
             }
 
             ConversationActionCueRules.TryCorrectTravelActionTargetFromVisibleDialogue(

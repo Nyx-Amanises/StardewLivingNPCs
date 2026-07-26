@@ -828,7 +828,7 @@ internal sealed class DialogueEngine : IDialogueEngine
 
         // 立即出游已经把这轮交流转化成世界动作；NPC 的确认台词应当像明确道别一样
         // 点完即关闭，不能继续显示模型误生成的回应选项。
-        if (HasAcceptedImmediateCompanionOuting(analysis))
+        if (HasAcceptedImmediateCompanionOuting(analysis, prepared.LastPlayerLine, parsed.DialogueLine))
         {
             analysis.EndConversation = true;
         }
@@ -904,15 +904,18 @@ internal sealed class DialogueEngine : IDialogueEngine
         return result;
     }
 
-    /// <summary>与行为层裁决对齐（TravelLocationRules：空目标即空、不再兜底 Town）：目标地点
-    /// 缺失的 accepted_now 出游会被行为层拒绝执行，因此这里也绝不据此强制关闭对话。</summary>
-    internal static bool HasAcceptedImmediateCompanionOuting(ConversationAnalysis analysis)
+    /// <summary>与行为层裁决完全共享同一判定（ConversationActionCueRules.IsConfirmedImmediateOutingAcceptance）：
+    /// 空目标/未知目标/被可见文本强矛盾否决的 accepted_now 出游，行为层不会执行，这里也绝不据此
+    /// 强制关闭对话——两层不一致时玩家会看到"她答应了、对话关了、人却没动"。</summary>
+    internal static bool HasAcceptedImmediateCompanionOuting(ConversationAnalysis analysis, string playerText, string npcVisibleLine)
     {
         return analysis.Actions.Any(action =>
             string.Equals(action.Type, "companion_outing", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(action.TravelConsent, "accepted_now", StringComparison.OrdinalIgnoreCase)
-            && !string.IsNullOrWhiteSpace(action.TargetLocation)
-            && Behavior.TravelLocationRules.IsKnownPublicOutingTarget(action.TargetLocation));
+            && Behavior.ConversationActionCueRules.IsConfirmedImmediateOutingAcceptance(
+                action.TargetLocation,
+                action.TravelConsent,
+                playerText,
+                npcVisibleLine));
     }
 
     private static IReadOnlyDictionary<string, string> BuildAvailablePortraitDescriptions(
