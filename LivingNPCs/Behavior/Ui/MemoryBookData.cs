@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text.RegularExpressions;
 using LivingNPCs.Dialogue;
 using LivingNPCs.Dialogue.Persistence;
 
@@ -245,14 +246,15 @@ internal static class MemoryBookData
             lines.Add(new(MemoryBookLineKind.DateSeparator, FormatStardewDate(time, translate)));
             foreach (ConversationElement element in conversation.ConversationElements)
             {
-                if (string.IsNullOrWhiteSpace(element.Text))
+                string cleaned = SanitizeDialogueText(element.Text);
+                if (string.IsNullOrWhiteSpace(cleaned))
                 {
                     continue;
                 }
 
                 lines.Add(element.IsPlayerLine
-                    ? new MemoryBookLine(MemoryBookLineKind.PlayerLine, $"{farmerName}: {element.Text.Trim()}")
-                    : new MemoryBookLine(MemoryBookLineKind.NpcLine, $"{displayName}: {element.Text.Trim()}"));
+                    ? new MemoryBookLine(MemoryBookLineKind.PlayerLine, $"{farmerName}: {cleaned}")
+                    : new MemoryBookLine(MemoryBookLineKind.NpcLine, $"{displayName}: {cleaned}"));
             }
         }
 
@@ -337,6 +339,41 @@ internal static class MemoryBookData
     }
 
     // ---- 格式化 ----
+
+    /// <summary>肖像/情绪标记：$h $s $l $a $u $neutral 及 $数字（历史里存的是带命令的原始台词）。</summary>
+    private static readonly Regex DialoguePortraitTokens = new(@"\$(?:neutral|[hslau])\b|\$\d+", RegexOptions.Compiled);
+
+    /// <summary>
+    /// 把历史里的原始台词洗成手册可读文本：去 skip# 前缀、截掉 #$q 应答菜单区、
+    /// 页界（#$b#/#$e#）换成停顿、去肖像标记、压缩多余空白。
+    /// </summary>
+    internal static string SanitizeDialogueText(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return string.Empty;
+        }
+
+        string cleaned = text.Replace("skip#", string.Empty, StringComparison.Ordinal);
+        int responseMenuIndex = cleaned.IndexOf("#$q ", StringComparison.Ordinal);
+        if (responseMenuIndex >= 0)
+        {
+            cleaned = cleaned[..responseMenuIndex];
+        }
+
+        cleaned = cleaned
+            .Replace("#$b#", "　", StringComparison.Ordinal)
+            .Replace("#$e#", "　", StringComparison.Ordinal)
+            .Replace("\r", " ", StringComparison.Ordinal)
+            .Replace("\n", " ", StringComparison.Ordinal);
+        cleaned = DialoguePortraitTokens.Replace(cleaned, string.Empty);
+        while (cleaned.Contains("  ", StringComparison.Ordinal))
+        {
+            cleaned = cleaned.Replace("  ", " ", StringComparison.Ordinal);
+        }
+
+        return cleaned.Trim();
+    }
 
     internal static string NormalizeMemoryKind(string? kind)
     {

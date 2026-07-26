@@ -122,7 +122,7 @@ public sealed class MemoryBookDataTests
     }
 
     [Fact]
-    public void Conversations_Are_Newest_First_With_Speaker_Prefixes()
+    public void Conversations_Are_Newest_First_With_Speaker_Prefixes_And_Clean_Text()
     {
         var history = new StardewEventHistory { NpcName = "Abigail" };
         history.Add(
@@ -130,14 +130,14 @@ public sealed class MemoryBookDataTests
             new ConversationHistory(new List<ConversationElement>
             {
                 new("早呀", true),
-                new("早上好！", false)
+                new("早上好！$h", false)
             }));
         history.Add(
             new StardewTime(1, Season.Summer, 2, 1300),
             new ConversationHistory(new List<ConversationElement>
             {
                 new("矿洞怎么样？", true),
-                new("下次带你一起去。", false)
+                new("skip#还行。#$b#下次带你一起去。$0", false)
             }));
 
         var lines = MemoryBookData.BuildConversationLines(history, "阿比盖尔", "Yuki", Echo);
@@ -147,7 +147,22 @@ public sealed class MemoryBookDataTests
         Assert.True(summerIndex >= 0 && springIndex > summerIndex);
 
         Assert.Contains(lines, line => line.Kind == MemoryBookLineKind.PlayerLine && line.Text == "Yuki: 矿洞怎么样？");
-        Assert.Contains(lines, line => line.Kind == MemoryBookLineKind.NpcLine && line.Text == "阿比盖尔: 下次带你一起去。");
+        // 原始台词里的 skip#、页界与肖像标记全部被清洗。
+        Assert.Contains(lines, line => line.Kind == MemoryBookLineKind.NpcLine && line.Text == "阿比盖尔: 还行。　下次带你一起去。");
+        Assert.Contains(lines, line => line.Kind == MemoryBookLineKind.NpcLine && line.Text == "阿比盖尔: 早上好！");
+        Assert.DoesNotContain(lines, line => line.Text.Contains("#$b#") || line.Text.Contains("$0") || line.Text.Contains("skip#"));
+    }
+
+    [Theory]
+    [InlineData("你好。$0", "你好。")]
+    [InlineData("嗯…$h 好吧。$s", "嗯… 好吧。")]
+    [InlineData("skip#第一页#$b#第二页", "第一页　第二页")]
+    [InlineData("正文#$q 1 2#选项一", "正文")]
+    [InlineData("平平无奇的一句话。", "平平无奇的一句话。")]
+    [InlineData("  多   空格  ", "多 空格")]
+    public void SanitizeDialogueText_Strips_Control_Codes(string raw, string expected)
+    {
+        Assert.Equal(expected, MemoryBookData.SanitizeDialogueText(raw));
     }
 
     [Fact]

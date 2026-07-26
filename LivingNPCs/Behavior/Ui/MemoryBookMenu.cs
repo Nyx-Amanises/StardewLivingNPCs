@@ -123,14 +123,14 @@ internal sealed class MemoryBookMenu : IClickableMenu
         int rosterWidth = Math.Max(300, this.width / 4 + 40);
         this.rosterBounds = new Rectangle(
             this.xPositionOnScreen + 36,
-            this.yPositionOnScreen + 120,
+            this.yPositionOnScreen + 72,
             rosterWidth,
-            this.height - 160);
+            this.height - 112);
         this.contentBounds = new Rectangle(
             this.rosterBounds.Right + 40,
-            this.yPositionOnScreen + 120 + TabButtonHeight + 8,
+            this.yPositionOnScreen + 72 + TabButtonHeight + 8,
             this.width - rosterWidth - 36 * 2 - 40,
-            this.height - 160 - TabButtonHeight - 8);
+            this.height - 112 - TabButtonHeight - 8);
 
         this.rosterRows.Clear();
         int visibleRows = this.VisibleRosterRows;
@@ -506,13 +506,24 @@ internal sealed class MemoryBookMenu : IClickableMenu
     {
         b.Draw(Game1.fadeToBlackRect, Game1.graphics.GraphicsDevice.Viewport.Bounds, Color.Black * 0.5f);
 
-        // 书本框体：经典羊皮纸菜单框 + 顶部卷轴标题。
-        Game1.drawDialogueBox(this.xPositionOnScreen, this.yPositionOnScreen, this.width, this.height, false, true);
+        // 书本框体：几何确定的菜单框贴图（drawDialogueBox 的装饰边框会超出传入矩形，
+        // 关闭按钮与标题会"飘"在框外——冒烟实测），卷轴标题压在框体顶边上。
+        drawTextureBox(
+            b,
+            Game1.mouseCursors,
+            new Rectangle(384, 373, 18, 18),
+            this.xPositionOnScreen,
+            this.yPositionOnScreen,
+            this.width,
+            this.height,
+            Color.White,
+            4f,
+            drawShadow: true);
         SpriteText.drawStringWithScrollCenteredAt(
             b,
             this.translate("book.title"),
             this.xPositionOnScreen + this.width / 2,
-            this.yPositionOnScreen + 40);
+            this.yPositionOnScreen - 8);
 
         this.DrawRoster(b);
         this.DrawDivider(b);
@@ -627,9 +638,9 @@ internal sealed class MemoryBookMenu : IClickableMenu
     {
         var divider = new Rectangle(
             this.rosterBounds.Right + 16,
-            this.yPositionOnScreen + 110,
+            this.yPositionOnScreen + 64,
             4,
-            this.height - 150);
+            this.height - 104);
         b.Draw(Game1.staminaRect, divider, new Color(120, 80, 48) * 0.5f);
     }
 
