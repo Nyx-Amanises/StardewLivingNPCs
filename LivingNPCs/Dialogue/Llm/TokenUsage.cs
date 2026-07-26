@@ -52,10 +52,13 @@ internal sealed class TokenUsage
         int completionTokens = usage.Value<int?>("completion_tokens") ?? 0;
         int totalTokens = usage.Value<int?>("total_tokens") ?? promptTokens + completionTokens;
         // OpenAI 系报 prompt_tokens_details.cached_tokens；DeepSeek 旧字段是 prompt_cache_hit_tokens。
-        int cachedPromptTokens = usage["prompt_tokens_details"]?.Value<int?>("cached_tokens")
+        // 部分兼容端点（旧版 vLLM 等自建服务）把 details 字段序列化为字面量 null：此时索引结果是
+        // 非空的 JValue(Null)，`?.` 不短路，继续取子值会抛 InvalidOperationException
+        // （"Cannot access child value on JValue"），把成功响应整体误判为失败——必须先判型 JObject。
+        int cachedPromptTokens = (usage["prompt_tokens_details"] as JObject)?.Value<int?>("cached_tokens")
             ?? usage.Value<int?>("prompt_cache_hit_tokens")
             ?? 0;
-        int reasoningTokens = usage["completion_tokens_details"]?.Value<int?>("reasoning_tokens") ?? 0;
+        int reasoningTokens = (usage["completion_tokens_details"] as JObject)?.Value<int?>("reasoning_tokens") ?? 0;
 
         return new TokenUsage
         {

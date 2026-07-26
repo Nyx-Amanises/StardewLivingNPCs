@@ -10,6 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using StardewModdingAPI;
 
 namespace LivingNPCs.Dialogue.Llm;
 
@@ -95,6 +96,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         string json = body.ToString();
         int budget = request.AllowRetry ? 3 : 1;
         bool gotAnyDelta = false;
+        bool midStreamFailure = false;
         string lastRaw = string.Empty;
         string lastError = "Streaming request failed";
         int lastStatus = 500;
@@ -132,6 +134,8 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
                     {
                         lastError = ex.Message;
                         lastStatus = ExtractHttpStatus(ex);
+                        // 已向消费方交付过增量后才异常 = 中途断连；尚无增量的失败仍走整轮重试。
+                        midStreamFailure = gotAnyDelta;
                         break;
                     }
 
@@ -154,7 +158,18 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
             streamUsage = context.Usage ?? streamUsage;
         }
 
-        // 流结束后若拿到过增量则成功返回；usage 优先流内真实值，否则 CJK 感知估算。
+        // 中途断连（增量已交付后传输异常）：已 yield 的文本无法撤回，本层也不能重试
+        // （重试会把新一轮增量拼在旧残句后面）。记 Warn 日志并以流式异常上抛，
+        // 让调用方丢弃半截文本按失败路径处理；熔断装饰器经异常路径记失败而非成功。
+        if (midStreamFailure)
+        {
+            DialogueServices.Monitor?.Log(
+                $"[{ProviderId}] Streaming connection lost mid-reply after {fullText.Length} chars were already delivered; the partial text is discarded and the caller retries. Error: {lastError}",
+                LogLevel.Warn);
+            throw new LlmStreamException($"Streaming connection lost mid-reply: {lastError}", lastStatus);
+        }
+
+        // 流自然收尾（读到 [DONE] 或干净 EOF）且拿到过增量 → 成功；usage 优先流内真实值，否则 CJK 感知估算。
         if (gotAnyDelta)
         {
             TokenUsage usage = streamUsage ?? TokenUsage.Estimate(
@@ -258,8 +273,10 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         try
         {
             var json = JObject.Parse(body);
-            JToken? firstChoice = (json["choices"] as JArray)?.FirstOrDefault();
-            string? text = firstChoice?["message"]?["content"]?.ToString()
+            // choices[0] / message 可能被兼容端点写成字面量 null（JValue）：对非容器节点再取子值会抛
+            // InvalidOperationException（与 TokenUsage 的 details 字段同型缺陷），一律先判型 JObject。
+            var firstChoice = (json["choices"] as JArray)?.FirstOrDefault() as JObject;
+            string? text = (firstChoice?["message"] as JObject)?["content"]?.ToString()
                 ?? firstChoice?["text"]?.ToString()
                 ?? json["text"]?.ToString();
             TokenUsage? usage = json["usage"] is JObject usageJson && usageJson.HasValues
@@ -399,7 +416,9 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
             TokenUsage? usage = chunk["usage"] is JObject usageJson && usageJson.HasValues
                 ? TokenUsage.FromOpenAiUsage(usageJson)
                 : null;
-            string? delta = (chunk["choices"] as JArray)?.FirstOrDefault()?["delta"]?["content"]?.ToString();
+            // choices[0] / delta 为字面量 null 时不得对 JValue 取子值（会抛非 JsonException 的异常打断流）。
+            var deltaObject = ((chunk["choices"] as JArray)?.FirstOrDefault() as JObject)?["delta"] as JObject;
+            string? delta = deltaObject?["content"]?.ToString();
             return (string.IsNullOrEmpty(delta) ? null : delta, usage);
         }
         catch (JsonException)
