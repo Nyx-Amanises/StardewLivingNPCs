@@ -133,6 +133,13 @@ internal static class ThinkingDialogueController
             return false;
         }
 
+        // 流式会话：已生成的回复文字实时替代点点点（仍是这只原版 DialogueBox 在渲染）。
+        if (StreamingReplyPreview.TryGetPreview(out string preview))
+        {
+            text = preview;
+            return true;
+        }
+
         int dotCount = 1 + (int)((Game1.currentGameTime?.TotalGameTime.TotalMilliseconds ?? 0d) / 450d % 3d);
         text = baseText + new string('.', dotCount);
         return true;

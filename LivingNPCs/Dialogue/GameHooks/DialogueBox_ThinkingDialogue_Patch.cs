@@ -88,7 +88,9 @@ internal static class DialogueBox_ReceiveKeyPress_ThinkingDialogue_Patch
 [HarmonyPatch(typeof(IClickableMenu), nameof(IClickableMenu.receiveGamePadButton))]
 internal static class DialogueBox_ReceiveGamePadButton_ThinkingDialogue_Patch
 {
-    public static bool Prefix(IClickableMenu __instance, Buttons b)
+    // 形参名必须与游戏声明一致（button）：Harmony 前缀按名字配对，写 b 会在打补丁时
+    // 抛 Parameter not found 并再次中止 PatchAll（签名测试已钉住该参数名）。
+    public static bool Prefix(IClickableMenu __instance, Buttons button)
     {
         if (__instance is not DialogueBox box)
         {
@@ -97,7 +99,7 @@ internal static class DialogueBox_ReceiveGamePadButton_ThinkingDialogue_Patch
 
         if (NativeDialogueTextInputController.IsInputBox(box))
         {
-            if (b == Buttons.B)
+            if (button == Buttons.B)
             {
                 NativeDialogueTextInputController.HandleSpecialKey(Keys.Escape);
             }
@@ -107,7 +109,7 @@ internal static class DialogueBox_ReceiveGamePadButton_ThinkingDialogue_Patch
 
         if (ThinkingDialogueController.IsThinkingBox(box))
         {
-            if (b == Buttons.B)
+            if (button == Buttons.B)
             {
                 AsyncBuilder.Instance.CancelActiveGeneration();
             }

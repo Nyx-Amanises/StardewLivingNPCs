@@ -88,6 +88,8 @@ public class Wp12PatchTargetSignatureTests
         Assert.Equal(typeof(StardewValley.Menus.IClickableMenu), target!.DeclaringType);
         var parameter = Assert.Single(target.GetParameters());
         Assert.Equal("Buttons", parameter.ParameterType.Name);
+        // Harmony 前缀按形参名注入：patch 的形参必须与此同名（冒烟实测 "b" 会 Parameter not found）。
+        Assert.Equal("button", parameter.Name);
 
         bool subclassDeclares = typeof(StardewValley.Menus.DialogueBox)
             .GetMethods(All | BindingFlags.DeclaredOnly)
