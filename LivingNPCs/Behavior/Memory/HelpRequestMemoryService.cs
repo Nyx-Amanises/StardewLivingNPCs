@@ -7,29 +7,8 @@ namespace LivingNPCs.Behavior;
 
 internal sealed class HelpRequestMemoryService
 {
-    private static readonly HashSet<string> AllowedHelpRequestItemIds = new(StringComparer.OrdinalIgnoreCase)
-    {
-        "(O)16",
-        "(O)18",
-        "(O)20",
-        "(O)22",
-        "(O)66",
-        "(O)80",
-        "(O)216",
-        "(O)223",
-        "(O)395",
-        "(O)396",
-        "(O)398",
-        "(O)402",
-        "(O)404",
-        "(O)406",
-        "(O)408",
-        "(O)410",
-        "(O)412",
-        "(O)414",
-        "(O)416",
-        "(O)418"
-    };
+    /// <summary>超集白名单从 Advisor 目录派生（单一真源）；逐 NPC 的当轮可选性由第二重校验把关。</summary>
+    private static readonly IReadOnlySet<string> AllowedHelpRequestItemIds = HelpRequestAdvisor.AllItemIds;
 
     private readonly Action<LivingNpcState, int, int> addFamiliarity;
     private readonly Action<LivingNpcState, int> applyRelationshipTrustDelta;
