@@ -21,7 +21,9 @@ internal abstract class LlmClientBase : ILlmClient, ILlmCapabilities
     protected LlmClientBase(LlmConnectionSettings settings)
     {
         Settings = settings;
-        ApiKey = settings.ApiKey ?? string.Empty;
+        // 与 ModelName 同口径 Trim：剪贴板粘贴的尾随空白会让 Bearer/x-api-key/URL query
+        // 携带脏字符，酿成难排查的 401（审查附带项）。
+        ApiKey = (settings.ApiKey ?? string.Empty).Trim();
     }
 
     public abstract string ProviderId { get; }

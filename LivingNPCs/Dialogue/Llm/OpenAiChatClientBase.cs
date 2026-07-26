@@ -40,9 +40,9 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
     /// <summary>官方端点 ApiKey 为空时模型列表直接返回空、不发请求；兼容端点无条件发（可能无鉴权）。</summary>
     protected virtual bool RequireApiKeyForModelList => true;
 
-    protected string ChatEndpoint => BaseAddress + "/v1/chat/completions";
+    protected virtual string ChatEndpoint => BaseAddress + "/v1/chat/completions";
 
-    protected string ModelsEndpoint => BaseAddress + "/v1/models";
+    protected virtual string ModelsEndpoint => BaseAddress + "/v1/models";
 
     protected string? AuthTokenOrNull => string.IsNullOrEmpty(ApiKey) ? null : ApiKey;
 
@@ -216,6 +216,29 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
     public IReadOnlyList<string> GetModelNames()
     {
         return ListModelNamesSafely(FetchModelNamesAsync);
+    }
+
+    /// <summary>
+    /// 完整端点直用判定（审查发现 4）：地址以 /chat/completions 结尾但其前缀不以 /v1 结尾
+    /// （Cloudflare AI Gateway 的 /compat/chat/completions 等网关路径），返回去掉尾部斜杠后的
+    /// 完整端点原样——此时"剥 /chat/completions 再拼 /v1/chat/completions"会凭空插入用户从未
+    /// 配置的 /v1 段导致 404。主流 /v1 形态与裸基地址返回 null，仍走 NormalizeBaseAddress 拼接。
+    /// </summary>
+    internal static string? DetectVerbatimChatEndpoint(string? serverAddress)
+    {
+        string address = (serverAddress ?? string.Empty).Trim();
+        if (address.EndsWith("/", StringComparison.Ordinal))
+        {
+            address = address[..^1];
+        }
+
+        if (!address.EndsWith("/chat/completions", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        string prefix = address[..^"/chat/completions".Length];
+        return prefix.EndsWith("/v1", StringComparison.OrdinalIgnoreCase) ? null : address;
     }
 
     /// <summary>兼容端点地址规整：依次剥掉尾部 /、尾部 /chat/completions、尾部 /v1（§3.1）。</summary>

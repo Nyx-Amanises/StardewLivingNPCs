@@ -15,6 +15,9 @@ internal sealed class ClaudeClient : LlmClientBase, IModelNameSource
     private const string MessagesEndpoint = "https://api.anthropic.com/v1/messages";
     private const string ModelsEndpoint = "https://api.anthropic.com/v1/models";
 
+    /// <summary>四段尾部全空的退化请求用的最小中性 user 内容（Anthropic 拒绝空内容消息）。</summary>
+    internal const string EmptyUserContentPlaceholder = "(continue)";
+
     public ClaudeClient(LlmConnectionSettings settings)
         : base(settings)
     {
@@ -81,7 +84,9 @@ internal sealed class ClaudeClient : LlmClientBase, IModelNameSource
     /// 缓存断点放置（§3.2，近期精修逐字保留）：断点 1 盖住"系统提示词+世界摘要"全 NPC 共享稳定前缀，
     /// 断点 2 让同一 NPC 的连续轮次复用传记/示例段；可变尾段永远不进缓存。
     /// 低于模型最小可缓存前缀（Haiku 4.5 为 4096 token）的断点被服务端静默忽略、不报错，属预期行为。
-    /// 空文本块一律不发（Anthropic 端点拒绝空 text 块，自检等场景稳定段可为空）。
+    /// 空文本块一律不发（Anthropic 端点拒绝空 text 块，自检等场景稳定段可为空）；
+    /// NpcContext 与 Tail 皆空的退化调用以 <see cref="EmptyUserContentPlaceholder"/> 占位，
+    /// 保证 user 消息内容非空合法（Anthropic 对空内容消息直接 400）。
     /// </summary>
     internal JObject BuildBody(LlmRequest request)
     {
@@ -119,7 +124,8 @@ internal sealed class ClaudeClient : LlmClientBase, IModelNameSource
         JToken userContent;
         if (string.IsNullOrEmpty(request.NpcContext))
         {
-            userContent = request.Tail;
+            // 发现 5 兜底：两段皆空时不发空串（正常引擎请求 Tail 恒非空，仅旁路退化调用可达）。
+            userContent = string.IsNullOrEmpty(request.Tail) ? EmptyUserContentPlaceholder : request.Tail;
         }
         else
         {
