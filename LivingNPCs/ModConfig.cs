@@ -24,6 +24,13 @@ internal sealed class ModConfig
     public int MaxMemoryEntriesPerNpc { get; set; } = 20;
     public int PromptMemoryEntries { get; set; } = 4;
     public bool EnableConversationMemory { get; set; } = true;
+
+    /// <summary>
+    /// 多人同步总开关（隐藏项，v1 主机权威）：farmhand 上报交换给主机统一入账、主机回发
+    /// NPC 心智镜像。关闭后 farmhand 回到旧行为（本地临时记忆，不上报、不落盘）。
+    /// </summary>
+    public bool EnableMultiplayerSync { get; set; } = true;
+
     public bool EnableHelpRequests { get; set; } = true;
     public int MaxPendingHelpRequestsPerNpc { get; set; } = 1;
     public int HelpRequestCooldownDays { get; set; } = 3;

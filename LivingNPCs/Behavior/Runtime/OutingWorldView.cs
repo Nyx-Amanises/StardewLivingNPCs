@@ -14,6 +14,13 @@ internal interface IOutingWorldView
 {
     int TimeOfDay { get; }
     int TotalDays { get; }
+
+    /// <summary>
+    /// 刻意用 Game1.IsMasterGame 而非 Context.IsMainPlayer：出游驱动的是 NPC 寻路模拟
+    /// （PathFindController 只在主模拟端更新），判据是"本进程是否模拟世界"。分屏时副屏
+    /// 与主屏同属主模拟进程，IsMasterGame 为真而 IsMainPlayer 为假——用后者会错杀。
+    /// 每玩家数据（存档/任务栏/好感）才用 Context.IsMainPlayer。
+    /// </summary>
     bool IsMasterGame { get; }
     bool IsFestivalToday { get; }
     bool IsLightning { get; }

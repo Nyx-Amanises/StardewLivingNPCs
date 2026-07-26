@@ -49,6 +49,11 @@ internal sealed class ExchangeApplicationService
         this.applyAiDialogueFriendship = applyAiDialogueFriendship;
     }
 
+    /// <param name="allowHelpRequestProgress">
+    /// 为 false 时求助系统整体不推进（不存新请求、不合成、不应用更新、不因玩家肯定语接受
+    /// Offered 请求）。多人 v1 里 farmhand 上报的远程交换走 false：任务栏投影与奖励只属于
+    /// 主机玩家自己的会话（见 Multiplayer/RemoteExchangePolicy）。
+    /// </param>
     public ValleyTalkExchangeResult Apply(
         NPC npc,
         LivingNpcState state,
@@ -59,7 +64,8 @@ internal sealed class ExchangeApplicationService
         int maxPendingHelpRequestsPerNpc,
         int helpRequestCooldownDays,
         int maxExtraFriendshipPerDay,
-        int maxDialogueBehaviorInfluenceDays)
+        int maxDialogueBehaviorInfluenceDays,
+        bool allowHelpRequestProgress = true)
     {
         var analysis = ValleyTalkExchangeParser.Parse(analysisJson);
         NicknamePreferenceService.TryUpdateStateFromDialogue(
@@ -115,7 +121,8 @@ internal sealed class ExchangeApplicationService
 
         foreach (var candidate in analysis.HelpRequests
                      .Where(request =>
-                         maxPendingHelpRequestsPerNpc > 0
+                         allowHelpRequestProgress
+                         && maxPendingHelpRequestsPerNpc > 0
                          && !string.IsNullOrWhiteSpace(request.Summary)
                          && BehaviorValueNormalizer.NormalizeHelpRequestType(request.Type) == "item_request")
                      .Take(1))
@@ -141,7 +148,8 @@ internal sealed class ExchangeApplicationService
 
         // Creation safety net: if the AI mentioned an item favor in the visible reply but omitted
         // the structured helpRequests field, synthesize it from the dialogue (still gated by Store).
-        if (storedHelpRequests == 0
+        if (allowHelpRequestProgress
+            && storedHelpRequests == 0
             && this.helpRequests.TrySynthesizeItemRequestFromDialogue(
                 npc,
                 state,
@@ -158,7 +166,7 @@ internal sealed class ExchangeApplicationService
         }
 
         foreach (var candidate in analysis.HelpRequestUpdates
-                     .Where(update => !string.IsNullOrWhiteSpace(update.Summary))
+                     .Where(update => allowHelpRequestProgress && !string.IsNullOrWhiteSpace(update.Summary))
                      .Take(2))
         {
             if (this.helpRequests.ApplyUpdate(state, candidate, playerText, out NpcHelpRequestFact? fulfilledRequest))
@@ -180,7 +188,7 @@ internal sealed class ExchangeApplicationService
 
         // Deterministic fallback: if the farmer's reply clearly agrees to help and an offered
         // request is still waiting, accept it even when the AI did not emit an accepted update.
-        if (this.helpRequests.TryAcceptOfferedFromPlayerAffirmation(state, playerText))
+        if (allowHelpRequestProgress && this.helpRequests.TryAcceptOfferedFromPlayerAffirmation(state, playerText))
         {
             updatedHelpRequests++;
             this.addEntry(

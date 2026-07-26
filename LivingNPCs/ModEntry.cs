@@ -39,7 +39,7 @@ public sealed class ModEntry : Mod
         }
 
         NpcDisposition.LoadCommunityProfiles(helper.DirectoryPath, Monitor);
-        this.engine = new BehaviorEngine(helper, Monitor, this.config);
+        this.engine = new BehaviorEngine(helper, Monitor, this.config, this.ModManifest.UniqueID);
         this.engine.RegisterEvents();
 
         // 交换记录直调（WP16 §4.1）：引擎生成完成后在后台线程回调；BehaviorEngine 内部用

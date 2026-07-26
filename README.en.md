@@ -144,6 +144,16 @@ If generation fails, times out, or returns unusable content, the mod falls back 
 - LivingNPCs respects content authors' AI-use permissions. Text from content packs that do not permit AI use is not copied into prompts.
 - This release does not claim dedicated, hand-tuned support for other large expansions such as Ridgeside Village or East Scarp.
 
+## Multiplayer (v1: host-authoritative)
+
+Since 0.2.0, LAN/invite-code multiplayer is supported at a basic level, provided **both the host and the farmhands install this mod** (each with their own API key and provider settings):
+
+- **There is exactly one NPC mind, owned by the host's save.** Farmhands generate dialogue locally with their own key; finished exchanges are reported to the host, which records memories/emotions/trust in the single authoritative ledger and pushes each NPC's "mind mirror" back to farmhands — everyone perceives the same relationship history. Friendship earned from a farmhand's dialogue goes to that farmhand.
+- **Farmhand conversation history stays on the farmhand's machine** (the `multiplayer/` folder). The memory book's "Talks" tab reads local history; the other tabs (bond/memories/moments) request a fresh snapshot from the host on open, falling back to the last synced data (with a notice) if the host does not respond.
+- **World actions are host-only**: gifts/money/companion outings/help requests are not initiated from farmhand conversations (NPCs politely decline outing invitations); the help-request quest log and rewards belong to the host player.
+- **Split-screen secondary players cannot use AI dialogue in v1** — they get a one-time notice and vanilla dialogue.
+- If the host does not have the mod (or the hidden `EnableMultiplayerSync=false` setting is used), farmhands fall back to session-local, non-persisted memory.
+
 ## Common settings
 
 Settings actually available in Generic Mod Config Menu:
@@ -171,6 +181,7 @@ The following advanced options **can only be edited in `config.json`** (close th
 - Passive behaviors: `EnablePassiveBehaviors`, `PassiveBehaviorChancePercent` (off by default; test with the manual behavior hotkey first);
 - Memory sizes: `MaxMemoryEntriesPerNpc`, `PromptMemoryEntries`;
 - Gift mail and memory compression: `EnableAiGiftMail`, `EnableMemoryImpressions`;
+- Multiplayer sync: `EnableMultiplayerSync` (on by default; when off, farmhands stop reporting to the host and fall back to session-local memory — see the Multiplayer section);
 - Connection and logging: `SuppressConnectionCheck` (fully disables the self-check; by default it only runs when connection settings change) and `ExportAiResponseLogs` (AI diagnostic logs; each log rotates to `.old` past ~8MB, so they never grow without bound).
 
 ## Hotkeys

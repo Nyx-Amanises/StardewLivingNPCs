@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using StardewModdingAPI;
 using StardewValley;
 
 using LivingNPCs.Dialogue.Content;
@@ -85,12 +87,75 @@ internal static class PatchGuards
     /// <summary>主动搭话路径（P1 / P13 前半 / P15）：就绪 + 启用，不抽签（§4.2.1）。</summary>
     public static bool AllowInteractiveInput(NPC? npc)
     {
+        if (IsSplitScreenSecondaryBlocked(notifyPlayer: npc != null))
+        {
+            return false;
+        }
+
         if (npc != null && NotifyIfConnectionUnconfigured())
         {
             return false;
         }
 
         return IsEnabledFor(npc);
+    }
+
+    /// <summary>已提示过"分屏不支持"的副屏 ScreenId（每屏一次性）。</summary>
+    private static readonly HashSet<int> splitScreenNoticeShownForScreens = new();
+
+    /// <summary>测试注入的分屏状态 (IsSplitScreen, ScreenId)；null 走 SMAPI Context。</summary>
+    internal static Func<(bool IsSplitScreen, int ScreenId)>? SplitScreenStateResolverForTests;
+
+    /// <summary>
+    /// 多人 v1 不支持分屏副屏的 AI 对话：引擎的调度器/输入队列/思考窗全是进程级静态，
+    /// 未做 PerScreen 化，副屏触发会与主屏互相踩状态。副屏一律回退原版对话；
+    /// 主动搭话时给一次性 HUD 说明（被动路径静默）。PerScreen 化留 v2。
+    /// </summary>
+    internal static bool IsSplitScreenSecondaryBlocked(bool notifyPlayer)
+    {
+        bool isSplitScreen;
+        int screenId;
+        try
+        {
+            (isSplitScreen, screenId) = SplitScreenStateResolverForTests?.Invoke()
+                ?? (Context.IsSplitScreen, Context.ScreenId);
+        }
+        catch
+        {
+            // 无游戏环境（单元测试/极早期）读分屏状态会抛：按非分屏放行。
+            return false;
+        }
+
+        if (!isSplitScreen || screenId == 0)
+        {
+            return false;
+        }
+
+        if (notifyPlayer && splitScreenNoticeShownForScreens.Add(screenId))
+        {
+            try
+            {
+                Game1.addHUDMessage(new StardewValley.HUDMessage(
+                    Util.GetConsoleString(
+                        "dialogue.hud.splitScreenUnsupported",
+                        null,
+                        "LivingNPCs: AI dialogue is unavailable for split-screen players in this version; vanilla dialogue is used instead."),
+                    StardewValley.HUDMessage.newQuest_type));
+            }
+            catch
+            {
+                // HUD 失败不影响门禁裁决。
+            }
+        }
+
+        return true;
+    }
+
+    /// <summary>测试复位：清除分屏一次性提示记录与注入。</summary>
+    internal static void ResetSplitScreenNoticeForTests()
+    {
+        splitScreenNoticeShownForScreens.Clear();
+        SplitScreenStateResolverForTests = null;
     }
 
     /// <summary>
@@ -140,6 +205,11 @@ internal static class PatchGuards
     /// </summary>
     public static bool AllowPassiveGeneration(NPC? npc, GenerationFrequencyKind kind, bool checkNetwork)
     {
+        if (IsSplitScreenSecondaryBlocked(notifyPlayer: false))
+        {
+            return false;
+        }
+
         if (DialogueServices.Config?.GenerateAiForNormalRightClick != true)
         {
             return false;
@@ -161,6 +231,11 @@ internal static class PatchGuards
     /// <summary>送礼生成门（P4）：不受被动门控约束；启用 + 送礼频率（不带记忆）+ 网络。</summary>
     public static bool AllowGiftGeneration(NPC? npc)
     {
+        if (IsSplitScreenSecondaryBlocked(notifyPlayer: false))
+        {
+            return false;
+        }
+
         if (!IsEnabledFor(npc))
         {
             return false;

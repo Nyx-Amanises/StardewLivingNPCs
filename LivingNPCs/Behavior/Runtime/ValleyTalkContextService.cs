@@ -23,6 +23,7 @@ internal sealed class ValleyTalkContextService
     private readonly GiftSelector giftSelector;
     private readonly BehaviorMailService mailService;
     private readonly Func<NPC, string> buildCompanionOutingContext;
+    private readonly Func<bool>? suppressOpportunitySections;
 
     /// <summary>Per-NPC one-shot immediate cues; consumed by the next BuildPromptContext.</summary>
     private readonly Dictionary<string, string> immediateContexts = new(StringComparer.OrdinalIgnoreCase);
@@ -33,7 +34,8 @@ internal sealed class ValleyTalkContextService
         BehaviorMemory memory,
         GiftSelector giftSelector,
         BehaviorMailService mailService,
-        Func<NPC, string> buildCompanionOutingContext)
+        Func<NPC, string> buildCompanionOutingContext,
+        Func<bool>? suppressOpportunitySections = null)
     {
         this.monitor = monitor;
         this.config = config;
@@ -41,7 +43,15 @@ internal sealed class ValleyTalkContextService
         this.giftSelector = giftSelector;
         this.mailService = mailService;
         this.buildCompanionOutingContext = buildCompanionOutingContext;
+        this.suppressOpportunitySections = suppressOpportunitySections;
     }
+
+    /// <summary>
+    /// 多人 v1（主机权威下的远程 farmhand）：机会段引导模型发起世界动作（送礼/求助/出游），
+    /// 而世界动作只属于主机玩家自己的会话——farmhand 上报的动作会被主机剥除。抑制注入并
+    /// 显式告知模型"不可送礼 / 出游不可安排"，避免 NPC 口头答应却无事发生。
+    /// </summary>
+    private bool SuppressOpportunitySections => this.suppressOpportunitySections?.Invoke() == true;
 
     public void PushInteractionContext(NPC npc, string debugMessage, string immediatePromptContext = "")
     {
@@ -93,7 +103,9 @@ internal sealed class ValleyTalkContextService
             promptContext = $"{promptContext}\n{helpRequestOpportunityContext}";
         }
 
-        string companionOutingContext = this.buildCompanionOutingContext(npc);
+        string companionOutingContext = this.SuppressOpportunitySections
+            ? PromptFragments.Outing.UnavailableSection()
+            : this.buildCompanionOutingContext(npc);
         if (!string.IsNullOrWhiteSpace(companionOutingContext))
         {
             promptContext = $"{promptContext}\n{companionOutingContext}";
@@ -116,6 +128,12 @@ internal sealed class ValleyTalkContextService
         if (state == null)
         {
             return string.Empty;
+        }
+
+        if (this.SuppressOpportunitySections)
+        {
+            // 镜像里可能带着主机滚出的当日礼物机会；对 farmhand 明确声明"今天不送"。
+            return PromptFragments.GiftOpportunity.NoOpportunitySection();
         }
 
         if (!this.config.EnableAiWorldActions
@@ -150,6 +168,7 @@ internal sealed class ValleyTalkContextService
     {
         var state = this.memory.GetState(npc);
         if (state == null
+            || this.SuppressOpportunitySections
             || !this.config.EnableHelpRequests
             || state.DailyHelpRequestOpportunityTotalDays != Game1.Date.TotalDays
             || state.HighestUnresolvedConflictSeverity >= 30
@@ -178,7 +197,13 @@ internal sealed class ValleyTalkContextService
             GiftMemoryDetailsFactory.IsBirthdayGift(npc)
         );
         LivingNpcState state = this.memory.GetOrCreateState(npc);
-        var matchingHelpRequests = FindMatchingItemHelpRequestGiftContexts(state, gift).ToList();
+
+        // 主机权威下的 farmhand：镜像里的待办求助/待发回礼邮件都属于主机玩家的账本——
+        // farmhand 的这次送礼在求助系统里什么都没推进（交付拦截也已禁用），邮件也只会
+        // 寄给主机。按普通礼物回应，不注入上交/回礼暗示。
+        var matchingHelpRequests = this.SuppressOpportunitySections
+            ? new List<NpcHelpRequestFact>()
+            : FindMatchingItemHelpRequestGiftContexts(state, gift).ToList();
         if (matchingHelpRequests.Count > 0)
         {
             return BuildHelpRequestGiftResponsePrompt(npc, gift, matchingHelpRequests);
@@ -191,8 +216,9 @@ internal sealed class ValleyTalkContextService
 
         // Read-only: the reciprocal-gift roll happens once, in ConversationStartRecorder, after the
         // gift is confirmed accepted. Rolling here too would stack a second chance per gift.
-        bool hasResponseMail = this.mailService.HasPendingGiftMail(state, "reciprocal")
-            || this.mailService.HasPendingGiftMail(state, "birthday");
+        bool hasResponseMail = !this.SuppressOpportunitySections
+            && (this.mailService.HasPendingGiftMail(state, "reciprocal")
+                || this.mailService.HasPendingGiftMail(state, "birthday"));
         return hasResponseMail
             ? BuildGiftResponseMailPrompt(npc, gift)
             : string.Empty;

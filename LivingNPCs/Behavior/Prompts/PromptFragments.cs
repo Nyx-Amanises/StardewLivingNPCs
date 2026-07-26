@@ -834,6 +834,15 @@ internal static class PromptFragments
             CompanionOutingPhase.AtDestination => "spending time together at the destination",
             _ => "returning to the normal daily schedule"
         };
+
+        /// <summary>
+        /// 多人 v1：远程 farmhand 的会话里出游不可安排（出游由主机驱动、farmhand 上报的
+        /// 出游动作会被主机丢弃）。显式告知模型婉拒，避免口头答应却无人出发。
+        /// </summary>
+        public static string UnavailableSection() =>
+            "## Companion Outing Unavailable\n"
+            + "- Going somewhere together cannot be arranged in this conversation. If the farmer "
+            + "invites you out, warmly decline for now without promising a specific later time.";
     }
 
     /// <summary>The micro-behavior planner request sent by <see cref="AiBehaviorClient"/>.</summary>

@@ -214,6 +214,16 @@ AI 上下文可以感知当前日期、时间、季节、天气、节日、地�
 
 当前没有宣称对 Ridgeside Village、East Scarp 等其他大型扩展提供专属精修适配。
 
+## 多人联机（v1：主机权威）
+
+0.2.0 起支持局域网/邀请码联机的基础适配，前提是**主机与帮工都安装本 Mod**（各自使用自己的 API Key 与提供商配置）：
+
+- **NPC 心智只有一份，归主机存档**。帮工用自己的 Key 本地生成对话；说完的内容自动上报主机，由主机统一记入记忆/情绪/信任账本，再把每位 NPC 的"心智镜像"发回帮工——双方都能感知同一段关系历史。帮工对话产生的好感增长会回到帮工自己头上。
+- **帮工的对话历史仍存在帮工本机**（`multiplayer/` 目录），记忆手册的"对话"页读取本地历史；其余页（关系卡/记忆/经历）打开时向主机请求最新快照，主机无响应时会提示或退回上次同步的数据。
+- **世界动作仅主机**：送礼/送钱/陪伴出游/求助任务在帮工的对话里不会发起（NPC 会自然婉拒出游邀请）；求助任务栏与奖励只属于主机玩家。
+- **分屏（split-screen）副屏玩家 v1 暂不支持 AI 对话**，会一次性提示并回退原版对话。
+- 主机未装本 Mod（或隐藏配置 `EnableMultiplayerSync=false`）时，帮工回退为本地临时记忆：当次会话内有效，不写入任何存档。
+
 ## 常用设置
 
 Generic Mod Config Menu 中实际提供的设置：
@@ -241,6 +251,7 @@ Generic Mod Config Menu 中实际提供的设置：
 - 被动行为：<code>EnablePassiveBehaviors</code>、<code>PassiveBehaviorChancePercent</code>（默认关闭；开启前建议先用行为测试键手动测试）；
 - 记忆容量：<code>MaxMemoryEntriesPerNpc</code>、<code>PromptMemoryEntries</code>；
 - 礼物信与记忆压缩：<code>EnableAiGiftMail</code>、<code>EnableMemoryImpressions</code>；
+- 多人同步：<code>EnableMultiplayerSync</code>（默认开启；关闭后帮工不再上报主机、退回本地临时记忆，见"多人联机"一节）；
 - 连接与日志：<code>SuppressConnectionCheck</code>（完全关闭连接自检；默认只在连接设置变化时自检一次）、<code>ExportAiResponseLogs</code>（AI 诊断日志开关；单个日志超过约 8MB 会自动轮转为 <code>.old</code>，不会无限增长）。
 
 ## 快捷键

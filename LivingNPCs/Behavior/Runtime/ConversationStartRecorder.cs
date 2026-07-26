@@ -40,6 +40,7 @@ internal sealed class ConversationStartRecorder
     private readonly HelpRequestQuestLogService helpRequestQuestLog;
     private readonly TryFindNpcForInteractionHandler tryFindNpcForInteraction;
     private readonly Action<NPC, string, string> pushInteractionContext;
+    private readonly Func<bool>? suppressHostLedgerSideEffects;
     private readonly Dictionary<string, int> lastConversationMemoryTimeByNpc = new();
     private readonly List<PendingGiftVerification> pendingGiftVerifications = new();
 
@@ -55,7 +56,8 @@ internal sealed class ConversationStartRecorder
         HelpRequestRewardService helpRequestRewards,
         HelpRequestQuestLogService helpRequestQuestLog,
         TryFindNpcForInteractionHandler tryFindNpcForInteraction,
-        Action<NPC, string, string> pushInteractionContext)
+        Action<NPC, string, string> pushInteractionContext,
+        Func<bool>? suppressHostLedgerSideEffects = null)
     {
         this.helper = helper;
         this.monitor = monitor;
@@ -69,7 +71,15 @@ internal sealed class ConversationStartRecorder
         this.helpRequestQuestLog = helpRequestQuestLog;
         this.tryFindNpcForInteraction = tryFindNpcForInteraction;
         this.pushInteractionContext = pushInteractionContext;
+        this.suppressHostLedgerSideEffects = suppressHostLedgerSideEffects;
     }
+
+    /// <summary>
+    /// 多人 v1（主机权威下的远程 farmhand）：本地记忆是主机镜像，机会掷骰、社群涟漪、
+    /// 求助交付与奖励属于主机账本——在 farmhand 上执行会造成假机会/假奖励，随后被快照
+    /// 覆盖。会话/礼物的即时记录保留（当次会话的连贯性素材，不落盘）。
+    /// </summary>
+    private bool SuppressHostLedgerSideEffects => this.suppressHostLedgerSideEffects?.Invoke() == true;
 
     public void Clear()
     {
@@ -96,6 +106,7 @@ internal sealed class ConversationStartRecorder
         if (heldGift != null
             && heldGiftDetails != null
             && this.config.EnableHelpRequests
+            && !this.SuppressHostLedgerSideEffects
             && this.HasPendingItemHelpRequest(npc, heldGiftDetails))
         {
             // Deliveries run BEFORE the per-10-minute interaction marker: they are idempotent
@@ -156,13 +167,16 @@ internal sealed class ConversationStartRecorder
         if (this.config.EnableNpcState)
         {
             LivingNpcState state = this.memory.UpdateStateForConversationStart(npc);
-            this.giftOpportunities.TryPrepareDailyGiftOpportunity(npc, state);
-            if (this.config.EnableHelpRequests)
+            if (!this.SuppressHostLedgerSideEffects)
             {
-                this.giftOpportunities.TryPrepareDailyHelpRequestOpportunity(npc, state);
-            }
+                this.giftOpportunities.TryPrepareDailyGiftOpportunity(npc, state);
+                if (this.config.EnableHelpRequests)
+                {
+                    this.giftOpportunities.TryPrepareDailyHelpRequestOpportunity(npc, state);
+                }
 
-            this.communityRipples.TrySpreadConversationSocialRipple(npc, state);
+                this.communityRipples.TrySpreadConversationSocialRipple(npc, state);
+            }
         }
 
         this.PushInteractionContext(
@@ -247,10 +261,13 @@ internal sealed class ConversationStartRecorder
         if (this.config.EnableNpcState)
         {
             LivingNpcState state = this.memory.UpdateStateForGift(npc, gift);
-            this.giftOpportunities.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
+            if (!this.SuppressHostLedgerSideEffects)
+            {
+                this.giftOpportunities.TryScheduleReciprocalGiftOpportunity(npc, state, gift);
+            }
         }
 
-        if (this.config.EnableHelpRequests)
+        if (this.config.EnableHelpRequests && !this.SuppressHostLedgerSideEffects)
         {
             IReadOnlyList<NpcHelpRequestFact> changedHelpRequests = this.memory.TryCompleteItemHelpRequests(npc, gift, this.config.MaxMemoryEntriesPerNpc);
             if (changedHelpRequests.Count > 0)

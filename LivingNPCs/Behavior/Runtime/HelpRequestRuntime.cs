@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using Microsoft.Xna.Framework;
+using StardewModdingAPI;
 using StardewValley;
 
 namespace LivingNPCs.Behavior;
@@ -32,7 +33,8 @@ internal sealed class HelpRequestRuntime
 
     public void UpdateTimers()
     {
-        if (!this.config.EnableHelpRequests)
+        // 多人 v1：求助账本（过期裁决）只在主机推进；farmhand 的状态是主机镜像。
+        if (!this.config.EnableHelpRequests || !Context.IsMainPlayer)
         {
             return;
         }
@@ -77,7 +79,9 @@ internal sealed class HelpRequestRuntime
 
     public void ShowFollowUps()
     {
+        // 多人 v1：回访标记写入求助账本，仅主机执行（farmhand 上的标记会被镜像快照覆盖并重放）。
         if (!this.config.EnableDialogueFollowUps
+            || !Context.IsMainPlayer
             || Game1.currentLocation == null
             || Game1.player == null
             || Game1.activeClickableMenu != null

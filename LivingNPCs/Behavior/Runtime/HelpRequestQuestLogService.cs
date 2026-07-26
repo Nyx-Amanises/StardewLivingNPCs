@@ -29,6 +29,14 @@ internal sealed class HelpRequestQuestLogService
             return;
         }
 
+        // 多人 v1：任务栏投影与金钱领取只属于主机玩家。farmhand 的本地状态是主机心智镜像
+        // （分屏副屏则直接共享主机内存），在这里投影会把共享求助复制成每名玩家各一份
+        // 可领钱的代理任务；farmhand 的对话也不推进求助系统（见 RemoteExchangePolicy）。
+        if (!Context.IsMainPlayer)
+        {
+            return;
+        }
+
         var trackedRequests = this.memory.GetTrackedStates()
             .SelectMany(state => state.HelpRequests
                 // With the feature turned off mid-save, stop tracking Pending proxies (they could

@@ -38,17 +38,25 @@ internal sealed class BehaviorEngineServices
     public DelayedTravelActionRuntime DelayedTravelActions { get; }
     public HelpRequestRuntime HelpRequests { get; }
     public DialogueBehaviorInfluenceRuntime DialogueBehaviorInfluences { get; }
+    public Multiplayer.MultiplayerSyncService MultiplayerSync { get; }
 
     /// <summary>Engine-owned cleanup invoked after the debug command wipes behavior memory.</summary>
     public Action? AfterManualMemoryClear { get; set; }
 
-    public BehaviorEngineServices(IModHelper helper, IMonitor monitor, ModConfig config)
+    public BehaviorEngineServices(IModHelper helper, IMonitor monitor, ModConfig config, string modUniqueId = "Yuki.LivingNPCs")
     {
         this.DialogueLink = new DialogueEngineLink(monitor);
         this.GiftSelector = new GiftSelector(this.Random);
         this.Planner = new AiBehaviorPlanner(new RuleBasedBehaviorPlanner(config, this.Random, this.Memory));
         this.AiBehaviorClient = new AiBehaviorClient(config, monitor);
         this.Feedback = new BehaviorFeedbackService(config, monitor);
+        this.MultiplayerSync = new Multiplayer.MultiplayerSyncService(
+            helper,
+            monitor,
+            config,
+            this.Memory,
+            this.Feedback,
+            modUniqueId);
         this.CommunityRipples = new CommunityRippleRuntime(config, monitor, this.Memory, this.Random);
         this.MailService = new BehaviorMailService(helper, this.Memory, this.Random, config, this.DialogueLink);
         this.MemoryImpressions = new MemoryImpressionService(config, monitor, this.Memory, this.DialogueLink);
@@ -74,7 +82,8 @@ internal sealed class BehaviorEngineServices
             this.Memory,
             this.GiftSelector,
             this.MailService,
-            npc => companionOutings?.BuildPromptContext(npc) ?? string.Empty
+            npc => companionOutings?.BuildPromptContext(npc) ?? string.Empty,
+            () => this.MultiplayerSync.SuppressLocalOpportunities
         );
 
         this.GiftOpportunities = new GiftOpportunityService(
@@ -135,7 +144,8 @@ internal sealed class BehaviorEngineServices
             this.HelpRequestRewards,
             this.HelpRequestQuestLog,
             this.Locator.TryFindNpcForInteraction,
-            (npc, debugMessage, immediatePromptContext) => this.ContextService.PushInteractionContext(npc, debugMessage, immediatePromptContext)
+            (npc, debugMessage, immediatePromptContext) => this.ContextService.PushInteractionContext(npc, debugMessage, immediatePromptContext),
+            () => this.MultiplayerSync.SuppressLocalOpportunities
         );
         this.DelayedTravelActions = new DelayedTravelActionRuntime(
             config,

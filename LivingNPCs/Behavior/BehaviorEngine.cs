@@ -26,6 +26,12 @@ internal sealed class BehaviorEngine
         public string PlayerText = string.Empty;
         public string NpcResponse = string.Empty;
         public string AnalysisJson = string.Empty;
+
+        /// <summary>true = 主机收到的 farmhand 上报（走远程入账路径，见多人 v1）。</summary>
+        public bool IsRemote;
+
+        /// <summary>上报者的 UniqueMultiplayerID（仅 IsRemote 时有意义）。</summary>
+        public long ReporterPlayerId = -1;
     }
 
     private const string SaveDataKey = "behavior-memory";
@@ -54,6 +60,7 @@ internal sealed class BehaviorEngine
     private readonly ConversationStartRecorder conversationStartRecorder;
     private readonly NpcLocator locator;
     private readonly ValleyTalkContextService contextService;
+    private readonly Multiplayer.MultiplayerSyncService multiplayerSync;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
     private readonly ConcurrentQueue<PendingValleyTalkExchange> pendingValleyTalkExchanges = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
@@ -62,12 +69,12 @@ internal sealed class BehaviorEngine
     private int pendingGiftMailTrackTicks;
     private string activeGiftMailKey = string.Empty;
 
-    public BehaviorEngine(IModHelper helper, IMonitor monitor, ModConfig config)
+    public BehaviorEngine(IModHelper helper, IMonitor monitor, ModConfig config, string modUniqueId = "Yuki.LivingNPCs")
     {
         this.helper = helper;
         this.monitor = monitor;
         this.config = config;
-        this.services = new BehaviorEngineServices(helper, monitor, config);
+        this.services = new BehaviorEngineServices(helper, monitor, config, modUniqueId);
         this.services.AfterManualMemoryClear = this.AfterManualMemoryClear;
 
         this.random = this.services.Random;
@@ -90,6 +97,9 @@ internal sealed class BehaviorEngine
         this.conversationStartRecorder = this.services.ConversationStartRecorder;
         this.locator = this.services.Locator;
         this.contextService = this.services.ContextService;
+        this.multiplayerSync = this.services.MultiplayerSync;
+        this.multiplayerSync.RemoteExchangeReceived = this.EnqueueRemoteValleyTalkExchange;
+        this.multiplayerSync.OpenBookFromMirror = this.OpenMemoryBookFromLocalMemory;
     }
 
     public void RegisterEvents()
@@ -104,7 +114,25 @@ internal sealed class BehaviorEngine
         this.helper.Events.Input.ButtonPressed += this.OnButtonPressed;
         this.helper.Events.Display.MenuChanged += this.OnMenuChanged;
         this.helper.Events.Content.AssetRequested += this.OnAssetRequested;
+        this.helper.Events.Multiplayer.ModMessageReceived += this.OnModMessageReceived;
+        this.helper.Events.Multiplayer.PeerConnected += this.OnPeerConnected;
+        this.helper.Events.Multiplayer.PeerDisconnected += this.OnPeerDisconnected;
         this.debugCommands.RegisterConsoleCommands();
+    }
+
+    private void OnModMessageReceived(object? sender, ModMessageReceivedEventArgs e)
+    {
+        this.SafeRun("multiplayer message received", () => this.multiplayerSync.OnModMessageReceived(e));
+    }
+
+    private void OnPeerConnected(object? sender, PeerConnectedEventArgs e)
+    {
+        this.SafeRun("peer connected", () => this.multiplayerSync.OnPeerConnected(e));
+    }
+
+    private void OnPeerDisconnected(object? sender, PeerDisconnectedEventArgs e)
+    {
+        this.SafeRun("peer disconnected", () => this.multiplayerSync.OnPeerDisconnected(e));
     }
 
     private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)
@@ -136,10 +164,17 @@ internal sealed class BehaviorEngine
             this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
             RsvAiPolicy.RegisterGameThreadAliases();
             this.conversationStartRecorder.Clear();
-            this.mailService.ResolvePendingGiftMailGenerations();
-            this.mailService.QueueDueGiftMailsForTomorrow();
+            if (Context.IsMainPlayer)
+            {
+                // 账本类操作（礼物信生成/排程、任务栏投影）只属于主机；farmhand 的记忆是
+                // 主机镜像，读档后经多人同步请求全量快照（OnSaveLoaded 下面那行）。
+                this.mailService.ResolvePendingGiftMailGenerations();
+                this.mailService.QueueDueGiftMailsForTomorrow();
+            }
+
             this.mailService.InvalidateMailCache();
             this.helpRequestQuestLog.Sync();
+            this.multiplayerSync.OnSaveLoaded();
 
             if (this.config.Debug)
             {
@@ -172,6 +207,7 @@ internal sealed class BehaviorEngine
         if (Context.IsMainPlayer)
         {
             this.helper.Data.WriteSaveData(SaveDataKey, this.memory.ToSaveData());
+            this.multiplayerSync.BroadcastFullSnapshot();
         }
 
         this.contextService.ClearImmediateContexts();
@@ -195,7 +231,10 @@ internal sealed class BehaviorEngine
             // RSV aliases before either subsystem can send saved text to an LLM.
             RsvAiPolicy.RegisterGameThreadAliases();
 
-            if (this.config.EnableNpcState)
+            // 心智账本的日结（衰减/涟漪/印象压缩/礼物信）只在主机跑：farmhand 的记忆是主机
+            // 镜像，本地日结既无意义又会在下一次快照前造成短暂漂移（分屏副屏同理，由主屏跑）。
+            bool ledgerOwner = Context.IsMainPlayer;
+            if (ledgerOwner && this.config.EnableNpcState)
             {
                 this.memory.DecayStates(
                     this.config.NpcStateDailyDecay,
@@ -212,12 +251,21 @@ internal sealed class BehaviorEngine
             this.conversationStartRecorder.Clear();
             this.feedback.Clear();
             this.delayedTravelActions.Clear();
-            this.communityRipples.TryPropagate();
-            this.mailService.ResolvePendingGiftMailGenerations();
-            this.memoryImpressions.ProcessDayStart();
-            this.mailService.QueueDueGiftMailsForTomorrow();
+            if (ledgerOwner)
+            {
+                this.communityRipples.TryPropagate();
+                this.mailService.ResolvePendingGiftMailGenerations();
+                this.memoryImpressions.ProcessDayStart();
+                this.mailService.QueueDueGiftMailsForTomorrow();
+            }
+
             this.mailService.InvalidateMailCache();
             this.helpRequestQuestLog.Sync();
+            if (ledgerOwner)
+            {
+                // 日结后的状态广播给远程 farmhand（无对端时零开销）。
+                this.multiplayerSync.BroadcastFullSnapshot();
+            }
         });
     }
 
@@ -266,6 +314,7 @@ internal sealed class BehaviorEngine
             this.conversationStartRecorder.Clear();
             this.feedback.Clear();
             this.delayedTravelActions.Clear();
+            this.multiplayerSync.OnReturnedToTitle();
         });
     }
 
@@ -312,10 +361,27 @@ internal sealed class BehaviorEngine
 
     /// <summary>
     /// 打开游戏内记忆手册（原快捷键行为是控制台摘要，现由 livingnpcs_debug 命令承担）。
-    /// 还没有任何可展示 NPC 时给 HUD 提示而不是弹一本空书。
+    /// 远程 farmhand 在主机权威下先向主机请求只读快照，快照到位（或超时降级）后再开书；
+    /// 其余场合直接从本地记忆开。还没有任何可展示 NPC 时给 HUD 提示而不是弹一本空书。
     /// </summary>
     private void OpenMemoryBook()
     {
+        if (this.multiplayerSync.TryBeginRemoteBookOpen())
+        {
+            return;
+        }
+
+        this.OpenMemoryBookFromLocalMemory();
+    }
+
+    /// <summary>从本地记忆（主机真身或 farmhand 镜像）开书；延迟打开时防菜单叠加。</summary>
+    private void OpenMemoryBookFromLocalMemory()
+    {
+        if (!Context.IsWorldReady || Game1.activeClickableMenu != null)
+        {
+            return;
+        }
+
         Ui.MemoryBookMenu? menu = Ui.MemoryBookMenu.TryCreate(this.memory);
         if (menu == null)
         {
@@ -401,6 +467,7 @@ internal sealed class BehaviorEngine
             return;
         }
 
+        this.SafeRun("update tick: multiplayer sync", () => this.multiplayerSync.OnUpdateTicked());
         this.SafeRun("update tick: valleytalk exchanges", this.ProcessPendingValleyTalkExchanges);
         this.SafeRun("update tick: pending gift verifications", () => this.conversationStartRecorder.ProcessPendingGiftVerifications());
         this.SafeRun("update tick: pending behavior requests", this.ProcessPendingBehaviorRequests);
@@ -539,7 +606,118 @@ internal sealed class BehaviorEngine
     {
         while (this.pendingValleyTalkExchanges.TryDequeue(out PendingValleyTalkExchange? exchange))
         {
+            if (exchange.IsRemote)
+            {
+                // 主机：farmhand 上报的交换走远程入账（唯一写者）。
+                this.ApplyRemoteValleyTalkExchange(exchange);
+                continue;
+            }
+
+            if (this.multiplayerSync.UseHostAuthority
+                && this.multiplayerSync.TrySendExchangeReport(
+                    exchange.NpcName,
+                    exchange.PlayerText,
+                    exchange.NpcResponse,
+                    exchange.AnalysisJson))
+            {
+                // farmhand：上报主机统一入账；好感与随境跟话等回执到达后在本地应用。
+                continue;
+            }
+
+            // 主机本人，或 farmhand 的降级路径（主机未装本 mod / 同步关闭 / 瞬时无主机）：
+            // 维持旧行为——本地入账（farmhand 侧不落盘，仅当次会话有效）。
             this.ApplyValleyTalkExchange(exchange);
+        }
+    }
+
+    /// <summary>主机收到 farmhand 交换上报（多人同步回调，主线程）：过本机配置门后入队统一消费。</summary>
+    private void EnqueueRemoteValleyTalkExchange(long reporterPlayerId, Multiplayer.ExchangeReportMessage message)
+    {
+        if (RsvAiPolicy.IsBlockedNpcName(message.NpcName)
+            || !this.config.EnableConversationMemory
+            || string.IsNullOrWhiteSpace(message.PlayerText))
+        {
+            return;
+        }
+
+        this.pendingValleyTalkExchanges.Enqueue(new PendingValleyTalkExchange
+        {
+            NpcName = message.NpcName,
+            NpcDisplayName = message.NpcName,
+            PlayerText = message.PlayerText,
+            NpcResponse = message.NpcResponse ?? string.Empty,
+            AnalysisJson = message.AnalysisJson ?? string.Empty,
+            IsRemote = true,
+            ReporterPlayerId = reporterPlayerId
+        });
+    }
+
+    /// <summary>
+    /// 主机代 farmhand 入账（多人 v1）：只写心智账本——记忆/偏好/冲突/情绪/行为倾向与好感
+    /// 增量；世界动作与求助字段在入账前剥除（<see cref="Multiplayer.RemoteExchangePolicy"/>，
+    /// 含出游请求，丢弃并记 Trace）。好感增量与随境跟话属于上报玩家，经回执发回其本地应用；
+    /// NPC 用全图查找——farmhand 的对话地点通常不是主机所在地点。
+    /// </summary>
+    private void ApplyRemoteValleyTalkExchange(PendingValleyTalkExchange exchange)
+    {
+        NPC? npc = Game1.getCharacterFromName(exchange.NpcName);
+        if (npc == null || RsvAiPolicy.IsBlockedNpc(npc))
+        {
+            return;
+        }
+
+        string sanitizedAnalysis = Multiplayer.RemoteExchangePolicy.SanitizeAnalysisJson(
+            exchange.AnalysisJson,
+            out List<string> droppedActionTypes);
+        if (droppedActionTypes.Count > 0)
+        {
+            this.monitor.Log(
+                I18n.Get(
+                    "log.mp.remoteActionsDropped",
+                    new { npc = npc.Name, types = string.Join(", ", droppedActionTypes) }),
+                LogLevel.Trace);
+        }
+
+        var result = this.memory.RecordValleyTalkExchange(
+            npc,
+            exchange.PlayerText,
+            exchange.NpcResponse,
+            sanitizedAnalysis,
+            this.config.MaxMemoryEntriesPerNpc,
+            0,
+            this.config.HelpRequestCooldownDays,
+            this.config.EnableAiDialogueFriendship ? this.config.MaxAiDialogueFriendshipPerNpcPerDay : 0,
+            this.config.MaxDialogueBehaviorInfluenceDays,
+            allowHelpRequestProgress: false
+        );
+
+        this.multiplayerSync.SendExchangeAck(
+            exchange.ReporterPlayerId,
+            new Multiplayer.ExchangeAckMessage
+            {
+                NpcName = exchange.NpcName,
+                FriendshipDelta = result.AppliedFriendshipDelta,
+                AmbientText = this.config.EnableDialogueFollowUps ? result.AmbientFollowUpText : string.Empty,
+                AmbientDelayMinutes = result.AmbientFollowUpDelayMinutes
+            });
+        this.multiplayerSync.BroadcastNpcView(exchange.NpcName);
+
+        if (this.config.Debug)
+        {
+            this.monitor.Log(
+                I18n.Get(
+                    "log.mp.remoteExchangeApplied",
+                    new
+                    {
+                        player = exchange.ReporterPlayerId,
+                        npc = npc.Name,
+                        memories = result.LongTermMemoriesStored,
+                        preferences = result.PlayerPreferencesStored,
+                        conflicts = result.ConflictsStored,
+                        influences = result.BehaviorInfluencesStored,
+                        friendship = result.AppliedFriendshipDelta
+                    }),
+                LogLevel.Debug);
         }
     }
 
@@ -563,6 +741,9 @@ internal sealed class BehaviorEngine
             this.config.EnableAiDialogueFriendship ? this.config.MaxAiDialogueFriendshipPerNpcPerDay : 0,
             this.config.MaxDialogueBehaviorInfluenceDays
         );
+
+        // 主机本人交换入账后同样刷新远程 farmhand 的该 NPC 镜像（无对端时零开销）。
+        this.multiplayerSync.BroadcastNpcView(exchange.NpcName);
 
         if (!result.HasEffect)
         {
