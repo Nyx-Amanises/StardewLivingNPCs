@@ -17,6 +17,16 @@ var tests = new List<RegressionCheck>
         "状态摘要包含记忆召回原因",
         Path.Combine(root, "LivingNPCs", "Behavior"),
         [
+            "debug.label.currentLongTermRecall",
+            "debug.label.currentPreferenceRecall",
+            "debug.label.currentCommunityRecall",
+            "debug.label.latestBehaviorChoice"
+        ]
+    ),
+    CheckFileContains(
+        "记忆召回调试标签的中文文案未丢失",
+        Path.Combine(root, "LivingNPCs", "i18n", "zh.json"),
+        [
             "当前检索长期记忆",
             "当前检索玩家偏好",
             "当前检索社区印象",

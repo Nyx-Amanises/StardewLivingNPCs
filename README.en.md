@@ -1,374 +1,237 @@
-# StardewLivingNPCs
+# LivingNPCs 0.2.0
 
 [中文 README](./README.md)
 
-An experimental umbrella repo that wires an **AI conversation** layer and an **NPC behavior** layer into *Stardew Valley*.
+> Talk to the people of Pelican Town in your own words, and let them genuinely remember, care about, and respond to what you have been through together.
 
-The repo has two parts:
+LivingNPCs adds a built-in AI dialogue engine, long-term memory, emotions and relationship pacing, and controlled NPC behaviors to Stardew Valley. It does not just generate a throwaway line: NPCs respond in light of their personality, their relationship with you, game progress, the current place and time, and your past conversations; when it fits, a conversation can also grow into a help request, a return gift, a short companion outing, or a small everyday behavior.
 
-- `LivingNPCs/` — this project's own SMAPI companion mod: memory, state, behavior, relationship pacing, and controlled AI influence on the game world.
-- `ValleyTalk/` — a local fork of dandm1/ValleyTalk that generates the AI dialogue, plus streaming dialogue, log export, hidden metadata, and third-party context injection.
+## 0.2.0: the all-in-one rewrite
 
-> **Attribution & license** — `ValleyTalk/` is a **modified build of [dandm1/ValleyTalk](https://github.com/dandm1/ValleyTalk)** (Nexus mod 30319), redistributed under its original **LGPL v2.1** (see [`ValleyTalk/LICENSE.txt`](./ValleyTalk/LICENSE.txt)). It is bundled here only because LivingNPCs needs a small bridge that stock ValleyTalk lacks. `LivingNPCs/` is this project's own code.
+0.2.0 is a complete rewrite, and it installs differently from 0.1.x:
 
-One-line design:
+- The AI dialogue engine was rewritten from scratch and is now built directly into LivingNPCs.
+- The release package contains a single `LivingNPCs` mod folder.
+- **ValleyTalk and Content Patcher are no longer required.**
+- English and Simplified Chinese character profiles and progression awareness for vanilla and Stardew Valley Expanded (SVE) are built in; the separate SVE dialogue content pack is no longer needed.
+- Compatible legacy ValleyTalk settings, chat transcripts, NPC dialogue memories, and token ledgers can be migrated automatically.
+- AI dialogue, memory, emotions, help requests, gifts, outings, logs, and usage statistics are now managed by one mod.
 
-> ValleyTalk decides **what an NPC says**; LivingNPCs decides **what an NPC remembers, why it speaks that way, and what it may safely do**.
+- Current version: `0.2.0`
+- Mod ID: `Yuki.LivingNPCs`
+- Nexus: <https://www.nexusmods.com/stardewvalley/mods/47704>
+- Source: <https://github.com/Nyx-Amanises/StardewLivingNPCs>
 
-> **Players:** the Nexus mod page is the place to start — it has the bundled download and a player-facing guide. This file is the developer/architecture overview.
-
-## What's implemented
-
-### 1. AI conversation pipeline
-
-- Free-text AI conversation through ValleyTalk.
-- The free-text entry also covers festival / event scenes: hold the configured key and click a festival NPC to open the AI input box instead of only the vanilla festival lines.
-- Chinese prompt + in-game Chinese output supported.
-- A real streaming reply UI: text appears as it is generated, inside the portrait dialogue box, rather than only a "thinking" placeholder.
-- A single reply can continue across multiple vanilla dialogue pages.
-- The AI can decide whether the exchange should naturally end; if so it returns `endConversation=true` instead of forcing another choice.
-- Every AI conversation produces hidden metadata for LivingNPCs:
-  - `rapportDelta` — extra friendship from this chat.
-  - `memories` — facts worth remembering long-term.
-  - `emotionImpact` — effect on the NPC's longer-term feelings.
-  - `conflicts` — interpersonal friction worth remembering.
-  - `ambientFollowUp` — a later overhead-bubble follow-up line.
-  - `behaviorInfluences` — behavior leanings that keep acting for minutes to days.
-  - `helpRequests` / `helpRequestUpdates` — small favors an NPC offers, and later completion / refusal.
-  - `actions` — at most one controlled world-action request.
-
-### 2. NPC memory system
-
-Several distinct memory layers, not just "the last line":
-
-| Layer | Purpose |
-| --- | --- |
-| Recent interactions | behaviors, conversation starts, gifts, event interactions, world actions the NPC actually performed |
-| Current state | mood, attention, openness, current response leaning |
-| Long-term familiarity | how long / how well the NPC has known the player |
-| Interaction pacing | chats today, consecutive-day streaks, long gaps since last seen |
-| Long-term memory | AI-distilled facts, preferences, boundaries, relationship info |
-| Player-preference memory | liked categories, disliked items, habits, values, goals |
-| Community impressions | the player's social traces other NPCs witnessed or heard from a close circle |
-| Help requests | favors the NPC asked for, due dates, completion status |
-| Emotion & conflict memory | the NPC's longer feelings toward the player, friction, severity, recovery |
-| Nickname memory | how the player asked to be addressed, and whether the NPC accepted |
-
-Long-term memory is not fixed-phrase matching. ValleyTalk returns structured memory candidates from the whole exchange; LivingNPCs only keeps the important, still-useful ones. Memories describing the player are tagged `playerPreference` and stored separately. A deterministic "player requested nickname" fallback covers cases where the model misses it.
-
-There is also a retrieval/curation layer:
-
-- On save, memories are deduplicated by "type + stable topic"; repeats are merged, not stacked forever.
-- Each memory stores topic, tags, importance, reinforcement count, last-updated and last-recalled times, and recall count.
-- Tags are extracted from both the AI metadata and text keywords (farm, mines, fishing, library, flower, coffee, night, …).
-- Before each ValleyTalk context build, relevance is scored against current location, time, weather, recent behavior, gifts, events, and open help requests.
-- Only the few currently-relevant memories enter the prompt, and recently-used ones are slightly down-weighted so the NPC doesn't loop on one topic.
-
-### 3. Emotions & conflict
-
-Beyond the short-term `Mood`, each NPC keeps a longer interpersonal state:
-
-- Current emotion: `Happy`, `Calm`, `Jealous`, `Worried`, `Grateful`, `Disappointed`, `Uneasy`, `Upset`, `Angry`, `Sad`.
-- Emotion intensity: `0-100`.
-- Conflict memory: cause, severity, status, whether healed by apology / gift / time.
-- Relationship trust: a separate `0-100` value that gates how deeply the NPC opens up. (This is independent of vanilla hearts.)
-
-Triggers include AI `emotionImpact` / `conflicts`, gift results, worry on long absence or when the player is hurt, light jealousy from romantic-bystander situations, gratitude after a completed help request, and disappointment after a let-down.
-
-Rules:
-
-- Liked / loved gifts raise good feelings and help soften existing conflict.
-- Disliked / hated gifts cause unease or upset, and at the extreme are written into conflict memory.
-- If the AI judges a genuine apology / repair, it can return `apology` and `repairDelta`.
-- Each morning emotions ease toward calm and conflict severity decays.
-- Unresolved conflict lowers approach/affection leanings and, when severe, blocks gifts, money and favors.
-- Ordinary conflict heals gradually via apology, gifts and time; severe conflict needs a multi-step chain (apology + a fitting gift + time + a real talk-it-out) and softens gradually instead of resetting on one polite line.
-- A severe conflict that is genuinely repaired can leave the relationship slightly deeper than before.
-
-An **emotional expression style** layer makes "the same upset" play differently per character (e.g. Penny gets quieter and more careful; Shane gets guarded; Haley is sharper but cools fast; Harvey leans to polite worry). It also nudges the actual numbers: daily emotion decay, conflict decay, repair responsiveness, and how long a severe conflict must last.
-
-### 4. Relationship & chat pacing
-
-LivingNPCs weighs **vanilla hearts** and its **own long-term familiarity** together:
-
-- When the bond is shallow, repeated chats in one day read as more polite/reserved.
-- Once closer, several chats a day feel more natural.
-- Consecutive days, long gaps, and "first chat today" all shape how warm the next line should be.
-- Relationship trust gates how private the NPC gets: low trust stays surface-level; high trust allows more vulnerable, personal content.
-
-On top of vanilla daily-talk friendship, AI chats grant a small "chat-quality bonus":
-
-- `rapportDelta` is judged by the model, range `0-30` (ordinary pleasant chat ~`10-15`, warmer ~`16-24`, rare strong connection ~`25-30`).
-- Each NPC has a daily cap on AI-chat bonus friendship, default `30`.
-
-### 4.5. NPC social layer
-
-LivingNPCs keeps a limited-spread "community impression" layer between NPCs:
-
-- Spending repeated time with someone, finishing their favor, or being openly close in public can be noticed by nearby NPCs.
-- Eyewitnesses store a higher-confidence `Witnessed` memory.
-- Using `FriendsAndFamily` from `Data/Characters`, news passes to a close circle as lower-confidence `CloseCircle`.
-- If a fact is public enough and happens in `Town` or `Saloon`, a few present NPCs get a weaker `PublicRumor` impression.
-- Facts have privacy tiers `公开` / `Personal` / `私有`; the more private, the more it depends on high trust or a very small close circle.
-- The same fact gets each NPC's own tone (gentle, reserved, direct, curious), so it doesn't sound identical in every mouth.
-- ValleyTalk only ever receives the one or two most relevant impressions, and is told to stay vague about second-hand news (no omniscient NPCs).
-- Messages have a lifecycle (`fresh` → `settled` → `fading`) and decay out; eyewitness memories last longer than retold or public ones.
-- Each morning a few NPCs may retell fresh news to acquaintances; expressive/curious ones share more, guarded ones keep it in. Retelling accumulates "relay depth" and distortion, so wording grows vaguer rather than more precise.
-- Stable circles exist: family/close ties, the saloon regulars, and the young-people group (the latter two mostly carry public news, not private matters).
-
-So Haley might vaguely know you talk to Emily a lot, Robin might hear you helped Maru, and saloon patrons present at the time keep a fuzzy impression of what you just did.
-
-### 4.6. Game-progress awareness
-
-LivingNPCs compresses "how far this save has gotten" into a world-stage summary, not just the current season:
-
-- Route: Community Center restored, Joja route, or undecided.
-- Unlocks: bus, greenhouse, minecart, Ginger Island, movie theater.
-- Player vocation leaning: farming / fishing / foraging / mining / combat, from real profession records.
-- Farm scale: starting / small / established / large, estimated from crops, finished buildings and animals.
-- Family stage: spouse and number of children.
-- Time stage: Y1 spring newcomer, Y1 settling in, Y2 integrated, Y3+ old resident.
-
-This is given to ValleyTalk with constraints: don't write a Y1-spring player as an old-timer, or a Y3+ player as a newcomer; treat repaired facilities as everyday fact and don't mention unbuilt ones as if they exist; acknowledge marriage/kids/a big farm when appropriate.
-
-Progress is split into two tiers:
-
-- **Public facts** — route, public facilities, which year you're in, marriage and kids.
-- **Privately-knowable info** — rough farm scale, vocation leaning. Only exposed when the relationship is close enough, the NPC is on the farm to see it, the NPC's job/interest gives a real reason to know (Robin/Marnie for the farm, Willy for fishing, Clint for mining), or you told them directly.
-
-There is also an **SVE progress-awareness layer**:
-
-| Expansion | Recognized progress |
-| --- | --- |
-| SVE | Grandpa's shed restored, Apples, Enchanted Grove, Aurora Vineyard restored, Crimson Badlands, Castle Village Outpost, Susan, Joja Emporium |
-
-Filtered by NPC origin: SVE characters treat confirmed SVE milestones as real; vanilla NPCs treat them as distant background unless context supports knowing. Unconfirmed milestones are explicitly marked unfinished to avoid spoilers or invented progress.
-
-This layer also gates help-request depth (Y1 spring: only light one-step favors; later Y1: occasional two-step; Y2+: fuller multi-step when relationship and context fit) and passes through each NPC's own values (community-minded characters weigh the Community Center more; Pierre vs. Morris diverge on Joja; Pam on the bus, Willy on Ginger Island, farm types on the greenhouse, family types on marriage/kids). It applies to vanilla and SVE characters.
-
-### 4.7. Debug & eval tools
-
-| Tool | Purpose |
-| --- | --- |
-| `LeftShift + J` | print a nearby NPC's state, memory and recall results to the SMAPI console |
-| `livingnpcs_debug [near\|<NPC>]` | an NPC's state, recent behavior reasons, help-request fit and memory recall |
-| `livingnpcs_prompt [near\|<NPC>]` | the full hidden context about to be injected into ValleyTalk |
-| `livingnpcs_export [near\|all\|<NPC>]` | a Markdown debug report under `Mods/LivingNPCs/debug_reports/<save>/` |
-| `livingnpcs_eval` | a light in-game runtime check that key personality rules still hold |
-| `livingnpcs_giftmail` | diagnose LivingNPCs gift mail: status, mailbox location, whether `Data/mail` has the entry, generated text, orphaned dead letters |
-
-There is also an offline regression check (no game needed):
-
-```powershell
-dotnet run --project LivingNPCs.Diagnostics\LivingNPCs.Diagnostics.csproj -- .
-```
-
-It verifies key debug abilities, emotion styles, help-request explanations, behavior-choice reasons, and that README notes weren't accidentally dropped.
-
-### 5. NPC behavior layer
-
-Safe micro-behaviors: `FacePlayer`, `Emote`, `ApproachPlayer`, `Pause`, `LookAround`, `StepAway`.
-
-Behaviors come from three sources:
-
-- **Manual** — a hotkey triggers one behavior on a nearby NPC, for testing.
-- **Passive** — nearby NPCs react on a small chance (configurable; ships off by default).
-- **Dialogue-driven** — AI conversations leave short-term leanings so the next few minutes-to-days of behavior grow out of that exchange.
-
-Behavior choice considers the NPC's light personality, current relationship/familiarity, whether you've chatted too often today, time/weather/location/indoors/nearby NPCs, world progress, and recent dialogue leanings — and writes the result back into memory and state.
-
-Dialogue-driven leanings currently supported:
-
-| Leaning | Effect |
-| --- | --- |
-| `visit_location` | the NPC genuinely mentions wanting to go somewhere; if you later meet there, it picks that up |
-| `comforted` / `stay_near` / `pause_to_talk` | after comfort/closeness, more willing to approach, linger and respond |
-| `offended` / `give_space` | after offense or needing space, more likely to keep distance or step back |
-
-### 6. Controlled AI influence on the world
-
-The AI can *请求* a few world actions, but **cannot freely change the game**:
-
-```text
-AI proposes an action in hidden metadata
--> LivingNPCs checks relationship, location, cooldown, frequency and caps
--> only whitelisted, safety-checked actions run
--> the result is written back to NPC memory
-```
-
-Current whitelist:
-
-| Action | Rule |
-| --- | --- |
-| `give_small_gift` | at least a little familiar; at most one AI gift per NPC per day |
-| `give_meaningful_gift` | at least friendly, plus one of: high relationship / recent special event / important long-term memory; separate cooldown |
-| `give_money` | at least friendly; defaults to 100g, capped by config (default cap 250g) |
-| `companion_outing` | both clearly agree to go somewhere together now; the NPC uses vanilla schedule-style cross-map routing and stays at least 2 in-game hours on arrival |
-| `festival_interaction` | light special interactions in festival / event scenes only |
-
-Deliberately not enabled: planting crops, arbitrary NPC teleports (outings prefer vanilla schedule pathing and real map exits; a safe-position fallback is only allowed once the NPC is off-screen and routing failed), permanent schedule edits, changing quests/story/world state, or any non-whitelisted command.
-
-### 7. Gift system
-
-AI gifts have two tiers:
-
-- The catalog has 96 vanilla items: 64 small gifts, 32 meaningful gifts.
-- The 34 vanilla giftable NPCs use a "shared pool + per-character personality pool"; expansion NPCs currently use the shared pool only.
-- Per-character pools and item IDs are in [`原版NPC个性礼物池.md`](./原版NPC个性礼物池.md).
-
-**Small gifts** (everyday, light, low-value) are weighted-random, scored by the NPC's traits, hearts/relationship tier, season, job/background, what the chat just touched on, recurring long-term topics, player-preference memory (weighted above ordinary topics), whether the item is in that NPC's personality pool, and the last 3 AI gifts (same item excluded, similar categories slightly down-weighted). Season only adds a match bonus; it no longer hard-bans off-season gifts.
-
-**Meaningful gifts** are not more frequent, but more deliberate: only when the relationship is deep, a special event just happened, or the chat clearly hit an important memory. Candidates lean toward gems, fine cooking, desserts and artisan goods, with a separate cooldown (default 7 days; bypassable at 8 hearts but still subject to one AI gift per day).
-
-### 8. NPC help requests
-
-A light "help-request" layer where an NPC asks the player for a small favor. New requests are item requests only:
-
-|类型| Completion |
-| --- | --- |
-| `item_request` | the NPC asks for a low-value, whitelisted item; hand it over to complete |
-
-`question_request` is no longer projected as a quest; "ask me something" stays ordinary AI conversation so the quest log has no deliverable-less entries.
-
-Lifecycle:
-
-- A new request starts `Offered` — the NPC merely asked; not in the quest log yet.
-- After the player clearly agrees, the AI returns `accepted`, the request becomes `Pending`, and it projects into the vanilla quest log.
-- If the player declines, the AI returns `declined`; no quest, just a light relationship memory.
-- A request can have up to 3 steps, each a stage-appropriate item request; the log shows the current step, intermediate steps advance, and the full reward comes on the last step.
-- If `followUpPotential` is `deeper_relationship`, completing it more easily deepens the relationship in later chats.
-- Failure reactions distinguish "never agreed, so didn't do it" from "agreed but didn't", expressed per character (direct, withdrawn, or gentle).
-
-A request can surface two ways: from the current chat hitting a fitting point, or from a once-per-day roll on the first chat with an eligible NPC (default `3%`) deciding whether the NPC brings up a favor unprompted. Either way it must pass the gates: no existing open request for that NPC, at least some familiarity with relationship trust over the configured threshold, no clear unresolved conflict, not currently `Angry`/`Upset`, and the per-NPC cooldown between new requests. Generation also considers job, personality, season, progress, relationship stage, and what was just discussed.
-
-In the quest log:
-
-- Entries show only who is asking, the item, and the due date — no reward hint and no claimable reward box (matching vanilla "Item Delivery" Help Wanted quests).
-- LivingNPCs still owns the underlying state; it just projects into the vanilla log so it feels like a vanilla quest extension.
-
-Item requests respect progress: only low-value seasonal items obtainable this season; no minerals before the mines open; no amethyst until you've gone deep enough; if nothing fits, the NPC simply doesn't open a request instead of switching to a question.
-
-On completion: light `Grateful`; relationship trust and familiarity rise; intermediate steps grant a little trust/openness, with the full friendship reward on the last step; an extra `50-100` friendship (range configurable); if the request carries a gold reward it is paid immediately on hand-in (vanilla item-delivery style, not a next-day letter); a small thank-you gift by default; a possible overhead-bubble thank-you the next day; and a recorded "shared experience" milestone. Declines/expiries cause only light `Disappointed`.
-
-### 9. ValleyTalk context bridge
-
-LivingNPCs pushes a "hidden continuity summary" to ValleyTalk rather than a few raw logs. It tells the model: the NPC's current tone, how close you are, whether you've already chatted a lot today, recent gifts/events, nearby NPCs, how time/weather/location should color things, key recent memories, known player preferences, recent community impressions, any open help request, any current/just-healed conflict, and any nickname the NPC accepted. It also instructs the model not to restate the mechanics, not to mention LivingNPCs/prompt/AI/JSON, and to absorb only the one or two most relevant points as normal NPC speech.
-
-### 10. Custom NPC / SVE support
-
-**LivingNPCs:** prefers built-in profiles; SVE recognized characters have hand-written summaries (with common alias handling); custom NPCs without a profile get base traits inferred from `Data/Characters`. SVE gets dedicated recognition (summary-backed characters get clearer hints; others carry their mod's worldview hint and fall back to inference). World-progress awareness, personalized attitudes, relationship memory and help requests apply to SVE characters. A `LivingNPCs/npc_profiles/` directory lets the community add or override profiles via JSON (single-object, array, or `{ "profiles": [...] }`), with a bundled `_template.json` — no C# changes needed.
-
-**ValleyTalk fork:** reads custom NPCs already loaded at runtime; uses local content-pack dialogue as AI context only when the content pack explicitly permits AI use; and auto-generates a light biography from `Data/Characters` (age, politeness, sociability, optimism, datability, family/friends) when one isn't provided.
-
-### 10.5. Prompt size
-
-A full SVE or custom-NPC AI prompt stacks: vanilla world summary (~13.7k chars) + expansion world summary (~5k for SVE) + the current NPC's biography + sample dialogue + game state + chat history + ValleyTalk event history + the LivingNPCs hidden context + memories/preferences/impressions/help/emotion - easily 20k+ chars. The main visible trim lever is `UseOptimizedPrompts` (off by default), which combines the optimized world-summary prompt and the compact LivingNPCs metadata instructions; it can reduce prompt size but may increase model hallucinations. LivingNPCs also keeps `ConcisePromptContext` (off by default) for a slimmer hidden continuity context. ValleyTalk semantic context routing is enabled by default and chooses brief/full modules before the main request; the LivingNPCs action decision pass is also enabled by default but hidden from the config UI. Debug logs break prompt size down by section (`system, game, npc, core, instructions, command, responseStart`).
-
-**Language boundary of semantic routing:** the routing decision itself is made by a small model and is language-independent, but two cheap heuristics — refreshing the cached per-conversation plan on a topic shift, and the deterministic location/companion promotion — rely on **Chinese/English-only** keyword tables (`ContextRoutingDecisionPass.cs` / `ConversationCues.cs`). Consequences: when the game language is anything other than English or Chinese, the mod automatically skips the per-conversation routing cache and re-routes every turn — no feature loss, just one extra lightweight call per turn. If the game runs in English/Chinese but the player types a third language, topic-shift detection may not fire and the cached module selection is conservatively reused until the conversation ends (safe; at worst slightly less relevant context). To support a new language, extend the keyword tables in those two files.
-
-### 11. Conversation logs & observability
-
-ValleyTalk exports a readable per-save, per-NPC chat log:
-
-```text
-Mods/ValleyTalk/conversation_logs/<save>/<NPC>.md
-```
-
-Logs are kept by turn (player input, NPC reply, in-game date/time). With ValleyTalk debug logging on, each request also prints staged timings and a prompt-character breakdown, so toggling the optimized-prompt switches gives a concrete size comparison. LivingNPCs' inspect-memory hotkey prints nearby NPC state, pacing, long-term memory and recent behavior to the console.
-
-### 12. Shared experiences
-
-Completing a companion outing (`companion_outing`, see §6) records a standalone "shared experience" milestone:
-
-- It grows a natural follow-up a few days later (e.g. the NPC mentions "that trip was nice").
-- It makes that NPC more willing to propose a similar new outing when the scene fits.
-- It also spreads as a limited community impression among witnesses and the close circle (see §4.5).
-
-The outing itself stays deliberately conservative: it never rewrites the permanent schedule (only a one-off temporary cross-map route, then a vanilla-style return); it doesn't force the player to follow or show "follow me" prompts (the NPC stands at a public spot chosen by semantic anchors + map safety scoring); after settling a while with the player nearby it may show at most one low-frequency scene emote; and the outing's stage, destination, activity, stay time, standing-spot semantics and whether the player is present are injected into ValleyTalk as hidden context.
-
-### 13. Token usage
-
-ValleyTalk accumulates AI token usage per session and per save:
-
-- Prefers official usage from the provider (OpenAI-compatible, Claude, Gemini, VolcEngine, llama.cpp); otherwise writes a local estimate marked `estimated`.
-- Aggregates by total, by model, by NPC, and recent requests.
-- Per-save stats are saved with the save and exported to `ValleyTalk/token_usage/<save>.md`.
-
-Console: `valleytalk_tokens` (summary), `valleytalk_tokens export`, `valleytalk_tokens reset`.
-
-## Overall flow
-
-```text
-Player interacts with an NPC
--> LivingNPCs records the conversation start / gift / event context
--> LivingNPCs builds a hidden context summary and pushes it to ValleyTalk
--> ValleyTalk generates a reply from character profile, game state, history and that summary
--> ValleyTalk also emits hidden metadata
--> LivingNPCs parses it
--> updates long-term memory, player-preference memory, dialogue-driven behavior, emotion/conflict, bonus friendship, follow-up bubbles, controlled world actions
--> writes limited-spread community impressions among witnesses and the close circle
--> the new state feeds the next conversation
-```
-
-## Install & build
-
-### Player install
-
-Download the release package from Nexus, unzip it, and put the extracted `LivingNPCs` and `ValleyTalk` folders into the game's `Mods` folder. Then launch the game through SMAPI.
-
-In game, open Generic Mod Config Menu and edit the ValleyTalk settings:
-
-1. Choose your model provider, then fill in the API key and model name.
-2. If your provider is OpenAI-compatible, click Save once, reopen the ValleyTalk settings, then fill the newly shown `Base URL` / server address and save again.
-3. Watch the SMAPI console for a ValleyTalk connection success message or successful model-list load.
-
-### Dependencies
+## Requirements
 
 - Stardew Valley 1.6.x
-- SMAPI
-- Content Patcher (required by ValleyTalk's content pack)
-- Generic Mod Config Menu
-- An LLM provider / API key for ValleyTalk
+- [SMAPI 4.1.0 or later](https://smapi.io/)
+- [Generic Mod Config Menu](https://www.nexusmods.com/stardewvalley/mods/5098) (optional, strongly recommended)
+- An LLM provider/API, or a compatible local server you run yourself
 
-### Local dev build
+LivingNPCs **does not bundle a model and does not provide a free API**. Speed, cost, privacy, and dialogue quality depend on the provider and model you choose.
 
-```powershell
-cd LivingNPCs
-dotnet build
-```
+## Fresh installation
 
-```powershell
-cd ValleyTalk
-dotnet build src\ValleyTalk.csproj -p:GamePath="D:\SteamLibrary\steamapps\common\Stardew Valley"
-```
+1. Fully exit the game and SMAPI.
+2. Unzip the 0.2.0 release package.
+3. Put the single `LivingNPCs` folder into the game's `Mods` folder.
+4. Check that the final path looks like `Stardew Valley/Mods/LivingNPCs/manifest.json`, without an extra nested folder of the same name.
+5. Launch the game through SMAPI.
+6. In Generic Mod Config Menu, open **LivingNPCs → AI Dialogue Engine** and complete the model connection settings.
 
-`Pathoschild.Stardew.ModBuildConfig` deploys the mod to the game's `Mods` folder on a successful build, and produces a distributable zip under each project's `bin/Release/net6.0/`.
+If GMCM is not installed, you can also close the game after the first launch and edit `Mods/LivingNPCs/config.json` by hand.
+
+## Upgrading from 0.1.x / migrating an existing save
+
+> **Complete the folder rename below before launching 0.2.0 for the first time**, so the new version can find and import the old configuration and folder data.
+
+Back up your saves and the old `LivingNPCs` / `ValleyTalk` folders first, then:
+
+1. Fully exit the game and SMAPI.
+2. In the game's `Mods` folder, rename the **outer** legacy `ValleyTalk` folder to `.ValleyTalk`:
+
+   ~~~text
+   Mods/ValleyTalk/  →  Mods/.ValleyTalk/
+   ~~~
+
+   If the old package used a nested `ValleyTalk/ValleyTalk` layout, rename the outermost folder that contains all the old components. Do not add a dot to the old `LivingNPCs` folder; it must be replaced by the new version.
+
+3. Extract the new `LivingNPCs` folder into `Mods`, replacing the old folder of the same name. Do not keep two versions loaded from different subfolders.
+4. Launch through SMAPI and load every save you want to migrate once. In multiplayer, the host must load the save to migrate save data.
+5. If the save contains migratable legacy conversation data, an in-game message appears: *"LivingNPCs: migrated dialogue memories of N NPCs from ValleyTalk."* After seeing it, make one normal in-game save.
+
+Migration tries to preserve NPC dialogue history and related save memories, compatible provider/API key/model/server and conversation settings, the token ledger, local farmhand history, and readable transcripts in `conversation_logs`. It never deletes old files or legacy save keys automatically; the renamed `.ValleyTalk` folder is ignored by SMAPI and can stay as a backup.
+
+Notes:
+
+- **Do not leave the old ValleyTalk active under its original name.** If 0.2.0 detects legacy ValleyTalk running, the built-in dialogue engine and migration stay disabled to avoid two competing dialogue patch sets.
+- A save with no old chat history or token data may show no "migrated N NPCs" message; that alone does not mean migration failed.
+- If the game reports a partial migration, keep `.ValleyTalk`, check the SMAPI log, and include it in your report.
+
+## First-time AI setup
+
+Recommended flow via GMCM:
+
+1. Open **LivingNPCs → AI Dialogue Engine**.
+2. Choose the LLM provider.
+3. If you just switched providers, save once and reopen the settings page. Switching providers clears the previous API key and refreshes the provider-specific fields.
+4. Fill in the API key, model name, and server address as required by the provider.
+5. Save and watch the SMAPI console for the non-blocking connection self-check.
+6. Load a save, approach an NPC, and hold `LeftAlt` while clicking or using the interaction button to open the free-text input box.
+
+Supported providers:
+
+| Provider | Typical required fields |
+| --- | --- |
+| OpenAI | API key, model name |
+| OpenAI-compatible | API key, model name, server address (the base address is enough, e.g. OpenRouter `https://openrouter.ai/api/v1`, local Ollama `http://localhost:11434/v1`, Zhipu `https://open.bigmodel.cn/api/paas/v4`; follow your provider's docs) |
+| Anthropic (Claude) | API key, model name |
+| Google (Gemini) | API key, model name |
+| DeepSeek | API key, model name |
+| Mistral | API key, model name |
+| VolcEngine (Doubao) | API key, model name |
+| llama.cpp (local) | The full endpoint of a server you run yourself (e.g. `http://127.0.0.1:8080/completion`); `PromptFormat` must match your model's instruction format (defaults to the Mistral `[INST]` style) and can currently only be changed in `config.json` |
+
+LivingNPCs performs a non-blocking self-check after saving connection settings. A failed self-check never permanently disables the engine; the next real conversation retries. Common errors:
+
+- `401/403`: invalid API key, missing permission, or the wrong provider selected;
+- `429`: requests too fast, exhausted quota, or provider rate limiting;
+- model not found: wrong model name, or the key cannot access that model;
+- timeouts: check the server address, network, or request timeout setting.
+
+Stronger models are generally more consistent at roleplay, long-term memory, and the hidden structured information the mod relies on. Smaller or cheaper models can work, but drift and unstable action decisions become more likely.
+
+## How to talk to NPCs
+
+- **Free-text AI dialogue:** hold `LeftAlt` (default) and click the NPC or use the interaction button.
+- **Normal dialogue:** plain right-click still shows vanilla lines by default.
+- **Make plain right-click use AI too:** enable "AI for normal right-click dialogue" in GMCM.
+- **Gift and marriage lines:** the AI generation frequency can be set separately for each.
+- **Disable AI for specific characters:** list internal names, separated by commas or spaces.
+
+If generation fails, times out, or returns unusable content, the mod falls back safely and never blocks normal save loading just to show an AI line.
+
+## Main gameplay
+
+- **Long-term memory.** NPCs can keep and recall facts, preferences, dislikes, nicknames, promises, boundaries, shared moments, and unresolved issues. When the record grows past its capacity, older memories are compressed into stable "relationship impressions" so saves do not grow without bound.
+- **Emotion and relationship pacing.** Responses weigh vanilla hearts, conversation history, trust, longer-term emotions, and recent conflict. New acquaintances do not act like lifelong friends; grievances do not vanish in the next line. Apologies, gifts, and follow-ups can gradually repair a relationship.
+- **Community impressions.** Important interactions can leave limited impressions with witnesses and close circles. Retellings decay and blur over time instead of making the whole town omniscient.
+- **Personal help requests.** NPCs may occasionally ask for a suitable item. Once clearly accepted, the request enters the vanilla quest log and only completes when the correct item is actually delivered, with a small friendship or material reward.
+- **Gifts, money, and personal mail.** Under friendship, value, cooldown, and item checks, an NPC may offer a small gift, a little money, or a rarer meaningful gift. Birthday, reciprocal, and thank-you mail can be written in character, with stable templates as fallback. Per-NPC candidate gift pools are listed in [原版NPC个性礼物池.md](./原版NPC个性礼物池.md) (Chinese, with item IDs).
+- **Companion outings.** After a clearly accepted invitation, an NPC can temporarily leave their schedule, walk through real map boundaries to a supported destination, stay a while, and then resume. Festivals, story events, sleep, bad weather, and unsafe map states are blocked.
+- **Progress awareness.** The AI context can see the date, time, season, weather, festivals, location, relationships, the NPC's current activity, and part of the game progress, so characters talk about what is actually happening.
+- **Small behaviors and world actions.** Dialogue can influence restrained behaviors (facing you, emotes, stepping closer, keeping distance). Every world-affecting action passes a whitelist and a second local validation; the model can never run arbitrary commands.
+
+## SVE and custom NPCs
+
+- `EnableSveCompatibility` is on by default. With SVE installed, built-in SVE profiles, relationships, and progression context are used; SVE is never required.
+- Third-party NPCs use game data and a conservative generic fallback; without a dedicated profile, characters may be less detailed. The community can drop JSON profiles into `Mods/LivingNPCs/npc_profiles/` to add or override characters — see [npc_profiles/README.md](./LivingNPCs/npc_profiles/README.md).
+- LivingNPCs respects content authors' AI-use permissions. Text from content packs that do not permit AI use is not copied into prompts.
+- This release does not claim dedicated, hand-tuned support for other large expansions such as Ridgeside Village or East Scarp.
+
+## Common settings
+
+Settings actually available in Generic Mod Config Menu:
+
+| Setting | Purpose |
+| --- | --- |
+| Enable AI dialogue | Master switch for the built-in engine; turning it on requires a game restart |
+| Provider connection | LLM provider, API key, model name, server address, request timeout |
+| Semantic context routing | On by default; one lightweight call selects the context needed this turn (timeout and thinking level adjustable) |
+| Optimized world summary / concise prompt context | Reduce tokens; restore defaults if character detail drops |
+| Chat thinking level | Only affects models that support it |
+| AI for normal right-click | Off by default |
+| AI line frequencies | Separate general / gift / marriage settings |
+| Typed-dialogue hotkey / inspect-memory hotkey | Default `LeftAlt` and `LeftShift + J` |
+| Disabled characters | Internal names, comma or space separated |
+| Help requests | Toggle and daily offer chance |
+| AI world actions | Master switch; turning it off keeps AI dialogue but stops gifts, money, and outings |
+| AI small gifts | Toggle and daily chance range |
+| SVE compatibility | Recommended on when SVE is installed |
+
+The following advanced options **can only be edited in `config.json`** (close the game first and keep a backup; invalid values may be auto-corrected):
+
+- Meaningful gifts, money, and outings: `AllowAiMeaningfulGifts`, `AllowAiMoneyGifts` (cap `MaxAiMoneyGiftAmount`), `AllowAiCompanionOutings`;
+- AI-chat bonus friendship: `EnableAiDialogueFriendship` and its daily cap;
+- Passive behaviors: `EnablePassiveBehaviors`, `PassiveBehaviorChancePercent` (off by default; test with the manual behavior hotkey first);
+- Memory sizes: `MaxMemoryEntriesPerNpc`, `PromptMemoryEntries`;
+- Gift mail and memory compression: `EnableAiGiftMail`, `EnableMemoryImpressions`;
+- Connection and logging: `SuppressConnectionCheck`, `ExportAiResponseLogs`, and llama.cpp's `PromptFormat`.
 
 ## Hotkeys
 
-- `LeftShift + H` — trigger one LivingNPCs micro-behavior on a nearby NPC.
-- `LeftShift + J` — print a nearby NPC's state and memory to the SMAPI console.
+- `LeftAlt` + click/interact: open free-text AI dialogue.
+- `LeftShift + H`: manually trigger one small behavior on a nearby NPC (mainly for testing).
+- `LeftShift + J`: print a nearby NPC's state and memory summary to the SMAPI console.
 
-## Main config
+The dialogue and inspect-memory hotkeys can be changed in GMCM; the behavior test key is `BehaviorHotkey` in `config.json`.
 
-LivingNPCs ships a deliberately small in-game Generic Mod Config Menu (enable mod, HUD messages, the inspect-memory hotkey, the help-request toggle, the AI world-actions master plus festival/quest-assist toggles, SVE compatibility, and the concise-prompt switch). Everything else lives in `config.json` with safe defaults, including:
+## Debug and evaluation tools
 
-- Hotkeys and manual-behavior test mode; memory sizes; whether to log conversation starts.
-- Help requests: pending cap, cooldown days, minimum relationship trust, daily offer chance, completion reward range.
-- AI-chat bonus friendship and its daily cap; ambient follow-ups; dialogue-driven behaviors and how many days they linger.
-- AI world actions: per-action toggles (small / meaningful gift, money, outing, festival); meaningful-gift cooldown; money cap; minimum outing stay.
-- State / emotion / conflict daily decay; passive-behavior chance; daily behavior cap; interaction range.
-- ValleyTalk prompt bridge; `ConcisePromptContext`; the optional AI behavior planner; and the hidden, default-on LivingNPCs action decision pass.
+Type these in the SMAPI console:
 
-The ValleyTalk fork adds: provider config (OpenAI-compatible / others), request timeout (default `85` seconds), `UseOptimizedPrompts` (off by default), semantic context routing (on by default), custom prompt/language/entry config, and the free-input hotkey (which now also works in festival / event scenes).
+| Command | Purpose |
+| --- | --- |
+| `livingnpcs_debug [near\|NPC]` | State, behavior reasons, help-request fit, and memory recall |
+| `livingnpcs_prompt [near\|NPC]` | The hidden context prepared for the next generation |
+| `livingnpcs_export [near\|all\|NPC]` | Export a Markdown diagnostic report |
+| `livingnpcs_eval` | Run a lightweight rule sanity check |
+| `livingnpcs_giftmail` | Inspect gift-mail state and generated text |
+| `livingnpcs_forget [near\|NPC]` | Clear one NPC's behavior memory and AI dialogue history |
+| `livingnpcs_forget all confirm` | Permanently clear all NPC memories and dialogue history in this save |
+| `livingnpcs_tokens [export\|reset]` | View, export, or reset the save's LLM usage statistics |
+| `livingnpcs_purge_valleytalk confirm` | After a verified migration, delete retained legacy ValleyTalk save keys; host only |
 
-## Not done yet
+`forget`, `reset`, and `purge` delete data; back up the save and check the target first.
 
-- More hand-authored semantic anchors for vanilla and expansion maps.
-- Richer follow-up chains growing out of completed shared experiences (multi-step invites, cross-location experiences, deeper quest-line tie-ins).
-- Longer-arc emotional evolution (cross-season grudges, long-term reassurance, more complex echoes when re-hurt after a repair).
+## Transcripts, logs, privacy, and cost
 
-## License
+Conversations are sent to the LLM provider you configure. Requests can include your typed text, the NPC's name/profile/relationship, the in-game date, location, weather and progress, and the recent conversations and memories needed for continuity.
 
-- `ValleyTalk/` keeps the original project's **LGPL v2.1** license; see `ValleyTalk/LICENSE.txt`. ValleyTalk is created by [dandm1](https://github.com/dandm1/ValleyTalk); this is a modified build.
-- `LivingNPCs/` is this repo's own new code.
+The API key is stored only in `Mods/LivingNPCs/config.json` and is never written to the mod's logs or exported reports. Never share your API key.
+
+By default 0.2.0 keeps local files under `Mods/LivingNPCs` for review and troubleshooting: `conversation_logs/` (readable per-NPC memoirs), `prompt_logs/`, `ai_response_logs/`, `context_routing_logs/`, `debug_reports/`, and `token_usage/`. These may contain your conversations and game information — review and redact before sharing. Set `ExportAiResponseLogs` to `false` in `config.json` to stop the ongoing AI diagnostic logs.
+
+Semantic routing, the final reply, AI-written mail, and long-term memory compression can all use model calls. Use `livingnpcs_tokens` to inspect usage; billing depends on your provider and playtime.
+
+## FAQ
+
+- **Holding LeftAlt shows no input box.** Check the NPC is in interaction range, no other menu is open, and the hotkey in GMCM; then check the SMAPI console for a missing API key/model/server message.
+- **Plain right-click is still vanilla.** That is the default; use `LeftAlt` + interact, or enable "AI for normal right-click dialogue".
+- **"Legacy ValleyTalk detected, AI dialogue disabled."** Fully exit the game, rename the old outer `ValleyTalk` folder to `.ValleyTalk` (or move it out of `Mods`), and restart.
+- **Slow, expensive, or inconsistent output.** Make sure the model handles long context and structured output; lower AI line frequencies, try the optimized world summary, or switch to a faster model.
+
+## Development build
+
+Requires the .NET 6 SDK and a Stardew Valley/SMAPI installation to compile against. The projects default to the author's local `GamePath`; override it explicitly elsewhere:
+
+~~~powershell
+dotnet build LivingNPCs/LivingNPCs.csproj -p:GamePath="D:\SteamLibrary\steamapps\common\Stardew Valley"
+~~~
+
+Run tests:
+
+~~~powershell
+dotnet test LivingNPCs.Tests/LivingNPCs.Tests.csproj -p:GamePath="D:\SteamLibrary\steamapps\common\Stardew Valley"
+~~~
+
+Run the offline regression check (LivingNPCs.Diagnostics, no game needed):
+
+~~~powershell
+dotnet run --project LivingNPCs.Diagnostics\LivingNPCs.Diagnostics.csproj -- .
+~~~
+
+The release package should contain a single `LivingNPCs` folder loadable by SMAPI, without the legacy ValleyTalk or its Content Patcher pack.
+
+A deeper systems overview of the behavior/memory layer lives in [LivingNPCs/README.md](./LivingNPCs/README.md) (Chinese); the rewrite specifications and decisions are archived under [RewriteSpec/](./RewriteSpec/README.md).
+
+## Feedback
+
+If you find a bug, unnatural behavior, a migration or compatibility problem, or have gameplay ideas, please leave a Nexus comment or Bug Report. Helpful reports include the game/SMAPI/mod versions, the NPC, date/time/weather, location, your input and the NPC's reply, screenshots, reproduction steps, and a parsed SMAPI log link from <https://smapi.io/log>. Check diagnostic files for private content before sharing, and never include your API key.
+
+## Credits
+
+LivingNPCs 0.2.0 and its built-in AI dialogue engine are a from-scratch rewrite. ValleyTalk is no longer bundled and no longer a runtime dependency; it only appears in the migration notes for 0.1.x users.
+
+Thanks to Stardew Valley, SMAPI, Generic Mod Config Menu, and the modding community for the ecosystem, tools, and testing feedback.
