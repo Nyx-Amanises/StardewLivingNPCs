@@ -972,6 +972,69 @@ public class DialogueEngineGenerateTests
     }
 
     [Fact]
+    public async Task ExplicitStrongJoyPromotesOnlyTheMatchingPageUsingFinalPortraitSemantics()
+    {
+        var (engine, _, _) = Create(
+            replyText: "- 我真的很开心你还记得！$7#$b#谢谢你愿意听我说。$7");
+        var capturedBio = new NpcBio { Biography = "Captured biography." };
+        var frames = new[]
+        {
+            new PortraitFrameSemantics.Match("h", "明确高兴的神情", new string('A', 64), 1),
+            new PortraitFrameSemantics.Match("7", "温柔感激的微笑", new string('B', 64), 7)
+        };
+
+        GenerationResult result = await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Penny",
+            Trigger = GenerationTrigger.Conversation,
+            Conversation = new List<ConversationTurn> { new("你还记得吗？", true, "strong-joy-portrait") },
+            Snapshot = new GameStateSnapshot { FarmerName = "Yuki" },
+            ContentSnapshot = new GenerationContentSnapshot(
+                capturedBio,
+                new Dictionary<string, string>(),
+                PortraitFrames: frames,
+                PortraitFrameCount: 8)
+        }, CancellationToken.None);
+
+        Assert.Equal(
+            "我真的很开心你还记得！$h#$b#谢谢你愿意听我说。$7",
+            result.ParsedLines[0]);
+    }
+
+    [Fact]
+    public async Task ExplicitAvailableExtraPortraitCanSupplyTheStrongerJoyFrame()
+    {
+        var (engine, _, _) = Create(replyText: "- I'm so happy you came!$h");
+        var capturedBio = new NpcBio
+        {
+            Biography = "Captured biography.",
+            ExtraPortraits = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+            {
+                ["11"] = "a joyful, eyes-closed laugh"
+            }
+        };
+        var frames = new[]
+        {
+            new PortraitFrameSemantics.Match("h", "a gentle, grateful smile", new string('A', 64), 1)
+        };
+
+        GenerationResult result = await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Penny",
+            Trigger = GenerationTrigger.Conversation,
+            Conversation = new List<ConversationTurn> { new("I came to see you.", true, "extra-joy-portrait") },
+            Snapshot = new GameStateSnapshot { FarmerName = "Yuki" },
+            ContentSnapshot = new GenerationContentSnapshot(
+                capturedBio,
+                new Dictionary<string, string>(),
+                PortraitFrames: frames,
+                PortraitFrameCount: 12)
+        }, CancellationToken.None);
+
+        Assert.Equal("I'm so happy you came!$11", result.ParsedLines[0]);
+    }
+
+    [Fact]
     public async Task YearOneGreenRainDemetriusDoesNotExposeForcedCostumeFrameAsAnEmotion()
     {
         var (engine, client, _) = Create(

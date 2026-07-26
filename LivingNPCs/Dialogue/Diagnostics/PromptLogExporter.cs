@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using StardewModdingAPI;
 using StardewValley;
@@ -40,12 +39,10 @@ internal static class PromptLogExporter
                 ? "unknown-save"
                 : Constants.SaveFolderName;
             string directory = Path.Combine(DialogueServices.Helper.DirectoryPath, RootFolderName, saveFolder);
-            Directory.CreateDirectory(directory);
-
             string filePath = Path.Combine(directory, $"{GetSafeFileName(npcName)}.md");
-            File.AppendAllText(
+            DiagnosticMarkdownLogWriter.Append(
                 filePath,
-                BuildEntry(
+                recordedAt => BuildEntry(
                     npcName,
                     context,
                     systemPrompt,
@@ -58,8 +55,8 @@ internal static class PromptLogExporter
                     response,
                     parsedLines,
                     attempt,
-                    outcome),
-                Encoding.UTF8);
+                    outcome,
+                    recordedAt));
         }
         catch (Exception ex)
         {
@@ -85,7 +82,8 @@ internal static class PromptLogExporter
         LlmResponse response,
         IReadOnlyList<string> parsedLines,
         int attempt,
-        string outcome)
+        string outcome,
+        DateTimeOffset recordedAt)
     {
         string generatedPrompt = string.Concat(corePrompt, instructions, command);
         string userPrompt = string.Concat(gameConstantContext, npcConstantContext, generatedPrompt);
@@ -95,6 +93,7 @@ internal static class PromptLogExporter
 
         builder.AppendLine($"## {npcName} - Year {time.Year}, {FormatSeason(time.Season)} {time.DayOfMonth} {Game1.timeOfDay:0000} - attempt {attempt}");
         builder.AppendLine();
+        builder.AppendLine($"- Wall-clock time: `{DiagnosticMarkdownLogWriter.FormatWallClockTimestamp(recordedAt)}`");
         builder.AppendLine($"- Provider/model: `{DialogueServices.Config.Provider}/{DialogueServices.Config.ModelName}`");
         builder.AppendLine($"- Outcome: `{outcome}`");
         builder.AppendLine($"- Success: `{response?.IsSuccess == true}`");
@@ -188,13 +187,6 @@ internal static class PromptLogExporter
 
     private static string GetSafeFileName(string value)
     {
-        var invalid = Path.GetInvalidFileNameChars();
-        var builder = new StringBuilder((value ?? string.Empty).Length);
-        foreach (char ch in value ?? string.Empty)
-        {
-            builder.Append(invalid.Contains(ch) ? '_' : ch);
-        }
-
-        return builder.Length == 0 ? "unknown-npc" : builder.ToString();
+        return DiagnosticMarkdownLogWriter.GetSafeFileName(value);
     }
 }

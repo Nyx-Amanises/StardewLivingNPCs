@@ -167,6 +167,71 @@ public sealed class ContentAssetValidationTests
     }
 
     [Fact]
+    public void Prompts_PortraitSelection_PrioritizesStrongHappinessAndFinalTextureSemantics()
+    {
+        var en = Deserialize<Dictionary<string, string>>(Path.Combine(AssetRoot, "prompts", "default.json"));
+        var zh = Deserialize<Dictionary<string, string>>(Path.Combine(AssetRoot, "prompts", "zh.json"));
+
+        string englishRule = en["instructionsEmotion"];
+        Assert.Contains("strong happiness", englishRule, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("takes priority", englishRule, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("means only what its description", englishRule, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("never assume $a is angry", englishRule, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("records, not recommendations", englishRule, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("normally $h", englishRule, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("gentle grateful markers such as $7", englishRule, StringComparison.OrdinalIgnoreCase);
+
+        string chineseRule = zh["instructionsEmotion"];
+        Assert.Contains("真的很开心", chineseRule, StringComparison.Ordinal);
+        Assert.Contains("优先", chineseRule, StringComparison.Ordinal);
+        Assert.Contains("只代表当前最终肖像贴图", chineseRule, StringComparison.Ordinal);
+        Assert.Contains("不得假定$a就是怒脸", chineseRule, StringComparison.Ordinal);
+        Assert.Contains("只是记录，不是当前推荐", chineseRule, StringComparison.Ordinal);
+        Assert.DoesNotContain("通常是列出的$h", chineseRule, StringComparison.Ordinal);
+        Assert.DoesNotContain("$7等温柔感激", chineseRule, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Prompts_PrioritizeActualRelationshipProgressDialogueAndSpatialGrounding()
+    {
+        var en = Deserialize<Dictionary<string, string>>(Path.Combine(AssetRoot, "prompts", "default.json"));
+        var zh = Deserialize<Dictionary<string, string>>(Path.Combine(AssetRoot, "prompts", "zh.json"));
+
+        Assert.Contains("current hearts are authoritative", en["dateTimeResidencyToday"], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("move the topic forward", en["currentConversationIntro"], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("does not prove visibility", en["instructionsGrounding"], StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("polite personal or family question", en["instructionsLivingNpcEmotionDepth"], StringComparison.OrdinalIgnoreCase);
+
+        Assert.Contains("关系状态和爱心数始终优先", zh["dateTimeResidencyToday"], StringComparison.Ordinal);
+        Assert.Contains("推进话题", zh["currentConversationIntro"], StringComparison.Ordinal);
+        Assert.Contains("不能据此推断门窗外能看见什么", zh["instructionsGrounding"], StringComparison.Ordinal);
+        Assert.Contains("一次礼貌的私人或家庭提问", zh["instructionsLivingNpcEmotionDepth"], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Prompts_HighOrModdedHeartsDoNotInventMutualRomance()
+    {
+        var en = Deserialize<Dictionary<string, string>>(Path.Combine(AssetRoot, "prompts", "default.json"));
+        var zh = Deserialize<Dictionary<string, string>>(Path.Combine(AssetRoot, "prompts", "zh.json"));
+
+        foreach (string key in new[]
+                 {
+                     "nonSpouseFriendshipWantToDate",
+                     "nonSpouseFriendshipWantToDate.MaleNpc",
+                     "nonSpouseFriendshipWantToDate.FemaleNpc"
+                 })
+        {
+            Assert.Contains("modded hearts", en[key], StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("never", en[key], StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("explicit relationship status", en[key], StringComparison.OrdinalIgnoreCase);
+
+            Assert.Contains("Mod 修改的爱心", zh[key], StringComparison.Ordinal);
+            Assert.Contains("绝不", zh[key], StringComparison.Ordinal);
+            Assert.Contains("明确", zh[key], StringComparison.Ordinal);
+        }
+    }
+
+    [Fact]
     public void PortraitFrameSemantics_CatalogHasReviewedFullFrameSchema()
     {
         string catalogPath = Path.Combine(AssetRoot, "portrait-frame-semantics.json");

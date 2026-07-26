@@ -1,5 +1,6 @@
 using LivingNPCs.Behavior;
 using LivingNPCs.Dialogue;
+using LivingNPCs.Dialogue.Diagnostics;
 using StardewModdingAPI;
 
 namespace LivingNPCs;
@@ -15,6 +16,7 @@ public sealed class ModEntry : Mod
     {
         I18n.Init(helper.Translation);
         DialogueServices.Initialize(helper, Monitor);
+        DiagnosticMarkdownLogWriter.BeginSession(this.ModManifest.Version.ToString());
         this.config = helper.ReadConfig<ModConfig>();
         ActiveConfig = this.config;
         ModCompatibility.Initialize(helper.ModRegistry);

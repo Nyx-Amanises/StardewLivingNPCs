@@ -138,8 +138,8 @@ internal sealed class DialogueEngine : IDialogueEngine
     public async Task<GenerationResult> GenerateAsync(GenerationRequest request, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
-        var prepared = await this.PrepareAsync(request, ct).ConfigureAwait(false);
         var watch = Stopwatch.StartNew();
+        var prepared = await this.PrepareAsync(request, ct).ConfigureAwait(false);
 
         LlmResponse? response = null;
         Exception? failure = null;
@@ -193,14 +193,13 @@ internal sealed class DialogueEngine : IDialogueEngine
             break;
         }
 
-        watch.Stop();
         ct.ThrowIfCancellationRequested();
         return await this.FinalizeResultAsync(
             prepared,
             response,
             failure,
             Math.Min(attempt, MaxAttempts),
-            watch.ElapsedMilliseconds,
+            watch,
             ct).ConfigureAwait(false);
     }
 
@@ -209,12 +208,15 @@ internal sealed class DialogueEngine : IDialogueEngine
     public async Task StreamAsync(GenerationRequest request, IStreamSink sink, CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
+        var watch = Stopwatch.StartNew();
         var prepared = await this.PrepareAsync(request, ct).ConfigureAwait(false);
 
         LlmResponse? response = null;
         bool languageRetry = false;
+        int attempts = 0;
         for (int attempt = 1; attempt <= MaxAttempts; attempt++)
         {
+            attempts = attempt;
             if (attempt > 1)
             {
                 await Task.Delay(RetryDelay, ct).ConfigureAwait(false);
@@ -260,8 +262,8 @@ internal sealed class DialogueEngine : IDialogueEngine
             prepared,
             response,
             null,
-            MaxAttempts,
-            0,
+            attempts,
+            watch,
             ct).ConfigureAwait(false);
         ct.ThrowIfCancellationRequested();
         var options = ResponseFormatter.BuildStreamingOptions(
@@ -717,7 +719,7 @@ internal sealed class DialogueEngine : IDialogueEngine
         LlmResponse? response,
         Exception? failure,
         int attempts,
-        long elapsedMilliseconds,
+        Stopwatch generationWatch,
         CancellationToken ct)
     {
         ct.ThrowIfCancellationRequested();
@@ -809,6 +811,14 @@ internal sealed class DialogueEngine : IDialogueEngine
                     I18n.Get("log.dialogue.actionDecisionFailed", new { npc = request.NpcName, error = ex.Message }),
                     StardewModdingAPI.LogLevel.Trace);
             }
+
+            // Apply the same evidence guard to the legacy-inline fallback as to authoritative
+            // metadata extraction. It is idempotent when the extraction path already applied it.
+            LivingNpcMetadataExtractionPass.ApplyConservativeInterpersonalEvidenceRules(
+                analysis,
+                prepared.Context,
+                playerText,
+                parsed.DialogueLine);
         }
 
         ct.ThrowIfCancellationRequested();
@@ -830,6 +840,24 @@ internal sealed class DialogueEngine : IDialogueEngine
         // 后处理（§4.11）。
         string visibleDialogueLine = ConversationTextPostProcessor.NormalizeImmediateNicknameReply(
             parsed.DialogueLine, prepared.LastPlayerLine);
+        visibleDialogueLine = ResponseParser.PromoteWeakPositivePortraitsForExplicitJoy(
+            visibleDialogueLine,
+            BuildAvailablePortraitDescriptions(prepared));
+        if (IsCanonicalAngryPortraitActuallyAngry(prepared))
+        {
+            string fullVisibleDialogueLine = visibleDialogueLine;
+            bool isMultiPage = fullVisibleDialogueLine.Contains("#$b#", StringComparison.OrdinalIgnoreCase)
+                || fullVisibleDialogueLine.Contains("#$e#", StringComparison.OrdinalIgnoreCase);
+            visibleDialogueLine = ResponseParser.DowngradeCanonicalAngryPortraitToNeutral(
+                fullVisibleDialogueLine,
+                pageText => LivingNpcMetadataExtractionPass.ShouldNeutralizeCanonicalAngryPortraitPage(
+                    analysis,
+                    prepared.Context,
+                    prepared.LastPlayerLine,
+                    fullVisibleDialogueLine,
+                    pageText,
+                    isMultiPage));
+        }
         bool ended = ResponseFormatter.IsConversationEnded(analysis, prepared.LastPlayerLine, visibleDialogueLine);
 
         // 可信送礼命令只进入原生 Stardew 对话串。解析产物、历史和流式 UI 始终保留
@@ -867,8 +895,9 @@ internal sealed class DialogueEngine : IDialogueEngine
             }
         };
 
+        long generationMilliseconds = generationWatch.ElapsedMilliseconds;
         this.ExportAttempt(prepared, response, analysis, parsedLines, attempts, "success", actionDiagnostics);
-        this.LogDiagnostics(prepared, response, attempts, elapsedMilliseconds, parsedLines.Count);
+        this.LogDiagnostics(prepared, response, attempts, generationMilliseconds, parsedLines.Count);
         return result;
     }
 
@@ -878,6 +907,76 @@ internal sealed class DialogueEngine : IDialogueEngine
             string.Equals(action.Type, "companion_outing", StringComparison.OrdinalIgnoreCase)
             && string.Equals(action.TravelConsent, "accepted_now", StringComparison.OrdinalIgnoreCase)
             && Behavior.TravelLocationRules.IsKnownPublicOutingTarget(action.TargetLocation));
+    }
+
+    private static IReadOnlyDictionary<string, string> BuildAvailablePortraitDescriptions(
+        PreparedGeneration prepared)
+    {
+        var descriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+        // A hash-reviewed match from the final texture is authoritative for its marker. Explicit
+        // bio frames fill only still-unresolved, physically available markers.
+        foreach (PortraitFrameSemantics.Match frame in prepared.AssemblyInput.PortraitFrames
+                     .OrderBy(frame => frame.FrameIndex))
+        {
+            string? marker = PortraitMarkerRules.NormalizeGameMarker(frame.Marker);
+            if (marker != null
+                && prepared.ValidPortraits.Contains(marker)
+                && !string.IsNullOrWhiteSpace(frame.Description)
+                && !descriptions.ContainsKey(marker))
+            {
+                descriptions[marker] = frame.Description;
+            }
+        }
+
+        foreach ((string rawMarker, string description) in prepared.Bio.ExtraPortraits)
+        {
+            string? marker = PortraitMarkerRules.NormalizeExtraMarker(rawMarker);
+            if (marker != null
+                && prepared.ValidPortraits.Contains(marker)
+                && !string.IsNullOrWhiteSpace(description)
+                && !descriptions.ContainsKey(marker))
+            {
+                descriptions[marker] = description;
+            }
+        }
+
+        return descriptions;
+    }
+
+    private static bool IsCanonicalAngryPortraitActuallyAngry(PreparedGeneration prepared)
+    {
+        var descriptions = prepared.AssemblyInput.PortraitFrames
+            .Where(frame => string.Equals(
+                PortraitMarkerRules.NormalizeGameMarker(frame.Marker),
+                "a",
+                StringComparison.OrdinalIgnoreCase))
+            .Select(frame => frame.Description)
+            .Concat(prepared.Bio.ExtraPortraits
+                .Where(pair => string.Equals(
+                    PortraitMarkerRules.NormalizeExtraMarker(pair.Key),
+                    "a",
+                    StringComparison.OrdinalIgnoreCase))
+                .Select(pair => pair.Value))
+            .Where(description => !string.IsNullOrWhiteSpace(description))
+            .ToArray();
+
+        // Legacy/test callers without a captured final texture retain Stardew's standard $a
+        // meaning. Runtime snapshots require an explicit reviewed/configured angry description.
+        return descriptions.Length == 0
+            ? prepared.Request.ContentSnapshot == null
+            : descriptions.Any(IsAngryPortraitDescription);
+    }
+
+    internal static bool IsAngryPortraitDescription(string description)
+    {
+        string[] fragments =
+        {
+            "angry", "irritated", "furious", "displeased", "confrontational", "scowl",
+            "生气", "愤怒", "恼怒", "不悦", "冲突", "瞪"
+        };
+        return !string.IsNullOrWhiteSpace(description)
+            && fragments.Any(fragment => description.Contains(fragment, StringComparison.OrdinalIgnoreCase));
     }
 
     /// <summary>

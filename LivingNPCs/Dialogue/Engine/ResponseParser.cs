@@ -52,6 +52,18 @@ internal static class ResponseParser
     private static readonly Regex BareDollarPattern = new(@"\$(?![A-Za-z0-9_])", RegexOptions.Compiled);
     private static readonly Regex BracketCommandPattern = new(@"\[[^\]\r\n]*\]", RegexOptions.Compiled);
     private static readonly Regex PageMarkerPattern = new(@"(#\$[be]#)", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex ExplicitEnglishStrongJoyPattern = new(
+        @"\b(?:(?:really|so|very|extremely|incredibly|truly|genuinely)\s+(?:happy|glad|excited)|overjoyed|thrilled|ecstatic|elated|(?:i(?:'m|\s+am|\s+feel)|we(?:'re|\s+are|\s+feel))\s+(?:delighted|joyful|excited)|(?:this|that|it)(?:'s|\s+is|\s+feels)\s+(?:really|so|very|extremely|incredibly|truly)\s+(?:exciting|wonderful)|i\s+(?:can't|cannot)\s+stop\s+(?:smiling|laughing)|i\s+(?:couldn't|could\s+not)\s+be\s+happier|(?:burst|broke)\s+out\s+laughing|(?:laughing|beaming)\s+with\s+joy|over\s+the\s+moon|on\s+cloud\s+nine|made\s+my\s+day|how\s+exciting)\b",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex OtherEnglishJoySubjectPattern = new(
+        @"\b(?:(?:are\s+)?you(?:'re|\s+are|\s+seem|\s+look|\s+sound|\s+feel)?|he(?:'s|\s+is|\s+seems|\s+looks|\s+sounds|\s+feels)?|she(?:'s|\s+is|\s+seems|\s+looks|\s+sounds|\s+feels)?|they(?:'re|\s+are|\s+seem|\s+look|\s+sound|\s+feel)?)\s*$",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    private static readonly Regex ExplicitChineseStrongJoyPattern = new(
+        @"太开心|真的?很开心|真开心|非常开心|特别开心|好开心|开心极了|开心死了|高兴极了|非常高兴|特别高兴|欣喜若狂|喜出望外|乐开了花|兴奋|开怀|忍不住(?:笑|大笑)|笑得停不下来",
+        RegexOptions.Compiled);
+    private static readonly Regex OtherChineseJoySubjectPattern = new(
+        @"(?:你|他|她|他们|她们)(?:看起来|显得|似乎|好像|是不是|一定|应该|居然|怎么)?\s*$",
+        RegexOptions.Compiled);
     private static readonly Regex OptionPrefixPattern = new(
         @"^(?:[-*•\d.、)）\s]*)?(?:玩家回应|玩家回复|回应|回复|选项|response|reply|option)\s*\d*\s*[:：.、\-]?\s*",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -464,6 +476,279 @@ internal static class ResponseParser
                 ? "$0"
                 : match.Value;
         });
+    }
+
+    /// <summary>
+    /// Corrects the standard angry alias after metadata evidence identifies a shy/flustered
+    /// misclassification. Numeric and custom portrait markers are left untouched because their
+    /// meanings depend on the final portrait sheet.
+    /// </summary>
+    internal static string DowngradeCanonicalAngryPortraitToNeutral(
+        string text,
+        Func<string, bool>? shouldNeutralizePage = null)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        string[] parts = PageMarkerPattern.Split(text);
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (PageMarkerPattern.IsMatch(parts[i]))
+            {
+                continue;
+            }
+
+            string visiblePage = DollarTokenPattern.Replace(parts[i], string.Empty).Trim();
+            if (shouldNeutralizePage != null && !shouldNeutralizePage(visiblePage))
+            {
+                continue;
+            }
+
+            parts[i] = DollarTokenPattern.Replace(parts[i], match =>
+                string.Equals(match.Groups["token"].Value, "a", StringComparison.OrdinalIgnoreCase)
+                    ? "$0"
+                    : match.Value);
+        }
+
+        return string.Concat(parts);
+    }
+
+    /// <summary>
+    /// Promotes a weak positive expression only when one page explicitly voices strong joy and the
+    /// final portrait sheet exposes a reviewed, unambiguous stronger expression. Each page is
+    /// evaluated independently; no NPC name, conventional marker, or portrait-pack layout is
+    /// assumed.
+    /// </summary>
+    internal static string PromoteWeakPositivePortraitsForExplicitJoy(
+        string text,
+        IReadOnlyDictionary<string, string> portraitDescriptions)
+    {
+        if (string.IsNullOrEmpty(text) || portraitDescriptions.Count == 0)
+        {
+            return text ?? string.Empty;
+        }
+
+        var normalizedDescriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach ((string rawMarker, string description) in portraitDescriptions)
+        {
+            string? marker = PortraitMarkerRules.NormalizeGameMarker(rawMarker);
+            if (marker != null
+                && !string.IsNullOrWhiteSpace(description)
+                && !normalizedDescriptions.ContainsKey(marker))
+            {
+                normalizedDescriptions[marker] = description;
+            }
+        }
+
+        var strongCandidate = normalizedDescriptions
+            .Select(pair => new
+            {
+                pair.Key,
+                Score = GetStrongJoyPortraitScore(pair.Value),
+                FrameIndex = PortraitMarkerRules.TryGetFrameIndex(pair.Key, out int frameIndex)
+                    ? frameIndex
+                    : int.MaxValue
+            })
+            .Where(candidate => candidate.Score > 0)
+            .OrderByDescending(candidate => candidate.Score)
+            .ThenBy(candidate => candidate.FrameIndex)
+            .ThenBy(candidate => candidate.Key, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+        if (strongCandidate == null)
+        {
+            return text;
+        }
+
+        string[] parts = PageMarkerPattern.Split(text);
+        for (int i = 0; i < parts.Length; i++)
+        {
+            if (PageMarkerPattern.IsMatch(parts[i]))
+            {
+                continue;
+            }
+
+            Match? currentPortrait = DollarTokenPattern.Matches(parts[i])
+                .Cast<Match>()
+                .LastOrDefault(match =>
+                {
+                    string? marker = PortraitMarkerRules.NormalizeGameMarker(match.Groups["token"].Value);
+                    return marker != null && normalizedDescriptions.ContainsKey(marker);
+                });
+            if (currentPortrait == null)
+            {
+                continue;
+            }
+
+            string currentMarker = PortraitMarkerRules.NormalizeGameMarker(
+                currentPortrait.Groups["token"].Value)!;
+            string visiblePage = DollarTokenPattern.Replace(parts[i], string.Empty).Trim();
+            if (!HasExplicitStrongJoyEvidence(visiblePage)
+                || !IsWeakPositivePortraitDescription(normalizedDescriptions[currentMarker])
+                || string.Equals(currentMarker, strongCandidate.Key, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            parts[i] = parts[i][..currentPortrait.Index]
+                + "$" + strongCandidate.Key
+                + parts[i][(currentPortrait.Index + currentPortrait.Length)..];
+        }
+
+        return string.Concat(parts);
+    }
+
+    internal static bool HasExplicitStrongJoyEvidence(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        foreach (Match match in ExplicitEnglishStrongJoyPattern.Matches(text))
+        {
+            string prefix = text[..match.Index];
+            string suffix = text[(match.Index + match.Length)..].TrimStart();
+            if (!HasNegatedJoyPrefix(prefix)
+                && !OtherEnglishJoySubjectPattern.IsMatch(prefix)
+                && !StartsWithQuestionSuffix(suffix))
+            {
+                return true;
+            }
+        }
+
+        foreach (Match match in ExplicitChineseStrongJoyPattern.Matches(text))
+        {
+            string prefix = text[..match.Index];
+            string suffix = text[(match.Index + match.Length)..].TrimStart();
+            if (!HasNegatedJoyPrefix(prefix)
+                && !OtherChineseJoySubjectPattern.IsMatch(prefix)
+                && !StartsWithQuestionSuffix(suffix))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    internal static bool IsWeakPositivePortraitDescription(string description)
+    {
+        if (string.IsNullOrWhiteSpace(description)
+            || GetStrongJoyPortraitScore(description) > 0
+            || HasMixedOrContextSpecificJoySemantics(description))
+        {
+            return false;
+        }
+
+        string[] fragments =
+        {
+            "gentle", "grateful", "warm", "content", "soft smile", "slight smile",
+            "friendly", "pleasant", "pleased", "relieved", "fond", "affection",
+            "amused smile", "reserved smile", "happy smile",
+            "温柔", "感激", "温暖", "满足", "柔和", "淡淡", "友好", "愉悦",
+            "释然", "亲切", "和善", "微笑"
+        };
+        return fragments.Any(fragment =>
+            description.Contains(fragment, StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal static bool IsStrongJoyPortraitDescription(string description)
+    {
+        return GetStrongJoyPortraitScore(description) > 0;
+    }
+
+    private static int GetStrongJoyPortraitScore(string description)
+    {
+        if (string.IsNullOrWhiteSpace(description)
+            || HasMixedOrContextSpecificJoySemantics(description))
+        {
+            return 0;
+        }
+
+        string normalized = description.ToLowerInvariant();
+        if (normalized.Contains("joyful", StringComparison.Ordinal)
+            || normalized.Contains("开心大笑", StringComparison.Ordinal)
+            || normalized.Contains("欣喜大笑", StringComparison.Ordinal)
+            || normalized.Contains("开怀大笑", StringComparison.Ordinal))
+        {
+            return 100;
+        }
+
+        if (normalized.Contains(" laugh", StringComparison.Ordinal)
+            || normalized.StartsWith("laugh", StringComparison.Ordinal)
+            || normalized.Contains("大笑", StringComparison.Ordinal))
+        {
+            return 95;
+        }
+
+        if (normalized.Contains("clearly happy", StringComparison.Ordinal)
+            || normalized.Contains("delighted", StringComparison.Ordinal)
+            || normalized.Contains("exuberant", StringComparison.Ordinal)
+            || normalized.Contains("radiant", StringComparison.Ordinal)
+            || normalized.Contains("beaming", StringComparison.Ordinal)
+            || normalized.Contains("明确高兴", StringComparison.Ordinal)
+            || normalized.Contains("欣喜", StringComparison.Ordinal)
+            || normalized.Contains("灿烂", StringComparison.Ordinal))
+        {
+            return 90;
+        }
+
+        bool visiblyBrightSmile = (normalized.Contains("bright,", StringComparison.Ordinal)
+                || normalized.Contains("bright ", StringComparison.Ordinal))
+            && (normalized.Contains("smile", StringComparison.Ordinal)
+                || normalized.Contains("laugh", StringComparison.Ordinal)
+                || normalized.Contains("grin", StringComparison.Ordinal)
+                || normalized.Contains("happy", StringComparison.Ordinal));
+        if (normalized.Contains("cheerful", StringComparison.Ordinal)
+            || normalized.Contains("excited", StringComparison.Ordinal)
+            || visiblyBrightSmile
+            || normalized.Contains("开朗", StringComparison.Ordinal)
+            || normalized.Contains("兴奋", StringComparison.Ordinal)
+            || normalized.Contains("明快", StringComparison.Ordinal))
+        {
+            return 80;
+        }
+
+        return 0;
+    }
+
+    private static bool HasMixedOrContextSpecificJoySemantics(string description)
+    {
+        string[] fragments =
+        {
+            "flustered", "embarrassed", "shy", "bashful", "anxious", "worried", "tearful",
+            "crying", "distressed", "pained", "fear", "sad", "downcast", "somber", "subdued",
+            "uneasy", "dejected", "ashamed", "lonely", "angry", "irritated", "displeased",
+            "surprised", "startled", "shocked", "alarmed", "uncertain", "costume", "cosplay", "uniform",
+            "shirtless", "mud-smeared", "holding", "telephone", "radio", "without glasses",
+            "background", "害羞", "尴尬", "慌乱", "焦虑", "担心", "含泪", "哭", "痛苦",
+            "害怕", "难过", "低落", "忧伤", "悲伤", "不安", "沮丧", "羞愧", "孤独",
+            "生气", "愤怒", "恼怒", "不悦", "惊讶", "吃惊", "震惊", "惊慌", "不确定",
+            "装扮", "制服", "赤裸", "泥污", "抱着", "电话", "耳机", "摘下眼镜", "背景"
+        };
+        return fragments.Any(fragment =>
+            description.Contains(fragment, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool HasNegatedJoyPrefix(string prefix)
+    {
+        string trimmed = prefix.TrimEnd();
+        return Regex.IsMatch(trimmed, @"\b(?:not|never|hardly)\s*$", RegexOptions.IgnoreCase)
+            || trimmed.EndsWith("不", StringComparison.Ordinal)
+            || trimmed.EndsWith("没", StringComparison.Ordinal)
+            || trimmed.EndsWith("没有", StringComparison.Ordinal)
+            || trimmed.EndsWith("别", StringComparison.Ordinal)
+            || trimmed.EndsWith("不要", StringComparison.Ordinal);
+    }
+
+    private static bool StartsWithQuestionSuffix(string suffix)
+    {
+        return suffix.StartsWith("?", StringComparison.Ordinal)
+            || suffix.StartsWith("？", StringComparison.Ordinal)
+            || suffix.StartsWith("吗", StringComparison.Ordinal)
+            || suffix.StartsWith("么", StringComparison.Ordinal);
     }
 
     private static bool TryGetAvailablePortrait(

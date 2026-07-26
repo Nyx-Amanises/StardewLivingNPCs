@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -38,13 +37,10 @@ internal static class AiResponseLogExporter
                 ? "unknown-save"
                 : Constants.SaveFolderName;
             string directory = Path.Combine(DialogueServices.Helper.DirectoryPath, RootFolderName, saveFolder);
-            Directory.CreateDirectory(directory);
-
             string filePath = Path.Combine(directory, $"{GetSafeFileName(npcName)}.md");
-            File.AppendAllText(
+            DiagnosticMarkdownLogWriter.Append(
                 filePath,
-                BuildEntry(npcName, context, response, analysis, parsedLines, attempt, promptCharacters, outcome, actionDecision),
-                Encoding.UTF8);
+                recordedAt => BuildEntry(npcName, context, response, analysis, parsedLines, attempt, promptCharacters, outcome, actionDecision, recordedAt));
         }
         catch (Exception ex)
         {
@@ -66,12 +62,14 @@ internal static class AiResponseLogExporter
         int attempt,
         int promptCharacters,
         string outcome,
-        LivingNpcActionDecisionDiagnostics actionDecision)
+        LivingNpcActionDecisionDiagnostics actionDecision,
+        DateTimeOffset recordedAt)
     {
         var builder = new StringBuilder();
         var time = Game1.Date;
         builder.AppendLine($"## {npcName} - Year {time.Year}, {FormatSeason(time.Season)} {time.DayOfMonth} {Game1.timeOfDay:0000} - attempt {attempt}");
         builder.AppendLine();
+        builder.AppendLine($"- Wall-clock time: `{DiagnosticMarkdownLogWriter.FormatWallClockTimestamp(recordedAt)}`");
         builder.AppendLine($"- Provider/model: `{DialogueServices.Config.Provider}/{DialogueServices.Config.ModelName}`");
         builder.AppendLine($"- Outcome: `{outcome}`");
         builder.AppendLine($"- Success: `{response?.IsSuccess == true}`");
@@ -197,13 +195,6 @@ internal static class AiResponseLogExporter
 
     private static string GetSafeFileName(string value)
     {
-        var invalid = Path.GetInvalidFileNameChars();
-        var builder = new StringBuilder(value.Length);
-        foreach (char ch in value)
-        {
-            builder.Append(invalid.Contains(ch) ? '_' : ch);
-        }
-
-        return builder.Length == 0 ? "unknown-npc" : builder.ToString();
+        return DiagnosticMarkdownLogWriter.GetSafeFileName(value);
     }
 }

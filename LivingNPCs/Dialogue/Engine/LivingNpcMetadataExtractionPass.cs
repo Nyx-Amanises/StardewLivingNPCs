@@ -20,6 +20,42 @@ namespace LivingNPCs.Dialogue.Engine;
 internal static class LivingNpcMetadataExtractionPass
 {
     private const int MaxCompactContextCharacters = 7000;
+    private static readonly string[] FlusteredSignals =
+    {
+        "flustered", "embarrassed", "bashful", "shy", "blushing",
+        "害羞", "尴尬", "慌张", "脸红", "不好意思", "嘴硬"
+    };
+    private static readonly string[] ExplicitPlayerHarmSignals =
+    {
+        "idiot", "stupid", "moron", "worthless", "shut up", "hate you", "damn you",
+        "fuck", "bitch", "kill you", "hurt you", "coward", "pathetic",
+        "useless", "incompetent", "蠢货", "笨蛋", "废物", "闭嘴", "懦夫", "胆小鬼",
+        "没用", "窝囊", "废柴",
+        "讨厌你", "滚开", "混蛋", "杀了你", "打你", "威胁", "羞辱", "嘲笑",
+        "取笑", "让你难堪", "泄密", "泄露", "食言", "爽约", "违约", "故意气你",
+        "就是想惹你", "恶意挑衅", "humiliat", "ridicul", "mock you", "embarrass you",
+        "leaked", "broke my promise", "break my promise", "didn't keep my promise",
+        "malicious provocation", "wanted to upset you", "trying to provoke you"
+    };
+    private static readonly string[] ExplicitBoundaryRequestSignals =
+    {
+        "给我点空间", "离我远", "远一点", "别再问", "不要再问", "别打听", "不要打听",
+        "别来烦", "不要烦我", "不想回答", "不想谈", "到此为止", "请离开", "走开",
+        "leave me alone", "give me space", "stay away", "don't ask again", "do not ask again",
+        "stop asking", "don't pry", "do not pry", "drop it", "go away", "please leave",
+        "I don't want to discuss", "I do not want to discuss", "none of your business"
+    };
+    private static readonly string[] RepeatedPressureSignals =
+    {
+        "repeated pressure", "kept asking", "asked repeatedly", "continued asking", "would not stop asking",
+        "反复追问", "一再追问", "多次追问", "继续追问", "持续追问", "不肯停止追问"
+    };
+    private static readonly string[] DurableMemorySemanticSignals =
+    {
+        "promise", "promised", "commitment", "prefer", "favorite", "favourite", "likes ", "dislikes ",
+        "boundary", "goal", "plans to", "承诺", "答应", "约定", "保证", "喜欢", "偏好", "讨厌",
+        "不喜欢", "底线", "边界", "目标", "计划"
+    };
     private static readonly string[] RequiredTopLevelFields =
     {
         "rapportDelta", "endConversation", "ambientFollowUp", "emotionImpact",
@@ -101,15 +137,16 @@ internal static class LivingNpcMetadataExtractionPass
                 response.Text);
         }
 
-        return ParseAuthoritativeResponse(response.Text, playerText, visibleNpcReply, prompt);
+        return ParseAuthoritativeResponse(response.Text, playerText, visibleNpcReply, context, prompt);
     }
 
     internal static LivingNpcMetadataExtractionResult ParseAuthoritativeResponseForTesting(
         string responseText,
         string playerText,
-        string visibleNpcReply)
+        string visibleNpcReply,
+        DialogueContext? context = null)
     {
-        return ParseAuthoritativeResponse(responseText, playerText, visibleNpcReply, string.Empty);
+        return ParseAuthoritativeResponse(responseText, playerText, visibleNpcReply, context ?? new DialogueContext(), string.Empty);
     }
 
     internal static string BuildPromptForTesting(
@@ -126,6 +163,7 @@ internal static class LivingNpcMetadataExtractionPass
         string responseText,
         string playerText,
         string visibleNpcReply,
+        DialogueContext context,
         string prompt)
     {
         string json = ExtractFirstJsonObject(responseText);
@@ -165,6 +203,7 @@ internal static class LivingNpcMetadataExtractionPass
             json,
             RsvPromptSanitizer.SafeInline(playerText),
             RsvPromptSanitizer.SafeInline(visibleNpcReply));
+        ApplyConservativeInterpersonalEvidenceRules(analysis, context, playerText, visibleNpcReply);
 
         return LivingNpcMetadataExtractionResult.Succeeded(analysis, prompt, responseText);
     }
@@ -214,11 +253,383 @@ internal static class LivingNpcMetadataExtractionPass
         prompt.AppendLine("- rapportDelta measures new relationship value in this turn: routine pleasant small talk 0-2; genuine new understanding 3-7; clear warmth 8-15; major earned relationship moments 16-24; 25-30 only exceptionally.");
         prompt.AppendLine("- Set endConversation from the NPC's visible reply alone. If the NPC clearly closes the exchange, use true even if the dialogue writer mistakenly supplied farmer options; the game will discard those options.");
         prompt.AppendLine("- Create memories, conflicts, help updates, emotion changes, and behavior influences only from this turn's player input and NPC reply. Context may constrain or de-duplicate them, but never creates a new event by itself.");
+        prompt.AppendLine("- Flustered, embarrassed, shy, playful-defensive, or mildly teased is uneasy, not angry. Do not create offended/give_space/conflict/boundary memory from it unless the NPC clearly asks the player to stop or leave, prior pressure is visible, or clear harmful conduct occurred.");
+        prompt.AppendLine("- One ordinary polite question about family, a partner, or personal life is not by itself a boundary violation. Preserve an explicit refusal or request to stop. Durable harm also includes an explicit insult, threat, humiliation, disclosure of private information, malicious provocation, broken promise, or repeated pressure.");
+        prompt.AppendLine("- A location name does not prove visibility, adjacency, distance, or a route. Never create spatial facts or consequences from an inferred map relationship.");
+        prompt.AppendLine("- Do not store first meeting or first conversation itself, first-day calendar facts, routine chores, or repeated thanks as durable memories; the transcript and runtime context already preserve them. Still store a concrete fact, promise, preference, boundary, or goal disclosed during that first conversation.");
         prompt.AppendLine("- At most one action, two memories, two behavior influences, one conflict, one help request, and two help updates.");
         prompt.AppendLine("- companion_outing requires an invitation to leave and visible accepted_now consent to a supported destination. Staying together at the current spot is not travel.");
         prompt.AppendLine("- giftDecision is immediate only when the NPC visibly offers an item now; mail, later, and promises create no gift action.");
         prompt.AppendLine("- Output no markdown, explanation, or dialogue.");
         return prompt.ToString();
+    }
+
+    internal static void ApplyConservativeInterpersonalEvidenceRules(
+        ConversationAnalysis analysis,
+        DialogueContext context,
+        string playerText,
+        string visibleNpcReply)
+    {
+        if (analysis == null)
+        {
+            return;
+        }
+
+        // The transcript and calendar already preserve introductory facts. Kind and stable semantic
+        // guards prevent a promise or preference made during that introduction from being discarded.
+        analysis.Memories.RemoveAll(IsRedundantIntroductoryMemory);
+
+        if (context?.Accept != null
+            || HasDurableNegativeEvidence(analysis, context, playerText, visibleNpcReply))
+        {
+            return;
+        }
+
+        ConversationEmotionImpact emotionImpact = analysis.EmotionImpact ??= new ConversationEmotionImpact();
+        string emotionalEvidence = $"{emotionImpact.Reason} {visibleNpcReply}";
+        bool flusteredMisclassification = IsAngryOrUpset(emotionImpact.Emotion)
+            && ContainsAny(emotionalEvidence, FlusteredSignals);
+        bool ordinaryFamilyQuestion = LooksLikeOrdinaryFamilyQuestion(playerText);
+        if (!flusteredMisclassification && !ordinaryFamilyQuestion)
+        {
+            return;
+        }
+
+        if (IsAngryOrUpset(emotionImpact.Emotion))
+        {
+            emotionImpact.Emotion = "Uneasy";
+            emotionImpact.IntensityDelta = Math.Clamp(emotionImpact.IntensityDelta, 1, 10);
+        }
+
+        analysis.Conflicts.Clear();
+        analysis.Memories.RemoveAll(memory =>
+            string.Equals(memory.Kind, "boundary", StringComparison.OrdinalIgnoreCase));
+        analysis.BehaviorInfluences.RemoveAll(influence =>
+            string.Equals(influence.Type, "offended", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(influence.Type, "give_space", StringComparison.OrdinalIgnoreCase));
+    }
+
+    internal static bool ShouldNeutralizeCanonicalAngryPortrait(
+        ConversationAnalysis analysis,
+        DialogueContext context,
+        string playerText,
+        string visibleNpcReply)
+    {
+        return ShouldNeutralizeCanonicalAngryPortraitPage(
+            analysis,
+            context,
+            playerText,
+            visibleNpcReply,
+            visibleNpcReply,
+            isMultiPage: false);
+    }
+
+    internal static bool ShouldNeutralizeCanonicalAngryPortraitPage(
+        ConversationAnalysis analysis,
+        DialogueContext context,
+        string playerText,
+        string visibleNpcReply,
+        string pageText,
+        bool isMultiPage)
+    {
+        if (analysis?.EmotionImpact == null
+            || context?.Accept != null
+            || HasExplicitPlayerHarm(playerText)
+            || HasStrongHarmSemantics(playerText)
+            || HasExplicitPlayerHarm(pageText)
+            || HasExplicitBoundaryRequest(pageText)
+            || HasStrongHarmSemantics(pageText))
+        {
+            return false;
+        }
+
+        bool hasFlusteredEvidence = ContainsAny(pageText, FlusteredSignals)
+            || (ContainsAny(analysis.EmotionImpact.Reason, FlusteredSignals)
+                && (!isMultiPage || LooksLikeFlusteredDefensiveness(pageText)));
+        if (!hasFlusteredEvidence)
+        {
+            return false;
+        }
+
+        // In a multi-page reply, metadata can describe both an initially flustered reaction and a
+        // later genuine boundary. Judge those pages independently so the boundary does not turn the
+        // earlier blush into anger, while page-level stop/harm language above retains the angry face.
+        return isMultiPage
+            || (!HasDurableNegativeEvidence(analysis, context, playerText, visibleNpcReply)
+                && !IsAngryOrUpset(analysis.EmotionImpact.Emotion));
+    }
+
+    private static bool LooksLikeOrdinaryFamilyQuestion(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text)
+            || text.Length > 160
+            || HasExplicitPlayerHarm(text)
+            || HasStrongHarmSemantics(text)
+            || ContainsAny(text,
+                "always such", "such a coward", "such an idiot", "what a loser",
+                "怎么这么", "怎么那么", "真是个", "就是个"))
+        {
+            return false;
+        }
+
+        bool hasFamilySubject = GetFamilyQuestionSubject(text).Length > 0;
+        bool hasOrdinaryQuestionForm = ContainsAny(
+            text,
+            "是你的", "是你", "在哪", "在哪里", "是谁", "有爱人吗", "有伴侣吗", "结婚了吗",
+            "还好吗", "最近好吗", "where is your", "where's your", "do you have",
+            "who is your", "how is your", "how's your")
+            || LooksLikeFactualIsYourQuestion(text);
+        return hasFamilySubject && hasOrdinaryQuestionForm;
+    }
+
+    private static bool LooksLikeFactualIsYourQuestion(string text)
+    {
+        string normalized = text.Trim();
+        if (!normalized.StartsWith("is ", StringComparison.OrdinalIgnoreCase)
+            || !normalized.Contains(" your ", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        int yourIndex = normalized.IndexOf(" your ", StringComparison.OrdinalIgnoreCase);
+        return yourIndex > 3
+            || ContainsAny(normalized,
+                " home", " here", " nearby", " at work", " in town", " okay", " well", " coming");
+    }
+
+    private static bool HasExplicitPlayerHarm(string text)
+    {
+        return ContainsAny(text, ExplicitPlayerHarmSignals);
+    }
+
+    private static bool HasDurableNegativeEvidence(
+        ConversationAnalysis analysis,
+        DialogueContext? context,
+        string playerText,
+        string visibleNpcReply)
+    {
+        if (HasExplicitPlayerHarm(playerText)
+            || HasExplicitBoundaryRequest(visibleNpcReply)
+            || ContainsAny(context?.LivingNpcExtraPrompt,
+                "Unresolved conflict:", "Active conflict:", "未解决冲突", "尚未解决的冲突")
+            || HasRepeatedPressureEvidence(context, playerText))
+        {
+            return true;
+        }
+
+        string metadataEvidence = string.Join(" ",
+            analysis.Conflicts.Select(conflict => $"{conflict.CauseKind} {conflict.Summary}")
+                .Concat(analysis.Memories.Select(memory => $"{memory.Kind} {memory.Subject} {memory.Summary}"))
+                .Concat(analysis.BehaviorInfluences.Select(influence => influence.Summary))
+                .Append(analysis.EmotionImpact?.Reason ?? string.Empty));
+
+        return analysis.Conflicts.Any(conflict =>
+                string.Equals(conflict.CauseKind, "promise", StringComparison.OrdinalIgnoreCase))
+            || HasStrongHarmSemantics($"{playerText} {visibleNpcReply} {metadataEvidence}");
+    }
+
+    private static bool HasRepeatedPressureEvidence(DialogueContext? context, string playerText)
+    {
+        if (ContainsAny(context?.LivingNpcExtraPrompt, RepeatedPressureSignals))
+        {
+            return true;
+        }
+
+        if (context?.ChatHistory == null || context.ChatHistory.Count == 0)
+        {
+            return false;
+        }
+
+        List<ConversationElement> priorTurns = context.ChatHistory.ToList();
+        int lastPlayerIndex = priorTurns.FindLastIndex(turn => turn.IsPlayerLine);
+        if (lastPlayerIndex == priorTurns.Count - 1
+            && EquivalentDialogueText(priorTurns[lastPlayerIndex].Text, playerText))
+        {
+            priorTurns.RemoveAt(lastPlayerIndex);
+        }
+
+        bool currentIsQuestion = LooksLikeQuestion(playerText);
+        if (currentIsQuestion && priorTurns.Any(turn =>
+                !turn.IsPlayerLine && HasExplicitBoundaryRequest(turn.Text)))
+        {
+            return true;
+        }
+
+        IEnumerable<string> priorPlayerLines = priorTurns
+            .Where(turn => turn.IsPlayerLine)
+            .Select(turn => turn.Text);
+        string familySubject = GetFamilyQuestionSubject(playerText);
+        if (LooksLikeOrdinaryFamilyQuestion(playerText)
+            && priorPlayerLines.Any(line =>
+                LooksLikeOrdinaryFamilyQuestion(line)
+                && string.Equals(GetFamilyQuestionSubject(line), familySubject, StringComparison.Ordinal)))
+        {
+            return true;
+        }
+
+        return currentIsQuestion
+            && priorPlayerLines.Any(line => LooksLikeQuestion(line) && EquivalentDialogueText(line, playerText));
+    }
+
+    private static bool HasStrongHarmSemantics(string text)
+    {
+        bool disclosureAction = ContainsAny(text,
+            "leaked", "revealed", "posted", "published", "shared", "showed everyone",
+            "sent everyone", "sent to", "spread", "exposed", "told everyone", "told others",
+            "泄露", "公开", "发布", "晒出", "传播", "曝光", "发给", "告诉所有人",
+            "告诉别人", "到处说");
+        bool privateMaterial = ContainsAny(text,
+            "secret", "private", "confidence", "photo", "picture", "image", "diary", "message",
+            "letter", "秘密", "隐私", "私事", "私密", "照片", "私照", "日记", "聊天记录", "信件");
+        bool broadAudience = ContainsAny(text,
+            "everyone", "whole town", "public", "online", "others", "in front of",
+            "所有人", "全镇", "大家", "公开", "网上", "别人", "当众", "面前");
+        bool privateDisclosure = disclosureAction
+            && privateMaterial
+            && (broadAudience || ContainsAny(text, "secret", "private", "confidence", "秘密", "隐私", "私密", "私照"));
+        bool brokenPromise = ContainsAny(text,
+            "broken promise", "broke a promise", "broke my promise", "didn't keep", "failed to keep",
+            "食言", "爽约", "违约", "没遵守承诺", "没有遵守承诺", "没兑现承诺", "没有兑现承诺");
+        bool humiliation = ContainsAny(text,
+                "humiliat", "ridicul", "mocked", "made a fool of", "laughed at",
+                "羞辱", "嘲笑", "取笑", "难堪", "丢脸")
+            || (ContainsAny(text, "embarrass", "尴尬") && broadAudience);
+        bool maliciousProvocation = ContainsAny(text,
+            "malicious provocation", "deliberately provoked", "wanted to upset", "trying to provoke",
+            "恶意挑衅", "故意挑衅", "故意气", "就是想惹");
+        return privateDisclosure || brokenPromise || humiliation || maliciousProvocation;
+    }
+
+    private static bool HasExplicitBoundaryRequest(string text)
+    {
+        return ContainsAny(text, ExplicitBoundaryRequestSignals);
+    }
+
+    private static bool IsRedundantIntroductoryMemory(ConversationMemoryCandidate memory)
+    {
+        if (memory == null
+            || (!string.Equals(memory.Kind, "fact", StringComparison.OrdinalIgnoreCase)
+                && !string.Equals(memory.Kind, "relationship", StringComparison.OrdinalIgnoreCase)))
+        {
+            return false;
+        }
+
+        string semantics = $"{memory.Subject} {memory.Summary}";
+        if (ContainsAny(semantics, DurableMemorySemanticSignals))
+        {
+            return false;
+        }
+
+        // Only remove the generic bookkeeping fact that the introduction happened. A temporal
+        // qualifier such as "in their first conversation" must not erase the concrete fact that
+        // follows it (family history, identity, home, work, and so on).
+        return ContainsAny(
+            semantics,
+            "remembers this as her first conversation", "remembers this as his first conversation",
+            "remembers this as their first conversation", "this was their first conversation",
+            "this is their first conversation", "first meeting with the new farmer",
+            "first met the new farmer", "met the new farmer for the first time",
+            "记得这是她和新农夫的第一次交谈", "记得这是他和新农夫的第一次交谈",
+            "这是他们第一次交谈", "这是第一次见到新农夫", "初次见到新农夫");
+    }
+
+    private static bool LooksLikeFlusteredDefensiveness(string text)
+    {
+        if (ContainsAny(text,
+            "who said", "who says", "as if", "it's not like", "not that I",
+            "才没有", "谁说", "谁为", "谁在乎", "别乱说", "不要乱说", "胡说",
+            "傲娇", "莫名其妙", "怎么这样"))
+        {
+            return true;
+        }
+
+        for (int i = 0; i + 2 < text.Length; i++)
+        {
+            if (text[i] == text[i + 2] && (text[i + 1] == '、' || text[i + 1] == '-'))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool LooksLikeQuestion(string text)
+    {
+        return !string.IsNullOrWhiteSpace(text)
+            && (ContainsAny(text, "?", "？", "吗", "呢", "why", "what", "where", "who", "how", "when")
+                || text.TrimStart().StartsWith("is ", StringComparison.OrdinalIgnoreCase)
+                || text.TrimStart().StartsWith("do ", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static string GetFamilyQuestionSubject(string text)
+    {
+        if (ContainsAny(text, "女儿", "儿子")
+            || ContainsEnglishWord(text, "daughter")
+            || ContainsEnglishWord(text, "son"))
+        {
+            return "child";
+        }
+
+        return ContainsAny(text, "爱人", "丈夫", "妻子", "配偶", "伴侣")
+            || ContainsEnglishWord(text, "spouse")
+            || ContainsEnglishWord(text, "husband")
+            || ContainsEnglishWord(text, "wife")
+            || ContainsEnglishWord(text, "partner")
+            ? "partner"
+            : string.Empty;
+    }
+
+    private static bool ContainsEnglishWord(string text, string word)
+    {
+        int startIndex = 0;
+        while (startIndex < text.Length)
+        {
+            int index = text.IndexOf(word, startIndex, StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            int end = index + word.Length;
+            bool leftBoundary = index == 0 || !char.IsLetterOrDigit(text[index - 1]);
+            bool rightBoundary = end == text.Length || !char.IsLetterOrDigit(text[end]);
+            if (leftBoundary && rightBoundary)
+            {
+                return true;
+            }
+
+            startIndex = index + 1;
+        }
+
+        return false;
+    }
+
+    private static bool EquivalentDialogueText(string left, string right)
+    {
+        static string Normalize(string value)
+        {
+            return new string((value ?? string.Empty)
+                .Where(ch => !char.IsWhiteSpace(ch) && !char.IsPunctuation(ch))
+                .Select(char.ToLowerInvariant)
+                .ToArray());
+        }
+
+        string normalizedLeft = Normalize(left);
+        return normalizedLeft.Length > 0
+            && string.Equals(normalizedLeft, Normalize(right), StringComparison.Ordinal);
+    }
+
+    private static bool IsAngryOrUpset(string? emotion)
+    {
+        return string.Equals(emotion, "Angry", StringComparison.OrdinalIgnoreCase)
+            || string.Equals(emotion, "Upset", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ContainsAny(string? text, params string[] fragments)
+    {
+        return !string.IsNullOrWhiteSpace(text)
+            && fragments.Any(fragment => text.Contains(fragment, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string ExtractFirstJsonObject(string text)

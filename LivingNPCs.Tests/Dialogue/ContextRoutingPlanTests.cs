@@ -452,6 +452,68 @@ public sealed class ContextRoutingPlanTests
         Assert.False(refresh);
     }
 
+    [Theory]
+    [InlineData("潘妮真的是你的女儿吗？")]
+    [InlineData("你的爱人现在在哪里？")]
+    [InlineData("How is your mother?")]
+    [InlineData("Tell me about your father.")]
+    [InlineData("Do you still live with a parent?")]
+    [InlineData("Tell me about your daughter.")]
+    [InlineData("How is your son?")]
+    [InlineData("Do you have a spouse?")]
+    [InlineData("What does your husband do?")]
+    [InlineData("How is your wife?")]
+    [InlineData("Do you have a partner?")]
+    [InlineData("Is your boyfriend from Pelican Town?")]
+    [InlineData("How is your girlfriend?")]
+    [InlineData("Tell me about your brother.")]
+    [InlineData("How is your sister?")]
+    [InlineData("Are your parents nearby?")]
+    [InlineData("Do your sisters visit often?")]
+    public void CachedRoutingRefreshesForFamilyRelationshipTopics(string playerText)
+    {
+        var context = BuildConversationContext(playerText);
+        var cached = ContextRoutingPlan.ConservativeBrief();
+
+        bool refresh = ContextRoutingDecisionPass.ShouldRefreshCachedPlanForTopicShift(context, cached, out string reason);
+
+        Assert.True(refresh);
+        Assert.Contains(nameof(ContextModule.NpcProfile), reason);
+        Assert.DoesNotContain(nameof(ContextModule.Relationship), reason);
+    }
+
+    [Fact]
+    public void CachedFamilyTopicDoesNotRerouteWhenRoutableProfileIsAlreadyFull()
+    {
+        var context = BuildConversationContext("你的爱人现在在哪里？");
+        var cached = ContextRoutingPlan.ConservativeBrief();
+        cached.Set(ContextModule.NpcProfile, ContextDetail.Full);
+
+        bool refresh = ContextRoutingDecisionPass.ShouldRefreshCachedPlanForTopicShift(context, cached, out string reason);
+
+        Assert.False(refresh);
+        Assert.Equal(string.Empty, reason);
+        Assert.Equal(ContextDetail.Brief, cached.Get(ContextModule.Relationship));
+    }
+
+    [Theory]
+    [InlineData("Apparently, tomorrow will be sunny.")]
+    [InlineData("This is only a parenthetical remark.")]
+    [InlineData("Our farming partnership is going well.")]
+    [InlineData("We are partnering on a community project.")]
+    public void CachedRoutingDoesNotTreatEmbeddedEnglishRelationshipTermsAsProfileTopics(string playerText)
+    {
+        var context = BuildConversationContext(playerText);
+        var cached = ContextRoutingPlan.ConservativeBrief();
+        cached.Set(ContextModule.Farm, ContextDetail.Full);
+        cached.Set(ContextModule.GameState, ContextDetail.Full);
+
+        bool refresh = ContextRoutingDecisionPass.ShouldRefreshCachedPlanForTopicShift(context, cached, out string reason);
+
+        Assert.False(refresh);
+        Assert.Equal(string.Empty, reason);
+    }
+
     [Fact]
     public void TopicShiftGuardCoversOnlyChineseAndEnglish()
     {

@@ -495,6 +495,122 @@ public class ResponseParserTests
             + "[(O)395]",
             safe);
     }
+
+    [Fact]
+    public void FlusteredFallbackNeutralizesOnlyCanonicalAngryPortrait()
+    {
+        string corrected = ResponseParser.DowngradeCanonicalAngryPortraitToNeutral(
+            "Flustered$a#$b#Custom$7#$e#Happy$h#$q 20001 SLD_Default#Respond");
+
+        Assert.Equal(
+            "Flustered$0#$b#Custom$7#$e#Happy$h#$q 20001 SLD_Default#Respond",
+            corrected);
+    }
+
+    [Fact]
+    public void FlusteredFallbackCanNeutralizeOnlyMatchingDialoguePages()
+    {
+        string corrected = ResponseParser.DowngradeCanonicalAngryPortraitToNeutral(
+            "I'm honestly shy about that.$a#$b#Stop insulting my sister.$a#$e#Calm again$h",
+            page => page.Contains("shy", StringComparison.OrdinalIgnoreCase));
+
+        Assert.Equal(
+            "I'm honestly shy about that.$0#$b#Stop insulting my sister.$a#$e#Calm again$h",
+            corrected);
+    }
+
+    [Fact]
+    public void StrongJoyPromotionUsesFinalSemanticsAndEvaluatesEveryPageIndependently()
+    {
+        var descriptions = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["h"] = "a gentle, grateful smile",
+            ["7"] = "a clearly happy expression",
+            ["11"] = "a joyful, eyes-closed laugh",
+            ["12"] = "a joyful laugh in a movie-theater uniform"
+        };
+
+        string corrected = ResponseParser.PromoteWeakPositivePortraitsForExplicitJoy(
+            "I'm really happy you came!$h#$b#It's good to see you.$h"
+            + "#$e#我真的很开心！$h#$b#You look really happy.$h",
+            descriptions);
+
+        Assert.Equal(
+            "I'm really happy you came!$11#$b#It's good to see you.$h"
+            + "#$e#我真的很开心！$11#$b#You look really happy.$h",
+            corrected);
+    }
+
+    [Fact]
+    public void StrongJoyPromotionFailsClosedWhenEitherPortraitSemanticIsNotClear()
+    {
+        var noUnambiguousStrongFrame = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["h"] = "a soft smile",
+            ["7"] = "a surprised, excited, open-mouthed reaction"
+        };
+        Assert.Equal(
+            "I'm so happy!$h",
+            ResponseParser.PromoteWeakPositivePortraitsForExplicitJoy(
+                "I'm so happy!$h",
+                noUnambiguousStrongFrame));
+
+        var reviewedFrames = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["0"] = "a neutral or baseline expression",
+            ["h"] = "a clearly happy expression",
+            ["7"] = "a joyful, eyes-closed laugh",
+            ["11"] = "a soft smile in a movie-theater uniform"
+        };
+        Assert.Equal(
+            "I'm very happy!$h#$b#I'm thrilled!$0#$b#I'm so happy!$11#$b#A pleasant morning.$7",
+            ResponseParser.PromoteWeakPositivePortraitsForExplicitJoy(
+                "I'm very happy!$h#$b#I'm thrilled!$0#$b#I'm so happy!$11#$b#A pleasant morning.$7",
+                reviewedFrames));
+    }
+
+    [Theory]
+    [InlineData("I'm so happy you remembered!", true)]
+    [InlineData("This is really exciting!", true)]
+    [InlineData("我真的很开心！", true)]
+    [InlineData("我兴奋得都睡不着了！", true)]
+    [InlineData("You look really happy.", false)]
+    [InlineData("Are you very happy?", false)]
+    [InlineData("I'm not really happy.", false)]
+    [InlineData("她非常高兴吗？", false)]
+    [InlineData("我并不兴奋。", false)]
+    [InlineData("It's a pleasant morning.", false)]
+    public void StrongJoyEvidenceRequiresExplicitNonNegatedSpeakerEmotion(string text, bool expected)
+    {
+        Assert.Equal(expected, ResponseParser.HasExplicitStrongJoyEvidence(text));
+    }
+
+    [Theory]
+    [InlineData("a gentle, grateful smile", true, false)]
+    [InlineData("闭眼温柔满足地微笑", true, false)]
+    [InlineData("a clearly happy expression", false, true)]
+    [InlineData("a joyful, eyes-closed laugh", false, true)]
+    [InlineData("闭眼开心大笑", false, true)]
+    [InlineData("a surprised, excited, open-mouthed reaction", false, false)]
+    [InlineData("a neutral or baseline expression", false, false)]
+    public void JoyPortraitSemanticChecksStayConservative(
+        string description,
+        bool expectedWeak,
+        bool expectedStrong)
+    {
+        Assert.Equal(expectedWeak, ResponseParser.IsWeakPositivePortraitDescription(description));
+        Assert.Equal(expectedStrong, ResponseParser.IsStrongJoyPortraitDescription(description));
+    }
+
+    [Theory]
+    [InlineData("an angry look with a red anger symbol", true)]
+    [InlineData("明确的生气、恼怒或正面冲突神情", true)]
+    [InlineData("a shy, blushing smile", false)]
+    [InlineData("害羞而脸红的微笑", false)]
+    public void AngryPortraitDescriptionCheckRespectsFinalSheetSemantics(string description, bool expected)
+    {
+        Assert.Equal(expected, DialogueEngine.IsAngryPortraitDescription(description));
+    }
 }
 
 public class StreamingDialoguePreviewTests

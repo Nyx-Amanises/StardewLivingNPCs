@@ -135,6 +135,27 @@ internal static class ContextRoutingDecisionPass
     [
         "你妈妈",
         "你的妈妈",
+        "妈妈",
+        "母亲",
+        "父亲",
+        "爸爸",
+        "女儿",
+        "儿子",
+        "爱人",
+        "丈夫",
+        "妻子",
+        "配偶",
+        "伴侣",
+        "男朋友",
+        "女朋友",
+        "家人",
+        "亲人",
+        "兄弟",
+        "姐妹",
+        "哥哥",
+        "弟弟",
+        "姐姐",
+        "妹妹",
         "家里",
         "童年",
         "梦想",
@@ -143,13 +164,47 @@ internal static class ContextRoutingDecisionPass
         "潘姆",
         "文森特",
         "贾斯",
-        "your mother",
-        "your family",
         "childhood",
         "dream",
         "pam",
         "vincent",
         "jas"
+    ];
+
+    // English relationship terms must be matched as complete words or phrases. Plain substring
+    // matching makes "parent" match "apparently" and "partner" match "partnership" or
+    // "partnering", which needlessly invalidates the cached routing plan.
+    private static readonly string[] NpcProfileEnglishTopicTerms =
+    [
+        "mother",
+        "mothers",
+        "father",
+        "fathers",
+        "parent",
+        "parents",
+        "daughter",
+        "daughters",
+        "son",
+        "sons",
+        "spouse",
+        "spouses",
+        "husband",
+        "husbands",
+        "wife",
+        "wives",
+        "partner",
+        "partners",
+        "boyfriend",
+        "boyfriends",
+        "girlfriend",
+        "girlfriends",
+        "brother",
+        "brothers",
+        "sister",
+        "sisters",
+        "your family",
+        "my family",
+        "their family"
     ];
 
     private static readonly string[] LocationTopicFragments =
@@ -191,6 +246,7 @@ internal static class ContextRoutingDecisionPass
         ["livingNpc"] = ContextModule.LivingNpc,
         ["gift"] = ContextModule.Gift
     };
+    private static readonly HashSet<ContextModule> RoutableModules = ModuleKeys.Values.ToHashSet();
 
     private static readonly ContextModule[] ActionGroupModules =
     [
@@ -490,7 +546,8 @@ internal static class ContextRoutingDecisionPass
             requiredModules.Add(ContextModule.Relationship);
         }
 
-        if (ContainsAny(latestPlayerText, NpcProfileTopicFragments))
+        if (ContainsAny(latestPlayerText, NpcProfileTopicFragments)
+            || ContainsAnyWholeWordOrPhrase(latestPlayerText, NpcProfileEnglishTopicTerms))
         {
             requiredModules.Add(ContextModule.NpcProfile);
             requiredModules.Add(ContextModule.Relationship);
@@ -503,7 +560,12 @@ internal static class ContextRoutingDecisionPass
         }
 
         var missingFullModules = requiredModules
-            .Where(module => cachedRawPlan.Get(module) != ContextDetail.Full)
+            // Brief deterministic modules (relationship, farm, recent events, etc.) are not
+            // router output keys and therefore can never become Full in the raw cached plan.
+            // They still accompany every generation; only a missing routable Full module should
+            // invalidate the cache.
+            .Where(module => RoutableModules.Contains(module)
+                && cachedRawPlan.Get(module) != ContextDetail.Full)
             .OrderBy(module => module.ToString())
             .ToArray();
         if (missingFullModules.Length == 0)
@@ -811,5 +873,48 @@ internal static class ContextRoutingDecisionPass
         }
 
         return fragments.Any(fragment => text.Contains(fragment, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool ContainsAnyWholeWordOrPhrase(string text, params string[] terms)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        foreach (string term in terms)
+        {
+            if (string.IsNullOrWhiteSpace(term))
+            {
+                continue;
+            }
+
+            int searchIndex = 0;
+            while (searchIndex <= text.Length - term.Length)
+            {
+                int matchIndex = text.IndexOf(term, searchIndex, StringComparison.OrdinalIgnoreCase);
+                if (matchIndex < 0)
+                {
+                    break;
+                }
+
+                int matchEnd = matchIndex + term.Length;
+                bool startsAtBoundary = matchIndex == 0 || !IsWordCharacter(text[matchIndex - 1]);
+                bool endsAtBoundary = matchEnd == text.Length || !IsWordCharacter(text[matchEnd]);
+                if (startsAtBoundary && endsAtBoundary)
+                {
+                    return true;
+                }
+
+                searchIndex = matchIndex + 1;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsWordCharacter(char value)
+    {
+        return char.IsLetterOrDigit(value) || value == '_';
     }
 }

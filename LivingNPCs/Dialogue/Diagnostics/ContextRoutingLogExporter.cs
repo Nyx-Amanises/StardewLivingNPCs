@@ -1,6 +1,5 @@
 using System;
 using System.IO;
-using System.Linq;
 using System.Text;
 using StardewModdingAPI;
 using StardewValley;
@@ -36,13 +35,10 @@ internal static class ContextRoutingLogExporter
                 ? "unknown-save"
                 : Constants.SaveFolderName;
             string directory = Path.Combine(DialogueServices.Helper.DirectoryPath, RootFolderName, saveFolder);
-            Directory.CreateDirectory(directory);
-
             string filePath = Path.Combine(directory, $"{GetSafeFileName(npcName)}.md");
-            File.AppendAllText(
+            DiagnosticMarkdownLogWriter.Append(
                 filePath,
-                BuildEntry(npcName, context, outcome, routeMilliseconds, timeoutSeconds, parseDetail, planLabel, routerPrompt, rawOutput, errorMessage),
-                Encoding.UTF8);
+                recordedAt => BuildEntry(npcName, context, outcome, routeMilliseconds, timeoutSeconds, parseDetail, planLabel, routerPrompt, rawOutput, errorMessage, recordedAt));
         }
         catch (Exception ex)
         {
@@ -65,12 +61,14 @@ internal static class ContextRoutingLogExporter
         string planLabel,
         string routerPrompt,
         string rawOutput,
-        string errorMessage)
+        string errorMessage,
+        DateTimeOffset recordedAt)
     {
         var builder = new StringBuilder();
         var time = Game1.Date;
         builder.AppendLine($"## {npcName} - Year {time.Year}, {FormatSeason(time.Season)} {time.DayOfMonth} {Game1.timeOfDay:0000}");
         builder.AppendLine();
+        builder.AppendLine($"- Wall-clock time: `{DiagnosticMarkdownLogWriter.FormatWallClockTimestamp(recordedAt)}`");
         builder.AppendLine($"- Provider/model: `{DialogueServices.Config.Provider}/{DialogueServices.Config.ModelName}`");
         builder.AppendLine($"- Outcome: `{outcome}`");
         builder.AppendLine($"- Route time: `{routeMilliseconds}ms`");
@@ -126,13 +124,6 @@ internal static class ContextRoutingLogExporter
 
     private static string GetSafeFileName(string value)
     {
-        var invalid = Path.GetInvalidFileNameChars();
-        var builder = new StringBuilder((value ?? string.Empty).Length);
-        foreach (char ch in value ?? string.Empty)
-        {
-            builder.Append(invalid.Contains(ch) ? '_' : ch);
-        }
-
-        return builder.Length == 0 ? "unknown-npc" : builder.ToString();
+        return DiagnosticMarkdownLogWriter.GetSafeFileName(value);
     }
 }
