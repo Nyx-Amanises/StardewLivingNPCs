@@ -456,17 +456,27 @@ internal sealed class BehaviorMailService
         string profile = ResolveNpcMailProfile(mail);
         string body = TryGetUsableGeneratedBody(mail, out string generated)
             ? generated
-            : GetGiftMailBody(motive, profile, mail, tokens);
+            : GetGiftMailBody(motive, profile, mail, tokens, I18n.Get);
         string title = I18n.Get($"gift.mail.title.{motive}", tokens);
         string itemId = EnsureQualifiedItemId(mail.ItemId);
         return $"{EnsureSigned(body, npcName)}%item id {itemId} 1 %%[#]{title}";
     }
 
-    private static string GetGiftMailBody(string motive, string profile, NpcGiftMailFact mail, object tokens)
+    /// <summary>
+    /// Fallback chain when no usable AI body exists: per-NPC profiled variants → (birthday) tone
+    /// variants → unprofiled variants → base motive key. The translate delegate is
+    /// <see cref="I18n.Get(string, object)"/> in production and a fake in tests.
+    /// </summary>
+    internal static string GetGiftMailBody(
+        string motive,
+        string profile,
+        NpcGiftMailFact mail,
+        object tokens,
+        Func<string, object, string> translate)
     {
         if (UsesProfiledGiftMail(motive) && !string.IsNullOrWhiteSpace(profile))
         {
-            if (TryGetGiftMailVariantBody(motive, profile, mail, tokens, out string profiledBody))
+            if (TryGetGiftMailVariantBody(motive, profile, mail, tokens, translate, out string profiledBody))
             {
                 return profiledBody;
             }
@@ -474,19 +484,19 @@ internal sealed class BehaviorMailService
             string tone = ResolveGiftMailToneProfile(motive, profile);
             if (!string.IsNullOrWhiteSpace(tone)
                 && !string.Equals(tone, profile, StringComparison.OrdinalIgnoreCase)
-                && TryGetGiftMailVariantBody(motive, tone, mail, tokens, out string toneBody))
+                && TryGetGiftMailVariantBody(motive, tone, mail, tokens, translate, out string toneBody))
             {
                 return toneBody;
             }
         }
 
         if (UsesVariantGiftMail(motive)
-            && TryGetGiftMailVariantBody(motive, string.Empty, mail, tokens, out string variantBody))
+            && TryGetGiftMailVariantBody(motive, string.Empty, mail, tokens, translate, out string variantBody))
         {
             return variantBody;
         }
 
-        return I18n.Get($"gift.mail.body.{motive}", tokens);
+        return translate($"gift.mail.body.{motive}", tokens);
     }
 
     private static bool UsesProfiledGiftMail(string motive)
@@ -499,7 +509,13 @@ internal sealed class BehaviorMailService
         return motive is "reciprocal" or "help_request_reward" or "birthday";
     }
 
-    private static bool TryGetGiftMailVariantBody(string motive, string profile, NpcGiftMailFact mail, object tokens, out string body)
+    internal static bool TryGetGiftMailVariantBody(
+        string motive,
+        string profile,
+        NpcGiftMailFact mail,
+        object tokens,
+        Func<string, object, string> translate,
+        out string body)
     {
         int firstVariant = SelectProfiledMailVariant(mail);
         for (int offset = 0; offset < ProfiledMailVariantCount; offset++)
@@ -508,7 +524,7 @@ internal sealed class BehaviorMailService
             string key = string.IsNullOrWhiteSpace(profile)
                 ? $"gift.mail.body.{motive}.{variant}"
                 : $"gift.mail.body.{motive}.{profile}.{variant}";
-            string text = I18n.Get(key, tokens);
+            string text = translate(key, tokens);
             if (!LooksMissingTranslation(key, text))
             {
                 body = text;
@@ -621,10 +637,17 @@ internal sealed class BehaviorMailService
         };
     }
 
-    private static bool LooksMissingTranslation(string key, string text)
+    /// <summary>
+    /// SMAPI returns the placeholder "(no translation:&lt;key&gt;)" for a missing i18n key
+    /// (<see cref="I18n"/> keeps placeholders enabled), so that prefix must count as missing or
+    /// the fallback chain below profiled variants can never run. The key-echo form covers the
+    /// uninitialized-I18n path used by unit tests.
+    /// </summary>
+    internal static bool LooksMissingTranslation(string key, string text)
     {
         return string.IsNullOrWhiteSpace(text)
-            || string.Equals(text, key, StringComparison.Ordinal);
+            || string.Equals(text, key, StringComparison.Ordinal)
+            || text.StartsWith("(no translation:", StringComparison.Ordinal);
     }
 
     private static string EnsureSigned(string body, string signer)
