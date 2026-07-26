@@ -133,9 +133,9 @@ internal static class PromptFragments
                 : string.Join("; ", experiences.Select(Facts.SharedExperience));
         }
 
-        public static string DialogueBehaviorInfluences(LivingNpcState state)
+        public static string DialogueBehaviorInfluences(LivingNpcState state, int currentTotalDays)
         {
-            var influences = state.ActiveDialogueBehaviorInfluences.Take(4).ToList();
+            var influences = state.GetActiveDialogueBehaviorInfluences(currentTotalDays).Take(4).ToList();
             return influences.Count == 0
                 ? EmptyBehaviorInfluences
                 : string.Join("; ", influences.Select(Facts.DialogueBehaviorInfluence));
@@ -373,18 +373,35 @@ internal static class PromptFragments
         public static string ExpressionStyleLine(string styleLabel) => $"- Emotional expression style: {styleLabel}.";
         public static string FamiliarityLine(LivingNpcState state) => $"- Long-term familiarity with the farmer: {state.Familiarity}/100 ({State.Familiarity(state)}).";
         public static string TrustLine(LivingNpcState state) => $"- Relationship trust in the farmer: {State.RelationshipTrust(state)}.";
-        public static string SecretSharingLine(LivingNpcState state) => $"- Secret-sharing depth: {State.SecretSharing(state)}.";
-        public static string RhythmComfortLine(LivingNpcState state) => $"- Relationship-aware interaction rhythm: {State.InteractionRhythm(state)}; comfort tier: {State.InteractionComfortTier(state)}.";
         public static string FamiliarityTrustRhythmLineConcise(LivingNpcState state) => $"- Familiarity {state.Familiarity}/100; trust: {State.RelationshipTrust(state)}; rhythm: {State.InteractionRhythm(state)}.";
-        public static string GiftContextLine(LivingNpcState state) => $"- Recent gift context: {State.LastGift(state)}.";
-        public static string EventContextLine(LivingNpcState state) => $"- Recent event context: {State.LastEvent(state)}.";
-        public static string MemoryStoreLine(int longTermCount, string recallFocus) => $"- Durable memory store: {longTermCount} long-term memories tracked; recall focus for this reply: {recallFocus}.";
+        public static string GiftContextLine(string lastGift) => $"- Recent gift context: {lastGift}.";
+        public static string EventContextLine(string lastEvent) => $"- Recent event context: {lastEvent}.";
+        public static string MemoryStoreLine(int longTermCount) => $"- Durable memory store: {longTermCount} long-term memories tracked; relevant ones, if any, appear under high-priority continuity.";
         public static string RelationshipImpressionLine(string impression) => $"- Long-term relationship impression (older memories compressed into background; treat as settled history, not recent events): {impression}";
-        public static string KnownPreferencesLine(string recallFocus) => $"- Known farmer preferences: {recallFocus}.";
-        public static string BehaviorTendenciesLine(LivingNpcState state) => $"- Conversation-driven behavior tendencies: {State.DialogueBehaviorInfluences(state)}.";
-        public static string SharedExperiencesLine(LivingNpcState state) => $"- Shared experiences with the farmer: {State.SharedExperiences(state)}.";
-        public static string HelpRequestsLine(LivingNpcState state) => $"- Help requests involving the farmer: {State.HelpRequests(state)}.";
-        public static string CommunityImpressionsLine(string recallText) => $"- Community impressions about the farmer's ties with other NPCs (background awareness, not a talking point): {recallText}. Bring this up only when the topic naturally leads there, at most as one brief passing remark, never as the opening subject, and keep second-hand reports tentative.";
+        public static string KnownPreferencesLine(int preferenceCount) => $"- Farmer preference memories tracked: {preferenceCount}; relevant ones, if any, appear under high-priority continuity.";
+        public static string BehaviorTendenciesLine(string tendencies) => $"- Conversation-driven behavior tendencies: {tendencies}.";
+        public static string SharedExperiencesLine(string sharedExperiences) => $"- Shared experiences with the farmer: {sharedExperiences}.";
+        public static string HelpRequestsLine(string helpRequests) => $"- Help requests involving the farmer: {helpRequests}.";
+        public static string CommunityImpressionsLine(int impressionCount) => $"- Community impressions about the farmer's ties with other NPCs: {impressionCount} tracked (background awareness, not a talking point; relevant ones, if any, appear under high-priority continuity).";
+
+        // ---- durable-store empty labels (collapsed into one line by the full context) ----
+        public const string StoreLabelGifts = "recent gifts";
+        public const string StoreLabelEvents = "recent events";
+        public const string StoreLabelLongTermMemories = "long-term memories";
+        public const string StoreLabelPreferences = "farmer preferences";
+        public const string StoreLabelBehaviorTendencies = "conversation-driven behavior tendencies";
+        public const string StoreLabelSharedExperiences = "shared experiences";
+        public const string StoreLabelHelpRequests = "help requests";
+        public const string StoreLabelCommunityImpressions = "community impressions";
+        public const string StoreLabelConflicts = "conflicts";
+        public const string StoreLabelNickname = "a preferred name for the farmer";
+
+        /// <summary>
+        /// One line covering every empty durable store, so the "there is no such shared history"
+        /// anti-hallucination signal survives without spending a full line per store.
+        /// </summary>
+        public static string EmptyStoresLine(IReadOnlyCollection<string> emptyStoreLabels) =>
+            $"- Nothing recorded yet for: {string.Join(", ", emptyStoreLabels)}; do not invent such shared history.";
 
         public static string SocialCirclesLine(IReadOnlyCollection<string> circleLabels) =>
             $"- Stable community circles this NPC belongs to: {(circleLabels.Count == 0 ? "no stable small-circle affiliation is currently tracked" : string.Join(", ", circleLabels))}.";
@@ -400,8 +417,7 @@ internal static class PromptFragments
             $"should not open a new help request now ({reason}); even if the farmer offers to help, gently decline or deflect rather than naming a task, accepting the favor, or committing to one";
 
         public static string HelpRequestFitLine(string fitLabel) => $"- Help-request fit: {fitLabel}";
-        public static string ConflictMemoryLine(LivingNpcState state) => $"- Conflict memory: {State.Conflicts(state)}.";
-        public static string NicknameMemoryLine(LivingNpcState state) => $"- Personal memory context: {State.FarmerNickname(state)}.";
+        public static string ConflictMemoryLine(string conflicts) => $"- Conflict memory: {conflicts}.";
         public static string SceneInfluenceLine(string reason) => $"- Scene influence on mood: {reason}.";
         public static string LastInteractionLine(string lastInteraction) => $"- Last interaction: {lastInteraction}.";
         public const string NoStateLine = "- No persistent LivingNPCs state exists yet; use disposition and scene context conservatively.";
@@ -438,7 +454,7 @@ internal static class PromptFragments
             $"Relevant farmer preference memories for this reply: {recallText}; when a gift or topic naturally matches one, it is okay to acknowledge remembering it briefly.";
 
         public static string CommunityImpressionCue(string recallText) =>
-            $"Community impressions: {recallText}; use at most one, keep indirect reports tentative, and do not reveal knowledge the NPC would not plausibly have.";
+            $"Community impressions: {recallText}; use at most one as a brief passing remark, never the opening subject; keep indirect reports tentative, and do not reveal knowledge the NPC would not plausibly have.";
 
         public static string BehaviorTendencyCue(DialogueBehaviorInfluenceFact influence) =>
             $"Conversation-driven behavior tendency: {Facts.DialogueBehaviorInfluence(influence)}; this should shape body language and follow-through, not be quoted as dialogue.";
@@ -494,9 +510,6 @@ internal static class PromptFragments
         public static string NearbyNpcsCue(IReadOnlyList<string> nearbyNpcNames) =>
             $"Social cue: nearby NPCs include {string.Join(", ", nearbyNpcNames)}; keep the reply aware of public company.";
 
-        public static string RecentMomentCue(string action, string reason) =>
-            $"Most recent non-conversation moment: {action}; {reason}.";
-
         // ---- "Recent tracked moments" section ----
         public const string RecentMomentsHeading = "Recent tracked moments, oldest to newest:";
 
@@ -524,7 +537,6 @@ internal static class PromptFragments
         public const string GuidanceNoStateModest = "Let the reply be scene-aware and modest because there is no persistent state yet.";
         public const string GuidanceNoStateSubtle = "Keep continuity subtle; do not invent strong feelings from weak context.";
         public static string GuidanceExpressionStyle(string replyGuidance) => $"Emotion expression style: {replyGuidance}.";
-        public static string GuidanceToneTarget(LivingNpcState state) => $"Tone target: {ToneCue(state)}.";
         public static string GuidanceRelationshipPacing(LivingNpcState state) => $"Relationship pacing: {State.InteractionComfortTier(state)}.";
         public static string GuidanceDisclosurePacing(LivingNpcState state) => $"Disclosure pacing: {State.SecretSharing(state)}.";
         public static string GuidanceInvitationPolicy(LivingNpcState state) => $"Invitation policy: {TravelInvitationPolicy(state)}.";
@@ -631,14 +643,7 @@ internal static class PromptFragments
 
         public static string NoOpportunitySection()
         {
-            return string.Join(
-                "\n",
-                "## LivingNPCs Gift Restriction",
-                "- No immediate NPC gift is authorized for this reply.",
-                "- Do not offer or give the farmer any item now, and include no give_small_gift or give_meaningful_gift action.",
-                "- Ordinary conversation may mention gifts for other people, but never turn that topic into an item for the farmer.",
-                "- If conversation history contains an earlier unsupported or failed gift offer, do not claim the farmer received, wore, ate, or kept it; move on without repeating it."
-            );
+            return "## LivingNPCs Gift Restriction: no NPC gift is authorized for this reply — do not offer or give the farmer any item, include no give_small_gift or give_meaningful_gift action, and do not claim any earlier unsupported gift offer was received or kept.";
         }
     }
 

@@ -26,10 +26,10 @@ public sealed class GiftOpportunityPromptTests
     {
         string prompt = PromptFragments.GiftOpportunity.NoOpportunitySection();
 
-        Assert.Contains("No immediate NPC gift is authorized", prompt);
-        Assert.Contains("no give_small_gift or give_meaningful_gift action", prompt);
-        Assert.Contains("gifts for other people", prompt);
-        Assert.Contains("failed gift offer", prompt);
+        Assert.Contains("no NPC gift is authorized", prompt);
+        Assert.Contains("give_small_gift", prompt);
+        Assert.Contains("give_meaningful_gift", prompt);
+        Assert.Contains("gift offer", prompt);
     }
 
     [Theory]

@@ -98,11 +98,22 @@ internal sealed class LivingNpcState
         .DefaultIfEmpty(0)
         .Max();
 
+    // Keeps Game1.Date inside the per-element lambda: serializers enumerate this get-only
+    // property, and an empty list must stay safe outside the game (headless tests).
     public IEnumerable<DialogueBehaviorInfluenceFact> ActiveDialogueBehaviorInfluences =>
         this.DialogueBehaviorInfluences.Where(influence =>
             influence.Status == "Active"
             && influence.ExpiresTotalDays >= Game1.Date.TotalDays
             && influence.TriggerCount < System.Math.Max(1, influence.MaxTriggers));
+
+    /// <summary>Parameterized variant of <see cref="ActiveDialogueBehaviorInfluences"/> for callers that already carry the current date (prompt rendering, tests).</summary>
+    public IEnumerable<DialogueBehaviorInfluenceFact> GetActiveDialogueBehaviorInfluences(int currentTotalDays)
+    {
+        return this.DialogueBehaviorInfluences.Where(influence =>
+            influence.Status == "Active"
+            && influence.ExpiresTotalDays >= currentTotalDays
+            && influence.TriggerCount < System.Math.Max(1, influence.MaxTriggers));
+    }
 
     public static int ClampScore(int value)
     {
