@@ -883,6 +883,8 @@
   "dialogue.config.disableCharacters.tooltip": "NPC names (comma or space separated) that never use AI dialogue.",
   "dialogue.configNoModels": "No model list is available. The API key may be missing or wrong.",
   "dialogue.configModels": "Models available from {{Provider}}:\n{{Models}}",
+  "dialogue.config.streaming.name": "Streaming replies",
+  "dialogue.config.streaming.tooltip": "Show free-text conversation replies word by word as they are generated. Turn off to wait for the full reply in the classic dialogue box.",
   "dialogue.configModelsLoading": "Fetching the model list in the background... reopen this page in a moment to see it.",
   "dialogue.hud.notConfigured": "LivingNPCs: the AI dialogue engine is not configured yet. Open Generic Mod Config Menu -> LivingNPCs -> AI Dialogue Engine and fill in the connection settings.",
   "dialogue.hud.generationFailed": "LivingNPCs: the AI reply failed to generate, so a placeholder line is shown. See the SMAPI console for the reason (API key, model name, server address, or network).",

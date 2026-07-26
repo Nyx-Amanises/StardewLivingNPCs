@@ -113,6 +113,8 @@ internal sealed class ModConfig
     public bool AllowWakeSleepingNpc { get; set; } = true;
     public bool UseOptimizedPrompts { get; set; } = false;
     public bool EnableSemanticContextRouting { get; set; } = true;
+    /// <summary>自由输入会话用流式对话窗逐字显示回复；关闭则回到"思考中→整段显示"。</summary>
+    public bool EnableStreamingDialogue { get; set; } = true;
     public int SemanticContextRoutingTimeoutSeconds { get; set; } = 8;
     public string RoutingThinkingLevel { get; set; } = "Off";
     public string ChatThinkingLevel { get; set; } = "Auto";
@@ -371,6 +373,7 @@ internal sealed class ModConfig
         this.InitiateTypedDialogueKey = defaults.InitiateTypedDialogueKey;
         this.UseOptimizedPrompts = defaults.UseOptimizedPrompts;
         this.EnableSemanticContextRouting = defaults.EnableSemanticContextRouting;
+        this.EnableStreamingDialogue = defaults.EnableStreamingDialogue;
         this.SemanticContextRoutingTimeoutSeconds = defaults.SemanticContextRoutingTimeoutSeconds;
         this.RoutingThinkingLevel = defaults.RoutingThinkingLevel;
         this.ChatThinkingLevel = defaults.ChatThinkingLevel;

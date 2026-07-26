@@ -53,6 +53,9 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
         this.UpdateLayout();
     }
 
+    /// <summary>生成尚未定稿时按 Esc 的取消回调（调度器接线：CancelActiveGeneration）。</summary>
+    internal Action? OnCancelRequested { get; set; }
+
     public void AppendToken(string token)
     {
         this.pendingUpdates.AppendToken(token);
@@ -159,6 +162,22 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
 
     public override void receiveKeyPress(Keys key)
     {
+        if (key is Keys.Escape)
+        {
+            bool complete;
+            lock (this.sync)
+            {
+                complete = this.generationComplete;
+            }
+
+            if (!complete)
+            {
+                // 生成中按 Esc = 取消本次生成（与"思考中"窗的 Esc 语义一致）。
+                this.OnCancelRequested?.Invoke();
+                return;
+            }
+        }
+
         if (this.showingResponses)
         {
             if (key is Keys.Up or Keys.W)
