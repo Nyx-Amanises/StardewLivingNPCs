@@ -843,6 +843,8 @@
   "dialogue.config.apiKey.tooltip": "提供商的 API 密钥。只保存在 config.json，绝不写入日志。",
   "dialogue.config.modelName.name": "模型名",
   "dialogue.config.modelName.tooltip": "留空使用提供商的默认模型。",
+  "dialogue.config.promptFormat.name": "提示词模板（llama.cpp）",
+  "dialogue.config.promptFormat.tooltip": "发给 llama.cpp 服务的指令模板，必须与所用模型的对话格式匹配（如 Mistral 用 [INST]，Qwen 用 ChatML）。可用占位符：{system}、{prompt}、{response_start}。",
   "dialogue.config.serverAddress.name": "服务器地址",
   "dialogue.config.serverAddress.tooltip": "自定义端点地址（OpenAI 兼容与 llama.cpp 使用）。",
   "dialogue.config.queryTimeout.name": "请求超时（秒）",

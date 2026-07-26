@@ -218,6 +218,16 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
         return true;
     }
 
+    public override void receiveGamePadButton(Buttons b)
+    {
+        // 手柄 B = 键盘 Esc 同语义（生成中取消 / 选项列表选静默 / 否则推进结束）。
+        // A 键由游戏本体合成 receiveLeftClick，这里不重复处理以免一次按键双推进。
+        if (b == Buttons.B)
+        {
+            this.receiveKeyPress(Keys.Escape);
+        }
+    }
+
     private void Advance()
     {
         Action? finished = null;

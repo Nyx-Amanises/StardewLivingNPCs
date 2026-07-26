@@ -96,6 +96,18 @@ internal static class DialogueConfigMenuSection
                 setValue: value => config.ServerAddress = value ?? string.Empty);
         }
 
+        if (metadata is { RequiresPromptFormat: true })
+        {
+            // llama.cpp：提示词模板必须与所用 GGUF 的指令格式匹配（默认 Mistral [INST] 形态）。
+            // 此前该字段只能手改 config.json，玩家跑 Qwen/Llama3 会得到乱码还找不到原因。
+            api.AddTextOption(
+                mod: manifest,
+                name: () => T("dialogue.config.promptFormat.name"),
+                tooltip: () => T("dialogue.config.promptFormat.tooltip"),
+                getValue: () => config.PromptFormat,
+                setValue: value => config.PromptFormat = string.IsNullOrWhiteSpace(value) ? config.PromptFormat : value);
+        }
+
         api.AddNumberOption(
             mod: manifest,
             name: () => T("dialogue.config.queryTimeout.name"),
@@ -200,13 +212,15 @@ internal static class DialogueConfigMenuSection
     }
 
     /// <summary>
-    /// 合并 save 里的引擎部分：先按当前连接参数重建 LLM 客户端（WP11 入口），
+    /// 合并 save 里的引擎部分：连接字段有变化时按当前参数重建 LLM 客户端（WP11 入口），
     /// 再由调用方 WriteConfig（§4.9）。同时刷新运行时配置视图与 SVE 相关缓存。
+    /// 连接字段未变的保存（比如只调礼物概率）不再重建客户端，也就不再触发付费的连接自检。
     /// </summary>
     public static void OnSave(ModEntry modEntry, ModConfig config)
     {
         bool providerChanged = ClearApiKeyWhenProviderChanged(config, DialogueServices.Config.Provider, DialogueServices.Config.ApiKey);
         bool sveChanged = DialogueServices.Config.EnableSveCompatibility != config.EnableSveCompatibility;
+        bool connectionChanged = ConnectionSettingsChanged(config, DialogueServices.Config);
         DialogueServices.Config.SyncFrom(config);
 
         if (sveChanged)
@@ -229,7 +243,8 @@ internal static class DialogueConfigMenuSection
             DialogueContentService.Instance?.InvalidateWorldSummaries();
         }
 
-        if (config.EnableDialogueEngine && !DialoguePersistence.LegacyValleyTalkLoaded)
+        if (config.EnableDialogueEngine && !DialoguePersistence.LegacyValleyTalkLoaded
+            && (connectionChanged || LlmClientHost.Instance.CurrentRaw == null))
         {
             LlmClientHost.Instance.ReplaceClient(LlmConnectionSettings.FromConfig(DialogueServices.Config));
 
@@ -245,6 +260,19 @@ internal static class DialogueConfigMenuSection
         {
             QueueMenuRefresh(modEntry, config);
         }
+    }
+
+    /// <summary>
+    /// 连接字段（提供商/Key/模型/服务器地址/PromptFormat）任一变化才需要重建客户端与自检；
+    /// 与 SyncFrom 之前的运行时视图比较（纯函数，单测覆盖）。
+    /// </summary>
+    internal static bool ConnectionSettingsChanged(ModConfig config, DialogueConfig previous)
+    {
+        return !string.Equals(config.Provider ?? string.Empty, previous.Provider ?? string.Empty, StringComparison.Ordinal)
+            || !string.Equals(config.ApiKey ?? string.Empty, previous.ApiKey ?? string.Empty, StringComparison.Ordinal)
+            || !string.Equals(config.ModelName ?? string.Empty, previous.ModelName ?? string.Empty, StringComparison.Ordinal)
+            || !string.Equals(config.ServerAddress ?? string.Empty, previous.ServerAddress ?? string.Empty, StringComparison.Ordinal)
+            || !string.Equals(config.PromptFormat ?? string.Empty, previous.PromptFormat ?? string.Empty, StringComparison.Ordinal);
     }
 
     /// <summary>

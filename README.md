@@ -107,7 +107,7 @@ LivingNPCs **不附带模型，也不会自动提供免费 API**。速度、费�
 | DeepSeek | API Key、模型名 |
 | Mistral | API Key、模型名 |
 | 火山引擎（豆包） | API Key、模型名 |
-| llama.cpp（本地） | 你自行运行的完整服务端点（例如 <code>http://127.0.0.1:8080/completion</code>）；<code>PromptFormat</code> 需与所用模型的指令格式匹配（默认为 Mistral <code>[INST]</code> 格式），目前只能在 <code>config.json</code> 中修改 |
+| llama.cpp（本地） | 你自行运行的完整服务端点（例如 <code>http://127.0.0.1:8080/completion</code>）；「提示词模板」需与所用模型的指令格式匹配（默认为 Mistral <code>[INST]</code> 格式，可在 GMCM 中直接修改） |
 
 LivingNPCs 会在保存连接设置后进行非阻塞自检。自检失败不会永久关闭引擎，下一次真实对话仍会重试。常见错误：
 
@@ -231,7 +231,7 @@ Generic Mod Config Menu 中实际提供的设置：
 - 被动行为：<code>EnablePassiveBehaviors</code>、<code>PassiveBehaviorChancePercent</code>（默认关闭；开启前建议先用行为测试键手动测试）；
 - 记忆容量：<code>MaxMemoryEntriesPerNpc</code>、<code>PromptMemoryEntries</code>；
 - 礼物信与记忆压缩：<code>EnableAiGiftMail</code>、<code>EnableMemoryImpressions</code>；
-- 连接与日志：<code>SuppressConnectionCheck</code>（关闭保存设置时的自动连接自检）、<code>ExportAiResponseLogs</code>（AI 诊断日志开关）、llama.cpp 的 <code>PromptFormat</code>。
+- 连接与日志：<code>SuppressConnectionCheck</code>（完全关闭连接自检；默认只在连接设置变化时自检一次）、<code>ExportAiResponseLogs</code>（AI 诊断日志开关；单个日志超过约 8MB 会自动轮转为 <code>.old</code>，不会无限增长）。
 
 ## 快捷键
 

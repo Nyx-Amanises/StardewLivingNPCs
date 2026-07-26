@@ -112,17 +112,25 @@ internal sealed class BehaviorEngine
         this.SafeRun("save loaded", () =>
         {
             BehaviorMemorySaveData? saveData;
-            try
+            if (!Context.IsMainPlayer)
             {
-                saveData = this.helper.Data.ReadSaveData<BehaviorMemorySaveData>(SaveDataKey);
-            }
-            catch (Exception ex)
-            {
-                this.monitor.Log(
-                    I18n.Get("log.save.readFailed", new { error = ex.Message }),
-                    LogLevel.Warn
-                );
+                // SMAPI 的存档数据只有主机可读写；farmhand 用空的本地视图，避免每次读档告警。
                 saveData = null;
+            }
+            else
+            {
+                try
+                {
+                    saveData = this.helper.Data.ReadSaveData<BehaviorMemorySaveData>(SaveDataKey);
+                }
+                catch (Exception ex)
+                {
+                    this.monitor.Log(
+                        I18n.Get("log.save.readFailed", new { error = ex.Message }),
+                        LogLevel.Warn
+                    );
+                    saveData = null;
+                }
             }
 
             this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
@@ -144,6 +152,12 @@ internal sealed class BehaviorEngine
     {
         this.SafeRun("saving", () =>
         {
+            if (!Context.IsMainPlayer)
+            {
+                // 行为记忆归主机存档；farmhand 上 WriteSaveData 必抛（此前每次存档都报错且数据丢失）。
+                return;
+            }
+
             this.helper.Data.WriteSaveData(SaveDataKey, this.memory.ToSaveData());
             if (this.config.Debug)
             {
@@ -155,7 +169,11 @@ internal sealed class BehaviorEngine
 
     private void AfterManualMemoryClear()
     {
-        this.helper.Data.WriteSaveData(SaveDataKey, this.memory.ToSaveData());
+        if (Context.IsMainPlayer)
+        {
+            this.helper.Data.WriteSaveData(SaveDataKey, this.memory.ToSaveData());
+        }
+
         this.contextService.ClearImmediateContexts();
         this.helpRequestQuestLog.Sync();
         this.mailService.InvalidateMailCache();

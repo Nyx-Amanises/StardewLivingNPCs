@@ -96,6 +96,39 @@ public sealed class DiagnosticMarkdownLogWriterTests : IDisposable
         Assert.True(enteredConcurrently);
     }
 
+    [Fact]
+    public void OversizedLogRotatesToOldFileAndStartsFresh()
+    {
+        // 分隔符约 250 字节，大条目 401 字节，上限 1000：
+        // 第 1 写 ~650 不轮转；第 2 写超限轮转；追加小尾巴不超限；第 4 写再次轮转并覆盖上一代 .old。
+        DateTimeOffset now = new(2026, 7, 26, 9, 10, 11, TimeSpan.Zero);
+        var session = new DiagnosticLogSession(
+            new DiagnosticRunInfo(now, "rotate-run", "0.2.0", "build-id"),
+            () => now,
+            maxLogFileBytes: 1000);
+        string filePath = Path.Combine(this.root, "ai_response_logs", "Penny.md");
+        string bigEntry = new string('x', 400) + "\n";
+
+        session.Append(filePath, _ => bigEntry);
+        session.Append(filePath, _ => bigEntry);
+
+        string rotatedPath = filePath + ".old";
+        Assert.True(File.Exists(rotatedPath));
+        Assert.Contains("# LivingNPCs diagnostic session / restart", File.ReadAllText(rotatedPath));
+        Assert.StartsWith("<!-- livingnpcs-diagnostic-session:rotate-run -->", File.ReadAllText(filePath));
+
+        session.Append(filePath, _ => "tail entry\n");
+        string current = File.ReadAllText(filePath);
+        Assert.Contains("tail entry", current);
+        Assert.DoesNotContain("tail entry", File.ReadAllText(rotatedPath));
+        Assert.True(new FileInfo(filePath).Length < 1200);
+
+        // 再次超限：上一代 .old 被覆盖为含 tail 的那一段，不会堆出第三代文件。
+        session.Append(filePath, _ => bigEntry);
+        Assert.Contains("tail entry", File.ReadAllText(rotatedPath));
+        Assert.False(File.Exists(rotatedPath + ".old"));
+    }
+
     [Theory]
     [InlineData("Penny", "Penny")]
     [InlineData("", "unknown-npc")]

@@ -111,6 +111,10 @@ internal static class DiagnosticMarkdownLogWriter
 
 internal sealed class DiagnosticLogSession
 {
+    /// <summary>单个诊断日志文件的大小上限；超限时把现文件轮转为 .old（只保留一代），当前文件从头开始。
+    /// 每条日志因此最多占约两倍上限的磁盘，长档不再无限增长。</summary>
+    private const long DefaultMaxLogFileBytes = 8 * 1024 * 1024;
+
     private static readonly StringComparer PathComparer = OperatingSystem.IsWindows()
         ? StringComparer.OrdinalIgnoreCase
         : StringComparer.Ordinal;
@@ -118,11 +122,13 @@ internal sealed class DiagnosticLogSession
     private readonly ConcurrentDictionary<string, byte> initializedFiles = new(PathComparer);
     private readonly DiagnosticRunInfo runInfo;
     private readonly Func<DateTimeOffset> clock;
+    private readonly long maxLogFileBytes;
 
-    public DiagnosticLogSession(DiagnosticRunInfo runInfo, Func<DateTimeOffset> clock)
+    public DiagnosticLogSession(DiagnosticRunInfo runInfo, Func<DateTimeOffset> clock, long maxLogFileBytes = DefaultMaxLogFileBytes)
     {
         this.runInfo = runInfo ?? throw new ArgumentNullException(nameof(runInfo));
         this.clock = clock ?? throw new ArgumentNullException(nameof(clock));
+        this.maxLogFileBytes = maxLogFileBytes > 0 ? maxLogFileBytes : DefaultMaxLogFileBytes;
     }
 
     public void Append(string filePath, Func<DateTimeOffset, string> buildEntry)
@@ -149,6 +155,13 @@ internal sealed class DiagnosticLogSession
                 Directory.CreateDirectory(directory);
             }
 
+            if (hasExistingContent && this.TryRotateOversizedFile(fullPath, entry.Length))
+            {
+                hasExistingContent = false;
+                isFirstWriteThisRun = true;
+                this.initializedFiles.TryRemove(fullPath, out _);
+            }
+
             string payload = isFirstWriteThisRun
                 ? this.BuildSessionSeparator(hasExistingContent) + entry
                 : entry;
@@ -157,6 +170,33 @@ internal sealed class DiagnosticLogSession
             // Mark the path only after a successful write, so a transient I/O failure cannot
             // cause the next successful append to lose its restart separator.
             this.initializedFiles.TryAdd(fullPath, 0);
+        }
+    }
+
+    /// <summary>超限即把现文件搬成 <c>*.old.md</c>（覆盖上一代）；搬运失败时放弃本次轮转、照常追加（不丢日志）。</summary>
+    private bool TryRotateOversizedFile(string fullPath, int incomingChars)
+    {
+        try
+        {
+            long length = new FileInfo(fullPath).Length;
+            if (length + incomingChars <= this.maxLogFileBytes)
+            {
+                return false;
+            }
+
+            string rotatedPath = fullPath + ".old";
+            if (File.Exists(rotatedPath))
+            {
+                File.Delete(rotatedPath);
+            }
+
+            File.Move(fullPath, rotatedPath);
+            return true;
+        }
+        catch
+        {
+            // 文件被占用等瞬时失败：这次继续写原文件，下次再试轮转。
+            return false;
         }
     }
 

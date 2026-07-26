@@ -94,7 +94,7 @@ Supported providers:
 | DeepSeek | API key, model name |
 | Mistral | API key, model name |
 | VolcEngine (Doubao) | API key, model name |
-| llama.cpp (local) | The full endpoint of a server you run yourself (e.g. `http://127.0.0.1:8080/completion`); `PromptFormat` must match your model's instruction format (defaults to the Mistral `[INST]` style) and can currently only be changed in `config.json` |
+| llama.cpp (local) | The full endpoint of a server you run yourself (e.g. `http://127.0.0.1:8080/completion`); the "Prompt format" template must match your model's instruction format (defaults to the Mistral `[INST]` style, adjustable directly in GMCM) |
 
 LivingNPCs performs a non-blocking self-check after saving connection settings. A failed self-check never permanently disables the engine; the next real conversation retries. Common errors:
 
@@ -171,7 +171,7 @@ The following advanced options **can only be edited in `config.json`** (close th
 - Passive behaviors: `EnablePassiveBehaviors`, `PassiveBehaviorChancePercent` (off by default; test with the manual behavior hotkey first);
 - Memory sizes: `MaxMemoryEntriesPerNpc`, `PromptMemoryEntries`;
 - Gift mail and memory compression: `EnableAiGiftMail`, `EnableMemoryImpressions`;
-- Connection and logging: `SuppressConnectionCheck`, `ExportAiResponseLogs`, and llama.cpp's `PromptFormat`.
+- Connection and logging: `SuppressConnectionCheck` (fully disables the self-check; by default it only runs when connection settings change) and `ExportAiResponseLogs` (AI diagnostic logs; each log rotates to `.old` past ~8MB, so they never grow without bound).
 
 ## Hotkeys
 

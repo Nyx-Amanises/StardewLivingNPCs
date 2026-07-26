@@ -158,4 +158,41 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
         Assert.True(DialogueConfigMenuSection.ClearApiKeyWhenProviderChanged(config, "OpenAiCompatible", "old-key"));
         Assert.Equal("new-deepseek-key", config.ApiKey);
     }
+
+    [Fact]
+    public void ConnectionSettingsChanged_OnlyFlagsConnectionFields()
+    {
+        var previous = new DialogueConfig
+        {
+            Provider = "OpenAI",
+            ApiKey = "key",
+            ModelName = "gpt-4o",
+            ServerAddress = "",
+            PromptFormat = "fmt"
+        };
+
+        // 只改非连接字段（礼物概率、频率等不进比较）：不触发客户端重建与付费自检。
+        var unchanged = new ModConfig
+        {
+            Provider = "OpenAI",
+            ApiKey = "key",
+            ModelName = "gpt-4o",
+            ServerAddress = "",
+            PromptFormat = "fmt",
+            GeneralFrequency = 1,
+            AiDailyGiftChanceMaxPercent = 9
+        };
+        Assert.False(DialogueConfigMenuSection.ConnectionSettingsChanged(unchanged, previous));
+
+        Assert.True(DialogueConfigMenuSection.ConnectionSettingsChanged(
+            new ModConfig { Provider = "DeepSeek", ApiKey = "key", ModelName = "gpt-4o", ServerAddress = "", PromptFormat = "fmt" }, previous));
+        Assert.True(DialogueConfigMenuSection.ConnectionSettingsChanged(
+            new ModConfig { Provider = "OpenAI", ApiKey = "other", ModelName = "gpt-4o", ServerAddress = "", PromptFormat = "fmt" }, previous));
+        Assert.True(DialogueConfigMenuSection.ConnectionSettingsChanged(
+            new ModConfig { Provider = "OpenAI", ApiKey = "key", ModelName = "gpt-4o-mini", ServerAddress = "", PromptFormat = "fmt" }, previous));
+        Assert.True(DialogueConfigMenuSection.ConnectionSettingsChanged(
+            new ModConfig { Provider = "OpenAI", ApiKey = "key", ModelName = "gpt-4o", ServerAddress = "https://gw.example", PromptFormat = "fmt" }, previous));
+        Assert.True(DialogueConfigMenuSection.ConnectionSettingsChanged(
+            new ModConfig { Provider = "OpenAI", ApiKey = "key", ModelName = "gpt-4o", ServerAddress = "", PromptFormat = "[INST]" }, previous));
+    }
 }

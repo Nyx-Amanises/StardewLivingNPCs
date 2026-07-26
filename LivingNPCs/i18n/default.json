@@ -843,6 +843,8 @@
   "dialogue.config.apiKey.tooltip": "The provider's API key. Stored in config.json only; never logged.",
   "dialogue.config.modelName.name": "Model name",
   "dialogue.config.modelName.tooltip": "Leave empty to use the provider's default model.",
+  "dialogue.config.promptFormat.name": "Prompt format (llama.cpp)",
+  "dialogue.config.promptFormat.tooltip": "Instruction template sent to the llama.cpp server. Must match your model's chat format, e.g. Mistral [INST], ChatML for Qwen. Placeholders: {system}, {prompt}, {response_start}.",
   "dialogue.config.serverAddress.name": "Server address",
   "dialogue.config.serverAddress.tooltip": "Custom endpoint address (OpenAI-compatible and llama.cpp).",
   "dialogue.config.queryTimeout.name": "Request timeout (seconds)",

@@ -77,3 +77,42 @@ internal static class DialogueBox_ReceiveKeyPress_ThinkingDialogue_Patch
         return true;
     }
 }
+
+/// <summary>
+/// 手柄取消入口：键盘 Esc 之外，B 键在"思考中"窗取消生成、在输入框取消输入会话。
+/// 目标方法解析经 AccessTools 命中 DialogueBox 实际声明处（未覆写时为 IClickableMenu 基实现），
+/// 因此前置守卫必须先确认实例确属本 mod 的两类对话框，其余菜单一律放行。
+/// </summary>
+[HarmonyPatch(typeof(DialogueBox), nameof(DialogueBox.receiveGamePadButton))]
+internal static class DialogueBox_ReceiveGamePadButton_ThinkingDialogue_Patch
+{
+    public static bool Prefix(IClickableMenu __instance, Buttons b)
+    {
+        if (__instance is not DialogueBox box)
+        {
+            return true;
+        }
+
+        if (NativeDialogueTextInputController.IsInputBox(box))
+        {
+            if (b == Buttons.B)
+            {
+                NativeDialogueTextInputController.HandleSpecialKey(Keys.Escape);
+            }
+
+            return false;
+        }
+
+        if (ThinkingDialogueController.IsThinkingBox(box))
+        {
+            if (b == Buttons.B)
+            {
+                AsyncBuilder.Instance.CancelActiveGeneration();
+            }
+
+            return false;
+        }
+
+        return true;
+    }
+}
