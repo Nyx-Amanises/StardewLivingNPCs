@@ -15,9 +15,11 @@ namespace LivingNPCs.Dialogue.Ui;
 
 internal sealed class StreamingDialogueWindow : IClickableMenu
 {
-    private const int TextInsetX = 40;
-    private const int TextInsetTop = 40;
-    private const int TextInsetBottom = 40;
+    // 文本面板改用几何确定的菜单框贴图（drawTextureBox 的边框画在给定矩形内侧），
+    // 不再用 Game1.drawDialogueBox 估算内区：其外沿装饰会超出传入矩形，实测把首行顶出框外。
+    private const int TextInsetX = 32;
+    private const int TextInsetTop = 32;
+    private const int TextInsetBottom = 32;
     private const int PortraitPanelWidth = 388;
     private const float RevealMillisecondsPerCharacter = 81f;
 
@@ -453,16 +455,27 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
 
     private void DrawDialogueChrome(SpriteBatch b)
     {
-        if (this.npc?.Portrait == null)
-        {
-            Game1.drawDialogueBox(this.xPositionOnScreen, this.yPositionOnScreen, this.width, this.height, false, true);
-            return;
-        }
+        int textPanelWidth = this.npc?.Portrait == null
+            ? this.width
+            : Math.Max(120, this.width - PortraitPanelWidth);
 
-        int textPanelWidth = Math.Max(120, this.width - PortraitPanelWidth);
-        Game1.drawDialogueBox(this.xPositionOnScreen, this.yPositionOnScreen, textPanelWidth, this.height, false, true);
-        this.UpdatePortraitEmotion();
-        this.dialogueShell?.drawPortrait(b);
+        drawTextureBox(
+            b,
+            Game1.mouseCursors,
+            new Rectangle(384, 373, 18, 18),
+            this.xPositionOnScreen,
+            this.yPositionOnScreen,
+            textPanelWidth,
+            this.height,
+            Color.White,
+            4f,
+            drawShadow: true);
+
+        if (this.npc?.Portrait != null)
+        {
+            this.UpdatePortraitEmotion();
+            this.dialogueShell?.drawPortrait(b);
+        }
     }
 
     private void ApplyPendingUpdates()
@@ -555,13 +568,15 @@ internal sealed class StreamingDialogueWindow : IClickableMenu
                 break;
             }
 
+            // width 传超大值：行已由 WrapSpriteText 按列宽预折行，禁止 SpriteText 再内部换行
+            // （二次换行会让长行自我折叠、与下一行重叠——冒烟截图里的文字糊叠即此因）。
             SpriteText.drawString(
                 b,
                 line,
                 bounds.X,
                 y,
                 999999,
-                bounds.Width,
+                999999,
                 lineHeight,
                 1f,
                 0.88f,
