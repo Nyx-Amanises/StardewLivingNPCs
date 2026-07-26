@@ -31,6 +31,18 @@ internal static class PromptFragments
     /// <summary>Prompt descriptions derived from a NPC's persisted state.</summary>
     internal static class State
     {
+        // Empty-form fallbacks, named so Context.IsEmptyStateValue can match them exactly.
+        public const string EmptyGiftMemory = "no recent LivingNPCs gift memory";
+        public const string EmptyEventMemory = "no recent LivingNPCs event memory";
+        public const string EmptyLongTermMemories = "no durable personal memory has been recorded";
+        public const string EmptyPlayerPreferences = "no durable farmer preference memory has been recorded";
+        public const string EmptyCommunityImpressions = "no community impression about the farmer has been recorded";
+        public const string EmptySharedExperiences = "no durable shared experiences are recorded";
+        public const string EmptyBehaviorInfluences = "no active conversation-driven behavior tendency";
+        public const string EmptyHelpRequests = "no durable help requests are recorded";
+        public const string EmptyConflicts = "no durable conflict memory has been recorded";
+        public const string EmptyNickname = "no personal name preference has been recorded";
+
         public static string Emotion(LivingNpcState state) => state.CurrentEmotion switch
         {
             "Happy" => $"happy, intensity {state.EmotionIntensity}/100; latest reason: {state.LastEmotionReason}",
@@ -82,18 +94,18 @@ internal static class PromptFragments
         };
 
         public static string LastGift(LivingNpcState state) => string.IsNullOrWhiteSpace(state.LastGiftName)
-            ? "no recent LivingNPCs gift memory"
+            ? EmptyGiftMemory
             : $"last recorded gift: the farmer offered {state.LastGiftName}; gift taste: {state.LastGiftTaste}; gifts recorded today: {state.GiftsToday}";
 
         public static string LastEvent(LivingNpcState state) => string.IsNullOrWhiteSpace(state.LastEventContext)
-            ? "no recent LivingNPCs event memory"
+            ? EmptyEventMemory
             : $"last recorded event context: {state.LastEventContext}";
 
         public static string LongTermMemories(LivingNpcState state)
         {
             var memories = state.GetTopLongTermMemories(4).ToList();
             return memories.Count == 0
-                ? "no durable personal memory has been recorded"
+                ? EmptyLongTermMemories
                 : string.Join("; ", memories.Select(memory => memory.Summary));
         }
 
@@ -101,7 +113,7 @@ internal static class PromptFragments
         {
             var preferences = state.GetTopPlayerPreferences(6).ToList();
             return preferences.Count == 0
-                ? "no durable farmer preference memory has been recorded"
+                ? EmptyPlayerPreferences
                 : string.Join("; ", preferences.Select(memory => memory.Summary));
         }
 
@@ -109,7 +121,7 @@ internal static class PromptFragments
         {
             var memories = state.GetTopCommunityImpressions(4).ToList();
             return memories.Count == 0
-                ? "no community impression about the farmer has been recorded"
+                ? EmptyCommunityImpressions
                 : string.Join("; ", memories.Select(Facts.CommunityImpression));
         }
 
@@ -117,7 +129,7 @@ internal static class PromptFragments
         {
             var experiences = state.GetTopSharedExperiences(4).ToList();
             return experiences.Count == 0
-                ? "no durable shared experiences are recorded"
+                ? EmptySharedExperiences
                 : string.Join("; ", experiences.Select(Facts.SharedExperience));
         }
 
@@ -125,7 +137,7 @@ internal static class PromptFragments
         {
             var influences = state.ActiveDialogueBehaviorInfluences.Take(4).ToList();
             return influences.Count == 0
-                ? "no active conversation-driven behavior tendency"
+                ? EmptyBehaviorInfluences
                 : string.Join("; ", influences.Select(Facts.DialogueBehaviorInfluence));
         }
 
@@ -133,7 +145,7 @@ internal static class PromptFragments
         {
             var requests = state.GetTopHelpRequests(4).ToList();
             return requests.Count == 0
-                ? "no durable help requests are recorded"
+                ? EmptyHelpRequests
                 : string.Join("; ", requests.Select(Facts.HelpRequest));
         }
 
@@ -157,7 +169,7 @@ internal static class PromptFragments
         {
             var conflicts = state.GetTopConflicts(4).ToList();
             return conflicts.Count == 0
-                ? "no durable conflict memory has been recorded"
+                ? EmptyConflicts
                 : string.Join("; ", conflicts.Select(Facts.Conflict));
         }
 
@@ -165,7 +177,7 @@ internal static class PromptFragments
         {
             if (string.IsNullOrWhiteSpace(state.FarmerNickname))
             {
-                return "no personal name preference has been recorded";
+                return EmptyNickname;
             }
 
             return state.FarmerNicknameStatus switch
@@ -226,17 +238,22 @@ internal static class PromptFragments
     /// <summary>Recall-focus lines built from the per-reply memory recall plan.</summary>
     internal static class Recall
     {
+        // Empty-form fallbacks, named so Context.IsEmptyStateValue can match them exactly.
+        public const string EmptyLongTermRecall = "no durable personal memory is especially relevant right now";
+        public const string EmptyPreferenceRecall = "no durable farmer preference memory is especially relevant right now";
+        public const string EmptyCommunityRecall = "no community impression is especially relevant right now";
+
         public static string LongTermMemories(IReadOnlyList<LongTermMemorySelection> selections)
         {
             return selections.Count == 0
-                ? "no durable personal memory is especially relevant right now"
+                ? EmptyLongTermRecall
                 : string.Join("; ", selections.Select(selection => selection.Memory.Summary));
         }
 
         public static string PlayerPreferences(IReadOnlyList<PlayerPreferenceSelection> selections)
         {
             return selections.Count == 0
-                ? "no durable farmer preference memory is especially relevant right now"
+                ? EmptyPreferenceRecall
                 : string.Join("; ", selections.Select(selection => selection.Memory.Summary));
         }
 
@@ -244,7 +261,7 @@ internal static class PromptFragments
         {
             CommunityReactionCue reaction = CommunityReactionStyle.For(npc);
             return selections.Count == 0
-                ? "no community impression is especially relevant right now"
+                ? EmptyCommunityRecall
                 : $"observer tendency: {reaction.PromptLabel}; retelling tendency: {reaction.RetellingPromptLabel}; {string.Join("; ", selections.Select(selection => Facts.CommunityImpression(selection.Memory)))}";
         }
     }
@@ -557,6 +574,37 @@ internal static class PromptFragments
             1 => "yesterday",
             int.MaxValue => "at an unknown time",
             _ => $"{ageDays} days ago"
+        };
+
+        /// <summary>
+        /// True when a state/recall value is one of the known empty-form fallbacks ("no recent…",
+        /// "no durable…") or an initializer placeholder. The concise context drops such lines.
+        /// Exact matching — not a "no " prefix sniff — so real content that happens to start with
+        /// "No …" (a memory summary, a relationship impression) is never silently dropped.
+        /// </summary>
+        public static bool IsEmptyStateValue(string value)
+        {
+            return EmptyStateValues.Contains(value.Trim());
+        }
+
+        private static readonly HashSet<string> EmptyStateValues = new(System.StringComparer.Ordinal)
+        {
+            State.EmptyGiftMemory,
+            State.EmptyEventMemory,
+            State.EmptyLongTermMemories,
+            State.EmptyPlayerPreferences,
+            State.EmptyCommunityImpressions,
+            State.EmptySharedExperiences,
+            State.EmptyBehaviorInfluences,
+            State.EmptyHelpRequests,
+            State.EmptyConflicts,
+            State.EmptyNickname,
+            Recall.EmptyLongTermRecall,
+            Recall.EmptyPreferenceRecall,
+            Recall.EmptyCommunityRecall,
+            // Stored initializer placeholders written by BehaviorMemory/state writers.
+            "none yet",
+            "none"
         };
     }
 

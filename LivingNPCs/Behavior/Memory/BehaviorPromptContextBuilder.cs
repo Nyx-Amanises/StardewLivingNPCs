@@ -224,8 +224,10 @@ internal static class BehaviorPromptContextBuilder
         }
 
         // The empty form of these labels reads as "no recent…/no durable…/no shared…"; skip those
-        // so the concise context only carries lines that actually say something.
-        if (value.TrimStart().StartsWith("no ", System.StringComparison.OrdinalIgnoreCase))
+        // so the concise context only carries lines that actually say something. Matching the
+        // known empty forms exactly (instead of sniffing a "no " prefix) keeps real content that
+        // happens to start with "No …" — a memory summary, a relationship impression — intact.
+        if (PromptFragments.Context.IsEmptyStateValue(value))
         {
             return;
         }
