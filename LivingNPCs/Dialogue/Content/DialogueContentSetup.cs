@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using LivingNPCs.Dialogue.Engine;
 using LivingNPCs.Dialogue.Llm;
 using LivingNPCs.Dialogue.Persistence;
@@ -36,6 +37,7 @@ internal static class DialogueContentSetup
         helper.Events.Content.AssetRequested += OnAssetRequested;
         helper.Events.Content.AssetsInvalidated += OnAssetsInvalidated;
         helper.Events.Content.LocaleChanged += OnLocaleChanged;
+        helper.Events.Content.LocaleChanged += OnLocaleChangedInvalidateCaches;
         helper.Events.GameLoop.OneSecondUpdateTicked += OnOneSecondUpdateTicked;
 
         // WP14 的文件夹迁移器在 GameLaunched 移交旧 config（找没找到都通知，幂等靠 LegacyConfigImported）。
@@ -83,6 +85,28 @@ internal static class DialogueContentSetup
     private static void OnLocaleChanged(object? sender, LocaleChangedEventArgs e)
     {
         InitializeAfterLocaleReady();
+    }
+
+    /// <summary>
+    /// 常驻的语言切换失效订阅（§4.1 补线）。与上面的一次性启动等待订阅分离：那个在初始化后
+    /// 注销，这个伴随整个进程。SMAPI 只在 mod 主动 InvalidateCache 时才触发 AssetsInvalidated，
+    /// 游戏语言切换只有本事件可依赖，而传记/世界摘要/提示词缓存与引擎台词样本库都含 locale
+    /// 敏感内容（切语言后不清会陈旧到重启）。
+    /// </summary>
+    private static void OnLocaleChangedInvalidateCaches(object? sender, LocaleChangedEventArgs e)
+    {
+        InvalidateLocaleSensitiveCaches(DialogueContentService.Instance, DialogueEngineHost.Instance);
+    }
+
+    /// <summary>
+    /// 语言切换失效动作（可测缝）：内容服务全量失效（传记缓存 + 四槽世界摘要 + 提示词表），
+    /// 加引擎台词样本库重建。肖像语义缓存不在此列——其纹理缓存不含 locale 数据，快照缓存自带
+    /// locale 比对。未装配的一侧（null）跳过。
+    /// </summary>
+    internal static void InvalidateLocaleSensitiveCaches(DialogueContentService? service, DialogueEngine? engine)
+    {
+        service?.InvalidateAll();
+        engine?.InvalidateSampleCaches();
     }
 
     private static void OnOneSecondUpdateTicked(object? sender, OneSecondUpdateTickedEventArgs e)
@@ -153,36 +177,98 @@ internal static class DialogueContentSetup
 
     private static void OnAssetsInvalidated(object? sender, AssetsInvalidatedEventArgs e)
     {
-        foreach (IAssetName name in e.NamesWithoutLocale)
+        ContentInvalidationPlan plan = ClassifyInvalidatedAssets(
+            e.NamesWithoutLocale.Select(name => name.Name));
+        ApplyInvalidationPlan(plan, DialogueContentService.Instance, DialogueEngineHost.Instance);
+    }
+
+    /// <summary>一次 AssetsInvalidated 批次映射出的缓存失效动作集（纯数据，单测钉规则）。</summary>
+    internal sealed class ContentInvalidationPlan
+    {
+        public bool Portraits { get; set; }
+
+        public bool Prompts { get; set; }
+
+        public bool WorldSummaries { get; set; }
+
+        public bool DialogueSamples { get; set; }
+
+        public List<string> BioNames { get; } = new();
+    }
+
+    /// <summary>
+    /// 纯函数：失效资产基名（SMAPI 已剥 locale 并把分隔符归一为 '/'）→ 失效计划。
+    /// 引擎台词样本库以 NPC 当前对话与净版 Characters/Dialogue 资产为源、并合并传记的
+    /// Dialogue 字典，因此这两类资产失效都要求样本库重建（InvalidateSampleCaches 的
+    /// WP15 事件接线，此前缺失导致样本一次捕获终身冻结）。
+    /// </summary>
+    internal static ContentInvalidationPlan ClassifyInvalidatedAssets(IEnumerable<string> assetBaseNames)
+    {
+        var plan = new ContentInvalidationPlan();
+        foreach (string rawName in assetBaseNames)
         {
-            if (name.StartsWith("Portraits/"))
+            string name = (rawName ?? string.Empty).Replace('\\', '/').Trim();
+            if (name.StartsWith("Portraits/", StringComparison.OrdinalIgnoreCase))
             {
-                DialogueEngineHost.InvalidatePortraitCaches();
-                break;
+                plan.Portraits = true;
+            }
+            else if (name.StartsWith("Characters/Dialogue/", StringComparison.OrdinalIgnoreCase))
+            {
+                plan.DialogueSamples = true;
+            }
+            else if (string.Equals(name, ContentAssetNames.Prompts, StringComparison.OrdinalIgnoreCase))
+            {
+                plan.Prompts = true;
+            }
+            else if (string.Equals(name, ContentAssetNames.GameSummary, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(name, ContentAssetNames.GameSummaryOptimized, StringComparison.OrdinalIgnoreCase))
+            {
+                plan.WorldSummaries = true;
+            }
+            else if (name.StartsWith(ContentAssetNames.BiosPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                plan.BioNames.Add(name[ContentAssetNames.BiosPrefix.Length..]);
+                plan.DialogueSamples = true;
             }
         }
 
-        DialogueContentService? service = DialogueContentService.Instance;
+        return plan;
+    }
+
+    /// <summary>执行失效计划；未装配的一侧（null）对应动作跳过。</summary>
+    internal static void ApplyInvalidationPlan(
+        ContentInvalidationPlan plan,
+        DialogueContentService? service,
+        DialogueEngine? engine)
+    {
+        if (plan.Portraits)
+        {
+            DialogueEngineHost.InvalidatePortraitCaches();
+        }
+
+        if (plan.DialogueSamples)
+        {
+            engine?.InvalidateSampleCaches();
+        }
+
         if (service == null)
         {
             return;
         }
 
-        foreach (IAssetName name in e.NamesWithoutLocale)
+        if (plan.Prompts)
         {
-            if (name.IsEquivalentTo(ContentAssetNames.Prompts))
-            {
-                service.InvalidatePrompts();
-            }
-            else if (name.IsEquivalentTo(ContentAssetNames.GameSummary)
-                || name.IsEquivalentTo(ContentAssetNames.GameSummaryOptimized))
-            {
-                service.InvalidateWorldSummaries();
-            }
-            else if (name.StartsWith(ContentAssetNames.BiosPrefix))
-            {
-                service.InvalidateBio(name.Name[ContentAssetNames.BiosPrefix.Length..]);
-            }
+            service.InvalidatePrompts();
+        }
+
+        if (plan.WorldSummaries)
+        {
+            service.InvalidateWorldSummaries();
+        }
+
+        foreach (string npcName in plan.BioNames)
+        {
+            service.InvalidateBio(npcName);
         }
     }
 
