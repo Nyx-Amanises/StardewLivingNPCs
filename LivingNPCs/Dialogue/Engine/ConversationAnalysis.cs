@@ -101,7 +101,9 @@ internal sealed class ConversationAnalysis
             return Empty;
         }
 
-        int markerIndex = text.LastIndexOf(marker, StringComparison.Ordinal);
+        // 与响应清理侧（ResponseParser 的 !+LIVINGNPCS_META 归一化）保持一致的大小写不敏感：
+        // 模型输出 !LivingNpcs_Meta 之类变体时，可见文本被正确清理，元数据也必须能解析出来。
+        int markerIndex = text.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
         if (markerIndex < 0)
         {
             return Empty;

@@ -129,7 +129,9 @@ internal sealed class GenerationResult
     internal GenerationCommit? Commit { get; init; }
 }
 
-/// <summary>流式回调（WP10 §5.2/§4.13）。OnToken 给原始增量，过滤由消费方用搬运件做。</summary>
+/// <summary>流式回调（WP10 §5.2/§4.13）。OnToken 给原始增量，过滤由消费方用搬运件做。
+/// 重试时引擎会经 OnToken 发送 <see cref="Engine.StreamingControlTokens.RetryReset"/> 控制记号：
+/// 渲染原始 token 的消费方必须把它当作"清空已积累预览"的信号，绝不能当作可显示文本。</summary>
 internal interface IStreamSink
 {
     void OnToken(string delta);

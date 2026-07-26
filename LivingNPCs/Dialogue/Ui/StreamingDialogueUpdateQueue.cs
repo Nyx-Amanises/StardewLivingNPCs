@@ -45,6 +45,14 @@ internal sealed class StreamingDialogueUpdateQueue
                 return;
             }
 
+            // 引擎重试信号：上一次尝试已作废（不可解析/语言错误），预览从干净状态重来。
+            if (string.Equals(token, StreamingControlTokens.RetryReset, StringComparison.Ordinal))
+            {
+                this.rawText = string.Empty;
+                this.previewDirty = true;
+                return;
+            }
+
             this.rawText += token;
             this.previewDirty = true;
         }

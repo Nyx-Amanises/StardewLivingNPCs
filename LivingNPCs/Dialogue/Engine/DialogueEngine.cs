@@ -219,6 +219,8 @@ internal sealed class DialogueEngine : IDialogueEngine
             attempts = attempt;
             if (attempt > 1)
             {
+                // 上一次尝试已作废：先让预览清空，再等待重试间隔，attempt 2 从干净窗开始。
+                sink.OnToken(StreamingControlTokens.RetryReset);
                 await Task.Delay(RetryDelay, ct).ConfigureAwait(false);
             }
 
@@ -902,11 +904,14 @@ internal sealed class DialogueEngine : IDialogueEngine
         return result;
     }
 
-    private static bool HasAcceptedImmediateCompanionOuting(ConversationAnalysis analysis)
+    /// <summary>与行为层裁决对齐（TravelLocationRules：空目标即空、不再兜底 Town）：目标地点
+    /// 缺失的 accepted_now 出游会被行为层拒绝执行，因此这里也绝不据此强制关闭对话。</summary>
+    internal static bool HasAcceptedImmediateCompanionOuting(ConversationAnalysis analysis)
     {
         return analysis.Actions.Any(action =>
             string.Equals(action.Type, "companion_outing", StringComparison.OrdinalIgnoreCase)
             && string.Equals(action.TravelConsent, "accepted_now", StringComparison.OrdinalIgnoreCase)
+            && !string.IsNullOrWhiteSpace(action.TargetLocation)
             && Behavior.TravelLocationRules.IsKnownPublicOutingTarget(action.TargetLocation));
     }
 

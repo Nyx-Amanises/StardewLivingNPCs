@@ -31,6 +31,9 @@ internal static class ResponseParser
     public const int MaxOptionLength = 90;
     public const int MaxOptionCandidateLength = 160;
 
+    /// <summary>元数据标记的裸名（无叹号）：选项候选按大小写不敏感整体拒绝。</summary>
+    private const string BareMetadataMarker = "LIVINGNPCS_META";
+
     private static readonly string[] MetadataFieldNames =
     {
         "rapportDelta", "endConversation", "memories", "ambientFollowUp", "emotionImpact",
@@ -115,15 +118,26 @@ internal static class ResponseParser
         if (dialogueIndex < 0)
         {
             int firstOption = lines.FindIndex(line => line.StartsWith("%", StringComparison.Ordinal));
-            var candidates = (firstOption < 0 ? lines : lines.Take(firstOption))
-                .Where(line => !PleasantryOpeners.Any(opener => line.StartsWith(opener, StringComparison.OrdinalIgnoreCase)))
-                .ToList();
-            string? candidate = candidates.LastOrDefault();
-            if (candidate == null || candidate.StartsWith("%", StringComparison.Ordinal))
+            int searchEnd = firstOption < 0 ? lines.Count : firstOption;
+
+            // 从后往前定位所选实例本身的下标。以前用 lines.IndexOf(文本) 回查会命中首个
+            // 重复行，使真正被选中的那份落进选项解析、NPC 台词复制成"玩家回应"。
+            int candidateIndex = -1;
+            for (int i = searchEnd - 1; i >= 0; i--)
+            {
+                if (!PleasantryOpeners.Any(opener => lines[i].StartsWith(opener, StringComparison.OrdinalIgnoreCase)))
+                {
+                    candidateIndex = i;
+                    break;
+                }
+            }
+
+            if (candidateIndex < 0)
             {
                 return new ParsedResponse { FailureReason = "no-dialogue-line" };
             }
 
+            string candidate = lines[candidateIndex];
             if (debug)
             {
                 DialogueServices.Monitor?.Log(
@@ -134,7 +148,7 @@ internal static class ResponseParser
                     StardewModdingAPI.LogLevel.Warn);
             }
 
-            dialogueIndex = lines.IndexOf(candidate);
+            dialogueIndex = candidateIndex;
             lines[dialogueIndex] = "- " + candidate;
         }
 
@@ -242,14 +256,19 @@ internal static class ResponseParser
         }
 
         string[] parts = PageMarkerPattern.Split(text);
-        for (int i = 0; i < parts.Length; i++)
+        var rebuilt = new StringBuilder(text.Length);
+        string? pendingBoundary = null;
+        foreach (string part in parts)
         {
-            if (PageMarkerPattern.IsMatch(parts[i]))
+            if (PageMarkerPattern.IsMatch(part))
             {
+                // 相邻页界只保留最后一个（#$e# 覆盖 #$b#），语义以离下一页最近者为准。
+                pendingBoundary = part;
                 continue;
             }
 
-            var portraitMatches = DollarTokenPattern.Matches(parts[i])
+            string page = part;
+            var portraitMatches = DollarTokenPattern.Matches(page)
                 .Cast<Match>()
                 .Select(match => new
                 {
@@ -259,21 +278,34 @@ internal static class ResponseParser
                 })
                 .Where(item => item.Marker != null)
                 .ToList();
-            if (portraitMatches.Count == 0)
+            if (portraitMatches.Count > 0)
+            {
+                string lastPortrait = "$" + portraitMatches[^1].Marker;
+                string visibleText = DollarTokenPattern.Replace(page, match =>
+                    TryGetAvailablePortrait(match.Groups["token"].Value, validPortraits, out _)
+                        ? string.Empty
+                        : match.Value);
+                visibleText = visibleText.TrimEnd();
+                page = visibleText.Length == 0 ? string.Empty : visibleText + lastPortrait;
+            }
+
+            // 无可见文本的页（仅肖像标记的页、模型输出相邻页界产生的空段）连同其页界
+            // 一起剔除：不产生 "#$b##$b#" 相邻页界，也不留下首尾悬空页界（空白对话页）。
+            if (page.Length == 0)
             {
                 continue;
             }
 
-            string lastPortrait = "$" + portraitMatches[^1].Marker;
-            string visibleText = DollarTokenPattern.Replace(parts[i], match =>
-                TryGetAvailablePortrait(match.Groups["token"].Value, validPortraits, out _)
-                    ? string.Empty
-                    : match.Value);
-            visibleText = visibleText.TrimEnd();
-            parts[i] = visibleText.Length == 0 ? string.Empty : visibleText + lastPortrait;
+            if (rebuilt.Length > 0 && pendingBoundary != null)
+            {
+                rebuilt.Append(pendingBoundary);
+            }
+
+            rebuilt.Append(page);
+            pendingBoundary = null;
         }
 
-        return string.Concat(parts);
+        return rebuilt.ToString();
     }
 
     private static string TrimPageMarkers(string text)
@@ -813,14 +845,20 @@ internal static class ResponseParser
             candidate = ListBulletPattern.Replace(candidate, string.Empty).Trim();
             if (candidate.Length == 0
                 || candidate.Length > MaxOptionCandidateLength
-                || candidate.Contains("#$", StringComparison.Ordinal)
-                || candidate.Contains(EngineConstants.MetadataMarker, StringComparison.Ordinal))
+                || candidate.Contains("#$", StringComparison.Ordinal))
             {
                 return null;
             }
         }
 
         if (candidate.Length == 0)
+        {
+            return null;
+        }
+
+        // 元数据标记残片绝不能变成可点击选项：不带叹号（模型漏写）或任意大小写的
+        // LIVINGNPCS_META 一律拒绝，两个分支（% 前缀与无前缀）共用此关卡。
+        if (candidate.Contains(BareMetadataMarker, StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
