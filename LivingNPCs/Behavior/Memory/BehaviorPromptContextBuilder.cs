@@ -171,7 +171,7 @@ internal static class BehaviorPromptContextBuilder
         AppendIfMeaningful(prompt, PromptFragments.Context.LabelBehaviorTendencies, PromptFragments.State.DialogueBehaviorInfluences(state, currentTotalDays));
         AppendIfMeaningful(prompt, PromptFragments.Context.LabelRecentGift, PromptFragments.State.LastGift(state));
         AppendIfMeaningful(prompt, PromptFragments.Context.LabelRecentEvent, PromptFragments.State.LastEvent(state));
-        AppendIfMeaningful(prompt, PromptFragments.Context.LabelSharedExperiences, PromptFragments.State.SharedExperiences(state));
+        AppendIfMeaningful(prompt, PromptFragments.Context.LabelSharedExperiences, PromptFragments.State.SharedExperiences(state, currentTotalDays));
         AppendIfMeaningful(prompt, PromptFragments.Context.LabelConflict, PromptFragments.State.Conflicts(state));
         AppendIfMeaningful(prompt, PromptFragments.Context.LabelPersonalMemory, PromptFragments.State.FarmerNickname(state));
 
@@ -185,7 +185,7 @@ internal static class BehaviorPromptContextBuilder
                 currentTotalDays).Allowed;
         if (helpRelevant)
         {
-            AppendIfMeaningful(prompt, PromptFragments.Context.LabelHelpRequests, PromptFragments.State.HelpRequests(state));
+            AppendIfMeaningful(prompt, PromptFragments.Context.LabelHelpRequests, PromptFragments.State.HelpRequests(state, currentTotalDays));
             prompt.AppendLine(PromptFragments.Context.HelpRequestLifecycleLineConcise);
             prompt.AppendLine(PromptFragments.Context.HelpRequestReadinessLine(
                 BuildHelpRequestReadinessLabel(state, world, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, currentTotalDays)));
@@ -269,7 +269,7 @@ internal static class BehaviorPromptContextBuilder
             lines.Add(PromptFragments.Context.BehaviorTendenciesLine(tendencies));
         }
 
-        string sharedExperiences = PromptFragments.State.SharedExperiences(state);
+        string sharedExperiences = PromptFragments.State.SharedExperiences(state, currentTotalDays);
         if (sharedExperiences == PromptFragments.State.EmptySharedExperiences)
         {
             emptyStores.Add(PromptFragments.Context.StoreLabelSharedExperiences);
@@ -279,7 +279,7 @@ internal static class BehaviorPromptContextBuilder
             lines.Add(PromptFragments.Context.SharedExperiencesLine(sharedExperiences));
         }
 
-        string helpRequests = PromptFragments.State.HelpRequests(state);
+        string helpRequests = PromptFragments.State.HelpRequests(state, currentTotalDays);
         if (helpRequests == PromptFragments.State.EmptyHelpRequests)
         {
             emptyStores.Add(PromptFragments.Context.StoreLabelHelpRequests);
@@ -496,25 +496,25 @@ internal static class BehaviorPromptContextBuilder
             if (communityImpressions.Count > 0)
             {
                 yield return PromptFragments.Context.CommunityImpressionCue(
-                    PromptFragments.Recall.CommunityImpressions(npc, communityImpressions));
+                    PromptFragments.Recall.CommunityImpressions(npc, communityImpressions, currentTotalDays));
             }
 
             var activeBehaviorInfluence = state.GetActiveDialogueBehaviorInfluences(currentTotalDays).FirstOrDefault();
             if (activeBehaviorInfluence != null)
             {
-                yield return PromptFragments.Context.BehaviorTendencyCue(activeBehaviorInfluence);
+                yield return PromptFragments.Context.BehaviorTendencyCue(activeBehaviorInfluence, currentTotalDays);
             }
 
             var activeHelpRequest = state.HelpRequests.FirstOrDefault(request => request.Status is "Offered" or "Pending");
             if (activeHelpRequest != null)
             {
-                yield return PromptFragments.Context.ActiveHelpRequestCue(activeHelpRequest);
+                yield return PromptFragments.Context.ActiveHelpRequestCue(activeHelpRequest, currentTotalDays);
             }
 
             var recentlyFulfilledHelpRequest = SelectRecentlyFulfilledHelpRequestToMention(state, currentTotalDays);
             if (recentlyFulfilledHelpRequest != null)
             {
-                yield return PromptFragments.Context.FulfilledHelpRequestCue(recentlyFulfilledHelpRequest);
+                yield return PromptFragments.Context.FulfilledHelpRequestCue(recentlyFulfilledHelpRequest, currentTotalDays);
             }
 
             var expiredHelpRequest = SelectExpiredHelpRequestToMention(state, currentTotalDays);
@@ -523,13 +523,13 @@ internal static class BehaviorPromptContextBuilder
                 string reaction = string.IsNullOrWhiteSpace(expiredHelpRequest.FailureReaction)
                     ? PromptFragments.Context.DefaultExpiredHelpRequestReaction
                     : expiredHelpRequest.FailureReaction;
-                yield return PromptFragments.Context.ExpiredHelpRequestCue(expiredHelpRequest, reaction);
+                yield return PromptFragments.Context.ExpiredHelpRequestCue(expiredHelpRequest, reaction, currentTotalDays);
             }
 
             var sharedExperience = SelectSharedExperienceFollowUp(state, currentTotalDays);
             if (sharedExperience != null)
             {
-                yield return PromptFragments.Context.SharedExperienceCue(sharedExperience);
+                yield return PromptFragments.Context.SharedExperienceCue(sharedExperience, currentTotalDays);
             }
 
             if (state.RelationshipTrust < 35)
@@ -558,7 +558,7 @@ internal static class BehaviorPromptContextBuilder
             var recoveredConflict = SelectRecentlyResolvedConflictToMention(state, currentTotalDays);
             if (recoveredConflict != null)
             {
-                yield return PromptFragments.Context.ResolvedConflictCue(recoveredConflict, emotionalStyle.RepairPromptLabel);
+                yield return PromptFragments.Context.ResolvedConflictCue(recoveredConflict, emotionalStyle.RepairPromptLabel, currentTotalDays);
             }
 
             if (!string.IsNullOrWhiteSpace(state.InteractionRhythm)

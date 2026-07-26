@@ -104,7 +104,7 @@ internal sealed class DialogueBehaviorInfluenceRuntime
                 $"a recent conversation shaped later behavior: {activeInfluence.Type}; {activeInfluence.Summary}",
                 this.config.MaxMemoryEntriesPerNpc
             );
-            this.pushInteractionContext(npc, $"Applied dialogue-driven behavior for {npc.Name}: {PromptFragments.Facts.DialogueBehaviorInfluence(activeInfluence)}.");
+            this.pushInteractionContext(npc, $"Applied dialogue-driven behavior for {npc.Name}: {PromptFragments.Facts.DialogueBehaviorInfluence(activeInfluence, Game1.Date.TotalDays)}.");
         }
     }
 

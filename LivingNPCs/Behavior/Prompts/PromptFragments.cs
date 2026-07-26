@@ -117,20 +117,12 @@ internal static class PromptFragments
                 : string.Join("; ", preferences.Select(memory => memory.Summary));
         }
 
-        public static string CommunityImpressions(LivingNpcState state)
-        {
-            var memories = state.GetTopCommunityImpressions(4).ToList();
-            return memories.Count == 0
-                ? EmptyCommunityImpressions
-                : string.Join("; ", memories.Select(Facts.CommunityImpression));
-        }
-
-        public static string SharedExperiences(LivingNpcState state)
+        public static string SharedExperiences(LivingNpcState state, int currentTotalDays)
         {
             var experiences = state.GetTopSharedExperiences(4).ToList();
             return experiences.Count == 0
                 ? EmptySharedExperiences
-                : string.Join("; ", experiences.Select(Facts.SharedExperience));
+                : string.Join("; ", experiences.Select(experience => Facts.SharedExperience(experience, currentTotalDays)));
         }
 
         public static string DialogueBehaviorInfluences(LivingNpcState state, int currentTotalDays)
@@ -138,15 +130,15 @@ internal static class PromptFragments
             var influences = state.GetActiveDialogueBehaviorInfluences(currentTotalDays).Take(4).ToList();
             return influences.Count == 0
                 ? EmptyBehaviorInfluences
-                : string.Join("; ", influences.Select(Facts.DialogueBehaviorInfluence));
+                : string.Join("; ", influences.Select(influence => Facts.DialogueBehaviorInfluence(influence, currentTotalDays)));
         }
 
-        public static string HelpRequests(LivingNpcState state)
+        public static string HelpRequests(LivingNpcState state, int currentTotalDays)
         {
             var requests = state.GetTopHelpRequests(4).ToList();
             return requests.Count == 0
                 ? EmptyHelpRequests
-                : string.Join("; ", requests.Select(Facts.HelpRequest));
+                : string.Join("; ", requests.Select(request => Facts.HelpRequest(request, currentTotalDays)));
         }
 
         public static string RelationshipTrust(LivingNpcState state) => state.RelationshipTrust switch
@@ -189,27 +181,35 @@ internal static class PromptFragments
         }
     }
 
-    /// <summary>One-line prompt descriptions of individual memory fact records.</summary>
+    /// <summary>
+    /// One-line prompt descriptions of individual memory fact records. Dates render as relative
+    /// time ("due tomorrow", "shared 3 days ago") because the model cannot reason about internal
+    /// total-day counters.
+    /// </summary>
     internal static class Facts
     {
-        public static string CommunityImpression(CommunityImpressionFact memory) => memory.Source switch
+        public static string CommunityImpression(CommunityImpressionFact memory, int currentTotalDays)
         {
-            "Witnessed" => $"directly witnessed, {memory.FreshnessStage} ({memory.Visibility.ToLowerInvariant()}): {memory.Summary}",
-            "CloseCircle" => $"heard through a close connection after {memory.TransmissionDepth} retelling(s), {memory.FreshnessStage} ({memory.Visibility.ToLowerInvariant()}): {memory.Summary}",
-            _ => $"picked up as a faint public impression after {memory.TransmissionDepth} retelling(s), {memory.FreshnessStage} ({memory.Visibility.ToLowerInvariant()}): {memory.Summary}"
-        };
+            string stage = CommunityImpressionStore.GetFreshnessStage(memory, currentTotalDays);
+            return memory.Source switch
+            {
+                "Witnessed" => $"directly witnessed, {stage} ({memory.Visibility.ToLowerInvariant()}): {memory.Summary}",
+                "CloseCircle" => $"heard through a close connection after {memory.TransmissionDepth} retelling(s), {stage} ({memory.Visibility.ToLowerInvariant()}): {memory.Summary}",
+                _ => $"picked up as a faint public impression after {memory.TransmissionDepth} retelling(s), {stage} ({memory.Visibility.ToLowerInvariant()}): {memory.Summary}"
+            };
+        }
 
-        public static string SharedExperience(SharedExperienceFact experience) =>
-            $"{experience.Type} at {experience.LocationLabel}; shared on total day {experience.CreatedTotalDays}; summary: {experience.Summary}";
+        public static string SharedExperience(SharedExperienceFact experience, int currentTotalDays) =>
+            $"{experience.Type} at {experience.LocationLabel}; shared {Age(experience.CreatedTotalDays, currentTotalDays)}; summary: {experience.Summary}";
 
-        public static string DialogueBehaviorInfluence(DialogueBehaviorInfluenceFact influence) =>
-            $"{influence.Type}, intensity {influence.Intensity}/100, target {influence.TargetLocationLabel}, status {influence.Status}, expires total day {influence.ExpiresTotalDays}; summary: {influence.Summary}";
+        public static string DialogueBehaviorInfluence(DialogueBehaviorInfluenceFact influence, int currentTotalDays) =>
+            $"{influence.Type}, intensity {influence.Intensity}/100, target {influence.TargetLocationLabel}, status {influence.Status}, {ExpiryLabel(influence.ExpiresTotalDays, currentTotalDays)}; summary: {influence.Summary}";
 
-        public static string HelpRequest(NpcHelpRequestFact request) =>
-            $"{request.Type}, due on total day {request.DueTotalDays}, status {request.Status}, step {System.Math.Min(request.CurrentStepIndex + 1, System.Math.Max(1, request.Steps.Count))}/{System.Math.Max(1, request.Steps.Count)}; current step: {HelpRequestCurrentStep(request)}; summary: {request.Summary}";
+        public static string HelpRequest(NpcHelpRequestFact request, int currentTotalDays) =>
+            $"{request.Type}, {DueLabel(request.DueTotalDays, currentTotalDays)}, status {request.Status}, step {System.Math.Min(request.CurrentStepIndex + 1, System.Math.Max(1, request.Steps.Count))}/{System.Math.Max(1, request.Steps.Count)}; current step: {HelpRequestCurrentStep(request)}; summary: {request.Summary}";
 
-        public static string HelpRequestFulfilled(NpcHelpRequestFact request) =>
-            $"{request.Type} was fulfilled on total day {request.FulfilledTotalDays}; summary: {request.Summary}; follow-up potential: {request.FollowUpPotential}";
+        public static string HelpRequestFulfilled(NpcHelpRequestFact request, int currentTotalDays) =>
+            $"{request.Type} was fulfilled {Age(request.FulfilledTotalDays, currentTotalDays)}; summary: {request.Summary}; follow-up potential: {request.FollowUpPotential}";
 
         public static string HelpRequestCurrentStep(NpcHelpRequestFact request)
         {
@@ -231,8 +231,45 @@ internal static class PromptFragments
         public static string Conflict(NpcConflictFact conflict) =>
             $"{conflict.Status.ToLowerInvariant()} conflict, severity {conflict.Severity}/100, cause {conflict.CauseKind}, repair stage {conflict.RepairStage}: {conflict.Summary}";
 
-        public static string ConflictResolved(NpcConflictFact conflict) =>
-            $"resolved conflict from total day {conflict.CreatedTotalDays}, cause {conflict.CauseKind}: {conflict.Summary}";
+        public static string ConflictResolved(NpcConflictFact conflict, int currentTotalDays) =>
+            $"resolved conflict from {Age(conflict.CreatedTotalDays, currentTotalDays)}, cause {conflict.CauseKind}: {conflict.Summary}";
+
+        private static string Age(int totalDays, int currentTotalDays) =>
+            Context.MemoryAge(totalDays < 0 ? int.MaxValue : System.Math.Max(0, currentTotalDays - totalDays));
+
+        private static string DueLabel(int dueTotalDays, int currentTotalDays)
+        {
+            if (dueTotalDays < 0)
+            {
+                return "no due date";
+            }
+
+            int remaining = dueTotalDays - currentTotalDays;
+            return remaining switch
+            {
+                < 0 => "past due",
+                0 => "due today",
+                1 => "due tomorrow",
+                _ => $"due in {remaining} days"
+            };
+        }
+
+        private static string ExpiryLabel(int expiresTotalDays, int currentTotalDays)
+        {
+            if (expiresTotalDays < 0)
+            {
+                return "no expiry";
+            }
+
+            int remaining = expiresTotalDays - currentTotalDays;
+            return remaining switch
+            {
+                < 0 => "already expired",
+                0 => "expires today",
+                1 => "expires tomorrow",
+                _ => $"expires in {remaining} days"
+            };
+        }
     }
 
     /// <summary>Recall-focus lines built from the per-reply memory recall plan.</summary>
@@ -257,12 +294,12 @@ internal static class PromptFragments
                 : string.Join("; ", selections.Select(selection => selection.Memory.Summary));
         }
 
-        public static string CommunityImpressions(NPC npc, IReadOnlyList<CommunityImpressionSelection> selections)
+        public static string CommunityImpressions(NPC npc, IReadOnlyList<CommunityImpressionSelection> selections, int currentTotalDays)
         {
             CommunityReactionCue reaction = CommunityReactionStyle.For(npc);
             return selections.Count == 0
                 ? EmptyCommunityRecall
-                : $"observer tendency: {reaction.PromptLabel}; retelling tendency: {reaction.RetellingPromptLabel}; {string.Join("; ", selections.Select(selection => Facts.CommunityImpression(selection.Memory)))}";
+                : $"observer tendency: {reaction.PromptLabel}; retelling tendency: {reaction.RetellingPromptLabel}; {string.Join("; ", selections.Select(selection => Facts.CommunityImpression(selection.Memory, currentTotalDays)))}";
         }
     }
 
@@ -456,27 +493,27 @@ internal static class PromptFragments
         public static string CommunityImpressionCue(string recallText) =>
             $"Community impressions: {recallText}; use at most one as a brief passing remark, never the opening subject; keep indirect reports tentative, and do not reveal knowledge the NPC would not plausibly have.";
 
-        public static string BehaviorTendencyCue(DialogueBehaviorInfluenceFact influence) =>
-            $"Conversation-driven behavior tendency: {Facts.DialogueBehaviorInfluence(influence)}; this should shape body language and follow-through, not be quoted as dialogue.";
+        public static string BehaviorTendencyCue(DialogueBehaviorInfluenceFact influence, int currentTotalDays) =>
+            $"Conversation-driven behavior tendency: {Facts.DialogueBehaviorInfluence(influence, currentTotalDays)}; this should shape body language and follow-through, not be quoted as dialogue.";
 
-        public static string ActiveHelpRequestCue(NpcHelpRequestFact request)
+        public static string ActiveHelpRequestCue(NpcHelpRequestFact request, int currentTotalDays)
         {
             string lifecycle = request.Status == "Offered"
                 ? "the NPC has asked, but the farmer has not clearly accepted or declined yet; do not treat it as an active task until accepted"
                 : "the farmer accepted this ask; it is now an active personal task";
-            return $"Active help request: {Facts.HelpRequest(request)}; {lifecycle}; remember that this is an unfinished ask, not a vague topic.";
+            return $"Active help request: {Facts.HelpRequest(request, currentTotalDays)}; {lifecycle}; remember that this is an unfinished ask, not a vague topic.";
         }
 
-        public static string FulfilledHelpRequestCue(NpcHelpRequestFact request) =>
-            $"Recently fulfilled help request: {Facts.HelpRequestFulfilled(request)}; if it fits, the NPC may briefly thank the farmer for following through.";
+        public static string FulfilledHelpRequestCue(NpcHelpRequestFact request, int currentTotalDays) =>
+            $"Recently fulfilled help request: {Facts.HelpRequestFulfilled(request, currentTotalDays)}; if it fits, the NPC may briefly thank the farmer for following through.";
 
         public const string DefaultExpiredHelpRequestReaction = "the NPC noticed the request did not work out";
 
-        public static string ExpiredHelpRequestCue(NpcHelpRequestFact request, string reaction) =>
-            $"Unfinished help request: {Facts.HelpRequest(request)}; reaction: {reaction}; the next conversation may acknowledge this according to personality, without over-punishing if the farmer never accepted.";
+        public static string ExpiredHelpRequestCue(NpcHelpRequestFact request, string reaction, int currentTotalDays) =>
+            $"Unfinished help request: {Facts.HelpRequest(request, currentTotalDays)}; reaction: {reaction}; the next conversation may acknowledge this according to personality, without over-punishing if the farmer never accepted.";
 
-        public static string SharedExperienceCue(SharedExperienceFact experience) =>
-            $"Shared experience: {Facts.SharedExperience(experience)}; if it fits, the NPC may acknowledge the time they spent together without formally reciting the memory.";
+        public static string SharedExperienceCue(SharedExperienceFact experience, int currentTotalDays) =>
+            $"Shared experience: {Facts.SharedExperience(experience, currentTotalDays)}; if it fits, the NPC may acknowledge the time they spent together without formally reciting the memory.";
 
         public static string LowTrustCue(int trust) =>
             $"Relationship trust is only {trust}/100; keep disclosures surface-level and avoid sudden emotional intimacy.";
@@ -490,8 +527,8 @@ internal static class PromptFragments
         public static string ComplexRepairCue(string repairStage) =>
             $"Complex repair chain: stage {repairStage}; serious hurt may need apology, a meaningful gesture, time, and a specific restorative conversation before it is fully repaired.";
 
-        public static string ResolvedConflictCue(NpcConflictFact conflict, string repairStyle) =>
-            $"Recently resolved conflict: {Facts.ConflictResolved(conflict)}; if it fits naturally, the NPC may briefly make clear that the earlier issue is past now; recovery style: {repairStyle}.";
+        public static string ResolvedConflictCue(NpcConflictFact conflict, string repairStyle, int currentTotalDays) =>
+            $"Recently resolved conflict: {Facts.ConflictResolved(conflict, currentTotalDays)}; if it fits naturally, the NPC may briefly make clear that the earlier issue is past now; recovery style: {repairStyle}.";
 
         public static string RhythmReminderCue(LivingNpcState state) =>
             $"Interaction rhythm: {State.InteractionRhythm(state)}; do not make every repeated talk sound equally eager.";
