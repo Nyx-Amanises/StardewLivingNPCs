@@ -236,6 +236,9 @@ internal static class DialogueEngineBootstrapper
         try
         {
             AsyncBuilder.Instance.Scheduler?.CancelActiveGeneration();
+            // 残留的自由输入会话必须随存档作用域强制释放（归还键盘订阅、不触发提交回调），
+            // 否则断线回标题等外力路径会把旧存档的会话与键盘劫持带进下一个存档。
+            NativeDialogueTextInputController.ForceClose();
             DialogueEngineHost.Instance?.History.ClearContext();
             ConversationTranscriptExporter.ClearPending();
             TypedInputRequestQueue.Clear();

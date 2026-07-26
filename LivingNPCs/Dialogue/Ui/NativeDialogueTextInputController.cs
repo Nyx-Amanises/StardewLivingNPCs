@@ -167,12 +167,100 @@ internal static class NativeDialogueTextInputController
             DialogueUiStateGuard.ClearDialogueState(npc, closingInputBox ? dialogueBox : null);
         }
 
-        if (ReferenceEquals(Game1.keyboardDispatcher.Subscriber, subscriber))
-        {
-            Game1.keyboardDispatcher.Subscriber = null;
-        }
-        DialogueServices.Helper.Events.GameLoop.UpdateTicked -= OnUpdateTicked;
+        ReleaseInput();
+        ClearFields();
+    }
 
+    /// <summary>
+    /// 存档作用域强制释放（SaveLoaded / ReturnedToTitle 由接线层调用）：残留会话直接废弃，
+    /// 不触发提交回调（不发好感、不发起生成），并归还键盘订阅。无会话时安全空转。
+    /// </summary>
+    public static void ForceClose()
+    {
+        if (!active)
+        {
+            return;
+        }
+
+        AbandonSession("save-scope reset");
+    }
+
+    /// <summary>
+    /// 看门狗 / 强制释放共用的废弃路径：与 Cancel 等价的输入释放，但绝不调用提交回调。
+    /// 先释放订阅并清空会话字段（此后 IsInputBox 恒 false），再摘除残留对白；仅当全局对话
+    /// 状态确为本会话残留（无任何菜单 + currentSpeaker 仍指向本 NPC + 对白栈已空）时才清理
+    /// 全局状态，绝不动其他代码打开的菜单。
+    /// </summary>
+    private static void AbandonSession(string reason)
+    {
+        NPC npc = currentNpc;
+        GameDialogue dialogue = activeDialogue;
+
+        ReleaseInput();
+        ClearFields();
+
+        try
+        {
+            DialogueUiStateGuard.RemoveDialogue(npc, dialogue);
+            if (ShouldClearAbandonedDialogueState(
+                menuIsNull: Game1.activeClickableMenu == null,
+                currentSpeakerIsOwnNpc: npc != null && ReferenceEquals(Game1.currentSpeaker, npc),
+                ownNpcStackEmpty: DialogueUiStateGuard.HasEmptyDialogueStack(npc)))
+            {
+                DialogueUiStateGuard.ClearDialogueState(npc);
+            }
+        }
+        catch (Exception ex)
+        {
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "clean up an abandoned typed-dialogue session", error = ex.Message },
+                    $"Failed to clean up an abandoned typed-dialogue session: {ex.Message}"),
+                StardewModdingAPI.LogLevel.Trace);
+        }
+
+        DialogueServices.Monitor?.Log(
+            Util.GetConsoleString(
+                "dialogue.log.inputSessionAbandoned",
+                new { npc = npc?.Name ?? "?", reason },
+                $"Abandoned the typed-dialogue input session for {npc?.Name} ({reason}); no text was submitted."),
+            StardewModdingAPI.LogLevel.Trace);
+    }
+
+    /// <summary>看门狗判定（纯函数）：会话活跃而宿主输入框已不在 → 废弃。</summary>
+    internal static bool ShouldAbandonSession(bool sessionActive, bool hostInputBoxAlive)
+    {
+        return sessionActive && !hostInputBoxAlive;
+    }
+
+    /// <summary>
+    /// 废弃后是否清理全局对话状态（纯函数）：仅当无任何菜单打开、说话人仍指向本 NPC、
+    /// 且该 NPC 的对白栈已空——三者同时成立才认定是本会话残留；任一不满足都不碰全局状态。
+    /// </summary>
+    internal static bool ShouldClearAbandonedDialogueState(bool menuIsNull, bool currentSpeakerIsOwnNpc, bool ownNpcStackEmpty)
+    {
+        return menuIsNull && currentSpeakerIsOwnNpc && ownNpcStackEmpty;
+    }
+
+    /// <summary>归还键盘输入：订阅者仍是本会话的才清（他人已接管则不夺回），并退订 tick 泵。</summary>
+    private static void ReleaseInput()
+    {
+        var dispatcher = Game1.keyboardDispatcher;
+        if (dispatcher != null && ReferenceEquals(dispatcher.Subscriber, subscriber))
+        {
+            dispatcher.Subscriber = null;
+        }
+
+        var events = DialogueServices.Helper?.Events;
+        if (events != null)
+        {
+            events.GameLoop.UpdateTicked -= OnUpdateTicked;
+        }
+    }
+
+    private static void ClearFields()
+    {
         active = false;
         currentNpc = null;
         activeBox = null;
@@ -343,7 +431,21 @@ internal static class NativeDialogueTextInputController
 
     private static void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
     {
-        if (!active || repeatingKey == null)
+        if (!active)
+        {
+            return;
+        }
+
+        // 看门狗：宿主对话框可被外力关闭（联机 2 点强制昏倒、节日强制散场、其他 mod 关菜单、
+        // 断线回标题等），此时会话必须立即废弃并归还键盘订阅，否则劫持永久残留，之后任意时刻
+        // 按 Enter 会凭空触发提交（发好感 + 发起生成），甚至把旧存档的会话带进新存档。
+        if (ShouldAbandonSession(active, hostInputBoxAlive: IsInputBox(Game1.activeClickableMenu as DialogueBox)))
+        {
+            AbandonSession("host dialogue box closed externally");
+            return;
+        }
+
+        if (repeatingKey == null)
         {
             return;
         }
