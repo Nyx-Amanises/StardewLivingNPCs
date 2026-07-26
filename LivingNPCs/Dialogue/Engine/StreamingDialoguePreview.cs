@@ -157,7 +157,7 @@ internal static class StreamingDialoguePreview
         cleaned = BareMetadataTailPattern.Replace(cleaned, string.Empty);
         cleaned = DialogueCommandPattern.Replace(cleaned, string.Empty);
 
-        int percentIndex = cleaned.IndexOf('%');
+        int percentIndex = FindGluedResponseTailIndex(cleaned);
         if (percentIndex > 0)
         {
             cleaned = cleaned[..percentIndex];
@@ -179,5 +179,48 @@ internal static class StreamingDialoguePreview
         }
 
         return cleaned.Trim();
+    }
+
+    /// <summary>
+    /// Locates a "%option" tail glued onto visible text. A percent sign that reads as prose —
+    /// preceded by a digit ("20%"), followed by a digit ("%20"), followed by whitespace, or at the
+    /// very end of the text — never truncates. This mirrors the response parser's
+    /// MidLineOptionPattern, which likewise refuses to treat "%" + digit as a response option.
+    /// Returns -1 when nothing should be cut.
+    /// </summary>
+    internal static int FindGluedResponseTailIndex(string text)
+    {
+        for (int index = text.IndexOf('%'); index > 0; index = text.IndexOf('%', index + 1))
+        {
+            // "20%" is a percentage, not a hidden tail; keep scanning after this marker.
+            if (char.IsDigit(text[index - 1]))
+            {
+                continue;
+            }
+
+            int runEnd = index;
+            while (runEnd < text.Length && text[runEnd] == '%')
+            {
+                runEnd++;
+            }
+
+            // A trailing percent run has no option text behind it — nothing to cut.
+            if (runEnd >= text.Length)
+            {
+                return -1;
+            }
+
+            char next = text[runEnd];
+            if (char.IsDigit(next) || char.IsWhiteSpace(next))
+            {
+                // "%20" / "% " read as prose; resume the scan after the whole run.
+                index = runEnd - 1;
+                continue;
+            }
+
+            return index;
+        }
+
+        return -1;
     }
 }

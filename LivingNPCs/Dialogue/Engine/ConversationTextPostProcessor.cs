@@ -155,8 +155,13 @@ internal static class ConversationTextPostProcessor
 
     public static string GetLanguageRetryInstruction()
     {
-        return DialogueServices.Helper?.Translation.Locale?.StartsWith("zh", StringComparison.OrdinalIgnoreCase) == true
-            ? string.Empty
+        return GetLanguageRetryInstruction(DialogueServices.Helper?.Translation.Locale ?? string.Empty);
+    }
+
+    internal static string GetLanguageRetryInstruction(string locale)
+    {
+        return locale.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
+            ? "\n重要：请只用中文重写这句 NPC 台词和所有玩家回应选项，不要输出英文句子。"
             : "\nImportant: rewrite the NPC line and all player response options in English only. Do not use Chinese characters.";
     }
 

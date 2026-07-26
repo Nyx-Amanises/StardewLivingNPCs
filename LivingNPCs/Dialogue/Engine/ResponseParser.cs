@@ -40,8 +40,13 @@ internal static class ResponseParser
     private static readonly Regex MetadataMarkerPattern = new(
         @"!+LIVINGNPCS_META",
         RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    // A bare "word: text" line is ordinary prose ("- Abigail: Hello!", "Sure: sounds good"), so a
+    // line only counts as a JSON property when it carries a structural JSON signal: an opening
+    // brace/bracket or quote before the name, a quote glued onto the name ('type":'), or — for
+    // unbulleted lines — a value that itself starts with a quote/brace/bracket. Bare top-level
+    // schema names ("rapportDelta: 2") remain covered by the MetadataFieldNames prefix check.
     private static readonly Regex JsonPropertyLinePattern = new(
-        """^(?:[-*]\s*)?[\{\[]?\s*["“”]?[A-Za-z][A-Za-z0-9_]*["“”]?\s*["']?\s*:\s*""",
+        """^(?:[-*]\s*)?(?:[\{\[]\s*["“”]?|["“”])[A-Za-z][A-Za-z0-9_]*["“”]?\s*["']?\s*:\s*|^(?:[-*]\s*)?[A-Za-z][A-Za-z0-9_]*["“”]\s*["']?\s*:\s*|^[A-Za-z][A-Za-z0-9_]*\s*:\s*["“”\{\[]""",
         RegexOptions.Compiled);
     private static readonly Regex JsonStructuralLinePattern = new(
         @"^[\s,]*[\}\]]+[\s,.;]*$|^```(?:json)?\s*$",
