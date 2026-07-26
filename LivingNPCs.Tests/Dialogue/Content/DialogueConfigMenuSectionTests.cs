@@ -141,11 +141,21 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
     public void ClearApiKeyWhenProviderChanged_OnlyClearsAfterCommittedProviderChange()
     {
         var unchanged = new ModConfig { Provider = "Google", ApiKey = "keep-me" };
-        Assert.False(DialogueConfigMenuSection.ClearApiKeyWhenProviderChanged(unchanged, "google"));
+        Assert.False(DialogueConfigMenuSection.ClearApiKeyWhenProviderChanged(unchanged, "google", "keep-me"));
         Assert.Equal("keep-me", unchanged.ApiKey);
 
+        // 只切换提供商、Key 未动：旧提供商的 Key 应被清空。
         var changed = new ModConfig { Provider = "Anthropic", ApiKey = "clear-me" };
-        Assert.True(DialogueConfigMenuSection.ClearApiKeyWhenProviderChanged(changed, "Google"));
+        Assert.True(DialogueConfigMenuSection.ClearApiKeyWhenProviderChanged(changed, "Google", "clear-me"));
         Assert.Equal(string.Empty, changed.ApiKey);
+    }
+
+    [Fact]
+    public void ClearApiKeyWhenProviderChanged_KeepsKeyEnteredInSameSave()
+    {
+        // 同一次保存里既切了提供商又填了新 Key：新 Key 必须保留，不能被"清旧 Key"逻辑吞掉。
+        var config = new ModConfig { Provider = "DeepSeek", ApiKey = "new-deepseek-key" };
+        Assert.True(DialogueConfigMenuSection.ClearApiKeyWhenProviderChanged(config, "OpenAiCompatible", "old-key"));
+        Assert.Equal("new-deepseek-key", config.ApiKey);
     }
 }

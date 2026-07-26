@@ -31,6 +31,10 @@ internal sealed class GenerationScheduler
     private CancellationTokenSource? activeCancellation;
     private Task? activeTask;
 
+    /// <summary>失败 HUD 提示节流（被动台词失败也走这里，避免刷屏）。</summary>
+    private static long lastFailureNoticeTicks = long.MinValue;
+    private const long FailureNoticeThrottleMs = 20_000;
+
     public GenerationScheduler(
         DialogueEngine engine,
         bool subscribeEvents = true,
@@ -245,8 +249,15 @@ internal sealed class GenerationScheduler
                         LogLevel.Error);
                 }
 
+                NotifyGenerationFailure();
                 this.draw(npc, EngineConstants.KeyError, EngineConstants.FallbackLine);
                 return;
+            }
+
+            if (result.IsFallback)
+            {
+                // 引擎内部已兜底为占位行；仍要让玩家知道这不是 NPC 在故意冷场。
+                NotifyGenerationFailure();
             }
 
             if (string.IsNullOrWhiteSpace(result.FormattedLine))
@@ -276,6 +287,28 @@ internal sealed class GenerationScheduler
                     $"Failed to present generated dialogue: {ex}"),
                 LogLevel.Error);
         }
+    }
+
+    /// <summary>生成失败时的游戏内提示（占位行"..."之外的可见解释）；20 秒节流。</summary>
+    private static void NotifyGenerationFailure()
+    {
+        long now = Environment.TickCount64;
+        if (lastFailureNoticeTicks != long.MinValue && now - lastFailureNoticeTicks < FailureNoticeThrottleMs)
+        {
+            return;
+        }
+
+        lastFailureNoticeTicks = now;
+        LlmHudNotifier.Show(Util.GetConsoleString(
+            "dialogue.hud.generationFailed",
+            null,
+            "LivingNPCs: the AI reply failed to generate, so a placeholder line is shown. See the SMAPI console for the reason (API key, model name, server address, or network)."));
+    }
+
+    /// <summary>测试复位：清除失败提示节流。</summary>
+    internal static void ResetFailureNoticeForTests()
+    {
+        lastFailureNoticeTicks = long.MinValue;
     }
 
     private bool Draw(NPC? npc, string key, string text)

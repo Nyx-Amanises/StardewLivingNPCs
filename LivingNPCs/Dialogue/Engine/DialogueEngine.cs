@@ -757,6 +757,7 @@ internal sealed class DialogueEngine : IDialogueEngine
                 AnalysisJson = ConversationAnalysis.Empty.ToJson(),
                 EndConversation = true,
                 DialogueKey = this.ResolveDialogueKey(request),
+                IsFallback = true,
                 Usage = response?.Usage ?? new TokenUsage()
             };
         }

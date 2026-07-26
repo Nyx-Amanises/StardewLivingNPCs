@@ -73,10 +73,65 @@ internal static class PatchGuards
         return Engine!.IsEnabledFor(npc);
     }
 
+    /// <summary>测试注入的"连接未配置"判定；null 走 LlmClientHost.Instance.ConnectionLooksIncomplete。</summary>
+    internal static Func<bool>? ConnectionUnconfiguredResolverForTests;
+
+    private static long lastUnconfiguredHintTicks = long.MinValue;
+    private const long UnconfiguredHintThrottleMs = 10_000;
+
+    private static bool ConnectionUnconfigured => ConnectionUnconfiguredResolverForTests?.Invoke()
+        ?? LlmClientHost.Instance.ConnectionLooksIncomplete;
+
     /// <summary>主动搭话路径（P1 / P13 前半 / P15）：就绪 + 启用，不抽签（§4.2.1）。</summary>
     public static bool AllowInteractiveInput(NPC? npc)
     {
+        if (npc != null && NotifyIfConnectionUnconfigured())
+        {
+            return false;
+        }
+
         return IsEnabledFor(npc);
+    }
+
+    /// <summary>
+    /// 玩家按住触发键主动搭话、引擎开着但连接必填项缺失时：给一次游戏内配置引导（10 秒节流），
+    /// 并让入口回退原版对话，替代旧行为里的静默"..."。
+    /// </summary>
+    private static bool NotifyIfConnectionUnconfigured()
+    {
+        if (DialogueServices.Config?.EnableDialogueEngine != true)
+        {
+            return false;
+        }
+
+        if (DialogueEngineGate.RuntimeDisabled || EnableGate.EngineDisabledByCoexistence)
+        {
+            return false;
+        }
+
+        if (!ConnectionUnconfigured)
+        {
+            return false;
+        }
+
+        long now = Environment.TickCount64;
+        if (lastUnconfiguredHintTicks == long.MinValue || now - lastUnconfiguredHintTicks >= UnconfiguredHintThrottleMs)
+        {
+            lastUnconfiguredHintTicks = now;
+            LlmHudNotifier.Show(Util.GetConsoleString(
+                "dialogue.hud.notConfigured",
+                null,
+                "LivingNPCs: the AI dialogue engine is not configured yet. Open Generic Mod Config Menu -> LivingNPCs -> AI Dialogue Engine and fill in the connection settings."));
+        }
+
+        return true;
+    }
+
+    /// <summary>测试复位：清除未配置提示节流与注入。</summary>
+    internal static void ResetUnconfiguredHintForTests()
+    {
+        lastUnconfiguredHintTicks = long.MinValue;
+        ConnectionUnconfiguredResolverForTests = null;
     }
 
     /// <summary>

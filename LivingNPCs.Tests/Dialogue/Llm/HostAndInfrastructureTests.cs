@@ -35,6 +35,30 @@ public sealed class LlmClientHostTests : LlmTestBase
     }
 
     [Fact]
+    public void IncompleteConnectionSettingsDisableGenerationAndSkipSelfCheck()
+    {
+        var host = new LlmClientHost();
+
+        // OpenAI 需要 API Key：空 Key = 未配置 → 生成入口关闭、自检跳过（避免必败请求与误导报错），
+        // 改为一条明确的引导日志。
+        host.ReplaceClient(Settings("OpenAI", apiKey: "", suppressConnectionCheck: false));
+        Assert.True(host.ConnectionLooksIncomplete);
+        Assert.False(host.CanGenerate);
+        Assert.Null(host.LastSelfCheck);
+        Assert.True(Monitor.Contains(LogLevel.Info, "incomplete"));
+
+        // llama.cpp 不需要 Key：有服务端点即视为完整。
+        host.ReplaceClient(Settings("LlamaCpp", apiKey: "", serverAddress: "http://127.0.0.1:8080/completion"));
+        Assert.False(host.ConnectionLooksIncomplete);
+        Assert.True(host.CanGenerate);
+
+        // 补上 Key 后恢复。
+        host.ReplaceClient(Settings("OpenAI"));
+        Assert.False(host.ConnectionLooksIncomplete);
+        Assert.True(host.CanGenerate);
+    }
+
+    [Fact]
     public async Task AuthBreakerSuspendsAfterTwoFailedRepliesUntilConfigChange()
     {
         var hudMessages = new List<string>();
@@ -209,20 +233,22 @@ public sealed class ConnectionSelfCheckTests : LlmTestBase
     }
 
     [Fact]
-    public async Task FailureWithEmptyApiKeySuggestsConfiguringKeyAndNeverDisablesEngine()
+    public void EmptyApiKeySkipsSelfCheckAndTurnsGenerationOff()
     {
         Http.DefaultResponder = _ => FakeHttpHandler.Json("{\"error\":\"denied\"}", HttpStatusCode.Unauthorized);
         var host = new LlmClientHost();
 
         host.ReplaceClient(Settings("OpenAI", apiKey: "", suppressConnectionCheck: false));
-        await host.LastSelfCheck!;
 
-        Assert.True(Monitor.Contains(LogLevel.Error, "connection check failed"));
-        Assert.True(Monitor.Contains(LogLevel.Error, "No API key is configured"));
-        Assert.True(Monitor.Contains(LogLevel.Warn, "stays enabled"));
-        // 自检失败但引擎保持启用（钉死语义），且不计入熔断。
-        Assert.True(host.CanGenerate);
+        // 必填项缺失：自检跳过（不发必败请求）、生成入口关闭、只留一条明确的引导日志，
+        // 不再产生误导性的自检报错（旧行为：报"非 HTTPS 不安全"等无关错误且生成入口仍放行）。
+        Assert.Null(host.LastSelfCheck);
+        Assert.Empty(Http.Requests);
+        Assert.True(host.ConnectionLooksIncomplete);
+        Assert.False(host.CanGenerate);
         Assert.Equal(LlmSuspensionKind.None, host.Suspension);
+        Assert.True(Monitor.Contains(LogLevel.Info, "incomplete"));
+        Assert.DoesNotContain(Monitor.Entries, e => e.Level == LogLevel.Error);
     }
 
     [Fact]

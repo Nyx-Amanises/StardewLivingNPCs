@@ -21,8 +21,10 @@ internal static class DialogueConfigMenuSection
     private static bool isRefreshingMenu;
     private static bool refreshQueued;
 
+    private static readonly object ModelListGate = new();
     private static string? modelListCacheKey;
-    private static string modelListCache = string.Empty;
+    private static IReadOnlyList<string>? modelListNames;
+    private static string? modelListFetchKey;
 
     /// <summary>把引擎段控件追加到已 Register 的菜单上（ModConfigMenu.Register 末尾调用）。</summary>
     public static void Append(IGenericModConfigMenuApi api, ModEntry modEntry, ModConfig config)
@@ -196,7 +198,7 @@ internal static class DialogueConfigMenuSection
     /// </summary>
     public static void OnSave(ModEntry modEntry, ModConfig config)
     {
-        bool providerChanged = ClearApiKeyWhenProviderChanged(config, DialogueServices.Config.Provider);
+        bool providerChanged = ClearApiKeyWhenProviderChanged(config, DialogueServices.Config.Provider, DialogueServices.Config.ApiKey);
         bool sveChanged = DialogueServices.Config.EnableSveCompatibility != config.EnableSveCompatibility;
         DialogueServices.Config.SyncFrom(config);
 
@@ -223,6 +225,13 @@ internal static class DialogueConfigMenuSection
         if (config.EnableDialogueEngine && !DialoguePersistence.LegacyValleyTalkLoaded)
         {
             LlmClientHost.Instance.ReplaceClient(LlmConnectionSettings.FromConfig(DialogueServices.Config));
+
+            // 后台预取模型列表：玩家保存后重开设置页时缓存多半已就绪。
+            if (LlmClientFactory.TryGetMetadata(config.Provider, out LlmProviderMetadata? prefetchMetadata)
+                && prefetchMetadata is { SupportsModelList: true })
+            {
+                _ = BuildModelListText(config);
+            }
         }
 
         if (providerChanged)
@@ -235,14 +244,20 @@ internal static class DialogueConfigMenuSection
     /// GMCM 的下拉框在鼠标悬停于选项时只更新自己的缓存值，真正调用 setValue 是在保存阶段。
     /// 因此提供商变更的副作用必须放在 OnSave，不能放在 OnFieldChanged。
     /// </summary>
-    internal static bool ClearApiKeyWhenProviderChanged(ModConfig config, string? previousProvider)
+    internal static bool ClearApiKeyWhenProviderChanged(ModConfig config, string? previousProvider, string? previousApiKey)
     {
         if (string.Equals(config.Provider, previousProvider, StringComparison.OrdinalIgnoreCase))
         {
             return false;
         }
 
-        config.ApiKey = string.Empty;
+        // 只清"沿用自旧提供商"的 Key。玩家在同一次保存里已为新提供商填入不同 Key 时保留新值，
+        // 避免"切提供商 + 填 Key + 保存"被清空后要再填一次。
+        if (string.Equals(config.ApiKey ?? string.Empty, previousApiKey ?? string.Empty, StringComparison.Ordinal))
+        {
+            config.ApiKey = string.Empty;
+        }
+
         return true;
     }
 
@@ -361,53 +376,102 @@ internal static class DialogueConfigMenuSection
             : LlmThinking.Options.ToArray();
     }
 
+    /// <summary>
+    /// GMCM 模型列表段落文案。旧实现会在主线程同步拉 /v1/models（地址错误/网络不通时
+    /// 打开设置页可卡死至超时）；现在改为后台预取：主线程只读缓存，未命中时先显示
+    /// "正在获取"并发起一次后台请求，玩家重开页面（或保存后重开）即可看到结果。
+    /// </summary>
     private static string BuildModelListText(ModConfig config)
     {
-        string cacheKey = string.Join("", config.Provider, config.ApiKey, config.ModelName, config.ServerAddress);
-        if (string.Equals(modelListCacheKey, cacheKey, StringComparison.Ordinal))
+        string cacheKey = string.Join("\x01", config.Provider, config.ApiKey, config.ModelName, config.ServerAddress);
+
+        lock (ModelListGate)
         {
-            return modelListCache;
+            if (string.Equals(modelListCacheKey, cacheKey, StringComparison.Ordinal))
+            {
+                return FormatModelListText(config.Provider, modelListNames);
+            }
+
+            if (string.Equals(modelListFetchKey, cacheKey, StringComparison.Ordinal))
+            {
+                return T("dialogue.configModelsLoading");
+            }
+
+            modelListFetchKey = cacheKey;
         }
 
-        string text;
+        // 连接参数在主线程快照进 settings，后台任务不再读共享 config。
+        var settings = new LlmConnectionSettings
+        {
+            Provider = config.Provider,
+            ApiKey = config.ApiKey,
+            ModelName = config.ModelName,
+            ServerAddress = config.ServerAddress,
+            PromptFormat = config.PromptFormat,
+            QueryTimeout = config.QueryTimeout,
+            SuppressConnectionCheck = true
+        };
+
+        _ = System.Threading.Tasks.Task.Run(() =>
+        {
+            IReadOnlyList<string>? names = FetchModelNames(settings);
+            lock (ModelListGate)
+            {
+                if (string.Equals(modelListFetchKey, cacheKey, StringComparison.Ordinal))
+                {
+                    modelListCacheKey = cacheKey;
+                    modelListNames = names;
+                    modelListFetchKey = null;
+                }
+            }
+        });
+
+        return T("dialogue.configModelsLoading");
+    }
+
+    /// <summary>后台线程执行：拉取并排序模型名；失败记 Warn（纯英文，后台不碰 i18n）并返回 null。</summary>
+    private static IReadOnlyList<string>? FetchModelNames(LlmConnectionSettings settings)
+    {
         try
         {
-            LlmClientBase? client = LlmClientFactory.TryCreate(new LlmConnectionSettings
-            {
-                Provider = config.Provider,
-                ApiKey = config.ApiKey,
-                ModelName = config.ModelName,
-                ServerAddress = config.ServerAddress,
-                PromptFormat = config.PromptFormat,
-                QueryTimeout = config.QueryTimeout,
-                SuppressConnectionCheck = true
-            });
-
-            List<string> names = client is IModelNameSource source
+            LlmClientBase? client = LlmClientFactory.TryCreate(settings);
+            return client is IModelNameSource source
                 ? source.GetModelNames().OrderBy(name => name, StringComparer.OrdinalIgnoreCase).ToList()
                 : new List<string>();
-
-            text = names.Count == 0
-                ? T("dialogue.configNoModels")
-                : Util.GetConsoleString(
-                    "dialogue.configModels",
-                    new { Provider = config.Provider, Models = string.Join(",\n", names) },
-                    $"Models available from {config.Provider}:\n{string.Join(",\n", names)}");
         }
         catch (Exception ex)
         {
             DialogueServices.Monitor?.Log(
-                Util.GetConsoleString(
-                    "dialogue.log.listModelsFailed",
-                    new { provider = config.Provider, error = ex.Message },
-                    $"Failed to list models for {config.Provider}: {ex.Message}"),
+                $"Failed to list models for {settings.Provider}: {ex.Message}",
                 LogLevel.Warn);
-            text = T("dialogue.configNoModels");
+            return null;
+        }
+    }
+
+    /// <summary>主线程格式化缓存结果（i18n 只在主线程解析）。</summary>
+    private static string FormatModelListText(string provider, IReadOnlyList<string>? names)
+    {
+        if (names == null || names.Count == 0)
+        {
+            return T("dialogue.configNoModels");
         }
 
-        modelListCacheKey = cacheKey;
-        modelListCache = text;
-        return text;
+        string joined = string.Join(",\n", names);
+        return Util.GetConsoleString(
+            "dialogue.configModels",
+            new { Provider = provider, Models = joined },
+            $"Models available from {provider}:\n{joined}");
+    }
+
+    /// <summary>测试复位：清空模型列表缓存与在途键。</summary>
+    internal static void ResetModelListCacheForTests()
+    {
+        lock (ModelListGate)
+        {
+            modelListCacheKey = null;
+            modelListNames = null;
+            modelListFetchKey = null;
+        }
     }
 
     private static string FormatProvider(string providerId)

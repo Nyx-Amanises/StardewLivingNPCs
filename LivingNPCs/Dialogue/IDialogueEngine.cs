@@ -120,6 +120,9 @@ internal sealed class GenerationResult
     /// <summary>呈现用对话键（§4.12）。</summary>
     public string DialogueKey { get; init; } = string.Empty;
 
+    /// <summary>true = 生成失败后的占位回退行（"..."）；呈现层据此给玩家游戏内失败提示。</summary>
+    public bool IsFallback { get; init; }
+
     public TokenUsage Usage { get; init; } = new();
 
     /// <summary>内部提交载荷；生成失败或未成功解析时为空。</summary>

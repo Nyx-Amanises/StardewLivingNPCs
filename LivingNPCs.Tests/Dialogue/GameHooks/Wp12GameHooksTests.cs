@@ -176,10 +176,47 @@ public class Wp12PatchGuardsTests : IDisposable
     {
         PatchGuards.EngineResolverForTests = null;
         PatchGuards.CanGenerateResolverForTests = null;
+        PatchGuards.ResetUnconfiguredHintForTests();
+        LlmHudNotifier.SinkForTests = null;
         EnableGate.EngineDisabledByCoexistence = false;
         LivingNPCs.Dialogue.Content.DialogueEngineGate.RuntimeDisabled = false;
         NetworkGate.ResetForTests();
         AndroidPlatform.OverrideForTests = null;
+    }
+
+    [Fact]
+    public void Interactive_Input_Blocked_With_Hint_When_Connection_Unconfigured()
+    {
+        UseEngine(NewEngine());
+        PatchGuards.ResetUnconfiguredHintForTests();
+        PatchGuards.ConnectionUnconfiguredResolverForTests = () => true;
+        var hud = new List<string>();
+        LlmHudNotifier.SinkForTests = hud.Add;
+        var npc = new NPC();
+
+        // 未配置连接：主动搭话入口回退原版，并给一次游戏内配置引导。
+        Assert.False(PatchGuards.AllowInteractiveInput(npc));
+        string hint = Assert.Single(hud);
+        Assert.Contains("not configured", hint, StringComparison.OrdinalIgnoreCase);
+
+        // 节流窗口内再次尝试：仍然拦截，但不重复弹 HUD。
+        Assert.False(PatchGuards.AllowInteractiveInput(npc));
+        Assert.Single(hud);
+
+        // 配置补全后不再弹配置引导（结果交由正常启用链决定）。
+        PatchGuards.ConnectionUnconfiguredResolverForTests = () => false;
+        hud.Clear();
+        _ = PatchGuards.AllowInteractiveInput(npc);
+        Assert.Empty(hud);
+
+        // 引擎总开关关闭时不该弹配置引导（玩家是有意关掉的）。
+        PatchGuards.ResetUnconfiguredHintForTests();
+        PatchGuards.ConnectionUnconfiguredResolverForTests = () => true;
+        DialogueServices.Config.EnableDialogueEngine = false;
+        hud.Clear();
+        Assert.False(PatchGuards.AllowInteractiveInput(npc));
+        Assert.Empty(hud);
+        DialogueServices.Config.EnableDialogueEngine = true;
     }
 
     private static DialogueEngine NewEngine()

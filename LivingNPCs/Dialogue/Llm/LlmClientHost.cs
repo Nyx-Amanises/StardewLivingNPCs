@@ -32,10 +32,19 @@ internal sealed class LlmClientHost
     /// <summary>配置错误（Provider 无效）时为 true：引擎保持关闭，不崩游戏。</summary>
     public bool EngineDisabled { get; private set; }
 
+    /// <summary>
+    /// 连接必填项缺失（按提供商元数据判定：缺 API Key 或服务器地址）。
+    /// 此状态下生成注定失败，所有生成入口回退原版台词；主动搭话入口另给配置引导 HUD（WP12）。
+    /// </summary>
+    public bool ConnectionLooksIncomplete { get; private set; }
+
     public LlmSuspensionKind Suspension => _breaker.CurrentSuspension;
 
     /// <summary>生成入口检查：挂起/禁用/未配置时直接回退原版台词（WP10/WP12 消费）。</summary>
-    public bool CanGenerate => !EngineDisabled && _guarded != null && Suspension == LlmSuspensionKind.None;
+    public bool CanGenerate => !EngineDisabled
+        && _guarded != null
+        && !ConnectionLooksIncomplete
+        && Suspension == LlmSuspensionKind.None;
 
     /// <summary>最近一次自检任务；仅供测试与诊断等待，游戏流程不依赖。</summary>
     internal Task? LastSelfCheck { get; private set; }
@@ -55,19 +64,32 @@ internal sealed class LlmClientHost
                 _raw = null;
                 _guarded = null;
                 EngineDisabled = true;
+                ConnectionLooksIncomplete = false;
             }
             else
             {
                 _raw = client;
                 _guarded = new BreakerGuardedLlmClient(client, _breaker, OnBreakerTrip);
                 EngineDisabled = false;
+                ConnectionLooksIncomplete = IsConnectionIncomplete(settings);
             }
         }
 
         // 让搬运件（礼物邮件/记忆印象/路由等 LegacyLlm 调用点）立即接上新客户端。
         LegacyLlm.Instance = _guarded != null ? new LegacyLlmBridge(this) : new LegacyLlmDummy();
 
-        if (client != null && !settings.SuppressConnectionCheck)
+        if (client != null && ConnectionLooksIncomplete)
+        {
+            // 必填项缺失时自检必败且报错误导（空地址/空 Key 的原始异常），改为一条明确的引导日志。
+            LastSelfCheck = null;
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.connectionIncomplete",
+                    new { provider = settings.Provider },
+                    $"LivingNPCs: the LLM connection settings for {settings.Provider} are incomplete (missing API key or server address). AI dialogue stays off until they are filled in via Generic Mod Config Menu."),
+                LogLevel.Info);
+        }
+        else if (client != null && !settings.SuppressConnectionCheck)
         {
             LastSelfCheck = ConnectionSelfCheck.Start(this, client, settings);
         }
@@ -75,6 +97,18 @@ internal sealed class LlmClientHost
         {
             LastSelfCheck = null;
         }
+    }
+
+    /// <summary>按提供商元数据判定必填连接项是否缺失（纯函数，单测覆盖）。</summary>
+    internal static bool IsConnectionIncomplete(LlmConnectionSettings settings)
+    {
+        if (!LlmClientFactory.TryGetMetadata(settings.Provider ?? string.Empty, out LlmProviderMetadata metadata))
+        {
+            return false;
+        }
+
+        return (metadata.RequiresApiKey && string.IsNullOrWhiteSpace(settings.ApiKey))
+            || (metadata.RequiresServerAddress && string.IsNullOrWhiteSpace(settings.ServerAddress));
     }
 
     private void OnBreakerTrip(LlmSuspensionKind kind)
