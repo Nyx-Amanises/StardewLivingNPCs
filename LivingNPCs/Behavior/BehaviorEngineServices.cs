@@ -38,6 +38,7 @@ internal sealed class BehaviorEngineServices
     public DelayedTravelActionRuntime DelayedTravelActions { get; }
     public HelpRequestRuntime HelpRequests { get; }
     public DialogueBehaviorInfluenceRuntime DialogueBehaviorInfluences { get; }
+    public Multiplayer.SmapiModMessageBus ModMessageBus { get; }
     public Multiplayer.MultiplayerSyncService MultiplayerSync { get; }
 
     /// <summary>Engine-owned cleanup invoked after the debug command wipes behavior memory.</summary>
@@ -50,8 +51,10 @@ internal sealed class BehaviorEngineServices
         this.Planner = new AiBehaviorPlanner(new RuleBasedBehaviorPlanner(config, this.Random, this.Memory));
         this.AiBehaviorClient = new AiBehaviorClient(config, monitor);
         this.Feedback = new BehaviorFeedbackService(config, monitor);
+        this.ModMessageBus = new Multiplayer.SmapiModMessageBus(helper.Multiplayer, modUniqueId);
         this.MultiplayerSync = new Multiplayer.MultiplayerSyncService(
-            helper,
+            this.ModMessageBus,
+            Multiplayer.GameMultiplayerRuntimeContext.Instance,
             monitor,
             config,
             this.Memory,

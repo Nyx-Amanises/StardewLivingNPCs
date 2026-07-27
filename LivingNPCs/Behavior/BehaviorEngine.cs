@@ -122,17 +122,19 @@ internal sealed class BehaviorEngine
 
     private void OnModMessageReceived(object? sender, ModMessageReceivedEventArgs e)
     {
-        this.SafeRun("multiplayer message received", () => this.multiplayerSync.OnModMessageReceived(e));
+        this.SafeRun("multiplayer message received", () => this.services.ModMessageBus.Receive(e));
     }
 
     private void OnPeerConnected(object? sender, PeerConnectedEventArgs e)
     {
-        this.SafeRun("peer connected", () => this.multiplayerSync.OnPeerConnected(e));
+        this.SafeRun(
+            "peer connected",
+            () => this.multiplayerSync.OnPeerConnected(this.services.ModMessageBus.DescribePeer(e.Peer)));
     }
 
     private void OnPeerDisconnected(object? sender, PeerDisconnectedEventArgs e)
     {
-        this.SafeRun("peer disconnected", () => this.multiplayerSync.OnPeerDisconnected(e));
+        this.SafeRun("peer disconnected", () => this.multiplayerSync.OnPeerDisconnected(e.Peer.PlayerID));
     }
 
     private void OnSaveLoaded(object? sender, SaveLoadedEventArgs e)

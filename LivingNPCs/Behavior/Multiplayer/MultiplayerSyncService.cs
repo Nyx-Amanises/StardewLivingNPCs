@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using StardewModdingAPI;
-using StardewModdingAPI.Events;
 using StardewValley;
 
 namespace LivingNPCs.Behavior.Multiplayer;
@@ -20,12 +19,14 @@ internal sealed class MultiplayerSyncService
     private const long BookSyncTimeoutMs = 5_000;
     private const long SnapshotSendThrottleMs = 1_000;
 
-    private readonly IModHelper helper;
+    private readonly IModMessageBus bus;
+    private readonly IMultiplayerRuntimeContext runtime;
     private readonly IMonitor monitor;
     private readonly ModConfig config;
     private readonly BehaviorMemory memory;
     private readonly BehaviorFeedbackService feedback;
     private readonly string modUniqueId;
+    private readonly Action<int, int> notifyProtocolMismatch;
 
     /// <summary>主机侧收到交换上报后的入账入口（engine 晚绑定：入队主线程统一消费）。</summary>
     public Action<long, ExchangeReportMessage>? RemoteExchangeReceived { get; set; }
@@ -38,22 +39,33 @@ internal sealed class MultiplayerSyncService
     private bool bookSnapshotArrived;
 
     private readonly Dictionary<long, long> lastSnapshotSentTicksByPeer = new();
+    private readonly HashSet<long> compatiblePeerIds = new();
     private bool loggedIncompatibleVersion;
+    private bool protocolMismatchNotified;
+    private ProtocolHandshakeState handshakeState = ProtocolHandshakeState.AwaitingHost;
 
     public MultiplayerSyncService(
-        IModHelper helper,
+        IModMessageBus bus,
+        IMultiplayerRuntimeContext runtime,
         IMonitor monitor,
         ModConfig config,
         BehaviorMemory memory,
         BehaviorFeedbackService feedback,
-        string modUniqueId)
+        string modUniqueId,
+        Action<int, int>? notifyProtocolMismatch = null)
     {
-        this.helper = helper;
+        this.bus = bus;
+        this.runtime = runtime;
         this.monitor = monitor;
         this.config = config;
         this.memory = memory;
         this.feedback = feedback;
         this.modUniqueId = modUniqueId;
+        this.notifyProtocolMismatch = notifyProtocolMismatch
+            ?? ((hostVersion, localVersion) => this.feedback.Show(I18n.Get(
+                "hud.mp.protocolMismatch",
+                new { host = hostVersion, local = localVersion })));
+        this.bus.MessageReceived += this.OnModMessageReceived;
     }
 
     private bool SyncEnabled => this.config.EnableMultiplayerSync;
@@ -65,10 +77,10 @@ internal sealed class MultiplayerSyncService
         {
             try
             {
-                IMultiplayerPeer? host = this.helper.Multiplayer
-                    .GetConnectedPlayers()
+                ModMessagePeer? host = this.bus
+                    .GetConnectedPeers()
                     .FirstOrDefault(peer => peer.IsHost);
-                return host?.GetMod(this.modUniqueId) != null;
+                return host?.HasMod == true;
             }
             catch
             {
@@ -82,8 +94,10 @@ internal sealed class MultiplayerSyncService
     /// 为真时交换上报主机、镜像只读、机会注入抑制；为假时回退旧的本地临时行为。
     /// </summary>
     public bool UseHostAuthority => this.SyncEnabled
-        && MultiplayerRoles.Current == MultiplayerRole.RemoteFarmhand
-        && this.HostHasMod;
+        && this.runtime.IsMultiplayer
+        && MultiplayerRoles.Decide(this.runtime.IsMainPlayer, this.runtime.IsOnHostComputer) == MultiplayerRole.RemoteFarmhand
+        && this.HostHasMod
+        && this.handshakeState == ProtocolHandshakeState.Compatible;
 
     /// <summary>
     /// 行为上下文是否抑制机会注入（礼物/求助机会与出游可用性）：这些段落引导模型发起
@@ -93,41 +107,67 @@ internal sealed class MultiplayerSyncService
 
     // ---- SMAPI 事件（经 BehaviorEngine SafeRun 转发） ----
 
-    public void OnModMessageReceived(ModMessageReceivedEventArgs e)
+    private void OnModMessageReceived(ReceivedModMessage e)
     {
-        if (e.FromModID != this.modUniqueId || !this.SyncEnabled)
+        if (e.FromModId != this.modUniqueId || !this.SyncEnabled || !this.runtime.IsMultiplayer)
         {
             return;
         }
 
         switch (e.Type)
         {
+            case SyncProtocol.TypeProtocolHello:
+            {
+                if (this.runtime.IsMainPlayer || !this.IsFromHost(e.FromPlayerId))
+                {
+                    return;
+                }
+
+                if (this.TryRead(e, out ProtocolHelloMessage message))
+                {
+                    this.ApplyProtocolHello(message);
+                }
+
+                return;
+            }
+
+            case SyncProtocol.TypeProtocolHelloAck:
+            {
+                if (!this.runtime.IsMainPlayer || !this.TryRead(e, out ProtocolHelloAckMessage message))
+                {
+                    return;
+                }
+
+                this.ApplyProtocolHelloAck(e.FromPlayerId, message);
+                return;
+            }
+
             case SyncProtocol.TypeExchangeReport:
             {
-                if (!Context.IsMainPlayer)
+                if (!this.runtime.IsMainPlayer || !this.compatiblePeerIds.Contains(e.FromPlayerId))
                 {
                     return;
                 }
 
-                var message = e.ReadAs<ExchangeReportMessage>();
-                if (!this.CheckVersion(message.SchemaVersion, e.Type))
+                if (!this.TryRead(e, out ExchangeReportMessage message)
+                    || !this.CheckVersion(message.SchemaVersion, e.Type))
                 {
                     return;
                 }
 
-                this.RemoteExchangeReceived?.Invoke(e.FromPlayerID, message);
+                this.RemoteExchangeReceived?.Invoke(e.FromPlayerId, message);
                 return;
             }
 
             case SyncProtocol.TypeExchangeAck:
             {
-                if (Context.IsMainPlayer || !this.IsFromHost(e.FromPlayerID))
+                if (this.runtime.IsMainPlayer || !this.IsFromHost(e.FromPlayerId) || !this.UseHostAuthority)
                 {
                     return;
                 }
 
-                var message = e.ReadAs<ExchangeAckMessage>();
-                if (!this.CheckVersion(message.SchemaVersion, e.Type))
+                if (!this.TryRead(e, out ExchangeAckMessage message)
+                    || !this.CheckVersion(message.SchemaVersion, e.Type))
                 {
                     return;
                 }
@@ -138,13 +178,13 @@ internal sealed class MultiplayerSyncService
 
             case SyncProtocol.TypeNpcView:
             {
-                if (Context.IsMainPlayer || !this.IsFromHost(e.FromPlayerID))
+                if (this.runtime.IsMainPlayer || !this.IsFromHost(e.FromPlayerId) || !this.UseHostAuthority)
                 {
                     return;
                 }
 
-                var message = e.ReadAs<NpcMindViewMessage>();
-                if (!this.CheckVersion(message.SchemaVersion, e.Type))
+                if (!this.TryRead(e, out NpcMindViewMessage message)
+                    || !this.CheckVersion(message.SchemaVersion, e.Type))
                 {
                     return;
                 }
@@ -155,30 +195,30 @@ internal sealed class MultiplayerSyncService
 
             case SyncProtocol.TypeSnapshotRequest:
             {
-                if (!Context.IsMainPlayer)
+                if (!this.runtime.IsMainPlayer || !this.compatiblePeerIds.Contains(e.FromPlayerId))
                 {
                     return;
                 }
 
-                var message = e.ReadAs<SnapshotRequestMessage>();
-                if (!this.CheckVersion(message.SchemaVersion, e.Type))
+                if (!this.TryRead(e, out SnapshotRequestMessage message)
+                    || !this.CheckVersion(message.SchemaVersion, e.Type))
                 {
                     return;
                 }
 
-                this.SendFullSnapshotToPeer(e.FromPlayerID);
+                this.SendFullSnapshotToPeer(e.FromPlayerId);
                 return;
             }
 
             case SyncProtocol.TypeSnapshotComplete:
             {
-                if (Context.IsMainPlayer || !this.IsFromHost(e.FromPlayerID))
+                if (this.runtime.IsMainPlayer || !this.IsFromHost(e.FromPlayerId) || !this.UseHostAuthority)
                 {
                     return;
                 }
 
-                var message = e.ReadAs<SnapshotCompleteMessage>();
-                if (!this.CheckVersion(message.SchemaVersion, e.Type))
+                if (!this.TryRead(e, out SnapshotCompleteMessage message)
+                    || !this.CheckVersion(message.SchemaVersion, e.Type))
                 {
                     return;
                 }
@@ -200,25 +240,29 @@ internal sealed class MultiplayerSyncService
         }
     }
 
-    /// <summary>主机：farmhand 连入且装了本 mod 时推送全量快照（分屏本地对端共享内存，跳过）。</summary>
-    public void OnPeerConnected(PeerConnectedEventArgs e)
+    /// <summary>主机：farmhand 连入且装了本 mod 时先公布协议版本。</summary>
+    public void OnPeerConnected(ModMessagePeer peer)
     {
-        if (!Context.IsMainPlayer || !this.SyncEnabled || e.Peer.IsSplitScreen)
+        if (!this.runtime.IsMultiplayer
+            || !this.runtime.IsMainPlayer
+            || !this.SyncEnabled
+            || peer.IsSplitScreen
+            || !peer.HasMod)
         {
             return;
         }
 
-        if (e.Peer.GetMod(this.modUniqueId) == null)
-        {
-            return;
-        }
-
-        this.SendFullSnapshotToPeer(e.Peer.PlayerID);
+        this.SendProtocolHello(peer.PlayerId);
     }
 
-    public void OnPeerDisconnected(PeerDisconnectedEventArgs e)
+    public void OnPeerDisconnected(long playerId)
     {
-        this.lastSnapshotSentTicksByPeer.Remove(e.Peer.PlayerID);
+        this.lastSnapshotSentTicksByPeer.Remove(playerId);
+        this.compatiblePeerIds.Remove(playerId);
+        if (!this.runtime.IsMainPlayer && this.runtime.HostPlayerId == playerId)
+        {
+            this.handshakeState = ProtocolHandshakeState.AwaitingHost;
+        }
     }
 
     /// <summary>读档后：farmhand 主动请求一次全量快照（与主机 PeerConnected 推送互为兜底）。</summary>
@@ -236,6 +280,10 @@ internal sealed class MultiplayerSyncService
     {
         this.ResetBookRequest();
         this.lastSnapshotSentTicksByPeer.Clear();
+        this.compatiblePeerIds.Clear();
+        this.handshakeState = ProtocolHandshakeState.AwaitingHost;
+        this.protocolMismatchNotified = false;
+        this.loggedIncompatibleVersion = false;
     }
 
     /// <summary>farmhand 开书流程的超时/到位巡查（BehaviorEngine 的 UpdateTicked 驱动）。</summary>
@@ -278,13 +326,18 @@ internal sealed class MultiplayerSyncService
     /// <summary>farmhand 上报一次交换；发送成功返回 true（失败时调用方回退本地入账）。</summary>
     public bool TrySendExchangeReport(string npcName, string playerText, string npcResponse, string analysisJson)
     {
-        long? hostId = TryGetHostPlayerId();
+        if (!this.UseHostAuthority)
+        {
+            return false;
+        }
+
+        long? hostId = this.TryGetHostPlayerId();
         if (hostId == null)
         {
             return false;
         }
 
-        this.helper.Multiplayer.SendMessage(
+        this.bus.Send(
             new ExchangeReportMessage
             {
                 NpcName = npcName,
@@ -293,7 +346,6 @@ internal sealed class MultiplayerSyncService
                 AnalysisJson = analysisJson
             },
             SyncProtocol.TypeExchangeReport,
-            new[] { this.modUniqueId },
             new[] { hostId.Value });
         if (this.config.Debug)
         {
@@ -358,22 +410,24 @@ internal sealed class MultiplayerSyncService
     /// <summary>主机把结果确认发回上报的 farmhand。</summary>
     public void SendExchangeAck(long toPlayerId, ExchangeAckMessage message)
     {
-        if (!Context.IsMainPlayer || !this.SyncEnabled)
+        if (!this.runtime.IsMultiplayer
+            || !this.runtime.IsMainPlayer
+            || !this.SyncEnabled
+            || !this.compatiblePeerIds.Contains(toPlayerId))
         {
             return;
         }
 
-        this.helper.Multiplayer.SendMessage(
+        this.bus.Send(
             message,
             SyncProtocol.TypeExchangeAck,
-            new[] { this.modUniqueId },
             new[] { toPlayerId });
     }
 
     /// <summary>主机在任一交换入账后刷新该 NPC 的镜像（无远程对端时零开销）。</summary>
     public void BroadcastNpcView(string npcName)
     {
-        if (!Context.IsMainPlayer || !this.SyncEnabled)
+        if (!this.runtime.IsMultiplayer || !this.runtime.IsMainPlayer || !this.SyncEnabled)
         {
             return;
         }
@@ -390,13 +444,13 @@ internal sealed class MultiplayerSyncService
             return;
         }
 
-        this.helper.Multiplayer.SendMessage(view, SyncProtocol.TypeNpcView, new[] { this.modUniqueId }, targets);
+        this.bus.Send(view, SyncProtocol.TypeNpcView, targets);
     }
 
     /// <summary>主机全量广播（日开始账本结算后 / 手动清记忆后）。</summary>
     public void BroadcastFullSnapshot()
     {
-        if (!Context.IsMainPlayer || !this.SyncEnabled)
+        if (!this.runtime.IsMultiplayer || !this.runtime.IsMainPlayer || !this.SyncEnabled)
         {
             return;
         }
@@ -428,13 +482,12 @@ internal sealed class MultiplayerSyncService
         List<NpcMindViewMessage> views = this.memory.ExportAllNpcViews();
         foreach (NpcMindViewMessage view in views)
         {
-            this.helper.Multiplayer.SendMessage(view, SyncProtocol.TypeNpcView, new[] { this.modUniqueId }, targets);
+            this.bus.Send(view, SyncProtocol.TypeNpcView, targets);
         }
 
-        this.helper.Multiplayer.SendMessage(
+        this.bus.Send(
             new SnapshotCompleteMessage { NpcNames = views.Select(view => view.NpcName).ToList() },
             SyncProtocol.TypeSnapshotComplete,
-            new[] { this.modUniqueId },
             targets);
         if (this.config.Debug)
         {
@@ -446,42 +499,117 @@ internal sealed class MultiplayerSyncService
 
     // ---- 杂项 ----
 
-    private void SendToHost(SnapshotRequestMessage message, string type)
+    private void SendProtocolHello(long playerId)
     {
-        long? hostId = TryGetHostPlayerId();
-        if (hostId == null)
+        if (!this.runtime.IsMultiplayer || !this.runtime.IsMainPlayer || !this.SyncEnabled)
         {
             return;
         }
 
-        this.helper.Multiplayer.SendMessage(message, type, new[] { this.modUniqueId }, new[] { hostId.Value });
+        this.bus.Send(
+            new ProtocolHelloMessage(),
+            SyncProtocol.TypeProtocolHello,
+            new[] { playerId });
     }
 
-    private static long? TryGetHostPlayerId()
+    private void ApplyProtocolHello(ProtocolHelloMessage message)
+    {
+        bool compatible = SyncProtocol.IsCompatible(message.SchemaVersion)
+            && SyncProtocol.IsCompatible(message.ProtocolVersion);
+        this.handshakeState = compatible
+            ? ProtocolHandshakeState.Compatible
+            : ProtocolHandshakeState.Incompatible;
+
+        long? hostId = this.TryGetHostPlayerId();
+        if (hostId != null)
+        {
+            this.bus.Send(
+                new ProtocolHelloAckMessage { Compatible = compatible },
+                SyncProtocol.TypeProtocolHelloAck,
+                new[] { hostId.Value });
+        }
+
+        if (compatible || this.protocolMismatchNotified)
+        {
+            return;
+        }
+
+        this.protocolMismatchNotified = true;
+        this.notifyProtocolMismatch(message.ProtocolVersion, SyncProtocol.Version);
+        this.monitor.Log(
+            I18n.Get(
+                "log.mp.protocolMismatch",
+                new { host = message.ProtocolVersion, local = SyncProtocol.Version }),
+            LogLevel.Warn);
+    }
+
+    private void ApplyProtocolHelloAck(long playerId, ProtocolHelloAckMessage message)
+    {
+        bool compatible = message.Compatible
+            && SyncProtocol.IsCompatible(message.SchemaVersion)
+            && SyncProtocol.IsCompatible(message.ProtocolVersion);
+        if (!compatible)
+        {
+            this.compatiblePeerIds.Remove(playerId);
+            return;
+        }
+
+        this.compatiblePeerIds.Add(playerId);
+        this.SendFullSnapshotToPeer(playerId);
+    }
+
+    private bool TryRead<TMessage>(ReceivedModMessage received, out TMessage message)
+        where TMessage : class
     {
         try
         {
-            return Game1.MasterPlayer?.UniqueMultiplayerID;
+            message = received.ReadAs<TMessage>();
+            return message != null;
         }
-        catch
+        catch (Exception ex)
         {
-            return null;
+            message = null!;
+            this.monitor.Log(
+                I18n.Get(
+                    "log.mp.messageRejected",
+                    new { type = received.Type, reason = ex.GetType().Name }),
+                LogLevel.Warn);
+            return false;
         }
+    }
+
+    private void SendToHost(SnapshotRequestMessage message, string type)
+    {
+        long? hostId = this.TryGetHostPlayerId();
+        if (!this.runtime.IsMultiplayer || hostId == null)
+        {
+            return;
+        }
+
+        this.bus.Send(message, type, new[] { hostId.Value });
+    }
+
+    private long? TryGetHostPlayerId()
+    {
+        return this.runtime.IsMultiplayer ? this.runtime.HostPlayerId : null;
     }
 
     private bool IsFromHost(long fromPlayerId)
     {
-        return TryGetHostPlayerId() == fromPlayerId;
+        return this.TryGetHostPlayerId() == fromPlayerId;
     }
 
     private long[] GetRemotePeerIdsWithMod()
     {
         try
         {
-            return this.helper.Multiplayer
-                .GetConnectedPlayers()
-                .Where(peer => !peer.IsHost && !peer.IsSplitScreen && peer.GetMod(this.modUniqueId) != null)
-                .Select(peer => peer.PlayerID)
+            return this.bus
+                .GetConnectedPeers()
+                .Where(peer => !peer.IsHost
+                    && !peer.IsSplitScreen
+                    && peer.HasMod
+                    && this.compatiblePeerIds.Contains(peer.PlayerId))
+                .Select(peer => peer.PlayerId)
                 .ToArray();
         }
         catch

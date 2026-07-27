@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using StardewModdingAPI;
 
 namespace LivingNPCs.Behavior.Multiplayer;
 
@@ -14,6 +13,8 @@ internal static class SyncProtocol
     /// <summary>消息负载布局版本；不兼容时接收方忽略并告警一次（正常捆绑发布两端同版）。</summary>
     public const int Version = 1;
 
+    public const string TypeProtocolHello = "ProtocolHello";
+    public const string TypeProtocolHelloAck = "ProtocolHelloAck";
     public const string TypeExchangeReport = "ExchangeReport";
     public const string TypeExchangeAck = "ExchangeAck";
     public const string TypeNpcView = "NpcView";
@@ -26,8 +27,29 @@ internal static class SyncProtocol
     }
 }
 
+/// <summary>所有协议 DTO 的共同版本字段；消息负载只允许纯数据成员。</summary>
+internal interface ISyncMessage
+{
+    int SchemaVersion { get; set; }
+}
+
+/// <summary>主机 → farmhand：加入时公布主机协议版本。</summary>
+internal sealed class ProtocolHelloMessage : ISyncMessage
+{
+    public int SchemaVersion { get; set; } = SyncProtocol.Version;
+    public int ProtocolVersion { get; set; } = SyncProtocol.Version;
+}
+
+/// <summary>farmhand → 主机：确认是否能启用主机权威同步。</summary>
+internal sealed class ProtocolHelloAckMessage : ISyncMessage
+{
+    public int SchemaVersion { get; set; } = SyncProtocol.Version;
+    public int ProtocolVersion { get; set; } = SyncProtocol.Version;
+    public bool Compatible { get; set; }
+}
+
 /// <summary>farmhand → 主机：一次完成的 AI 交换（玩家台词 / NPC 回复 / 元数据分析 JSON）。</summary>
-internal sealed class ExchangeReportMessage
+internal sealed class ExchangeReportMessage : ISyncMessage
 {
     public int SchemaVersion { get; set; } = SyncProtocol.Version;
     public string NpcName { get; set; } = string.Empty;
@@ -41,7 +63,7 @@ internal sealed class ExchangeReportMessage
 /// 对自己的 Farmer 应用（好感是每玩家数据，主机代应用会记到主机头上）；随境跟话在
 /// farmhand 屏幕上显示。
 /// </summary>
-internal sealed class ExchangeAckMessage
+internal sealed class ExchangeAckMessage : ISyncMessage
 {
     public int SchemaVersion { get; set; } = SyncProtocol.Version;
     public string NpcName { get; set; } = string.Empty;
@@ -51,7 +73,7 @@ internal sealed class ExchangeAckMessage
 }
 
 /// <summary>主机 → farmhand：单个 NPC 的心智视图（状态克隆 + 近期行为记忆），整体替换镜像。</summary>
-internal sealed class NpcMindViewMessage
+internal sealed class NpcMindViewMessage : ISyncMessage
 {
     public int SchemaVersion { get; set; } = SyncProtocol.Version;
     public string NpcName { get; set; } = string.Empty;
@@ -60,14 +82,14 @@ internal sealed class NpcMindViewMessage
 }
 
 /// <summary>farmhand → 主机：请求全量心智快照（读档重同步 / 打开记忆手册）。</summary>
-internal sealed class SnapshotRequestMessage
+internal sealed class SnapshotRequestMessage : ISyncMessage
 {
     public int SchemaVersion { get; set; } = SyncProtocol.Version;
     public string Reason { get; set; } = string.Empty;
 }
 
 /// <summary>主机 → farmhand：全量快照发送完毕；NpcNames 是完整名单，镜像据此修剪陈旧条目。</summary>
-internal sealed class SnapshotCompleteMessage
+internal sealed class SnapshotCompleteMessage : ISyncMessage
 {
     public int SchemaVersion { get; set; } = SyncProtocol.Version;
     public List<string> NpcNames { get; set; } = new();
@@ -98,6 +120,12 @@ internal static class MultiplayerRoles
 
         return isOnHostComputer ? MultiplayerRole.SplitScreenSecondary : MultiplayerRole.RemoteFarmhand;
     }
+}
 
-    public static MultiplayerRole Current => Decide(Context.IsMainPlayer, Context.IsOnHostComputer);
+/// <summary>farmhand 对主机协议的握手状态；只有 Compatible 会启用同步路径。</summary>
+internal enum ProtocolHandshakeState
+{
+    AwaitingHost,
+    Compatible,
+    Incompatible
 }
