@@ -53,9 +53,12 @@ internal sealed class ExchangeReportMessage : ISyncMessage
 {
     public int SchemaVersion { get; set; } = SyncProtocol.Version;
     public string NpcName { get; set; } = string.Empty;
+    public string PlayerName { get; set; } = string.Empty;
     public string PlayerText { get; set; } = string.Empty;
     public string NpcResponse { get; set; } = string.Empty;
     public string AnalysisJson { get; set; } = string.Empty;
+    public int TotalDays { get; set; } = -1;
+    public int TimeOfDay { get; set; }
 }
 
 /// <summary>

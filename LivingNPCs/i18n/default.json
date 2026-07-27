@@ -1013,6 +1013,8 @@
   "dialogue.hud.generationFailed": "LivingNPCs: the AI reply failed to generate, so a placeholder line is shown. See the SMAPI console for the reason (API key, model name, server address, or network).",
   "dialogue.hud.splitScreenUnsupported": "LivingNPCs: AI dialogue is unavailable for split-screen players in this version; vanilla dialogue is used instead.",
   "log.mp.exchangeForwarded": "Forwarded the {{npc}} exchange to the host for authoritative recording.",
+  "log.mp.exchangeQueuedForRetry": "Could not send the {{npc}} exchange ({{error}}); queued it for an in-memory retry.",
+  "log.mp.exchangeRetriesDiscarded": "Discarded {{count}} pending multiplayer exchange report(s) at {{reason}}; v1 does not persist retry data.",
   "log.mp.remoteExchangeApplied": "Applied a remote exchange from player {{player}} for {{npc}}: memories {{memories}}, preferences {{preferences}}, conflicts {{conflicts}}, influences {{influences}}, friendship {{friendship}}.",
   "log.mp.remoteActionsDropped": "Dropped world action(s) [{{types}}] reported by a farmhand for {{npc}}: world actions only run for the host player's own conversations.",
   "log.mp.snapshotSent": "Sent {{count}} NPC mind view(s) to player {{player}}.",

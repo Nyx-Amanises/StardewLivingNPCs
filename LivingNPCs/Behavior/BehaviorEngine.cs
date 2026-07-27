@@ -26,6 +26,9 @@ internal sealed class BehaviorEngine
         public string PlayerText = string.Empty;
         public string NpcResponse = string.Empty;
         public string AnalysisJson = string.Empty;
+        public string PlayerName = string.Empty;
+        public int ReportedTotalDays = -1;
+        public int ReportedTimeOfDay;
 
         /// <summary>true = 主机收到的 farmhand 上报（走远程入账路径，见多人 v1）。</summary>
         public bool IsRemote;
@@ -189,6 +192,7 @@ internal sealed class BehaviorEngine
     {
         this.SafeRun("saving", () =>
         {
+            this.multiplayerSync.OnSaving();
             if (!Context.IsMainPlayer)
             {
                 // 行为记忆归主机存档；farmhand 上 WriteSaveData 必抛（此前每次存档都报错且数据丢失）。
@@ -649,6 +653,9 @@ internal sealed class BehaviorEngine
             PlayerText = message.PlayerText,
             NpcResponse = message.NpcResponse ?? string.Empty,
             AnalysisJson = message.AnalysisJson ?? string.Empty,
+            PlayerName = message.PlayerName ?? string.Empty,
+            ReportedTotalDays = message.TotalDays,
+            ReportedTimeOfDay = message.TimeOfDay,
             IsRemote = true,
             ReporterPlayerId = reporterPlayerId
         });
@@ -711,7 +718,9 @@ internal sealed class BehaviorEngine
                     "log.mp.remoteExchangeApplied",
                     new
                     {
-                        player = exchange.ReporterPlayerId,
+                        player = string.IsNullOrWhiteSpace(exchange.PlayerName)
+                            ? exchange.ReporterPlayerId.ToString()
+                            : $"{exchange.PlayerName} ({exchange.ReporterPlayerId})",
                         npc = npc.Name,
                         memories = result.LongTermMemoriesStored,
                         preferences = result.PlayerPreferencesStored,

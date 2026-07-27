@@ -18,6 +18,7 @@ internal sealed class MultiplayerSyncService
 {
     private const long BookSyncTimeoutMs = 5_000;
     private const long SnapshotSendThrottleMs = 1_000;
+    private const int ExchangeRetryIntervalTicks = 60;
 
     private readonly IModMessageBus bus;
     private readonly IMultiplayerRuntimeContext runtime;
@@ -40,9 +41,11 @@ internal sealed class MultiplayerSyncService
 
     private readonly Dictionary<long, long> lastSnapshotSentTicksByPeer = new();
     private readonly HashSet<long> compatiblePeerIds = new();
+    private readonly Queue<ExchangeReportMessage> pendingExchangeReports = new();
     private bool loggedIncompatibleVersion;
     private bool protocolMismatchNotified;
     private ProtocolHandshakeState handshakeState = ProtocolHandshakeState.AwaitingHost;
+    private int exchangeRetryTicksRemaining;
 
     public MultiplayerSyncService(
         IModMessageBus bus,
@@ -104,6 +107,8 @@ internal sealed class MultiplayerSyncService
     /// 世界动作，而世界动作在主机权威下只属于主机玩家自己的会话（决策 3 的推广）。
     /// </summary>
     public bool SuppressLocalOpportunities => this.UseHostAuthority;
+
+    public int PendingExchangeReportCount => this.pendingExchangeReports.Count;
 
     // ---- SMAPI 事件（经 BehaviorEngine SafeRun 转发） ----
 
@@ -278,6 +283,7 @@ internal sealed class MultiplayerSyncService
 
     public void OnReturnedToTitle()
     {
+        this.DiscardPendingExchangeReports("returned to title");
         this.ResetBookRequest();
         this.lastSnapshotSentTicksByPeer.Clear();
         this.compatiblePeerIds.Clear();
@@ -289,6 +295,7 @@ internal sealed class MultiplayerSyncService
     /// <summary>farmhand 开书流程的超时/到位巡查（BehaviorEngine 的 UpdateTicked 驱动）。</summary>
     public void OnUpdateTicked()
     {
+        this.RetryPendingExchangeReports();
         if (!this.bookRequestPending)
         {
             return;
@@ -331,28 +338,42 @@ internal sealed class MultiplayerSyncService
             return false;
         }
 
-        long? hostId = this.TryGetHostPlayerId();
-        if (hostId == null)
+        var message = new ExchangeReportMessage
         {
-            return false;
+            NpcName = npcName,
+            PlayerName = this.runtime.LocalPlayerName,
+            PlayerText = playerText,
+            NpcResponse = npcResponse,
+            AnalysisJson = analysisJson,
+            TotalDays = this.runtime.TotalDays,
+            TimeOfDay = this.runtime.TimeOfDay
+        };
+
+        // 旧报告未发出时保持 FIFO，不让后来的交换越过它。
+        if (this.pendingExchangeReports.Count > 0)
+        {
+            this.pendingExchangeReports.Enqueue(message);
+            return true;
         }
 
-        this.bus.Send(
-            new ExchangeReportMessage
-            {
-                NpcName = npcName,
-                PlayerText = playerText,
-                NpcResponse = npcResponse,
-                AnalysisJson = analysisJson
-            },
-            SyncProtocol.TypeExchangeReport,
-            new[] { hostId.Value });
-        if (this.config.Debug)
+        if (!this.TrySendExchangeReportCore(message, out Exception? error))
         {
-            this.monitor.Log(I18n.Get("log.mp.exchangeForwarded", new { npc = npcName }), LogLevel.Debug);
+            this.pendingExchangeReports.Enqueue(message);
+            this.exchangeRetryTicksRemaining = ExchangeRetryIntervalTicks;
+            this.monitor.Log(
+                I18n.Get(
+                    "log.mp.exchangeQueuedForRetry",
+                    new { npc = npcName, error = error?.GetType().Name ?? "unknown" }),
+                LogLevel.Trace);
         }
 
         return true;
+    }
+
+    /// <summary>存档边界不持久化补偿队列；v1 明确丢弃并留 Trace。</summary>
+    public void OnSaving()
+    {
+        this.DiscardPendingExchangeReports("saving");
     }
 
     /// <summary>
@@ -498,6 +519,74 @@ internal sealed class MultiplayerSyncService
     }
 
     // ---- 杂项 ----
+
+    private bool TrySendExchangeReportCore(ExchangeReportMessage message, out Exception? error)
+    {
+        long? hostId = this.TryGetHostPlayerId();
+        if (!this.UseHostAuthority || hostId == null)
+        {
+            error = null;
+            return false;
+        }
+
+        try
+        {
+            this.bus.Send(message, SyncProtocol.TypeExchangeReport, new[] { hostId.Value });
+            error = null;
+            if (this.config.Debug)
+            {
+                this.monitor.Log(I18n.Get("log.mp.exchangeForwarded", new { npc = message.NpcName }), LogLevel.Debug);
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            error = ex;
+            return false;
+        }
+    }
+
+    private void RetryPendingExchangeReports()
+    {
+        if (this.pendingExchangeReports.Count == 0 || !this.UseHostAuthority)
+        {
+            return;
+        }
+
+        if (this.exchangeRetryTicksRemaining > 0)
+        {
+            this.exchangeRetryTicksRemaining--;
+            return;
+        }
+
+        int attemptsRemaining = this.pendingExchangeReports.Count;
+        while (attemptsRemaining-- > 0 && this.pendingExchangeReports.TryPeek(out ExchangeReportMessage? message))
+        {
+            if (!this.TrySendExchangeReportCore(message, out _))
+            {
+                this.exchangeRetryTicksRemaining = ExchangeRetryIntervalTicks;
+                return;
+            }
+
+            this.pendingExchangeReports.Dequeue();
+        }
+    }
+
+    private void DiscardPendingExchangeReports(string reason)
+    {
+        int count = this.pendingExchangeReports.Count;
+        if (count == 0)
+        {
+            return;
+        }
+
+        this.pendingExchangeReports.Clear();
+        this.exchangeRetryTicksRemaining = 0;
+        this.monitor.Log(
+            I18n.Get("log.mp.exchangeRetriesDiscarded", new { count, reason }),
+            LogLevel.Trace);
+    }
 
     private void SendProtocolHello(long playerId)
     {

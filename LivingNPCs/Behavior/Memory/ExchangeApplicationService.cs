@@ -24,6 +24,7 @@ internal sealed class ExchangeApplicationService
     private readonly Func<LivingNpcState, ValleyTalkEmotionImpact, bool> applyDialogueEmotionImpact;
     private readonly Func<LivingNpcState, int, bool, bool, int> applyConflictRepair;
     private readonly Func<LivingNpcState, int, int, int> applyAiDialogueFriendship;
+    private readonly Func<(int TotalDays, int TimeOfDay)> getGameTime;
 
     public ExchangeApplicationService(
         HelpRequestMemoryService helpRequests,
@@ -35,7 +36,8 @@ internal sealed class ExchangeApplicationService
         Func<NPC, LivingNpcState, ValleyTalkBehaviorInfluenceCandidate, int, bool> storeDialogueBehaviorInfluence,
         Func<LivingNpcState, ValleyTalkEmotionImpact, bool> applyDialogueEmotionImpact,
         Func<LivingNpcState, int, bool, bool, int> applyConflictRepair,
-        Func<LivingNpcState, int, int, int> applyAiDialogueFriendship)
+        Func<LivingNpcState, int, int, int> applyAiDialogueFriendship,
+        Func<(int TotalDays, int TimeOfDay)>? getGameTime = null)
     {
         this.helpRequests = helpRequests;
         this.createEntry = createEntry;
@@ -47,6 +49,7 @@ internal sealed class ExchangeApplicationService
         this.applyDialogueEmotionImpact = applyDialogueEmotionImpact;
         this.applyConflictRepair = applyConflictRepair;
         this.applyAiDialogueFriendship = applyAiDialogueFriendship;
+        this.getGameTime = getGameTime ?? (() => (Game1.Date.TotalDays, Game1.timeOfDay));
     }
 
     /// <param name="allowHelpRequestProgress">
@@ -67,13 +70,14 @@ internal sealed class ExchangeApplicationService
         int maxDialogueBehaviorInfluenceDays,
         bool allowHelpRequestProgress = true)
     {
+        (int totalDays, int timeOfDay) = this.getGameTime();
         var analysis = ValleyTalkExchangeParser.Parse(analysisJson);
         NicknamePreferenceService.TryUpdateStateFromDialogue(
             state,
             playerText,
             npcResponse,
-            Game1.Date.TotalDays,
-            Game1.timeOfDay);
+            totalDays,
+            timeOfDay);
         var pendingHelpRequestIdsBefore = state.HelpRequests
             .Where(request => request.Status == "Pending")
             .Select(request => request.QuestLogId)
@@ -295,8 +299,8 @@ internal sealed class ExchangeApplicationService
                 state.LastInteraction = "the farmer had an AI conversation";
             }
 
-            state.LastUpdatedTotalDays = Game1.Date.TotalDays;
-            state.LastUpdatedTimeOfDay = Game1.timeOfDay;
+            state.LastUpdatedTotalDays = totalDays;
+            state.LastUpdatedTimeOfDay = timeOfDay;
         }
 
         var activatedHelpRequests = state.HelpRequests

@@ -63,6 +63,7 @@ internal sealed class InMemoryModMessageBus : IModMessageBus
     public long PlayerId { get; }
     public bool IsHost { get; }
     public string ModId { get; }
+    public int FailNextSendCount { get; set; }
 
     public event Action<ReceivedModMessage>? MessageReceived;
 
@@ -73,6 +74,12 @@ internal sealed class InMemoryModMessageBus : IModMessageBus
 
     public void Send<TMessage>(TMessage message, string messageType, IReadOnlyCollection<long>? playerIds = null)
     {
+        if (this.FailNextSendCount > 0)
+        {
+            this.FailNextSendCount--;
+            throw new InvalidOperationException("Injected in-memory send failure.");
+        }
+
         this.network.Route(this, message, messageType, playerIds);
     }
 

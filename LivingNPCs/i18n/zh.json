@@ -1013,6 +1013,8 @@
   "dialogue.hud.generationFailed": "LivingNPCs：AI 回复生成失败，本次显示占位台词。原因见 SMAPI 控制台（常见：API Key、模型名、服务器地址或网络）。",
   "dialogue.hud.splitScreenUnsupported": "LivingNPCs：本版本分屏玩家暂不支持 AI 对话，已回退原版对话。",
   "log.mp.exchangeForwarded": "已把与{{npc}}的交换上报主机统一入账。",
+  "log.mp.exchangeQueuedForRetry": "与{{npc}}的交换发送失败（{{error}}），已加入内存重试队列。",
+  "log.mp.exchangeRetriesDiscarded": "在{{reason}}时丢弃了 {{count}} 条待重试联机交换；v1 不持久化补偿数据。",
   "log.mp.remoteExchangeApplied": "已入账玩家 {{player}} 与{{npc}}的远程交换：记忆 {{memories}}、偏好 {{preferences}}、冲突 {{conflicts}}、倾向 {{influences}}、好感 {{friendship}}。",
   "log.mp.remoteActionsDropped": "已丢弃帮工上报的{{npc}}世界动作 [{{types}}]：世界动作只在主机玩家自己的对话里执行。",
   "log.mp.snapshotSent": "已向玩家 {{player}} 发送 {{count}} 个 NPC 心智视图。",
