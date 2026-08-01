@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using LivingNPCs.Dialogue;
 using LivingNPCs.Dialogue.Content;
 using LivingNPCs.Dialogue.Engine;
+using LivingNPCs.Dialogue.GameHooks;
 using LivingNPCs.Dialogue.Llm;
 using LivingNPCs.Dialogue.Persistence;
 using LivingNPCs.Tests.Dialogue.Persistence;
@@ -31,6 +32,7 @@ public sealed class GenerationSchedulerCancellationTests : IDisposable
         });
         ThirdPartyContentPolicy.ResetForTests();
         LegacyLlm.Instance = new LegacyLlmDummy();
+        PatchGuards.ResetSplitScreenNoticeForTests();
 
         this.store = new DialogueHistoryStore(new FakePersistenceEnvironment()) { ArchiveSink = null };
         this.engine = new DialogueEngine(new DialogueEngineServices
@@ -57,6 +59,7 @@ public sealed class GenerationSchedulerCancellationTests : IDisposable
     public void Dispose()
     {
         DialogueEngine.RecordExchangeCallback = null;
+        PatchGuards.ResetSplitScreenNoticeForTests();
         LegacyLlm.Instance = new LegacyLlmDummy();
         DialogueServices.Initialize(null!, null!, new DialogueConfig());
     }
@@ -85,6 +88,36 @@ public sealed class GenerationSchedulerCancellationTests : IDisposable
         Assert.Empty(drawn);
         Assert.Empty(this.store.GetHistory("Abigail").ConversationHistory);
         Assert.Empty(this.engine.History.PeekConversationContext("Abigail"));
+    }
+
+    [Fact]
+    public async Task SplitScreen_Secondary_Tick_Leaves_Generation_For_Primary_Tick()
+    {
+        var drawn = new List<string>();
+        var scheduler = new GenerationScheduler(
+            this.engine,
+            subscribeEvents: false,
+            drawOverride: (_, _, text) =>
+            {
+                drawn.Add(text);
+                return true;
+            });
+
+        Assert.True(scheduler.Enqueue(null!, Request("primary generation")));
+        PatchGuards.SplitScreenStateResolverForTests = () => (true, 1);
+        scheduler.OnUpdateTicked();
+        Assert.True(scheduler.IsBusy);
+        Assert.Null(scheduler.ActiveTaskForTests);
+
+        PatchGuards.SplitScreenStateResolverForTests = () => (true, 0);
+        scheduler.OnUpdateTicked();
+        DelayedClient.PendingCall call = await this.client.WaitForCallAsync();
+        Task worker = scheduler.ActiveTaskForTests
+            ?? throw new InvalidOperationException("scheduler did not expose its active worker");
+        call.Complete("primary response");
+        await worker.WaitAsync(TimeSpan.FromSeconds(5));
+
+        Assert.Contains(drawn, line => line.Contains("primary response", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -130,6 +130,12 @@ internal sealed class GenerationScheduler
     /// <summary>延迟启动：游戏 tick 且无打开菜单时才真正启动（§4.2）。</summary>
     public void OnUpdateTicked()
     {
+        // 调度器是进程级静态；副屏 tick 只跳过，保留请求给主屏下一次 tick 启动。
+        if (PatchGuards.IsSplitScreenSecondaryBlocked(notifyPlayer: false))
+        {
+            return;
+        }
+
         GenerationRequest? request;
         NPC? npc;
         int myGeneration;
@@ -204,8 +210,10 @@ internal sealed class GenerationScheduler
         // 主线程交接：注册一次性的 UpdateTicked，把关窗 + 呈现推迟到下一游戏 tick（§4.2）。
         void Handler(object? sender, UpdateTickedEventArgs args)
         {
-            DialogueServices.Helper!.Events.GameLoop.UpdateTicked -= Handler;
-            this.Present(npc, request, result, failure, myGeneration);
+            TryConsumeCompletionTick(
+                PatchGuards.IsSplitScreenSecondaryBlocked(notifyPlayer: false),
+                () => DialogueServices.Helper!.Events.GameLoop.UpdateTicked -= Handler,
+                () => this.Present(npc, request, result, failure, myGeneration));
         }
 
         if (DialogueServices.Helper != null)
@@ -348,6 +356,22 @@ internal sealed class GenerationScheduler
         }
 
         return menuIsNull || menuIsOwnThinkingBox;
+    }
+
+    /// <summary>
+    /// 分屏共享同一个完成回调：副屏 tick 必须既不退订也不呈现，留给随后到来的主屏 tick。
+    /// 返回 true 表示本次 tick 已消费完成回调。
+    /// </summary>
+    internal static bool TryConsumeCompletionTick(bool isSplitScreenSecondary, Action unsubscribe, Action present)
+    {
+        if (isSplitScreenSecondary)
+        {
+            return false;
+        }
+
+        unsubscribe();
+        present();
+        return true;
     }
 
     /// <summary>生成失败时的游戏内提示（占位行"..."之外的可见解释）；20 秒节流。</summary>

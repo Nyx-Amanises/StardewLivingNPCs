@@ -11,6 +11,14 @@ namespace LivingNPCs.Tests.Dialogue.Ui;
 public sealed class NativeDialogueTextInputControllerWatchdogTests
 {
     [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void Update_Pump_Runs_Only_On_Primary_Screen(bool splitScreenSecondary, bool expected)
+    {
+        Assert.Equal(expected, NativeDialogueTextInputController.ShouldProcessUpdateTick(splitScreenSecondary));
+    }
+
+    [Theory]
     [InlineData(false, false, false)] // 无会话：宿主框在不在都不动作
     [InlineData(false, true, false)]  // 无会话：即使有输入框形态的菜单也不认领
     [InlineData(true, true, false)]   // 会话活跃且宿主框仍在（正常打字中）：保持

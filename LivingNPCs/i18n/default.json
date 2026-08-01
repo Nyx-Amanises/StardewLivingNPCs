@@ -1011,7 +1011,7 @@
   "dialogue.configModelsLoading": "Fetching the model list in the background... reopen this page in a moment to see it.",
   "dialogue.hud.notConfigured": "LivingNPCs: the AI dialogue engine is not configured yet. Open Generic Mod Config Menu -> LivingNPCs -> AI Dialogue Engine and fill in the connection settings.",
   "dialogue.hud.generationFailed": "LivingNPCs: the AI reply failed to generate, so a placeholder line is shown. See the SMAPI console for the reason (API key, model name, server address, or network).",
-  "dialogue.hud.splitScreenUnsupported": "LivingNPCs: AI dialogue is unavailable for split-screen players in this version; vanilla dialogue is used instead.",
+  "dialogue.hud.splitScreenUnsupported": "LivingNPCs: AI dialogue is unavailable for secondary split-screen players in this version; vanilla dialogue is used instead.",
   "log.mp.exchangeForwarded": "Forwarded the {{npc}} exchange to the host for authoritative recording.",
   "log.mp.exchangeQueuedForRetry": "Could not send the {{npc}} exchange ({{error}}); queued it for an in-memory retry.",
   "log.mp.exchangeRetriesDiscarded": "Discarded {{count}} pending multiplayer exchange report(s) at {{reason}}; v1 does not persist retry data.",

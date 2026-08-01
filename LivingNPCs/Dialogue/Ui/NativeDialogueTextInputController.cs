@@ -10,6 +10,7 @@ using StardewValley.BellsAndWhistles;
 using StardewValley.Menus;
 
 using LivingNPCs.Dialogue.Engine;
+using LivingNPCs.Dialogue.GameHooks;
 using GameDialogue = StardewValley.Dialogue;
 namespace LivingNPCs.Dialogue.Ui;
 
@@ -440,7 +441,8 @@ internal static class NativeDialogueTextInputController
 
     private static void OnUpdateTicked(object sender, UpdateTickedEventArgs e)
     {
-        if (!active)
+        // 看门狗也是静态订阅；副屏看不到主屏菜单，不能因此误判并废弃主屏输入会话。
+        if (!ShouldProcessUpdateTick(PatchGuards.IsSplitScreenSecondaryBlocked(notifyPlayer: false)) || !active)
         {
             return;
         }
@@ -475,6 +477,12 @@ internal static class NativeDialogueTextInputController
 
         PerformRepeatableEdit(key);
         nextRepeatAtMilliseconds = now + RepeatDelayMilliseconds;
+    }
+
+    /// <summary>分屏 v1：副屏 tick 不得驱动或废弃进程级静态输入会话。</summary>
+    internal static bool ShouldProcessUpdateTick(bool isSplitScreenSecondary)
+    {
+        return !isSplitScreenSecondary;
     }
 
     private static void BeginKeyRepeat(Keys key)

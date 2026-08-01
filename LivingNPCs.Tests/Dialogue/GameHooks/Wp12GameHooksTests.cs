@@ -201,6 +201,7 @@ public class Wp12PatchGuardsTests : IDisposable
         PatchGuards.EngineResolverForTests = null;
         PatchGuards.CanGenerateResolverForTests = null;
         PatchGuards.ResetUnconfiguredHintForTests();
+        PatchGuards.ResetSplitScreenNoticeForTests();
         LlmHudNotifier.SinkForTests = null;
         EnableGate.EngineDisabledByCoexistence = false;
         LivingNPCs.Dialogue.Content.DialogueEngineGate.RuntimeDisabled = false;
@@ -241,6 +242,32 @@ public class Wp12PatchGuardsTests : IDisposable
         Assert.False(PatchGuards.AllowInteractiveInput(npc));
         Assert.Empty(hud);
         DialogueServices.Config.EnableDialogueEngine = true;
+    }
+
+    [Fact]
+    public void SplitScreen_Secondary_Blocks_Common_Enablement_And_Notifies_Once()
+    {
+        UseEngine(NewEngine());
+        PatchGuards.ResetSplitScreenNoticeForTests();
+        PatchGuards.ConnectionUnconfiguredResolverForTests = () => false;
+        var hud = new List<string>();
+        PatchGuards.SplitScreenNoticeSinkForTests = hud.Add;
+        var npc = new NPC { Name = "Abigail", displayName = "Abigail" };
+
+        // 主屏仍走正常启用链。
+        PatchGuards.SplitScreenStateResolverForTests = () => (true, 0);
+        Assert.True(PatchGuards.IsEnabledFor(npc));
+
+        // 副屏的公共启用链静默拒绝，覆盖那些不经过主动/被动专用门的补丁。
+        PatchGuards.SplitScreenStateResolverForTests = () => (true, 1);
+        Assert.False(PatchGuards.IsEnabledFor(npc));
+        Assert.Empty(hud);
+
+        // 主动搭话给当前副屏一次提示；后续尝试继续回退原版但不刷屏。
+        Assert.False(PatchGuards.AllowInteractiveInput(npc));
+        Assert.False(PatchGuards.AllowInteractiveInput(npc));
+        string notice = Assert.Single(hud);
+        Assert.Contains("split-screen", notice, StringComparison.OrdinalIgnoreCase);
     }
 
     private static DialogueEngine NewEngine()
@@ -391,11 +418,13 @@ public class Wp12TypedInputQueueTests : IDisposable
     {
         DialogueServices.Initialize(null!, null!, new DialogueConfig());
         TypedInputRequestQueue.ResetForTests();
+        PatchGuards.ResetSplitScreenNoticeForTests();
     }
 
     public void Dispose()
     {
         TypedInputRequestQueue.ResetForTests();
+        PatchGuards.ResetSplitScreenNoticeForTests();
     }
 
     [Fact]
@@ -434,6 +463,26 @@ public class Wp12TypedInputQueueTests : IDisposable
         menuOpen = false;
         TypedInputRequestQueue.OnUpdateTicked();
         Assert.Equal(new[] { "hello" }, started);
+    }
+
+    [Fact]
+    public void SplitScreen_Secondary_Tick_Leaves_Request_For_Primary_Tick()
+    {
+        var npc = new NPC();
+        var started = new List<string>();
+        TypedInputRequestQueue.CanConsumeForTests = () => true;
+        TypedInputRequestQueue.InputStarterForTests = (prompt, _, _) => started.Add(prompt);
+        TypedInputRequestQueue.Submit("primary request", npc, "default", null);
+
+        PatchGuards.SplitScreenStateResolverForTests = () => (true, 1);
+        TypedInputRequestQueue.OnUpdateTicked();
+        Assert.Empty(started);
+        Assert.True(TypedInputRequestQueue.HasPending);
+
+        PatchGuards.SplitScreenStateResolverForTests = () => (true, 0);
+        TypedInputRequestQueue.OnUpdateTicked();
+        Assert.Equal(new[] { "primary request" }, started);
+        Assert.False(TypedInputRequestQueue.HasPending);
     }
 
     [Fact]

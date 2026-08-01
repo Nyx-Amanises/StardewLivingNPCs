@@ -20,10 +20,16 @@ internal static class NPC_CheckAction_Patch
     {
         try
         {
+            bool triggerKeyDown = DialoguePatchHelpers.IsTriggerKeyDown();
+            if (PatchGuards.IsSplitScreenSecondaryBlocked(notifyPlayer: triggerKeyDown))
+            {
+                return true;
+            }
+
             // 先清理上次生成异常残留的"思考中"占位对白。
             ThinkingDialogueController.RemoveStale(__instance);
 
-            if (!DialoguePatchHelpers.IsTriggerKeyDown())
+            if (!triggerKeyDown)
             {
                 if (DialogueServices.Config?.GenerateAiForNormalRightClick == true)
                 {

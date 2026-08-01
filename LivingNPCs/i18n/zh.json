@@ -1011,7 +1011,7 @@
   "dialogue.configModelsLoading": "正在后台获取模型列表……稍后重新打开本页面即可查看。",
   "dialogue.hud.notConfigured": "LivingNPCs：AI 对话引擎尚未配置。请在 Generic Mod Config Menu → LivingNPCs → AI 对话引擎中填写连接设置。",
   "dialogue.hud.generationFailed": "LivingNPCs：AI 回复生成失败，本次显示占位台词。原因见 SMAPI 控制台（常见：API Key、模型名、服务器地址或网络）。",
-  "dialogue.hud.splitScreenUnsupported": "LivingNPCs：本版本分屏玩家暂不支持 AI 对话，已回退原版对话。",
+  "dialogue.hud.splitScreenUnsupported": "LivingNPCs：本版本分屏副屏玩家暂不支持 AI 对话，已回退原版对话。",
   "log.mp.exchangeForwarded": "已把与{{npc}}的交换上报主机统一入账。",
   "log.mp.exchangeQueuedForRetry": "与{{npc}}的交换发送失败（{{error}}），已加入内存重试队列。",
   "log.mp.exchangeRetriesDiscarded": "在{{reason}}时丢弃了 {{count}} 条待重试联机交换；v1 不持久化补偿数据。",

@@ -10,6 +10,27 @@ namespace LivingNPCs.Tests.Dialogue.Engine;
 /// </summary>
 public sealed class GenerationSchedulerPresentGuardTests
 {
+    [Fact]
+    public void Completion_Tick_Waits_Through_Secondary_Then_Consumes_On_Primary()
+    {
+        int unsubscribeCalls = 0;
+        int presentCalls = 0;
+
+        Assert.False(GenerationScheduler.TryConsumeCompletionTick(
+            isSplitScreenSecondary: true,
+            () => unsubscribeCalls++,
+            () => presentCalls++));
+        Assert.Equal(0, unsubscribeCalls);
+        Assert.Equal(0, presentCalls);
+
+        Assert.True(GenerationScheduler.TryConsumeCompletionTick(
+            isSplitScreenSecondary: false,
+            () => unsubscribeCalls++,
+            () => presentCalls++));
+        Assert.Equal(1, unsubscribeCalls);
+        Assert.Equal(1, presentCalls);
+    }
+
     [Theory]
     // 常规呈现：世界就绪、非过日、前台是本次生成的思考窗（关窗后接替显示）。
     [InlineData(true, false, false, true, true)]

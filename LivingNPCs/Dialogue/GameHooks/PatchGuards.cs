@@ -67,7 +67,10 @@ internal static class PatchGuards
     /// <summary>每 NPC 启用判定（引擎就绪 + WP10 启用链：黑名单/禁用表/未授权内容包）。</summary>
     public static bool IsEnabledFor(NPC? npc)
     {
-        if (npc == null || !EngineReady)
+        // 少数响应/婚后台词补丁直接调用 IsEnabledFor，而不经过主动、被动或送礼门。
+        // 因此分屏副屏的 v1 禁用必须在公共启用链再次静默兜底，避免已有 AI 对话继续
+        // 进入进程级静态输入/调度状态。主动入口仍由 AllowInteractiveInput 负责提示。
+        if (npc == null || IsSplitScreenSecondaryBlocked(notifyPlayer: false) || !EngineReady)
         {
             return false;
         }
@@ -106,6 +109,9 @@ internal static class PatchGuards
     /// <summary>测试注入的分屏状态 (IsSplitScreen, ScreenId)；null 走 SMAPI Context。</summary>
     internal static Func<(bool IsSplitScreen, int ScreenId)>? SplitScreenStateResolverForTests;
 
+    /// <summary>测试注入的分屏提示出口；null 时直接显示在当前分屏的 HUD。</summary>
+    internal static Action<string>? SplitScreenNoticeSinkForTests;
+
     /// <summary>
     /// 多人 v1 不支持分屏副屏的 AI 对话：引擎的调度器/输入队列/思考窗全是进程级静态，
     /// 未做 PerScreen 化，副屏触发会与主屏互相踩状态。副屏一律回退原版对话；
@@ -133,18 +139,26 @@ internal static class PatchGuards
 
         if (notifyPlayer && splitScreenNoticeShownForScreens.Add(screenId))
         {
-            try
+            string message = Util.GetConsoleString(
+                "dialogue.hud.splitScreenUnsupported",
+                null,
+                "LivingNPCs: AI dialogue is unavailable for secondary split-screen players in this version; vanilla dialogue is used instead.");
+            Action<string>? sink = SplitScreenNoticeSinkForTests;
+            if (sink != null)
             {
-                Game1.addHUDMessage(new StardewValley.HUDMessage(
-                    Util.GetConsoleString(
-                        "dialogue.hud.splitScreenUnsupported",
-                        null,
-                        "LivingNPCs: AI dialogue is unavailable for split-screen players in this version; vanilla dialogue is used instead."),
-                    StardewValley.HUDMessage.newQuest_type));
+                sink(message);
             }
-            catch
+            else
             {
-                // HUD 失败不影响门禁裁决。
+                try
+                {
+                    // 必须在当前副屏的输入回调内直接显示；走全局异步 HUD 队列可能被主屏 tick 抢先消费。
+                    Game1.addHUDMessage(HUDMessage.ForCornerTextbox(message));
+                }
+                catch
+                {
+                    // HUD 失败不影响门禁裁决。
+                }
             }
         }
 
@@ -156,6 +170,7 @@ internal static class PatchGuards
     {
         splitScreenNoticeShownForScreens.Clear();
         SplitScreenStateResolverForTests = null;
+        SplitScreenNoticeSinkForTests = null;
     }
 
     /// <summary>

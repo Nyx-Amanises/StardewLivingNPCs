@@ -86,6 +86,12 @@ internal static class TypedInputRequestQueue
     /// <summary>UpdateTicked 泵：请求发起方已关闭当前对话，通常下一两帧即可打开输入框。</summary>
     public static void OnUpdateTicked()
     {
+        // 队列是进程级静态；分屏副屏的 tick 不能抢走主屏刚提交的请求。
+        if (PatchGuards.IsSplitScreenSecondaryBlocked(notifyPlayer: false))
+        {
+            return;
+        }
+
         TypedInputRequest? request;
         lock (gate)
         {
