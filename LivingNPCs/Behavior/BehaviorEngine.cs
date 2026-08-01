@@ -75,6 +75,7 @@ internal sealed class BehaviorEngine
     private int pendingGiftMailTrackTicks;
     private string activeGiftMailKey = string.Empty;
     private Ui.MemoryBookMenu? remoteMemoryBookMenu;
+    private Ui.MemoryBookAssets? memoryBookAssets;
 
     public BehaviorEngine(IModHelper helper, IMonitor monitor, ModConfig config, string modUniqueId = "Yuki.LivingNPCs")
     {
@@ -396,7 +397,7 @@ internal sealed class BehaviorEngine
 
         if (this.multiplayerSync.UseHostAuthorityForBook)
         {
-            Ui.MemoryBookMenu menu = Ui.MemoryBookMenu.CreateRemoteLoading();
+            Ui.MemoryBookMenu menu = Ui.MemoryBookMenu.CreateRemoteLoading(this.GetMemoryBookAssets());
             this.remoteMemoryBookMenu = menu;
             // 同步 fake 总线会在 Send 内立即回包；菜单必须先成为当前菜单，回调才能安全填充。
             Game1.activeClickableMenu = menu;
@@ -486,7 +487,7 @@ internal sealed class BehaviorEngine
             return;
         }
 
-        Ui.MemoryBookMenu? menu = Ui.MemoryBookMenu.TryCreate(this.memory);
+        Ui.MemoryBookMenu? menu = Ui.MemoryBookMenu.TryCreate(this.memory, this.GetMemoryBookAssets());
         if (menu == null)
         {
             this.feedback.Show(I18n.Get("book.hud.empty"));
@@ -494,6 +495,11 @@ internal sealed class BehaviorEngine
         }
 
         Game1.activeClickableMenu = menu;
+    }
+
+    private Ui.MemoryBookAssets GetMemoryBookAssets()
+    {
+        return this.memoryBookAssets ??= Ui.MemoryBookAssets.Load(this.helper, this.monitor);
     }
 
     private void OnMenuChanged(object? sender, MenuChangedEventArgs e)

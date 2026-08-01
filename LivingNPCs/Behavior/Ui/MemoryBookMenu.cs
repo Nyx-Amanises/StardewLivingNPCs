@@ -5,7 +5,6 @@ using Microsoft.Xna.Framework;
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using StardewValley;
-using StardewValley.BellsAndWhistles;
 using StardewValley.Menus;
 
 using LivingNPCs.Dialogue.Persistence;
@@ -26,9 +25,10 @@ internal sealed class MemoryBookMenu : IClickableMenu
         TimedOut
     }
 
-    private const int RosterRowHeight = 100;
-    private const int TabButtonHeight = 64;
-    private const int ContentPadding = 24;
+    private const int RosterRowHeight = 88;
+    private const int TabButtonHeight = 76;
+    private const int ContentPadding = 28;
+    private const int FooterHeight = 28;
 
     /// <summary>内容区裁剪用（复用实例，避免每帧分配）。</summary>
     private static readonly RasterizerState ScissorRasterizer = new() { ScissorTestEnable = true };
@@ -36,6 +36,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
     private readonly MemoryBookData.Translate translate;
     private readonly Func<string, StardewEventHistory> getHistory;
     private readonly Func<string> getFarmerName;
+    private readonly MemoryBookAssets assets;
     private readonly bool uiInitialized;
     private readonly Dictionary<string, LivingNpcState> statesByName;
     private readonly List<MemoryBookNpcSummary> roster;
@@ -46,8 +47,14 @@ internal sealed class MemoryBookMenu : IClickableMenu
     private ClickableTextureComponent? rosterUpArrow;
     private ClickableTextureComponent? rosterDownArrow;
 
+    private Rectangle bookBounds;
+    private Rectangle leftPageBounds;
+    private Rectangle rightPageBounds;
+    private Rectangle rosterHeaderBounds;
     private Rectangle rosterBounds;
+    private Rectangle profileBounds;
     private Rectangle contentBounds;
+    private Rectangle footerBounds;
     private int rosterScrollIndex;
     private float contentScroll;
     private float contentHeight;
@@ -56,6 +63,11 @@ internal sealed class MemoryBookMenu : IClickableMenu
     private string hoverText = string.Empty;
     private int capturedTotalDays;
     private RemoteLoadState remoteLoadState;
+    private int hoveredRosterIndex = -1;
+    private MemoryBookTab? hoveredTab;
+    private bool contentScrollbarHovered;
+    private bool draggingContentScrollbar;
+    private int contentScrollbarDragOffset;
 
     /// <summary>换好行的绘制行（按当前列宽缓存；列宽或数据变化时重建）。</summary>
     private readonly List<(MemoryBookLine Line, string Wrapped, float Height)> wrappedLines = new();
@@ -68,6 +80,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
         Func<string, StardewEventHistory> getHistory,
         Func<string> getFarmerName,
         MemoryBookData.Translate translate,
+        MemoryBookAssets? assets,
         int capturedTotalDays,
         RemoteLoadState remoteLoadState,
         bool initializeUi)
@@ -77,6 +90,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
         this.getHistory = getHistory;
         this.getFarmerName = getFarmerName;
         this.translate = translate;
+        this.assets = assets ?? MemoryBookAssets.Fallback;
         this.capturedTotalDays = capturedTotalDays;
         this.remoteLoadState = remoteLoadState;
         this.uiInitialized = initializeUi;
@@ -85,12 +99,18 @@ internal sealed class MemoryBookMenu : IClickableMenu
         {
             this.RebuildLayout();
             this.initializeUpperRightCloseButton();
+            this.PositionCloseButton();
             Game1.playSound("bigSelect");
         }
     }
 
     /// <summary>入口：没有任何可展示的 NPC 时返回 null（调用方给 HUD 提示）。</summary>
     public static MemoryBookMenu? TryCreate(BehaviorMemory memory)
+    {
+        return TryCreate(memory, MemoryBookAssets.Fallback);
+    }
+
+    internal static MemoryBookMenu? TryCreate(BehaviorMemory memory, MemoryBookAssets assets)
     {
         MemoryBookData.Translate translate = TranslateI18n;
         int nowTotalDays = Game1.Date.TotalDays;
@@ -118,6 +138,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
             npcName => DialogueHistoryStore.Instance.GetHistory(npcName),
             () => Game1.player?.Name ?? "Farmer",
             translate,
+            assets,
             nowTotalDays,
             RemoteLoadState.Ready,
             initializeUi: true);
@@ -129,6 +150,11 @@ internal sealed class MemoryBookMenu : IClickableMenu
     /// </summary>
     public static MemoryBookMenu CreateRemoteLoading()
     {
+        return CreateRemoteLoading(MemoryBookAssets.Fallback);
+    }
+
+    internal static MemoryBookMenu CreateRemoteLoading(MemoryBookAssets assets)
+    {
         MemoryBookData.Translate translate = TranslateI18n;
         return new MemoryBookMenu(
             new List<MemoryBookNpcSummary>(),
@@ -136,6 +162,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
             npcName => DialogueHistoryStore.Instance.GetHistory(npcName),
             () => Game1.player?.Name ?? "Farmer",
             translate,
+            assets,
             Game1.Date.TotalDays,
             RemoteLoadState.Loading,
             initializeUi: true);
@@ -153,6 +180,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
             getHistory,
             getFarmerName,
             translate,
+            MemoryBookAssets.Fallback,
             capturedTotalDays: -1,
             RemoteLoadState.Loading,
             initializeUi: false);
@@ -179,24 +207,67 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
     private void RebuildLayout()
     {
-        int menuWidth = Math.Min(1360, Game1.uiViewport.Width - 96);
-        int menuHeight = Math.Min(800, Game1.uiViewport.Height - 96);
-        this.width = Math.Max(960, menuWidth);
-        this.height = Math.Max(600, menuHeight);
+        int viewportWidth = Game1.uiViewport.Width;
+        int viewportHeight = Game1.uiViewport.Height;
+        int desiredWidth = Math.Clamp(viewportWidth - 64, 720, 1400);
+        int desiredHeight = Math.Clamp(viewportHeight - 64, 500, 820);
+        this.width = Math.Min(desiredWidth, Math.Max(320, viewportWidth - 16));
+        this.height = Math.Min(desiredHeight, Math.Max(360, viewportHeight - 16));
         this.xPositionOnScreen = (Game1.uiViewport.Width - this.width) / 2;
         this.yPositionOnScreen = (Game1.uiViewport.Height - this.height) / 2;
 
-        int rosterWidth = Math.Max(300, this.width / 4 + 40);
-        this.rosterBounds = new Rectangle(
-            this.xPositionOnScreen + 36,
-            this.yPositionOnScreen + 72,
+        this.bookBounds = new Rectangle(this.xPositionOnScreen, this.yPositionOnScreen, this.width, this.height);
+
+        int pageTop = this.yPositionOnScreen + 58;
+        int pageBottom = this.yPositionOnScreen + this.height - FooterHeight - 18;
+        int innerWidth = Math.Max(240, this.width - 48);
+        int pageGap = this.width < 760 ? 16 : 24;
+        int minimumRightWidth = Math.Clamp((innerWidth * 55) / 100, 160, 420);
+        int availableRosterWidth = Math.Max(120, innerWidth - pageGap - minimumRightWidth);
+        int minimumRosterWidth = Math.Min(this.width < 900 ? 240 : 260, availableRosterWidth);
+        int maximumRosterWidth = Math.Max(minimumRosterWidth, Math.Min(360, availableRosterWidth));
+        int rosterWidth = Math.Clamp((this.width * 29) / 100, minimumRosterWidth, maximumRosterWidth);
+
+        this.leftPageBounds = new Rectangle(
+            this.xPositionOnScreen + 24,
+            pageTop,
             rosterWidth,
-            this.height - 112);
+            Math.Max(180, pageBottom - pageTop));
+        int rightPageX = this.leftPageBounds.Right + pageGap;
+        this.rightPageBounds = new Rectangle(
+            rightPageX,
+            pageTop,
+            Math.Max(120, innerWidth - rosterWidth - pageGap),
+            this.leftPageBounds.Height);
+
+        this.rosterHeaderBounds = new Rectangle(
+            this.leftPageBounds.X + 18,
+            this.leftPageBounds.Y + 18,
+            Math.Max(80, this.leftPageBounds.Width - 36),
+            44);
+        this.rosterBounds = new Rectangle(
+            this.leftPageBounds.X + 18,
+            this.rosterHeaderBounds.Bottom + 8,
+            Math.Max(80, this.leftPageBounds.Width - 36),
+            Math.Max(80, this.leftPageBounds.Bottom - this.rosterHeaderBounds.Bottom - 26));
+
+        int profileHeight = this.height < 620 ? 80 : 92;
+        this.profileBounds = new Rectangle(
+            this.rightPageBounds.X + 20,
+            this.rightPageBounds.Y + 18,
+            Math.Max(120, this.rightPageBounds.Width - 40),
+            profileHeight);
+        int tabsY = this.profileBounds.Bottom + 8;
         this.contentBounds = new Rectangle(
-            this.rosterBounds.Right + 40,
-            this.yPositionOnScreen + 72 + TabButtonHeight + 8,
-            this.width - rosterWidth - 36 * 2 - 40,
-            this.height - 112 - TabButtonHeight - 8);
+            this.rightPageBounds.X + 20,
+            tabsY + TabButtonHeight - 4,
+            Math.Max(120, this.rightPageBounds.Width - 40),
+            Math.Max(60, this.rightPageBounds.Bottom - (tabsY + TabButtonHeight - 4) - 18));
+        this.footerBounds = new Rectangle(
+            this.xPositionOnScreen + 28,
+            pageBottom + 2,
+            this.width - 56,
+            FooterHeight);
 
         this.rosterRows.Clear();
         int visibleRows = this.VisibleRosterRows;
@@ -206,41 +277,44 @@ internal sealed class MemoryBookMenu : IClickableMenu
                 new Rectangle(
                     this.rosterBounds.X,
                     this.rosterBounds.Y + (i * RosterRowHeight),
-                    this.rosterBounds.Width - 52,
+                    this.rosterBounds.Width - 48,
                     RosterRowHeight - 8),
                 $"row{i}"));
         }
 
         this.rosterUpArrow = new ClickableTextureComponent(
-            new Rectangle(this.rosterBounds.Right - 44, this.rosterBounds.Y, 44, 48),
+            new Rectangle(this.rosterBounds.Right - 44, this.rosterBounds.Y, 44, 44),
             Game1.mouseCursors,
             new Rectangle(421, 459, 11, 12),
             4f);
         this.rosterDownArrow = new ClickableTextureComponent(
-            new Rectangle(this.rosterBounds.Right - 44, this.rosterBounds.Bottom - 48, 44, 48),
+            new Rectangle(this.rosterBounds.Right - 44, this.rosterBounds.Bottom - 44, 44, 44),
             Game1.mouseCursors,
             new Rectangle(421, 472, 11, 12),
             4f);
 
         this.tabButtons.Clear();
         MemoryBookTab[] tabs = Enum.GetValues<MemoryBookTab>();
-        int tabWidth = this.contentBounds.Width / tabs.Length;
+        int tabWidth = this.profileBounds.Width / tabs.Length;
         for (int i = 0; i < tabs.Length; i++)
         {
             this.tabButtons.Add(new ClickableComponent(
                 new Rectangle(
-                    this.contentBounds.X + (i * tabWidth),
-                    this.contentBounds.Y - TabButtonHeight,
-                    tabWidth - 8,
+                    this.profileBounds.X + (i * tabWidth),
+                    tabsY,
+                    tabWidth - 6,
                     TabButtonHeight),
                 tabs[i].ToString()));
         }
 
         this.wrappedForWidth = -1;
+        this.draggingContentScrollbar = false;
         this.ClampScrolls();
     }
 
     private int VisibleRosterRows => Math.Max(1, this.rosterBounds.Height / RosterRowHeight);
+
+    private int VisibleContentHeight => Math.Max(1, this.contentBounds.Height);
 
     public override void gameWindowSizeChanged(Rectangle oldBounds, Rectangle newBounds)
     {
@@ -252,6 +326,19 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
         this.RebuildLayout();
         this.initializeUpperRightCloseButton();
+        this.PositionCloseButton();
+    }
+
+    private void PositionCloseButton()
+    {
+        if (this.upperRightCloseButton != null)
+        {
+            this.upperRightCloseButton.bounds = new Rectangle(
+                this.xPositionOnScreen + this.width - 64,
+                this.yPositionOnScreen + 12,
+                48,
+                48);
+        }
     }
 
     // ---- 数据 ----
@@ -426,6 +513,11 @@ internal sealed class MemoryBookMenu : IClickableMenu
         this.contentScroll = 0f;
         this.contentHeight = 0f;
         this.hoverText = string.Empty;
+        this.hoveredRosterIndex = -1;
+        this.hoveredTab = null;
+        this.contentScrollbarHovered = false;
+        this.draggingContentScrollbar = false;
+        this.contentScrollbarDragOffset = 0;
     }
 
     private StardewEventHistory SafeHistory(string npcName)
@@ -463,9 +555,9 @@ internal sealed class MemoryBookMenu : IClickableMenu
             return;
         }
 
-        int textWidth = this.contentBounds.Width - (ContentPadding * 2) - 40;
+        int layoutWidth = this.contentBounds.Width;
         var page = (selectedNpc.NpcName, this.activeTab);
-        if (this.wrappedForWidth == textWidth && this.wrappedForPage == page)
+        if (this.wrappedForWidth == layoutWidth && this.wrappedForPage == page)
         {
             return;
         }
@@ -473,13 +565,14 @@ internal sealed class MemoryBookMenu : IClickableMenu
         this.wrappedLines.Clear();
         foreach (MemoryBookLine line in this.GetPageLines(page.NpcName, this.activeTab))
         {
-            string wrapped = Game1.parseText(line.Text, this.FontFor(line.Kind), Math.Max(120, textWidth - this.IndentFor(line.Kind)));
-            float height = this.FontFor(line.Kind).MeasureString(wrapped).Y + this.SpacingFor(line.Kind);
+            SpriteFont font = this.FontFor(line.Kind);
+            string wrapped = Game1.parseText(line.Text, font, this.ContentTextWidthFor(line.Kind));
+            float height = font.MeasureString(wrapped).Y + this.SpacingFor(line.Kind);
             this.wrappedLines.Add((line, wrapped, height));
         }
 
         this.contentHeight = this.wrappedLines.Sum(entry => entry.Height) + ContentPadding * 2;
-        this.wrappedForWidth = textWidth;
+        this.wrappedForWidth = layoutWidth;
         this.wrappedForPage = page;
         this.ClampScrolls();
     }
@@ -489,18 +582,33 @@ internal sealed class MemoryBookMenu : IClickableMenu
         return kind == MemoryBookLineKind.SectionHeader ? Game1.dialogueFont : Game1.smallFont;
     }
 
-    private int IndentFor(MemoryBookLineKind kind)
+    private int ContentTextWidthFor(MemoryBookLineKind kind)
     {
-        return kind is MemoryBookLineKind.MemoryFact or MemoryBookLineKind.PlayerLine or MemoryBookLineKind.NpcLine ? 28 : 0;
+        int usableWidth = Math.Max(36, this.contentBounds.Width - (ContentPadding * 2) - 28);
+        int reservedWidth = kind switch
+        {
+            MemoryBookLineKind.SectionHeader => 56,
+            MemoryBookLineKind.PlayerLine or MemoryBookLineKind.NpcLine => 80,
+            MemoryBookLineKind.DateSeparator => 56,
+            MemoryBookLineKind.MemoryFact => 34,
+            MemoryBookLineKind.Muted => 32,
+            MemoryBookLineKind.Empty => 24,
+            _ => 28
+        };
+        return Math.Max(16, usableWidth - reservedWidth);
     }
 
     private float SpacingFor(MemoryBookLineKind kind)
     {
         return kind switch
         {
-            MemoryBookLineKind.SectionHeader => 18f,
-            MemoryBookLineKind.DateSeparator => 14f,
-            _ => 8f
+            MemoryBookLineKind.SectionHeader => 28f,
+            MemoryBookLineKind.PlayerLine or MemoryBookLineKind.NpcLine => 32f,
+            MemoryBookLineKind.DateSeparator => 22f,
+            MemoryBookLineKind.MemoryFact => 14f,
+            MemoryBookLineKind.Muted => 12f,
+            MemoryBookLineKind.Empty => 88f,
+            _ => 12f
         };
     }
 
@@ -508,21 +616,21 @@ internal sealed class MemoryBookMenu : IClickableMenu
     {
         return kind switch
         {
-            MemoryBookLineKind.SectionHeader => new Color(86, 22, 12),
-            MemoryBookLineKind.PlayerLine => new Color(46, 80, 146),
-            MemoryBookLineKind.NpcLine => new Color(60, 60, 60),
-            MemoryBookLineKind.DateSeparator => new Color(140, 100, 60),
-            MemoryBookLineKind.MemoryFact => new Color(50, 60, 40),
-            MemoryBookLineKind.Muted => new Color(130, 120, 100),
-            MemoryBookLineKind.Empty => new Color(150, 130, 110),
-            _ => Game1.textColor
+            MemoryBookLineKind.SectionHeader => MemoryBookPalette.Ink,
+            MemoryBookLineKind.PlayerLine => MemoryBookPalette.Conversations,
+            MemoryBookLineKind.NpcLine => MemoryBookPalette.Ink,
+            MemoryBookLineKind.DateSeparator => MemoryBookPalette.Muted,
+            MemoryBookLineKind.MemoryFact => MemoryBookPalette.Ink,
+            MemoryBookLineKind.Muted => MemoryBookPalette.Muted,
+            MemoryBookLineKind.Empty => MemoryBookPalette.Muted,
+            _ => MemoryBookPalette.Ink
         };
     }
 
     private void ClampScrolls()
     {
         this.rosterScrollIndex = Math.Clamp(this.rosterScrollIndex, 0, Math.Max(0, this.roster.Count - this.VisibleRosterRows));
-        float maxScroll = Math.Max(0f, this.contentHeight - this.contentBounds.Height);
+        float maxScroll = Math.Max(0f, this.contentHeight - this.VisibleContentHeight);
         this.contentScroll = Math.Clamp(this.contentScroll, 0f, maxScroll);
     }
 
@@ -541,6 +649,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
         this.selectedRosterIndex = index;
         this.contentScroll = 0f;
+        this.draggingContentScrollbar = false;
         if (index < this.rosterScrollIndex)
         {
             this.rosterScrollIndex = index;
@@ -565,6 +674,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
         this.activeTab = tab;
         this.contentScroll = 0f;
+        this.draggingContentScrollbar = false;
         if (playSound && this.uiInitialized)
         {
             Game1.playSound("shwip");
@@ -614,7 +724,49 @@ internal sealed class MemoryBookMenu : IClickableMenu
         if (this.rosterDownArrow?.containsPoint(x, y) == true)
         {
             this.ScrollRoster(1);
+            return;
         }
+
+        this.EnsureWrapped();
+        if (this.TryGetContentScrollbarGeometry(out Rectangle track, out Rectangle thumb)
+            && ContentScrollbarHitBounds(track).Contains(x, y))
+        {
+            this.draggingContentScrollbar = true;
+            this.contentScrollbarHovered = true;
+            this.contentScrollbarDragOffset = thumb.Contains(x, y)
+                ? y - thumb.Y
+                : thumb.Height / 2;
+            this.SetContentScrollFromThumbTop(y - this.contentScrollbarDragOffset, track, thumb);
+            if (this.uiInitialized)
+            {
+                Game1.playSound("smallSelect");
+            }
+        }
+    }
+
+    public override void leftClickHeld(int x, int y)
+    {
+        if (!this.HasBrowsableContent || !this.draggingContentScrollbar)
+        {
+            base.leftClickHeld(x, y);
+            return;
+        }
+
+        this.EnsureWrapped();
+        if (this.TryGetContentScrollbarGeometry(out Rectangle track, out Rectangle thumb))
+        {
+            this.SetContentScrollFromThumbTop(y - this.contentScrollbarDragOffset, track, thumb);
+        }
+        else
+        {
+            this.draggingContentScrollbar = false;
+        }
+    }
+
+    public override void releaseLeftClick(int x, int y)
+    {
+        this.draggingContentScrollbar = false;
+        base.releaseLeftClick(x, y);
     }
 
     public override void receiveScrollWheelAction(int direction)
@@ -747,6 +899,9 @@ internal sealed class MemoryBookMenu : IClickableMenu
     public override void performHoverAction(int x, int y)
     {
         this.hoverText = string.Empty;
+        this.hoveredRosterIndex = -1;
+        this.hoveredTab = null;
+        this.contentScrollbarHovered = false;
         if (!this.HasBrowsableContent)
         {
             if (this.uiInitialized)
@@ -760,6 +915,38 @@ internal sealed class MemoryBookMenu : IClickableMenu
         base.performHoverAction(x, y);
         this.rosterUpArrow?.tryHover(x, y);
         this.rosterDownArrow?.tryHover(x, y);
+
+        for (int i = 0; i < this.rosterRows.Count; i++)
+        {
+            int rosterIndex = this.rosterScrollIndex + i;
+            if (rosterIndex < this.roster.Count && this.rosterRows[i].containsPoint(x, y))
+            {
+                this.hoveredRosterIndex = rosterIndex;
+                break;
+            }
+        }
+
+        foreach (ClickableComponent tabButton in this.tabButtons)
+        {
+            if (tabButton.containsPoint(x, y) && Enum.TryParse(tabButton.name, out MemoryBookTab tab))
+            {
+                this.hoveredTab = tab;
+                break;
+            }
+        }
+
+        this.EnsureWrapped();
+        if (this.TryGetContentScrollbarGeometry(out Rectangle track, out _)
+            && ContentScrollbarHitBounds(track).Contains(x, y))
+        {
+            this.contentScrollbarHovered = true;
+            return;
+        }
+
+        if (this.draggingContentScrollbar)
+        {
+            return;
+        }
 
         if (!this.contentBounds.Contains(x, y))
         {
@@ -787,39 +974,24 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
     public override void draw(SpriteBatch b)
     {
-        b.Draw(Game1.fadeToBlackRect, Game1.graphics.GraphicsDevice.Viewport.Bounds, Color.Black * 0.5f);
-
-        // 书本框体：几何确定的菜单框贴图（drawDialogueBox 的装饰边框会超出传入矩形，
-        // 关闭按钮与标题会"飘"在框外——冒烟实测），卷轴标题压在框体顶边上。
-        drawTextureBox(
-            b,
-            Game1.mouseCursors,
-            new Rectangle(384, 373, 18, 18),
-            this.xPositionOnScreen,
-            this.yPositionOnScreen,
-            this.width,
-            this.height,
-            Color.White,
-            4f,
-            drawShadow: true);
-        SpriteText.drawStringWithScrollCenteredAt(
-            b,
-            this.translate("book.title"),
-            this.xPositionOnScreen + this.width / 2,
-            this.yPositionOnScreen - 8);
+        b.Draw(Game1.fadeToBlackRect, Game1.graphics.GraphicsDevice.Viewport.Bounds, Color.Black * 0.58f);
+        this.DrawBookShell(b);
+        this.DrawTitle(b);
 
         if (!this.HasBrowsableContent)
         {
             this.DrawStatusPlaceholder(b);
+            this.DrawFooter(b);
             base.draw(b);
             this.drawMouse(b);
             return;
         }
 
         this.DrawRoster(b);
-        this.DrawDivider(b);
+        this.DrawProfileHeader(b);
         this.DrawTabs(b);
         this.DrawContent(b);
+        this.DrawFooter(b);
 
         base.draw(b);
 
@@ -831,24 +1003,155 @@ internal sealed class MemoryBookMenu : IClickableMenu
         this.drawMouse(b);
     }
 
+    private void DrawBookShell(SpriteBatch b)
+    {
+        this.DrawFrame(b, MemoryBookFrame.Cover, this.bookBounds, Color.White, 4f, drawShadow: true);
+        this.DrawFrame(b, MemoryBookFrame.Page, this.leftPageBounds, Color.White, 3f, drawShadow: false);
+        this.DrawFrame(b, MemoryBookFrame.Page, this.rightPageBounds, Color.White, 3f, drawShadow: false);
+
+        this.DrawPaperPattern(b, this.leftPageBounds);
+        this.DrawPaperPattern(b, this.rightPageBounds);
+
+        if (!this.assets.HasCustomArt || this.assets.Texture == null)
+        {
+            var divider = new Rectangle(
+                this.leftPageBounds.Right + ((this.rightPageBounds.X - this.leftPageBounds.Right - 8) / 2),
+                this.leftPageBounds.Y + 8,
+                8,
+                this.leftPageBounds.Height - 16);
+            b.Draw(Game1.staminaRect, divider, MemoryBookPalette.LeatherDark * 0.72f);
+            return;
+        }
+
+        Texture2D texture = this.assets.Texture;
+        int spineWidth = MemoryBookAssets.SpineSource.Width * 3;
+        int spineX = this.leftPageBounds.Right
+            + ((this.rightPageBounds.X - this.leftPageBounds.Right - spineWidth) / 2);
+        int tileHeight = MemoryBookAssets.SpineSource.Height * 3;
+        for (int y = this.leftPageBounds.Y + 12; y < this.leftPageBounds.Bottom - 12; y += tileHeight)
+        {
+            int height = Math.Min(tileHeight, this.leftPageBounds.Bottom - 12 - y);
+            b.Draw(
+                texture,
+                new Rectangle(spineX, y, spineWidth, height),
+                MemoryBookAssets.SpineSource,
+                Color.White);
+        }
+
+        b.Draw(
+            texture,
+            new Rectangle(this.bookBounds.X + 10, this.bookBounds.Y + 6, 72, 72),
+            MemoryBookAssets.SprigSource,
+            Color.White);
+        b.Draw(
+            texture,
+            new Rectangle(this.bookBounds.Right - 82, this.bookBounds.Bottom - 82, 72, 72),
+            MemoryBookAssets.FlowerSource,
+            Color.White);
+
+        this.DrawIcon(
+            b,
+            MemoryBookIcon.Sparkle,
+            new Rectangle(this.bookBounds.Right - 150, this.bookBounds.Y + 12, 32, 32));
+        this.DrawIcon(
+            b,
+            MemoryBookIcon.Sparkle,
+            new Rectangle(this.bookBounds.Right - 112, this.bookBounds.Y + 28, 16, 16));
+    }
+
+    private void DrawTitle(SpriteBatch b)
+    {
+        int bannerScale = Math.Clamp((this.bookBounds.Width - 80) / MemoryBookAssets.TitleBannerSource.Width, 2, 4);
+        int bannerWidth = MemoryBookAssets.TitleBannerSource.Width * bannerScale;
+        int bannerHeight = MemoryBookAssets.TitleBannerSource.Height * bannerScale;
+        Rectangle banner = new(
+            this.bookBounds.X + (this.bookBounds.Width - bannerWidth) / 2,
+            this.bookBounds.Y - 4,
+            bannerWidth,
+            bannerHeight);
+
+        if (this.assets.Texture != null)
+        {
+            b.Draw(this.assets.Texture, banner, MemoryBookAssets.TitleBannerSource, Color.White);
+        }
+        else
+        {
+            this.DrawFrame(b, MemoryBookFrame.Header, banner, Color.White, 3f, drawShadow: true);
+        }
+
+        string title = this.translate("book.title");
+        SpriteFont titleFont = Game1.dialogueFont;
+        Vector2 size = titleFont.MeasureString(title);
+        if (size.X > banner.Width - 48)
+        {
+            titleFont = Game1.smallFont;
+            size = titleFont.MeasureString(title);
+        }
+
+        var position = new Vector2(
+            banner.X + (banner.Width - size.X) / 2f,
+            banner.Y + (banner.Height - size.Y) / 2f - 2f);
+        b.DrawString(titleFont, title, position + new Vector2(2f, 3f), MemoryBookPalette.Shadow * 0.38f);
+        b.DrawString(titleFont, title, position, MemoryBookPalette.Ink);
+    }
+
     private void DrawStatusPlaceholder(SpriteBatch b)
     {
+        Rectangle note = new(
+            this.bookBounds.X + Math.Max(72, this.bookBounds.Width / 7),
+            this.bookBounds.Y + (this.bookBounds.Height - 220) / 2,
+            this.bookBounds.Width - Math.Max(144, (this.bookBounds.Width / 7) * 2),
+            220);
+        this.DrawFrame(b, MemoryBookFrame.Status, note, Color.White, 3f, drawShadow: true);
+
+        Rectangle iconBounds = new(note.X + (note.Width - 64) / 2, note.Y + 26, 64, 64);
+        this.DrawIcon(b, MemoryBookIcon.EmptyBook, iconBounds);
+
         string text = Game1.parseText(
             this.GetStatusText(),
             Game1.dialogueFont,
-            Math.Max(320, this.width - 240));
+            Math.Max(180, note.Width - 72));
         Vector2 size = Game1.dialogueFont.MeasureString(text);
         b.DrawString(
             Game1.dialogueFont,
             text,
             new Vector2(
-                this.xPositionOnScreen + (this.width - size.X) / 2f,
-                this.yPositionOnScreen + (this.height - size.Y) / 2f),
-            new Color(120, 100, 80));
+                note.X + (note.Width - size.X) / 2f,
+                note.Y + 112),
+            MemoryBookPalette.Muted);
     }
 
     private void DrawRoster(SpriteBatch b)
     {
+        this.DrawFrame(b, MemoryBookFrame.Header, this.rosterHeaderBounds, Color.White, 2f, drawShadow: false);
+        this.DrawIcon(
+            b,
+            MemoryBookIcon.Villagers,
+            new Rectangle(this.rosterHeaderBounds.X + 10, this.rosterHeaderBounds.Y + 6, 32, 32));
+
+        int countReserve = this.rosterHeaderBounds.Width >= 220 ? 48 : 0;
+        string header = FitSingleLine(
+            Game1.smallFont,
+            this.translate("book.roster.title"),
+            Math.Max(8, this.rosterHeaderBounds.Width - 60 - countReserve));
+        Vector2 headerSize = Game1.smallFont.MeasureString(header);
+        b.DrawString(
+            Game1.smallFont,
+            header,
+            new Vector2(this.rosterHeaderBounds.X + 48, this.rosterHeaderBounds.Y + (this.rosterHeaderBounds.Height - headerSize.Y) / 2f),
+            MemoryBookPalette.Ink);
+
+        if (this.rosterHeaderBounds.Width >= 220)
+        {
+            string countText = this.roster.Count.ToString();
+            Vector2 countSize = Game1.smallFont.MeasureString(countText);
+            b.DrawString(
+                Game1.smallFont,
+                countText,
+                new Vector2(this.rosterHeaderBounds.Right - countSize.X - 12, this.rosterHeaderBounds.Y + (this.rosterHeaderBounds.Height - countSize.Y) / 2f),
+                MemoryBookPalette.Muted);
+        }
+
         int visibleRows = this.VisibleRosterRows;
         for (int i = 0; i < visibleRows; i++)
         {
@@ -861,65 +1164,122 @@ internal sealed class MemoryBookMenu : IClickableMenu
             MemoryBookNpcSummary entry = this.roster[rosterIndex];
             Rectangle rowBounds = this.rosterRows[i].bounds;
             bool selected = rosterIndex == this.selectedRosterIndex;
+            bool hovered = rosterIndex == this.hoveredRosterIndex;
+            bool compact = rowBounds.Width < 260;
 
-            if (selected)
-            {
-                drawTextureBox(
-                    b,
-                    Game1.mouseCursors,
-                    new Rectangle(384, 396, 15, 15),
-                    rowBounds.X - 4,
-                    rowBounds.Y - 4,
-                    rowBounds.Width + 8,
-                    rowBounds.Height + 8,
-                    Color.White,
-                    4f,
-                    drawShadow: false);
-            }
+            this.DrawFrame(
+                b,
+                selected ? MemoryBookFrame.SelectedRow : MemoryBookFrame.Roster,
+                rowBounds,
+                hovered && !selected ? Color.White * 0.92f : Color.White,
+                2f,
+                drawShadow: selected);
 
-            NPC? npc = Game1.getCharacterFromName(entry.NpcName);
-            if (npc?.Portrait != null)
+            if (selected && this.assets.Texture != null)
             {
                 b.Draw(
-                    npc.Portrait,
-                    new Rectangle(rowBounds.X + 8, rowBounds.Y + (rowBounds.Height - 64) / 2, 64, 64),
-                    new Rectangle(0, 0, 64, 64),
+                    this.assets.Texture,
+                    new Rectangle(rowBounds.X - 12, rowBounds.Y + 18, 24, 40),
+                    MemoryBookAssets.BookmarkSource,
                     Color.White);
+            }
+
+            int portraitSize = compact ? 48 : 64;
+            Rectangle portraitBounds = new(
+                rowBounds.X + 8,
+                rowBounds.Y + (rowBounds.Height - portraitSize) / 2,
+                portraitSize,
+                portraitSize);
+            this.DrawPortrait(b, entry.NpcName, portraitBounds, selected);
+
+            int textX = portraitBounds.Right + (compact ? 10 : 12);
+            int availableTextWidth = Math.Max(8, rowBounds.Right - textX - 8);
+            string displayName = FitSingleLine(Game1.smallFont, entry.DisplayName, availableTextWidth);
+            b.DrawString(
+                Game1.smallFont,
+                displayName,
+                new Vector2(textX, rowBounds.Y + 8),
+                selected ? MemoryBookPalette.Relationship : MemoryBookPalette.Ink);
+
+            if (compact)
+            {
+                float detailLineHeight = Game1.smallFont.LineSpacing;
+                float detailY = rowBounds.Bottom - detailLineHeight - 6;
+                string detail = FitSingleLine(
+                    Game1.smallFont,
+                    $"{Math.Clamp(entry.Hearts, 0, 10)}/10 · {entry.SubtitleText}",
+                    Math.Max(8, availableTextWidth - 22));
+                int iconY = (int)Math.Round(detailY + Math.Max(0f, (detailLineHeight - 16f) / 2f));
+                this.DrawIcon(b, MemoryBookIcon.Relationship, new Rectangle(textX, iconY, 16, 16));
+                b.DrawString(
+                    Game1.smallFont,
+                    detail,
+                    new Vector2(textX + 22, detailY),
+                    MemoryBookPalette.Relationship);
             }
             else
             {
-                b.Draw(
-                    Game1.mouseCursors,
-                    new Rectangle(rowBounds.X + 8, rowBounds.Y + (rowBounds.Height - 64) / 2, 64, 64),
-                    new Rectangle(540, 333, 12, 14),
-                    Color.White * 0.7f);
+                this.DrawHearts(b, textX, rowBounds.Y + 34, entry.Hearts);
+                string subtitle = FitSingleLine(Game1.smallFont, entry.SubtitleText, availableTextWidth);
+                Vector2 subtitleSize = Game1.smallFont.MeasureString(subtitle);
+                b.DrawString(
+                    Game1.smallFont,
+                    subtitle,
+                    new Vector2(textX, rowBounds.Bottom - subtitleSize.Y - 4),
+                    MemoryBookPalette.Muted);
             }
-
-            int textX = rowBounds.X + 84;
-            b.DrawString(
-                Game1.smallFont,
-                entry.DisplayName,
-                new Vector2(textX, rowBounds.Y + 8),
-                selected ? new Color(86, 22, 12) : Game1.textColor);
-
-            this.DrawHearts(b, textX, rowBounds.Y + 40, entry.Hearts);
-
-            b.DrawString(
-                Game1.smallFont,
-                Game1.parseText(entry.SubtitleText, Game1.smallFont, Math.Max(80, rowBounds.Width - 92)),
-                new Vector2(textX, rowBounds.Y + 60),
-                new Color(130, 120, 100) * 0.9f);
         }
 
         if (this.rosterScrollIndex > 0)
         {
-            this.rosterUpArrow?.draw(b);
+            this.DrawArrowButton(b, this.rosterUpArrow, MemoryBookIcon.ArrowUp);
         }
 
         if (this.rosterScrollIndex + visibleRows < this.roster.Count)
         {
-            this.rosterDownArrow?.draw(b);
+            this.DrawArrowButton(b, this.rosterDownArrow, MemoryBookIcon.ArrowDown);
         }
+    }
+
+    private void DrawPortrait(SpriteBatch b, string npcName, Rectangle bounds, bool selected)
+    {
+        Rectangle outer = Inflate(bounds, 4);
+        b.Draw(Game1.staminaRect, outer, MemoryBookPalette.Ink);
+        b.Draw(Game1.staminaRect, Inset(outer, 2), selected ? MemoryBookPalette.GoldLight : MemoryBookPalette.PaperShadow);
+        b.Draw(Game1.staminaRect, Inset(outer, 4), MemoryBookPalette.PaperBright);
+
+        NPC? npc = Game1.getCharacterFromName(npcName);
+        if (npc?.Portrait != null)
+        {
+            b.Draw(npc.Portrait, bounds, new Rectangle(0, 0, 64, 64), Color.White);
+        }
+        else
+        {
+            b.Draw(
+                Game1.mouseCursors,
+                bounds,
+                new Rectangle(540, 333, 12, 14),
+                Color.White * 0.72f);
+        }
+    }
+
+    private void DrawArrowButton(SpriteBatch b, ClickableTextureComponent? button, MemoryBookIcon icon)
+    {
+        if (button == null)
+        {
+            return;
+        }
+
+        Point cursor = Game1.getMousePosition(true);
+        bool hovered = button.containsPoint(cursor.X, cursor.Y);
+        this.DrawFrame(
+            b,
+            hovered ? MemoryBookFrame.TabActive : MemoryBookFrame.TabIdle,
+            button.bounds,
+            hovered ? Color.White : Color.White * 0.9f,
+            2f,
+            drawShadow: false);
+        this.DrawIcon(b, icon, Inset(button.bounds, 6));
     }
 
     private void DrawHearts(SpriteBatch b, int x, int y, int hearts)
@@ -941,44 +1301,132 @@ internal sealed class MemoryBookMenu : IClickableMenu
         }
     }
 
-    private void DrawDivider(SpriteBatch b)
+    private void DrawProfileHeader(SpriteBatch b)
     {
-        var divider = new Rectangle(
-            this.rosterBounds.Right + 16,
-            this.yPositionOnScreen + 64,
-            4,
-            this.height - 104);
-        b.Draw(Game1.staminaRect, divider, new Color(120, 80, 48) * 0.5f);
+        if (!this.TryGetSelectedNpc(out MemoryBookNpcSummary? selectedNpc) || selectedNpc == null)
+        {
+            return;
+        }
+
+        this.DrawFrame(b, MemoryBookFrame.Roster, this.profileBounds, Color.White, 2f, drawShadow: false);
+
+        Rectangle portrait = new(
+            this.profileBounds.X + 14,
+            this.profileBounds.Y + (this.profileBounds.Height - 64) / 2,
+            64,
+            64);
+        this.DrawPortrait(b, selectedNpc.NpcName, portrait, selected: true);
+
+        int textX = portrait.Right + 18;
+        int iconReserve = this.profileBounds.Width >= 520 ? 68 : 12;
+        int availableNameWidth = Math.Max(60, this.profileBounds.Right - textX - iconReserve);
+        string profileLabel = FitSingleLine(Game1.smallFont, this.translate("book.profile.label"), availableNameWidth);
+        b.DrawString(
+            Game1.smallFont,
+            profileLabel,
+            new Vector2(textX, this.profileBounds.Y + 8),
+            MemoryBookPalette.Muted);
+
+        SpriteFont nameFont = Game1.dialogueFont;
+        Vector2 nameSize = nameFont.MeasureString(selectedNpc.DisplayName);
+        if (nameSize.X > availableNameWidth || nameSize.Y > this.profileBounds.Height - 36)
+        {
+            nameFont = Game1.smallFont;
+        }
+
+        string profileName = FitSingleLine(nameFont, selectedNpc.DisplayName, availableNameWidth);
+        nameSize = nameFont.MeasureString(profileName);
+
+        float nameY = this.profileBounds.Y + Math.Min(28, Math.Max(20, this.profileBounds.Height - (int)nameSize.Y - 22));
+        b.DrawString(
+            nameFont,
+            profileName,
+            new Vector2(textX, nameY),
+            MemoryBookPalette.Ink);
+
+        int heartY = this.profileBounds.Bottom - 24;
+        bool compact = this.profileBounds.Width < 430;
+        if (compact)
+        {
+            this.DrawIcon(b, MemoryBookIcon.Relationship, new Rectangle(textX, heartY + 1, 16, 16));
+            b.DrawString(
+                Game1.smallFont,
+                $"{Math.Clamp(selectedNpc.Hearts, 0, 10)}/10",
+                new Vector2(textX + 22, heartY - 2),
+                MemoryBookPalette.Relationship);
+        }
+        else
+        {
+            this.DrawHearts(b, textX, heartY, selectedNpc.Hearts);
+        }
+
+        int subtitleX = textX + (compact ? 90 : 178);
+        int subtitleWidth = this.profileBounds.Right - subtitleX - iconReserve;
+        if (subtitleWidth >= 100)
+        {
+            string subtitle = FitSingleLine(Game1.smallFont, selectedNpc.SubtitleText, subtitleWidth);
+            b.DrawString(
+                Game1.smallFont,
+                subtitle,
+                new Vector2(subtitleX, heartY - 2),
+                MemoryBookPalette.Muted);
+        }
+
+        if (this.profileBounds.Width >= 520)
+        {
+            Rectangle seal = new(this.profileBounds.Right - 62, this.profileBounds.Y + 16, 48, 48);
+            this.DrawFrame(b, MemoryBookFrame.TabActive, seal, Color.White, 2f, drawShadow: true);
+            this.DrawIcon(b, IconFor(this.activeTab), Inset(seal, 8), highlighted: true);
+        }
     }
 
     private void DrawTabs(SpriteBatch b)
     {
         foreach (ClickableComponent tabButton in this.tabButtons)
         {
-            bool active = Enum.TryParse(tabButton.name, out MemoryBookTab tab) && tab == this.activeTab;
-            Rectangle bounds = tabButton.bounds;
-            int lift = active ? 0 : 8;
-            drawTextureBox(
-                b,
-                Game1.mouseCursors,
-                new Rectangle(384, 373, 18, 18),
-                bounds.X,
-                bounds.Y + lift,
-                bounds.Width,
-                bounds.Height - lift,
-                active ? Color.White : Color.White * 0.75f,
-                4f,
-                drawShadow: false);
+            if (!Enum.TryParse(tabButton.name, out MemoryBookTab tab))
+            {
+                continue;
+            }
 
-            string label = this.translate($"book.tab.{tabButton.name.ToLowerInvariant()}");
+            bool active = tab == this.activeTab;
+            bool hovered = this.hoveredTab == tab;
+            Rectangle bounds = tabButton.bounds;
+            int lift = active ? 0 : 6;
+            Rectangle drawnBounds = new(bounds.X, bounds.Y + lift, bounds.Width, bounds.Height - lift);
+            this.DrawFrame(
+                b,
+                active ? MemoryBookFrame.TabActive : MemoryBookFrame.TabIdle,
+                drawnBounds,
+                hovered && !active ? Color.White * 0.92f : Color.White,
+                2f,
+                drawShadow: active);
+
+            Rectangle iconBounds = new(
+                drawnBounds.X + (drawnBounds.Width - 32) / 2,
+                drawnBounds.Y + 4,
+                32,
+                32);
+            this.DrawIcon(b, IconFor(tab), iconBounds, highlighted: active);
+
+            string label = FitSingleLine(
+                Game1.smallFont,
+                this.translate($"book.tab.{tabButton.name.ToLowerInvariant()}"),
+                Math.Max(8, drawnBounds.Width - 12));
             Vector2 size = Game1.smallFont.MeasureString(label);
             b.DrawString(
                 Game1.smallFont,
                 label,
                 new Vector2(
-                    bounds.X + (bounds.Width - size.X) / 2,
-                    bounds.Y + lift + (bounds.Height - lift - size.Y) / 2),
-                active ? new Color(86, 22, 12) : new Color(120, 100, 80));
+                    drawnBounds.X + (drawnBounds.Width - size.X) / 2,
+                    drawnBounds.Bottom - size.Y - 7),
+                active ? MemoryBookPalette.Ink : MemoryBookPalette.Muted);
+
+            Color accent = AccentFor(tab);
+            b.Draw(
+                Game1.staminaRect,
+                new Rectangle(drawnBounds.X + 10, drawnBounds.Bottom - 5, Math.Max(8, drawnBounds.Width - 20), 3),
+                accent * (active ? 1f : 0.45f));
         }
     }
 
@@ -986,23 +1434,23 @@ internal sealed class MemoryBookMenu : IClickableMenu
     {
         this.EnsureWrapped();
 
-        drawTextureBox(
-            b,
-            Game1.mouseCursors,
-            new Rectangle(384, 373, 18, 18),
-            this.contentBounds.X,
-            this.contentBounds.Y,
-            this.contentBounds.Width,
-            this.contentBounds.Height,
-            Color.White,
-            4f,
-            drawShadow: false);
+        this.DrawFrame(b, MemoryBookFrame.Content, this.contentBounds, Color.White, 3f, drawShadow: false);
+        this.DrawPaperPattern(b, this.contentBounds);
+
+        Rectangle ruledArea = Inset(this.contentBounds, 14);
+        for (int y = ruledArea.Y + 42; y < ruledArea.Bottom - 8; y += 44)
+        {
+            b.Draw(
+                Game1.staminaRect,
+                new Rectangle(ruledArea.X + 12, y, Math.Max(8, ruledArea.Width - 40), 1),
+                MemoryBookPalette.PaperShadow * 0.28f);
+        }
 
         Rectangle clip = new(
-            this.contentBounds.X + 8,
-            this.contentBounds.Y + 8,
-            this.contentBounds.Width - 16,
-            this.contentBounds.Height - 16);
+            this.contentBounds.X + 12,
+            this.contentBounds.Y + 12,
+            Math.Max(1, this.contentBounds.Width - 48),
+            Math.Max(1, this.contentBounds.Height - 24));
 
         b.End();
         Rectangle previousScissor = b.GraphicsDevice.ScissorRectangle;
@@ -1019,31 +1467,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
         {
             if (lineY + height > this.contentBounds.Y && lineY < this.contentBounds.Bottom)
             {
-                float x = this.contentBounds.X + ContentPadding + this.IndentFor(line.Kind);
-                if (line.Kind == MemoryBookLineKind.MemoryFact)
-                {
-                    b.Draw(
-                        Game1.mouseCursors,
-                        new Vector2(this.contentBounds.X + ContentPadding, lineY + 6),
-                        new Rectangle(346, 392, 8, 8),
-                        Color.White,
-                        0f,
-                        Vector2.Zero,
-                        2f,
-                        SpriteEffects.None,
-                        0.88f);
-                }
-
-                if (line.Kind == MemoryBookLineKind.DateSeparator)
-                {
-                    Vector2 size = Game1.smallFont.MeasureString(wrapped);
-                    float centered = this.contentBounds.X + (this.contentBounds.Width - size.X) / 2;
-                    b.DrawString(Game1.smallFont, wrapped, new Vector2(centered, lineY), ColorFor(line.Kind));
-                }
-                else
-                {
-                    b.DrawString(this.FontFor(line.Kind), wrapped, new Vector2(x, lineY), ColorFor(line.Kind));
-                }
+                this.DrawContentLine(b, line, wrapped, lineY);
             }
 
             lineY += height;
@@ -1056,34 +1480,349 @@ internal sealed class MemoryBookMenu : IClickableMenu
         this.DrawContentScrollbar(b);
     }
 
+    private void DrawContentLine(SpriteBatch b, MemoryBookLine line, string wrapped, float lineY)
+    {
+        SpriteFont font = this.FontFor(line.Kind);
+        Vector2 textSize = font.MeasureString(wrapped);
+        int x = this.contentBounds.X + ContentPadding;
+        int y = (int)Math.Round(lineY);
+        int usableWidth = Math.Max(36, this.contentBounds.Width - (ContentPadding * 2) - 28);
+
+        switch (line.Kind)
+        {
+            case MemoryBookLineKind.SectionHeader:
+            {
+                Rectangle header = new(x, y + 2, usableWidth, Math.Max(38, (int)Math.Ceiling(textSize.Y) + 12));
+                this.DrawFrame(b, MemoryBookFrame.Header, header, Color.White, 2f, drawShadow: false);
+                this.DrawIcon(b, IconFor(this.activeTab), new Rectangle(header.X + 8, header.Y + 3, 32, 32));
+                b.DrawString(font, wrapped, new Vector2(header.X + 48, header.Y + 6), ColorFor(line.Kind));
+                break;
+            }
+
+            case MemoryBookLineKind.PlayerLine:
+            case MemoryBookLineKind.NpcLine:
+            {
+                bool player = line.Kind == MemoryBookLineKind.PlayerLine;
+                int offset = player ? 24 : 0;
+                Rectangle note = new(
+                    x + offset,
+                    y + 2,
+                    Math.Max(72, usableWidth - 24),
+                    Math.Max(48, (int)Math.Ceiling(textSize.Y) + 18));
+                this.DrawFrame(
+                    b,
+                    player ? MemoryBookFrame.PlayerNote : MemoryBookFrame.NpcNote,
+                    note,
+                    Color.White,
+                    2f,
+                    drawShadow: false);
+                this.DrawIcon(
+                    b,
+                    player ? MemoryBookIcon.Quill : MemoryBookIcon.Conversations,
+                    new Rectangle(note.X + 8, note.Y + 8, 32, 32));
+                b.DrawString(font, wrapped, new Vector2(note.X + 48, note.Y + 7), ColorFor(line.Kind));
+                break;
+            }
+
+            case MemoryBookLineKind.DateSeparator:
+            {
+                int combinedWidth = (int)Math.Ceiling(textSize.X) + 40;
+                int centerX = this.contentBounds.X + (this.contentBounds.Width - 24) / 2;
+                int labelX = centerX - combinedWidth / 2;
+                int lineWidth = Math.Max(0, (usableWidth - combinedWidth - 24) / 2);
+                int ruleY = y + 16;
+                if (lineWidth > 0)
+                {
+                    b.Draw(Game1.staminaRect, new Rectangle(x, ruleY, lineWidth, 2), MemoryBookPalette.Gold * 0.62f);
+                    b.Draw(
+                        Game1.staminaRect,
+                        new Rectangle(centerX + combinedWidth / 2 + 12, ruleY, lineWidth, 2),
+                        MemoryBookPalette.Gold * 0.62f);
+                }
+
+                this.DrawIcon(b, MemoryBookIcon.Calendar, new Rectangle(labelX, y, 32, 32));
+                b.DrawString(font, wrapped, new Vector2(labelX + 40, y), ColorFor(line.Kind));
+                break;
+            }
+
+            case MemoryBookLineKind.MemoryFact:
+                this.DrawIcon(b, MemoryBookIcon.Pin, new Rectangle(x + 4, y + 4, 16, 16));
+                b.DrawString(font, wrapped, new Vector2(x + 26, y), ColorFor(line.Kind));
+                break;
+
+            case MemoryBookLineKind.Muted:
+                this.DrawIcon(b, MemoryBookIcon.Clock, new Rectangle(x + 2, y + 4, 16, 16));
+                b.DrawString(font, wrapped, new Vector2(x + 24, y), ColorFor(line.Kind));
+                break;
+
+            case MemoryBookLineKind.Empty:
+            {
+                Rectangle icon = new(
+                    this.contentBounds.X + (this.contentBounds.Width - 64) / 2 - 12,
+                    y + 2,
+                    64,
+                    64);
+                this.DrawIcon(b, MemoryBookIcon.EmptyBook, icon);
+                Vector2 emptySize = font.MeasureString(wrapped);
+                b.DrawString(
+                    font,
+                    wrapped,
+                    new Vector2(this.contentBounds.X + (this.contentBounds.Width - 24 - emptySize.X) / 2f, y + 72),
+                    ColorFor(line.Kind));
+                break;
+            }
+
+            default:
+                b.Draw(Game1.staminaRect, new Rectangle(x + 5, y + 10, 6, 6), AccentFor(this.activeTab));
+                b.DrawString(font, wrapped, new Vector2(x + 20, y), ColorFor(line.Kind));
+                break;
+        }
+    }
+
     private void DrawContentScrollbar(SpriteBatch b)
     {
-        float maxScroll = Math.Max(0f, this.contentHeight - this.contentBounds.Height);
-        if (maxScroll <= 0f)
+        if (!this.TryGetContentScrollbarGeometry(out Rectangle track, out Rectangle thumb))
         {
             return;
         }
 
-        var track = new Rectangle(this.contentBounds.Right - 24, this.contentBounds.Y + 12, 24, this.contentBounds.Height - 24);
+        Color tint = this.draggingContentScrollbar || this.contentScrollbarHovered
+            ? Color.White
+            : Color.White * 0.86f;
+        this.DrawFrame(b, MemoryBookFrame.ScrollTrack, track, tint, 1f, drawShadow: false);
+        if (this.assets.Texture != null)
+        {
+            b.Draw(
+                this.assets.Texture,
+                thumb,
+                MemoryBookAssets.ScrollThumbSource,
+                tint);
+        }
+        else
+        {
+            b.Draw(
+                Game1.mouseCursors,
+                thumb,
+                new Rectangle(435, 463, 6, 10),
+                tint);
+        }
+    }
+
+    private bool TryGetContentScrollbarGeometry(out Rectangle track, out Rectangle thumb)
+    {
+        track = new Rectangle(this.contentBounds.Right - 24, this.contentBounds.Y + 14, 16, Math.Max(1, this.contentBounds.Height - 28));
+        thumb = Rectangle.Empty;
+
+        float maxScroll = Math.Max(0f, this.contentHeight - this.VisibleContentHeight);
+        if (maxScroll <= 0f || this.contentHeight <= 0f)
+        {
+            return false;
+        }
+
+        int maximumThumbHeight = Math.Max(1, track.Height - 4);
+        int minimumThumbHeight = Math.Min(36, maximumThumbHeight);
+        int thumbHeight = Math.Clamp(
+            (int)(track.Height * (this.VisibleContentHeight / this.contentHeight)),
+            minimumThumbHeight,
+            maximumThumbHeight);
+        float ratio = Math.Clamp(this.contentScroll / maxScroll, 0f, 1f);
+        int thumbY = track.Y + (int)Math.Round((track.Height - thumbHeight) * ratio);
+        thumb = new Rectangle(track.X, thumbY, track.Width, thumbHeight);
+        return true;
+    }
+
+    private void SetContentScrollFromThumbTop(int thumbTop, Rectangle track, Rectangle thumb)
+    {
+        int travel = Math.Max(0, track.Height - thumb.Height);
+        float maxScroll = Math.Max(0f, this.contentHeight - this.VisibleContentHeight);
+        float ratio = travel == 0
+            ? 0f
+            : Math.Clamp((thumbTop - track.Y) / (float)travel, 0f, 1f);
+        this.contentScroll = maxScroll * ratio;
+        this.ClampScrolls();
+    }
+
+    private static Rectangle ContentScrollbarHitBounds(Rectangle track)
+    {
+        return new Rectangle(track.Center.X - 22, track.Y, 44, track.Height);
+    }
+
+    private void DrawFooter(SpriteBatch b)
+    {
+        string hint = FitSingleLine(
+            Game1.smallFont,
+            this.translate("book.footer.hint"),
+            Math.Max(8, this.footerBounds.Width - 96));
+        Vector2 size = Game1.smallFont.MeasureString(hint);
+        float x = this.footerBounds.X + (this.footerBounds.Width - size.X) / 2f;
+        float y = this.footerBounds.Y + (this.footerBounds.Height - size.Y) / 2f;
+        Color textColor = this.assets.HasCustomArt ? MemoryBookPalette.PaperBright : MemoryBookPalette.Ink;
+
+        this.DrawIcon(b, MemoryBookIcon.Leaf, new Rectangle((int)x - 26, this.footerBounds.Y + 6, 16, 16));
+        b.DrawString(Game1.smallFont, hint, new Vector2(x, y), textColor);
+        this.DrawIcon(b, MemoryBookIcon.Sparkle, new Rectangle((int)(x + size.X) + 10, this.footerBounds.Y + 6, 16, 16));
+    }
+
+    private void DrawFrame(
+        SpriteBatch b,
+        MemoryBookFrame frame,
+        Rectangle bounds,
+        Color tint,
+        float scale,
+        bool drawShadow)
+    {
+        Texture2D texture;
+        Rectangle source;
+        if (this.assets.Texture != null)
+        {
+            texture = this.assets.Texture;
+            source = MemoryBookAssets.FrameSource(frame);
+        }
+        else
+        {
+            texture = Game1.mouseCursors;
+            source = frame == MemoryBookFrame.SelectedRow
+                ? new Rectangle(384, 396, 15, 15)
+                : new Rectangle(384, 373, 18, 18);
+        }
+
         drawTextureBox(
             b,
-            Game1.mouseCursors,
-            new Rectangle(403, 383, 6, 6),
-            track.X,
-            track.Y,
-            track.Width,
-            track.Height,
-            Color.White,
-            4f,
-            drawShadow: false);
+            texture,
+            source,
+            bounds.X,
+            bounds.Y,
+            bounds.Width,
+            bounds.Height,
+            tint,
+            scale,
+            drawShadow);
+    }
 
-        float ratio = this.contentScroll / maxScroll;
-        int thumbHeight = Math.Max(40, (int)(track.Height * (this.contentBounds.Height / this.contentHeight)));
-        int thumbY = track.Y + (int)((track.Height - thumbHeight) * ratio);
-        b.Draw(
-            Game1.mouseCursors,
-            new Rectangle(track.X + 4, thumbY, 16, thumbHeight),
-            new Rectangle(435, 463, 6, 10),
-            Color.White);
+    private void DrawPaperPattern(SpriteBatch b, Rectangle bounds)
+    {
+        if (this.assets.Texture == null)
+        {
+            return;
+        }
+
+        Rectangle inner = Inset(bounds, 24);
+        const int tileSize = 32;
+        const int step = 64;
+        for (int y = inner.Y; y < inner.Bottom; y += step)
+        {
+            for (int x = inner.X; x < inner.Right; x += step)
+            {
+                b.Draw(
+                    this.assets.Texture,
+                    new Rectangle(x, y, tileSize, tileSize),
+                    MemoryBookAssets.PaperPatternSource,
+                    Color.White);
+            }
+        }
+    }
+
+    private void DrawIcon(
+        SpriteBatch b,
+        MemoryBookIcon icon,
+        Rectangle bounds,
+        bool highlighted = false)
+    {
+        if (this.assets.Texture != null)
+        {
+            b.Draw(
+                this.assets.Texture,
+                bounds,
+                MemoryBookAssets.IconSource(icon, highlighted),
+                Color.White);
+            return;
+        }
+
+        Rectangle source = icon switch
+        {
+            MemoryBookIcon.Relationship => new Rectangle(211, 428, 7, 6),
+            MemoryBookIcon.ArrowUp => new Rectangle(421, 459, 11, 12),
+            MemoryBookIcon.ArrowDown => new Rectangle(421, 472, 11, 12),
+            _ => new Rectangle(346, 392, 8, 8)
+        };
+        b.Draw(Game1.mouseCursors, bounds, source, Color.White);
+    }
+
+    private static MemoryBookIcon IconFor(MemoryBookTab tab)
+    {
+        return tab switch
+        {
+            MemoryBookTab.Relationship => MemoryBookIcon.Relationship,
+            MemoryBookTab.Memories => MemoryBookIcon.Memories,
+            MemoryBookTab.Conversations => MemoryBookIcon.Conversations,
+            _ => MemoryBookIcon.Moments
+        };
+    }
+
+    private static Color AccentFor(MemoryBookTab tab)
+    {
+        return tab switch
+        {
+            MemoryBookTab.Relationship => MemoryBookPalette.Relationship,
+            MemoryBookTab.Memories => MemoryBookPalette.Memories,
+            MemoryBookTab.Conversations => MemoryBookPalette.Conversations,
+            _ => MemoryBookPalette.Moments
+        };
+    }
+
+    private static Rectangle Inset(Rectangle bounds, int amount)
+    {
+        return new Rectangle(
+            bounds.X + amount,
+            bounds.Y + amount,
+            Math.Max(1, bounds.Width - (amount * 2)),
+            Math.Max(1, bounds.Height - (amount * 2)));
+    }
+
+    private static Rectangle Inflate(Rectangle bounds, int amount)
+    {
+        return new Rectangle(
+            bounds.X - amount,
+            bounds.Y - amount,
+            bounds.Width + (amount * 2),
+            bounds.Height + (amount * 2));
+    }
+
+    private static string FitSingleLine(SpriteFont font, string? text, int maxWidth)
+    {
+        if (string.IsNullOrWhiteSpace(text) || maxWidth <= 0)
+        {
+            return string.Empty;
+        }
+
+        string singleLine = text.Replace('\r', ' ').Replace('\n', ' ').Trim();
+        if (font.MeasureString(singleLine).X <= maxWidth)
+        {
+            return singleLine;
+        }
+
+        const string ellipsis = "…";
+        if (font.MeasureString(ellipsis).X > maxWidth)
+        {
+            return string.Empty;
+        }
+
+        int low = 0;
+        int high = singleLine.Length;
+        while (low < high)
+        {
+            int middle = (low + high + 1) / 2;
+            string candidate = singleLine[..middle].TrimEnd() + ellipsis;
+            if (font.MeasureString(candidate).X <= maxWidth)
+            {
+                low = middle;
+            }
+            else
+            {
+                high = middle - 1;
+            }
+        }
+
+        return singleLine[..low].TrimEnd() + ellipsis;
     }
 }
