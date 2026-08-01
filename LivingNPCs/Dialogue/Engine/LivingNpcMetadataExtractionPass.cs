@@ -258,7 +258,7 @@ internal static class LivingNpcMetadataExtractionPass
         prompt.AppendLine("- A location name does not prove visibility, adjacency, distance, or a route. Never create spatial facts or consequences from an inferred map relationship.");
         prompt.AppendLine("- Do not store first meeting or first conversation itself, first-day calendar facts, routine chores, or repeated thanks as durable memories; the transcript and runtime context already preserve them. Still store a concrete fact, promise, preference, boundary, or goal disclosed during that first conversation.");
         prompt.AppendLine("- At most one action, two memories, two behavior influences, one conflict, one help request, and two help updates.");
-        prompt.AppendLine("- companion_outing requires an invitation to leave and visible accepted_now consent to a supported destination. Staying together at the current spot is not travel.");
+        prompt.AppendLine("- companion_outing requires an invitation to leave and visible accepted_now consent to a supported destination. Staying together at the current spot is not travel. Always keep its delayMinutes at 0; departure starts when the dialogue closes.");
         prompt.AppendLine("- giftDecision is immediate only when the NPC visibly offers an item now; mail, later, and promises create no gift action.");
         prompt.AppendLine("- Output no markdown, explanation, or dialogue.");
         return prompt.ToString();

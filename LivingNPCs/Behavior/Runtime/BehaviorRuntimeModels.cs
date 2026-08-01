@@ -13,17 +13,6 @@ internal sealed record PendingAmbientRemark(
     Vector2 OriginTile
 );
 
-internal sealed record PendingDelayedTravelAction(
-    string NpcName,
-    int TotalDays,
-    string LocationName,
-    int NotBeforeTimeOfDay,
-    string Type,
-    string TargetLocation,
-    int DurationMinutes,
-    string Reason
-);
-
 internal enum CompanionOutingPhase
 {
     Traveling,

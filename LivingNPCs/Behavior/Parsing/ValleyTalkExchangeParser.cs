@@ -66,7 +66,9 @@ internal static class ValleyTalkExchangeParser
                     action.DurationMinutes = action.Type == "companion_outing"
                         ? CompanionOutingRules.NormalizeRequestedStayMinutes(action.DurationMinutes)
                         : LivingNpcMetadataRules.NormalizeActionDurationMinutes(action.Type, action.DurationMinutes);
-                    action.DelayMinutes = LivingNpcMetadataRules.ClampActionDelayMinutes(action.DelayMinutes);
+                    action.DelayMinutes = action.Type == "companion_outing"
+                        ? 0
+                        : LivingNpcMetadataRules.ClampActionDelayMinutes(action.DelayMinutes);
                     action.TargetLocation = action.TargetLocation?.Trim() ?? string.Empty;
                     action.TravelConsent = BehaviorValueNormalizer.NormalizeTravelConsent(action.TravelConsent);
                     action.ItemId = action.ItemId?.Trim() ?? string.Empty;

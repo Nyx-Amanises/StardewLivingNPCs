@@ -554,8 +554,6 @@
   "log.outing.routeFailed": "无法为 {{npc}} 构建原版风格陪伴出游路线：{{from}} -> {{to}}（{{x}}, {{y}}）。",
   "log.help.suppressedGiftNoMatch": "已拦截 {{npc}} 的礼物互动，但没有为 {{item}} 完成匹配的求助。",
   "log.help.selectedRewardGift": "已为 {{npc}} 选择求助谢礼：{{gift}}（{{item}}）；{{reason}}。",
-  "log.travel.delayedQueued": "已把 {{npc}} 的延迟出行动作 {{type}} 加入队列，将在 {{minutes}} 分钟后前往 {{target}}。",
-  "log.travel.delayedSkipped": "已跳过 {{npc}} 的延迟出行动作 {{type}}：{{reason}}。",
   "log.travel.rejected": "出行动作请求被拒绝",
   "log.gift.selectedSmall": "已为 {{npc}} 选择 AI 小礼物：{{gift}}（{{item}}）；{{reason}}。",
   "log.gift.selectedMeaningful": "已为 {{npc}} 选择 AI 有意义礼物：{{gift}}（{{item}}）；{{reason}}。",

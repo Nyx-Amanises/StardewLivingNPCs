@@ -826,6 +826,15 @@ internal sealed class DialogueEngine : IDialogueEngine
 
         ct.ThrowIfCancellationRequested();
 
+        // The model sometimes carries accepted_now across a multi-turn negotiation but omits the
+        // destination once both speakers shorten it to "let's go". Recover only from a recent,
+        // explicit player invitation in the sanitized current conversation. This also normalizes
+        // every outing delay to zero now that departure begins as soon as the final line closes.
+        RecentOutingInvitationResolver.NormalizeCompanionOutingActions(
+            analysis,
+            prepared.Context,
+            parsed.DialogueLine);
+
         // 立即出游已经把这轮交流转化成世界动作；NPC 的确认台词应当像明确道别一样
         // 点完即关闭，不能继续显示模型误生成的回应选项。
         if (HasAcceptedImmediateCompanionOuting(analysis, prepared.LastPlayerLine, parsed.DialogueLine))

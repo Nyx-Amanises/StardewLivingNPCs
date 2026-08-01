@@ -68,6 +68,7 @@ internal static class TravelLocationRules
         ["矿山"] = "Mine",
         ["Beach"] = "Beach",
         ["海滩"] = "Beach",
+        ["海边"] = "Beach",
         ["Forest"] = "Forest",
         ["Cindersap Forest"] = "Forest",
         ["森林"] = "Forest",
@@ -216,6 +217,90 @@ internal static class TravelLocationRules
 
     public static IReadOnlyCollection<string> KnownPublicOutingTargets { get; } =
         new ReadOnlyCollection<string>([.. PublicOutingTargets]);
+
+    /// <summary>
+    /// Finds every distinct supported outing destination explicitly named in visible text.
+    /// ASCII aliases use word boundaries so, for example, "farmer" does not accidentally match
+    /// the "farm" alias. Callers which infer a destination should accept exactly one result.
+    /// </summary>
+    public static IReadOnlyList<string> FindMentionedPublicOutingTargets(string text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return System.Array.Empty<string>();
+        }
+
+        var seen = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+        var matches = new List<string>();
+        foreach (KeyValuePair<string, string> alias in Aliases)
+        {
+            if (!PublicOutingTargets.Contains(alias.Value)
+                || !ContainsAlias(text, alias.Key)
+                || !seen.Add(alias.Value))
+            {
+                continue;
+            }
+
+            matches.Add(alias.Value);
+        }
+
+        return matches;
+    }
+
+    private static bool ContainsAlias(string text, string alias)
+    {
+        bool requireAsciiWordBoundary = IsAsciiWordAlias(alias);
+        int searchStart = 0;
+        while (searchStart < text.Length)
+        {
+            int index = text.IndexOf(alias, searchStart, System.StringComparison.OrdinalIgnoreCase);
+            if (index < 0)
+            {
+                return false;
+            }
+
+            int end = index + alias.Length;
+            if (!requireAsciiWordBoundary
+                || ((!IsAsciiWordCharacterBefore(text, index))
+                    && !IsAsciiWordCharacterAt(text, end)))
+            {
+                return true;
+            }
+
+            searchStart = index + 1;
+        }
+
+        return false;
+    }
+
+    private static bool IsAsciiWordAlias(string alias)
+    {
+        foreach (char character in alias)
+        {
+            if (character > 127)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsAsciiWordCharacterBefore(string text, int index)
+    {
+        return index > 0 && IsAsciiWordCharacter(text[index - 1]);
+    }
+
+    private static bool IsAsciiWordCharacterAt(string text, int index)
+    {
+        return index < text.Length && IsAsciiWordCharacter(text[index]);
+    }
+
+    private static bool IsAsciiWordCharacter(char character)
+    {
+        return character <= 127
+            && (char.IsLetterOrDigit(character) || character == '_');
+    }
 
     public static string Normalize(string value, string fallback)
     {

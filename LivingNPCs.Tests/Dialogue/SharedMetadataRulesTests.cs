@@ -54,6 +54,17 @@ public sealed class SharedMetadataRulesTests
     }
 
     [Fact]
+    public void CompanionOutingDelayIsAlwaysNormalizedToZero()
+    {
+        var analysis = ConversationAnalysis.Parse("""
+        !LIVINGNPCS_META {"actions":[{"type":"companion_outing","targetLocation":"Beach","travelConsent":"accepted_now","delayMinutes":20}]}
+        """);
+
+        var action = Assert.Single(analysis.Actions);
+        Assert.Equal(0, action.DelayMinutes);
+    }
+
+    [Fact]
     public void ListCapsMatchTheSharedConstants()
     {
         string memories = string.Join(",", Enumerable.Range(0, 10)

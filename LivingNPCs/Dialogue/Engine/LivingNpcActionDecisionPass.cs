@@ -210,13 +210,13 @@ internal static class LivingNpcActionDecisionPass
         prompt.AppendLine("{\"travelDecision\":{\"isTravelReply\":false,\"consent\":\"accepted_now|accepted_later|declined|tentative|none\",\"targetLocation\":\"Farm|Town|Mountain|Beach|Forest|BusStop|Saloon|SeedShop|ArchaeologyHouse|Hospital|Desert|IslandSouth|MovieTheater|BathHouse_Entry\",\"delayMinutes\":0,\"durationMinutes\":0,\"reason\":\"short evidence from visible reply\"},\"giftDecision\":{\"isGiftReply\":false,\"timing\":\"now|later|mail|promise|none\",\"tier\":\"small|meaningful\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"short evidence from visible reply\"},\"actions\":[{\"type\":\"give_small_gift|give_meaningful_gift|give_money|companion_outing|festival_interaction\",\"amount\":0,\"durationMinutes\":0,\"delayMinutes\":0,\"targetLocation\":\"\",\"travelConsent\":\"accepted_now|accepted_later|declined|tentative|none\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"short evidence from visible reply\"}],\"helpRequests\":[{\"type\":\"item_request\",\"summary\":\"short concrete ask\",\"requiresAcceptance\":true,\"requestedItemId\":\"\",\"requestedItemLabel\":\"\",\"questionTopic\":\"\",\"dueInDays\":1,\"reason\":\"short evidence\",\"followUpPotential\":\"none|deeper_relationship\"}],\"helpRequestUpdates\":[{\"summary\":\"matching existing request\",\"status\":\"accepted|declined|advanced|fulfilled\",\"resolution\":\"short result\"}]}");
         prompt.AppendLine("Rules:");
         prompt.AppendLine("- Always fill travelDecision and giftDecision, even when actions is empty. This is a classifier, not dialogue.");
-        prompt.AppendLine("- For travelDecision, accepted_now means the NPC agrees to go now. Short preparation still counts as accepted_now: wait five minutes, let me change clothes, get my coat, grab an umbrella, I will be right out.");
+        prompt.AppendLine("- For travelDecision, accepted_now means the NPC agrees to go when this dialogue closes. Brief preparation wording still counts as accepted_now, but delayMinutes must remain 0; LivingNPCs no longer delays outing actions in game time.");
         prompt.AppendLine("- Travel means leaving the current spot for a destination. Staying, sitting, chatting, or spending time here/at this bench/in the current location is not travel; return no companion_outing for that.");
         prompt.AppendLine("- Asking whether the NPC has ever been to a place is only a question about experience, not travel consent. Return no companion_outing unless the farmer also invites them to go now.");
         prompt.AppendLine("- Mentioning a location as background or origin is not a destination. Example: 'just came from the farm', 'farm mud on your shoes', or 'your farm looks muddy' does not target Farm.");
         prompt.AppendLine("- For travel, include companion_outing in actions only when consent=accepted_now and targetLocation is supported. Use the farmer's invitation to infer targetLocation if the NPC reply says yes/now but omits the destination.");
         prompt.AppendLine("- Later/maybe/refusal means no action and travelDecision consent accepted_later/tentative/declined.");
-        prompt.AppendLine("- For brief escort/show-the-way use durationMinutes 20; for a real stay together use 60. Use delayMinutes 1-10 for short preparation.");
+        prompt.AppendLine("- For brief escort/show-the-way use durationMinutes 20; for a real stay together use 60. Always use delayMinutes 0 for companion_outing.");
         prompt.AppendLine("- For giftDecision, set isGiftReply=true only when the NPC visibly gives or offers the farmer an item now. timing=now means the player should receive the item immediately.");
         prompt.AppendLine("- If the NPC promises to mail, send, bring later, give tomorrow, or return the favor some other time, set timing=mail/later/promise and include no gift action.");
         prompt.AppendLine("- For gifts, include a gift action only when giftDecision isGiftReply=true and timing=now. If a specific in-game item is named, fill itemId and itemLabel when known; otherwise leave them empty so LivingNPCs can choose safely.");
@@ -401,7 +401,7 @@ internal static class LivingNpcActionDecisionPass
             return false;
         }
 
-        int delayMinutes = Math.Clamp(decision.Value<int?>("delayMinutes") ?? InferPreparationDelayMinutes(visibleNpcReply), 0, 20);
+        const int delayMinutes = 0;
         int durationMinutes = Math.Clamp(decision.Value<int?>("durationMinutes") ?? 60, 0, 600);
         string reason = decision.Value<string>("reason")?.Trim();
         supplemental.Actions.Add(new ConversationWorldActionRequest
@@ -918,12 +918,6 @@ internal static class LivingNpcActionDecisionPass
         return string.Empty;
     }
 
-    private static int InferPreparationDelayMinutes(string text)
-    {
-        if (ContainsAny(text, "五分钟", "5分钟", "5 分钟", "five minutes")) return 5;
-        if (ContainsAny(text, "等我", "稍等", "一会儿", "准备", "换件", "换衣服", "很快就出来", "wait", "change clothes", "right out")) return 10;
-        return 0;
-    }
 }
 
 internal sealed class LivingNpcActionDecisionResult

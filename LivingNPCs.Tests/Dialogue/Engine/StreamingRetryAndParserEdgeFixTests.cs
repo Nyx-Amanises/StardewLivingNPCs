@@ -445,6 +445,40 @@ public sealed class EmptyOutingTargetTests : IDisposable
         Assert.Equal(2, result.ParsedLines.Length);
     }
 
+    [Fact]
+    public async Task FinalConfirmationRecoversFarmFromRecentConversationAndCloses()
+    {
+        const string reply = """
+            - 那我们走吧，小刚。就去一会儿……我正好也想多陪陪你。$l
+            %好啊，走吧！
+            %你要是觉得为难，我们改天也行。
+            !LIVINGNPCS_META {"rapportDelta":8,"endConversation":false,"actions":[{"type":"companion_outing","targetLocation":"","travelConsent":"accepted_now","durationMinutes":120,"delayMinutes":10}]}
+            """;
+        var (engine, _) = RetryFixEngineHarness.Create(new FixedReplyClient(reply));
+
+        GenerationResult result = await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Penny",
+            Trigger = GenerationTrigger.Conversation,
+            Conversation = new List<ConversationTurn>
+            {
+                new("不会的呀，对了潘妮，你现在要不要和我一起去我的农场玩？", true, "penny-farm-1"),
+                new("去你的农场？我很想去……不过今天可能不太方便。明天或者改天可以吗？", false, "penny-farm-2"),
+                new("不嘛不嘛，陪我去吧，花不了多少时间的", true, "penny-farm-3"),
+                new("不过，既然小刚这么想让我去，那我只去一会儿……这样可以吗？", false, "penny-farm-4"),
+                new("太好了，我们走吧！", true, "penny-farm-5")
+            },
+            Snapshot = new GameStateSnapshot { FarmerName = "小刚" }
+        }, CancellationToken.None);
+
+        Assert.True(result.EndConversation);
+        Assert.Single(result.ParsedLines);
+        ConversationAnalysis analysis = ConversationAnalysis.Parse($"!LIVINGNPCS_META {result.AnalysisJson}");
+        ConversationWorldActionRequest action = Assert.Single(analysis.Actions);
+        Assert.Equal("Farm", action.TargetLocation);
+        Assert.Equal(0, action.DelayMinutes);
+    }
+
     private sealed class FixedReplyClient : ILlmClient, ILlmCapabilities
     {
         private readonly string replyText;

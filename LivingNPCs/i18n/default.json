@@ -554,8 +554,6 @@
   "log.outing.routeFailed": "Could not build vanilla-style companion outing route for {{npc}}: {{from}} -> {{to}} ({{x}}, {{y}}).",
   "log.help.suppressedGiftNoMatch": "Suppressed gift interaction for {{npc}}, but no matching help request was completed for {{item}}.",
   "log.help.selectedRewardGift": "Selected help request reward gift for {{npc}}: {{gift}} ({{item}}); {{reason}}.",
-  "log.travel.delayedQueued": "Queued delayed travel action {{type}} for {{npc}} in {{minutes}} minutes toward {{target}}.",
-  "log.travel.delayedSkipped": "Skipped delayed travel action {{type}} for {{npc}}: {{reason}}.",
   "log.travel.rejected": "travel action request rejected",
   "log.gift.selectedSmall": "Selected AI gift for {{npc}}: {{gift}} ({{item}}); {{reason}}.",
   "log.gift.selectedMeaningful": "Selected meaningful AI gift for {{npc}}: {{gift}} ({{item}}); {{reason}}.",

@@ -52,7 +52,6 @@ internal sealed class BehaviorEngine
     private readonly BehaviorFeedbackService feedback;
     private readonly CommunityRippleRuntime communityRipples;
     private readonly DialogueBehaviorInfluenceRuntime dialogueBehaviorInfluences;
-    private readonly DelayedTravelActionRuntime delayedTravelActions;
     private readonly BehaviorMailService mailService;
     private readonly MemoryImpressionService memoryImpressions;
     private readonly GiftActionRuntime giftActions;
@@ -93,7 +92,6 @@ internal sealed class BehaviorEngine
         this.feedback = this.services.Feedback;
         this.communityRipples = this.services.CommunityRipples;
         this.dialogueBehaviorInfluences = this.services.DialogueBehaviorInfluences;
-        this.delayedTravelActions = this.services.DelayedTravelActions;
         this.mailService = this.services.MailService;
         this.memoryImpressions = this.services.MemoryImpressions;
         this.giftActions = this.services.GiftActions;
@@ -274,7 +272,6 @@ internal sealed class BehaviorEngine
             this.companionOutings.Clear();
             this.conversationStartRecorder.Clear();
             this.feedback.Clear();
-            this.delayedTravelActions.Clear();
             if (ledgerOwner)
             {
                 this.communityRipples.TryPropagate();
@@ -338,7 +335,6 @@ internal sealed class BehaviorEngine
             this.companionOutings.Clear();
             this.conversationStartRecorder.Clear();
             this.feedback.Clear();
-            this.delayedTravelActions.Clear();
             this.itemDeliveryResults.Clear();
             this.multiplayerSync.OnReturnedToTitle();
             this.remoteMemoryBookMenu = null;
@@ -591,7 +587,6 @@ internal sealed class BehaviorEngine
         this.SafeRun("update tick: gift mail tracking", this.TryTrackGiftMailOpening);
         this.SafeRun("update tick: HUD messages", () => this.feedback.TryShowPendingHudMessages());
         this.SafeRun("update tick: ambient remarks", () => this.feedback.TryShowPendingAmbientRemarks());
-        this.SafeRun("update tick: delayed travel actions", () => this.delayedTravelActions.TryStartPending());
         this.SafeRun("update tick: companion outings", () => this.companionOutings.TryUpdatePending());
         if (e.IsMultipleOf(120))
         {
@@ -1307,17 +1302,6 @@ internal sealed class BehaviorEngine
 
         foreach (var action in this.BuildEffectiveConversationActions(npc, actions, playerText, npcResponse).Take(1))
         {
-            if (action.Type == "companion_outing")
-            {
-                action.DelayMinutes = System.Math.Max(action.DelayMinutes, ConversationActionCueRules.DetectPreparationDelayMinutes(npcResponse));
-                if (action.DelayMinutes > 0)
-                {
-                    this.feedback.ClearAmbientRemarksForNpc(npc.Name);
-                    this.delayedTravelActions.Queue(npc, action);
-                    continue;
-                }
-            }
-
             string actionReason = string.Empty;
             bool executed = action.Type switch
             {

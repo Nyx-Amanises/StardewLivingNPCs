@@ -35,7 +35,6 @@ internal sealed class BehaviorEngineServices
     public HelpRequestRewardService HelpRequestRewards { get; }
     public HelpRequestQuestLogService HelpRequestQuestLog { get; }
     public ConversationStartRecorder ConversationStartRecorder { get; }
-    public DelayedTravelActionRuntime DelayedTravelActions { get; }
     public HelpRequestRuntime HelpRequests { get; }
     public DialogueBehaviorInfluenceRuntime DialogueBehaviorInfluences { get; }
     public Multiplayer.SmapiModMessageBus ModMessageBus { get; }
@@ -156,13 +155,6 @@ internal sealed class BehaviorEngineServices
             this.Locator.TryFindNpcForInteraction,
             (npc, debugMessage, immediatePromptContext) => this.ContextService.PushInteractionContext(npc, debugMessage, immediatePromptContext),
             () => this.MultiplayerSync.SuppressHostLedgerSideEffects
-        );
-        this.DelayedTravelActions = new DelayedTravelActionRuntime(
-            config,
-            monitor,
-            this.Memory,
-            npcName => this.Locator.TryFindNpcInCurrentLocation(npcName, out NPC? npc) ? npc : null,
-            this.CompanionOutings.TryStart
         );
         this.HelpRequests = new HelpRequestRuntime(
             config,

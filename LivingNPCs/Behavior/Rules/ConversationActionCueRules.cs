@@ -467,17 +467,22 @@ internal static class ConversationActionCueRules
             DurationMinutes = LooksLikeBriefEscortRequest(playerText, npcResponse)
                 ? CompanionOutingRules.DefaultShortVisitMinutes
                 : CompanionOutingRules.MinimumStayMinutes,
-            DelayMinutes = DetectPreparationDelayMinutes(npcResponse),
+            DelayMinutes = 0,
             Reason = "the visible conversation ended with an immediate shared outing plan"
         };
         return true;
     }
 
-    private static readonly string[] PreparationPhraseFragments =
+    private static readonly string[] BriefPreparationPhraseFragments =
     [
         "等我一下",
+        "等一下",
         "稍等",
-        "一会儿",
+        "稍等一下",
+        "等一会儿",
+        "坐一会儿再走",
+        "等会再去",
+        "等会儿再去",
         "准备一下",
         "换件衣服",
         "拿件衣服",
@@ -491,11 +496,9 @@ internal static class ConversationActionCueRules
         "umbrella"
     ];
 
-    public static int DetectPreparationDelayMinutes(string npcResponse)
+    internal static bool HasBriefPreparationWording(string npcResponse)
     {
-        return ContainsAny(npcResponse, PreparationPhraseFragments)
-            ? 10
-            : 0;
+        return ContainsAny(npcResponse, BriefPreparationPhraseFragments);
     }
 
     public static bool ContainsAny(string text, params string[] fragments)
@@ -653,9 +656,9 @@ internal static class ConversationActionCueRules
             return false;
         }
 
-        if (DetectPreparationDelayMinutes(npcResponse) > 0
-            && !ContainsAny(RemovePhrases(npcClean, PreparationPhraseFragments), StrongTravelRejectionFragments)
-            && !ContainsAny(RemovePhrases(combinedClean, PreparationPhraseFragments), FutureTravelPlanFragments))
+        if (HasBriefPreparationWording(npcResponse)
+            && !ContainsAny(RemovePhrases(npcClean, BriefPreparationPhraseFragments), StrongTravelRejectionFragments)
+            && !ContainsAny(RemovePhrases(combinedClean, BriefPreparationPhraseFragments), FutureTravelPlanFragments))
         {
             cue = string.Empty;
             source = string.Empty;
@@ -1064,14 +1067,13 @@ internal static class ConversationActionCueRules
             return false;
         }
 
-        // Preparation wording ("坐一会儿再走吧" / "稍等，我拿把伞") overlaps rejection fragments
-        // such as "一会儿再". When the reply contains a preparation phrase AND stripping those
-        // phrases removes every rejection cue, the "rejection" was only the preparation wording —
-        // treat it as leaving in a moment, not a refusal. An explicit deferral that survives the
-        // stripping ("稍等……还是改天吧") stays a rejection.
-        if (DetectPreparationDelayMinutes(npcResponse) > 0
-            && !ContainsAny(RemovePhrases(rejectionNpcResponse, PreparationPhraseFragments), TravelRejectionFragments)
-            && !ContainsAny(RemovePhrases(rejectionCombinedText, PreparationPhraseFragments), FutureTravelPlanFragments))
+        // Brief preparation wording ("坐一会儿再走吧" / "稍等，我拿把伞") may overlap
+        // rejection fragments such as "一会儿再". It still counts as accepted_now, but no longer
+        // creates a game-time delay: the outing begins when the final dialogue is dismissed.
+        // A real deferral that survives stripping ("稍等……还是改天吧") remains a rejection.
+        if (HasBriefPreparationWording(npcResponse)
+            && !ContainsAny(RemovePhrases(rejectionNpcResponse, BriefPreparationPhraseFragments), TravelRejectionFragments)
+            && !ContainsAny(RemovePhrases(rejectionCombinedText, BriefPreparationPhraseFragments), FutureTravelPlanFragments))
         {
             reason = string.Empty;
             return false;

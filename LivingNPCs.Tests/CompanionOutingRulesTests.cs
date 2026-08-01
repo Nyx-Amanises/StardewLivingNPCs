@@ -166,7 +166,7 @@ public sealed class CompanionOutingRulesTests
         Assert.Equal("companion_outing", action.Type);
         Assert.Equal("Farm", action.TargetLocation);
         Assert.Equal("accepted_now", action.TravelConsent);
-        Assert.Equal(10, action.DelayMinutes);
+        Assert.Equal(0, action.DelayMinutes);
     }
 
     [Fact]
