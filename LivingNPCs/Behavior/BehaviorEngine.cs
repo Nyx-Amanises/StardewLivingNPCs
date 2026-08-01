@@ -26,6 +26,7 @@ internal sealed class BehaviorEngine
         public string PlayerText = string.Empty;
         public string NpcResponse = string.Empty;
         public string AnalysisJson = string.Empty;
+        public string ReportId = string.Empty;
         public string PlayerName = string.Empty;
         public int ReportedTotalDays = -1;
         public int ReportedTimeOfDay;
@@ -55,6 +56,7 @@ internal sealed class BehaviorEngine
     private readonly BehaviorMailService mailService;
     private readonly MemoryImpressionService memoryImpressions;
     private readonly GiftActionRuntime giftActions;
+    private readonly GiftOpportunityService giftOpportunities;
     private readonly DirectWorldActionRuntime directWorldActions;
     private readonly CompanionOutingRuntime companionOutings;
     private readonly HelpRequestRewardService helpRequestRewards;
@@ -64,10 +66,12 @@ internal sealed class BehaviorEngine
     private readonly NpcLocator locator;
     private readonly ValleyTalkContextService contextService;
     private readonly Multiplayer.MultiplayerSyncService multiplayerSync;
+    private readonly Multiplayer.HelpRequestQuestProjectionStore questProjections;
     private readonly List<PendingBehaviorRequest> pendingRequests = new();
     private readonly ConcurrentQueue<PendingValleyTalkExchange> pendingValleyTalkExchanges = new();
     private readonly CancellationTokenSource cancellationTokenSource = new();
     private readonly HashSet<string> loggedHandlerExceptions = new();
+    private readonly Dictionary<(long PlayerId, string RequestId), Multiplayer.ItemDeliveryResultMessage> itemDeliveryResults = new();
     private string pendingGiftMailKey = string.Empty;
     private int pendingGiftMailTrackTicks;
     private string activeGiftMailKey = string.Empty;
@@ -92,6 +96,7 @@ internal sealed class BehaviorEngine
         this.mailService = this.services.MailService;
         this.memoryImpressions = this.services.MemoryImpressions;
         this.giftActions = this.services.GiftActions;
+        this.giftOpportunities = this.services.GiftOpportunities;
         this.directWorldActions = this.services.DirectWorldActions;
         this.companionOutings = this.services.CompanionOutings;
         this.helpRequestRewards = this.services.HelpRequestRewards;
@@ -101,9 +106,15 @@ internal sealed class BehaviorEngine
         this.locator = this.services.Locator;
         this.contextService = this.services.ContextService;
         this.multiplayerSync = this.services.MultiplayerSync;
+        this.questProjections = this.services.QuestProjections;
         this.multiplayerSync.RemoteExchangeReceived = this.EnqueueRemoteValleyTalkExchange;
         this.multiplayerSync.RelationshipNpcNamesProvider = this.memory.GetTrackedNpcNames;
         this.multiplayerSync.RelationshipViewProvider = this.BuildNpcRelationshipView;
+        this.multiplayerSync.QuestProjectionProvider = this.helpRequestQuestLog.BuildProjection;
+        this.multiplayerSync.QuestProjectionApplied = this.ApplyRemoteQuestProjection;
+        this.multiplayerSync.RemoteItemDeliveryReceived = this.ApplyRemoteItemDelivery;
+        this.multiplayerSync.ItemDeliveryResultReceived = this.conversationStartRecorder.ApplyRemoteItemDeliveryResult;
+        this.multiplayerSync.RemoteQuestRewardClaimed = this.ApplyRemoteQuestRewardClaimed;
     }
 
     public void RegisterEvents()
@@ -168,6 +179,7 @@ internal sealed class BehaviorEngine
             }
 
             this.memory.Load(saveData, this.config.MaxMemoryEntriesPerNpc);
+            this.itemDeliveryResults.Clear();
             RsvAiPolicy.RegisterGameThreadAliases();
             this.conversationStartRecorder.Clear();
             if (Context.IsMainPlayer)
@@ -215,6 +227,7 @@ internal sealed class BehaviorEngine
         {
             this.helper.Data.WriteSaveData(SaveDataKey, this.memory.ToSaveData());
             this.multiplayerSync.BroadcastRelationshipViewsCleared();
+            this.multiplayerSync.BroadcastQuestProjections();
         }
 
         this.contextService.ClearImmediateContexts();
@@ -272,6 +285,7 @@ internal sealed class BehaviorEngine
             {
                 // 日结后的状态广播给远程 farmhand（无对端时零开销）。
                 this.multiplayerSync.BroadcastAllNpcRelationshipViews();
+                this.multiplayerSync.BroadcastQuestProjections();
             }
         });
     }
@@ -321,6 +335,7 @@ internal sealed class BehaviorEngine
             this.conversationStartRecorder.Clear();
             this.feedback.Clear();
             this.delayedTravelActions.Clear();
+            this.itemDeliveryResults.Clear();
             this.multiplayerSync.OnReturnedToTitle();
         });
     }
@@ -475,6 +490,7 @@ internal sealed class BehaviorEngine
         }
 
         this.SafeRun("update tick: multiplayer sync", () => this.multiplayerSync.OnUpdateTicked());
+        this.SafeRun("update tick: multiplayer quest claims", this.PollRemoteQuestRewardClaims);
         this.SafeRun("update tick: valleytalk exchanges", this.ProcessPendingValleyTalkExchanges);
         this.SafeRun("update tick: pending gift verifications", () => this.conversationStartRecorder.ProcessPendingGiftVerifications());
         this.SafeRun("update tick: pending behavior requests", this.ProcessPendingBehaviorRequests);
@@ -640,15 +656,9 @@ internal sealed class BehaviorEngine
     /// <summary>主机收到 farmhand 交换上报（多人同步回调，主线程）：过本机配置门后入队统一消费。</summary>
     private void EnqueueRemoteValleyTalkExchange(long reporterPlayerId, Multiplayer.ExchangeReportMessage message)
     {
-        if (RsvAiPolicy.IsBlockedNpcName(message.NpcName)
-            || !this.config.EnableConversationMemory
-            || string.IsNullOrWhiteSpace(message.PlayerText))
-        {
-            return;
-        }
-
         this.pendingValleyTalkExchanges.Enqueue(new PendingValleyTalkExchange
         {
+            ReportId = message.ReportId ?? string.Empty,
             NpcName = message.NpcName,
             NpcDisplayName = message.NpcName,
             PlayerText = message.PlayerText,
@@ -663,16 +673,28 @@ internal sealed class BehaviorEngine
     }
 
     /// <summary>
-    /// 主机代 farmhand 入账（多人 v1）：只写心智账本——记忆/偏好/冲突/情绪/行为倾向与好感
-    /// 增量；世界动作与求助字段在入账前剥除（<see cref="Multiplayer.RemoteExchangePolicy"/>，
-    /// 含出游请求，丢弃并记 Trace）。好感增量与随境跟话属于上报玩家，经回执发回其本地应用；
-    /// NPC 用全图查找——farmhand 的对话地点通常不是主机所在地点。
+    /// 主机代 farmhand 入账（多人 v1）：心智、物品求助与允许的经济动作都由主机裁决；
+    /// 好感、钱和物品只以纯数据回执交给上报玩家本地兑现。出游、节日和未知动作由
+    /// <see cref="Multiplayer.RemoteExchangePolicy"/> 剥除并 Trace；远程动作绝不走本地的
+    /// 可见台词 fallback，避免空 actions 重新合成 companion_outing。
     /// </summary>
     private void ApplyRemoteValleyTalkExchange(PendingValleyTalkExchange exchange)
     {
         NPC? npc = Game1.getCharacterFromName(exchange.NpcName);
-        if (npc == null || RsvAiPolicy.IsBlockedNpc(npc))
+        Farmer? reporter = Game1.GetPlayer(exchange.ReporterPlayerId, onlyOnline: true);
+        if (npc == null
+            || reporter == null
+            || RsvAiPolicy.IsBlockedNpc(npc)
+            || !this.config.EnableConversationMemory
+            || string.IsNullOrWhiteSpace(exchange.PlayerText))
         {
+            this.multiplayerSync.SendExchangeAck(
+                exchange.ReporterPlayerId,
+                new Multiplayer.ExchangeAckMessage
+                {
+                    ReportId = exchange.ReportId,
+                    NpcName = exchange.NpcName
+                });
             return;
         }
 
@@ -694,22 +716,92 @@ internal sealed class BehaviorEngine
             exchange.NpcResponse,
             sanitizedAnalysis,
             this.config.MaxMemoryEntriesPerNpc,
-            0,
+            this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
             this.config.HelpRequestCooldownDays,
             this.config.EnableAiDialogueFriendship ? this.config.MaxAiDialogueFriendshipPerNpcPerDay : 0,
             this.config.MaxDialogueBehaviorInfluenceDays,
-            allowHelpRequestProgress: false
+            allowHelpRequestProgress: true,
+            helpRequestPlayerId: exchange.ReporterPlayerId,
+            helpRequestPlayerName: string.IsNullOrWhiteSpace(exchange.PlayerName)
+                ? reporter.Name
+                : exchange.PlayerName,
+            helpRequestFriendshipHearts: reporter.getFriendshipHeartLevelForNPC(npc.Name)
         );
+
+        var feedbackMessages = new List<string>();
+        var itemGrants = new List<Multiplayer.ItemGrant>();
+        int moneyGrant = 0;
+        if (this.config.EnableAiWorldActions)
+        {
+            RemoteWorldActionGrant? actionGrant = this.TryExecuteRemoteConversationAction(
+                npc,
+                reporter,
+                result.Actions,
+                exchange.PlayerText,
+                exchange.NpcResponse);
+            if (actionGrant != null)
+            {
+                moneyGrant = actionGrant.Money;
+                if (!string.IsNullOrWhiteSpace(actionGrant.ItemId))
+                {
+                    itemGrants.Add(new Multiplayer.ItemGrant
+                    {
+                        ItemId = actionGrant.ItemId,
+                        Stack = actionGrant.Stack,
+                        Quality = actionGrant.Quality,
+                        HudMessage = actionGrant.HudMessage
+                    });
+                }
+                else if (!string.IsNullOrWhiteSpace(actionGrant.HudMessage))
+                {
+                    feedbackMessages.Add(actionGrant.HudMessage);
+                }
+            }
+        }
+
+        foreach (NpcHelpRequestFact request in result.ActivatedHelpRequests)
+        {
+            string item = string.IsNullOrWhiteSpace(request.RequestedItemLabel)
+                ? request.Summary
+                : request.RequestedItemLabel;
+            feedbackMessages.Add(
+                I18n.Get(
+                    "help.quest.acceptedHud",
+                    new
+                    {
+                        npc = string.IsNullOrWhiteSpace(request.NpcDisplayName)
+                            ? npc.displayName
+                            : request.NpcDisplayName,
+                        item
+                    }));
+        }
 
         this.multiplayerSync.SendExchangeAck(
             exchange.ReporterPlayerId,
             new Multiplayer.ExchangeAckMessage
             {
+                ReportId = exchange.ReportId,
                 NpcName = exchange.NpcName,
                 FriendshipDelta = result.AppliedFriendshipDelta,
+                MoneyGrant = moneyGrant,
+                ItemGrants = itemGrants,
                 AmbientText = this.config.EnableDialogueFollowUps ? result.AmbientFollowUpText : string.Empty,
-                AmbientDelayMinutes = result.AmbientFollowUpDelayMinutes
+                AmbientDelayMinutes = result.AmbientFollowUpDelayMinutes,
+                FeedbackMessages = feedbackMessages
             });
+
+        if (result.HelpRequestsStored > 0 || result.HelpRequestsUpdated > 0)
+        {
+            this.multiplayerSync.SendQuestProjection(exchange.ReporterPlayerId);
+        }
+
+        LivingNpcState state = this.memory.GetOrCreateState(npc);
+        int reporterFriendshipHearts = reporter.getFriendshipHeartLevelForNPC(npc.Name);
+        this.giftOpportunities.TryPrepareDailyGiftOpportunity(npc, state, reporterFriendshipHearts);
+        if (this.config.EnableHelpRequests)
+        {
+            this.giftOpportunities.TryPrepareDailyHelpRequestOpportunity(npc, state, reporterFriendshipHearts);
+        }
         this.multiplayerSync.BroadcastNpcRelationshipView(exchange.NpcName);
 
         if (this.config.Debug)
@@ -731,6 +823,235 @@ internal sealed class BehaviorEngine
                     }),
                 LogLevel.Debug);
         }
+    }
+
+    private RemoteWorldActionGrant? TryExecuteRemoteConversationAction(
+        NPC npc,
+        Farmer reporter,
+        IReadOnlyList<ValleyTalkWorldActionRequest> actions,
+        string playerText,
+        string npcResponse)
+    {
+        LivingNpcState? state = this.memory.GetState(npc);
+        bool consumeDailyGiftOpportunity = state?.DailyGiftOpportunityTotalDays == Game1.Date.TotalDays;
+        List<string>? dropReasons = this.config.Debug ? new List<string>() : null;
+        IReadOnlyList<ValleyTalkWorldActionRequest> visibleSafeActions =
+            ConversationActionCueRules.FilterActionsContradictedByVisibleDialogue(
+                actions,
+                playerText,
+                npcResponse,
+                dropReasons);
+        RemoteWorldActionGrant? grant = null;
+        foreach (ValleyTalkWorldActionRequest action in visibleSafeActions.Take(1))
+        {
+            if (!this.giftActions.TryPlanRemoteGrant(
+                    npc,
+                    reporter,
+                    action,
+                    playerText,
+                    npcResponse,
+                    out grant,
+                    out string reason)
+                && this.config.Debug)
+            {
+                this.monitor.Log(
+                    I18n.Get(
+                        "log.worldAction.skipped",
+                        new { type = action.Type, npc = npc.Name, reason }),
+                    LogLevel.Debug);
+            }
+        }
+
+        if (this.config.Debug)
+        {
+            foreach (string detail in dropReasons ?? [])
+            {
+                this.monitor.Log(
+                    I18n.Get("log.worldAction.filteredDetail", new { npc = npc.Name, detail }),
+                    LogLevel.Debug);
+            }
+        }
+
+        if (consumeDailyGiftOpportunity && state != null)
+        {
+            GiftActionRules.ClearDailyGiftOpportunity(state);
+        }
+
+        return grant;
+    }
+
+    private void ApplyRemoteQuestProjection()
+    {
+        foreach (string questLogId in this.helpRequestQuestLog.ApplyProjection(this.questProjections))
+        {
+            this.multiplayerSync.TrySendQuestRewardClaimed(questLogId);
+        }
+    }
+
+    private void PollRemoteQuestRewardClaims()
+    {
+        if (!this.multiplayerSync.UseHostAuthority)
+        {
+            return;
+        }
+
+        foreach (string questLogId in this.helpRequestQuestLog.PollClaimedRewards())
+        {
+            this.multiplayerSync.TrySendQuestRewardClaimed(questLogId);
+        }
+    }
+
+    private void ApplyRemoteQuestRewardClaimed(
+        long reporterPlayerId,
+        Multiplayer.QuestRewardClaimedMessage message)
+    {
+        if (string.IsNullOrWhiteSpace(message.QuestLogId))
+        {
+            return;
+        }
+
+        NpcHelpRequestFact? request = this.memory.GetTrackedStates()
+            .SelectMany(state => state.HelpRequests)
+            .FirstOrDefault(candidate => candidate.AssignedPlayerId == reporterPlayerId
+                && candidate.QuestLogId == message.QuestLogId
+                && candidate.Status == "Fulfilled"
+                && candidate.RewardMoneyClaimQueued
+                && !candidate.RewardMoneyGranted);
+        if (request != null)
+        {
+            request.RewardMoneyGranted = true;
+            request.RewardMoneyClaimQueued = false;
+            request.RewardMoneyQuestPosted = false;
+            request.LastUpdatedTotalDays = Game1.Date.TotalDays;
+            request.LastUpdatedTimeOfDay = Game1.timeOfDay;
+        }
+
+        // 无论确认是否仍有效都回发完整集合：过期/重复确认会把 farmhand 的陈旧代理清掉。
+        this.multiplayerSync.SendQuestProjection(reporterPlayerId);
+    }
+
+    private void ApplyRemoteItemDelivery(
+        long reporterPlayerId,
+        Multiplayer.ItemDeliveryRequestMessage message)
+    {
+        if (string.IsNullOrWhiteSpace(message.RequestId))
+        {
+            return;
+        }
+
+        var key = (reporterPlayerId, message.RequestId);
+        if (this.itemDeliveryResults.TryGetValue(key, out Multiplayer.ItemDeliveryResultMessage? cached))
+        {
+            this.multiplayerSync.SendItemDeliveryResult(reporterPlayerId, cached);
+            this.multiplayerSync.SendQuestProjection(reporterPlayerId);
+            return;
+        }
+
+        Multiplayer.ItemDeliveryResultMessage result = this.BuildRemoteItemDeliveryResult(
+            reporterPlayerId,
+            message);
+        this.itemDeliveryResults[key] = result;
+        this.multiplayerSync.SendItemDeliveryResult(reporterPlayerId, result);
+        this.multiplayerSync.SendQuestProjection(reporterPlayerId);
+        if (result.Accepted)
+        {
+            this.multiplayerSync.BroadcastNpcRelationshipView(result.NpcName);
+        }
+    }
+
+    private Multiplayer.ItemDeliveryResultMessage BuildRemoteItemDeliveryResult(
+        long reporterPlayerId,
+        Multiplayer.ItemDeliveryRequestMessage message)
+    {
+        var result = new Multiplayer.ItemDeliveryResultMessage
+        {
+            RequestId = message.RequestId,
+            QuestLogId = message.QuestLogId,
+            NpcName = message.NpcName
+        };
+        if (string.IsNullOrWhiteSpace(message.QuestLogId)
+            || string.IsNullOrWhiteSpace(message.NpcName))
+        {
+            result.FailureReason = "missing quest or NPC identity";
+            return result;
+        }
+
+        Farmer? farmer = Game1.GetPlayer(reporterPlayerId, onlyOnline: true);
+        NPC? npc = Game1.getCharacterFromName(message.NpcName);
+        LivingNpcState? state = npc == null ? null : this.memory.GetState(npc);
+        NpcHelpRequestFact? request = state?.HelpRequests.FirstOrDefault(candidate =>
+            candidate.AssignedPlayerId == reporterPlayerId
+            && candidate.QuestLogId == message.QuestLogId
+            && candidate.Status == "Pending"
+            && candidate.Type == "item_request");
+        if (farmer == null || npc == null || state == null || request == null)
+        {
+            result.FailureReason = "quest owner, NPC, or pending request did not match";
+            return result;
+        }
+
+        if (npc.currentLocation == null
+            || farmer.currentLocation == null
+            || npc.currentLocation != farmer.currentLocation
+            || Microsoft.Xna.Framework.Vector2.Distance(npc.Tile, farmer.Tile) > this.config.MaxInteractionDistanceTiles + 1)
+        {
+            result.FailureReason = "farmer is not close enough to the NPC in the same location";
+            return result;
+        }
+
+        StardewValley.Object? heldItem = farmer.ActiveObject;
+        string authoritativeItemId = request.RequestedItemId;
+        if (heldItem == null
+            || string.IsNullOrWhiteSpace(authoritativeItemId)
+            || !string.Equals(heldItem.QualifiedItemId, authoritativeItemId, StringComparison.OrdinalIgnoreCase))
+        {
+            result.FailureReason = "the authoritative requested item is not currently held";
+            return result;
+        }
+
+        GiftMemoryDetails gift = GiftMemoryDetailsFactory.Build(npc, heldItem);
+        IReadOnlyList<NpcHelpRequestFact> changedRequests = this.memory.TryCompleteItemHelpRequests(
+            npc,
+            gift,
+            this.config.MaxMemoryEntriesPerNpc,
+            request.QuestLogId,
+            reporterPlayerId);
+        if (changedRequests.Count == 0)
+        {
+            result.FailureReason = "the request no longer accepted this delivery";
+            return result;
+        }
+
+        farmer.reduceActiveItemByOne();
+
+        RemoteHelpRequestRewardOutcome reward = this.helpRequestRewards.RewardFulfilledRemote(
+            npc,
+            changedRequests);
+        int fulfilledCount = changedRequests.Count(candidate => candidate.Status == "Fulfilled");
+        result.ItemId = gift.ItemId;
+        result.ItemLabel = gift.ItemName;
+        result.ItemQuality = heldItem.Quality;
+        result.TasteScore = gift.TasteScore;
+        result.Accepted = true;
+        result.RequestFulfilled = fulfilledCount > 0;
+        result.FriendshipDelta = reward.FriendshipDelta;
+        result.ItemGrants = reward.ItemGrants
+            .Select(grant => new Multiplayer.ItemGrant
+            {
+                ItemId = grant.ItemId,
+                Stack = grant.Stack,
+                Quality = grant.Quality,
+                HudMessage = grant.HudMessage
+            })
+            .ToList();
+        result.PromptContext = ConversationStartRecorder.BuildHelpRequestDeliveryPrompt(
+            npc,
+            gift,
+            changedRequests);
+        result.HudMessage = fulfilledCount == 0
+            ? I18n.Get("hud.itemDelivered", new { item = gift.ItemName, npc = npc.displayName })
+            : reward.FeedbackMessages.FirstOrDefault() ?? string.Empty;
+        return result;
     }
 
     private void ApplyValleyTalkExchange(PendingValleyTalkExchange exchange)

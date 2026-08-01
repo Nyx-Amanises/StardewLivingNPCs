@@ -20,6 +20,10 @@ internal static class SyncProtocol
     public const string TypeNpcRelationshipView = "NpcRelationshipView";
     public const string TypeRelationshipViewSetComplete = "RelationshipViewSetComplete";
     public const string TypeRelationshipViewsCleared = "RelationshipViewsCleared";
+    public const string TypeQuestProjection = "QuestProjection";
+    public const string TypeItemDeliveryRequest = "ItemDeliveryRequest";
+    public const string TypeItemDeliveryResult = "ItemDeliveryResult";
+    public const string TypeQuestRewardClaimed = "QuestRewardClaimed";
 
     public static bool IsCompatible(int schemaVersion)
     {
@@ -52,6 +56,7 @@ internal sealed class ProtocolHelloAckMessage : ISyncMessage
 internal sealed class ExchangeReportMessage : ISyncMessage
 {
     public int SchemaVersion { get; set; } = SyncProtocol.Version;
+    public string ReportId { get; set; } = string.Empty;
     public string NpcName { get; set; } = string.Empty;
     public string PlayerName { get; set; } = string.Empty;
     public string PlayerText { get; set; } = string.Empty;
@@ -69,10 +74,23 @@ internal sealed class ExchangeReportMessage : ISyncMessage
 internal sealed class ExchangeAckMessage : ISyncMessage
 {
     public int SchemaVersion { get; set; } = SyncProtocol.Version;
+    public string ReportId { get; set; } = string.Empty;
     public string NpcName { get; set; } = string.Empty;
     public int FriendshipDelta { get; set; }
+    public int MoneyGrant { get; set; }
+    public List<ItemGrant> ItemGrants { get; set; } = new();
     public string AmbientText { get; set; } = string.Empty;
     public int AmbientDelayMinutes { get; set; }
+    public List<string> FeedbackMessages { get; set; } = new();
+}
+
+/// <summary>主机裁决、farmhand 本地兑现的纯数据物品授予。</summary>
+internal sealed class ItemGrant
+{
+    public string ItemId { get; set; } = string.Empty;
+    public int Stack { get; set; } = 1;
+    public int Quality { get; set; }
+    public string HudMessage { get; set; } = string.Empty;
 }
 
 /// <summary>
@@ -100,6 +118,82 @@ internal sealed class RelationshipViewSetCompleteMessage : ISyncMessage
 internal sealed class RelationshipViewsClearedMessage : ISyncMessage
 {
     public int SchemaVersion { get; set; } = SyncProtocol.Version;
+}
+
+/// <summary>主机 → 单个 farmhand：该玩家当前应显示的 LivingNPCs 求助任务完整投影。</summary>
+internal sealed class QuestProjectionMessage : ISyncMessage
+{
+    public int SchemaVersion { get; set; } = SyncProtocol.Version;
+    public List<HelpRequestQuestProjection> Quests { get; set; } = new();
+}
+
+/// <summary>求助任务栏使用的纯数据投影；不携带 Quest、Farmer 或其他游戏对象。</summary>
+internal sealed class HelpRequestQuestProjection
+{
+    public string NpcName { get; set; } = string.Empty;
+    public string NpcDisplayName { get; set; } = string.Empty;
+    public string QuestLogId { get; set; } = string.Empty;
+    public string Type { get; set; } = "item_request";
+    public string Summary { get; set; } = string.Empty;
+    public List<HelpRequestQuestStepProjection> Steps { get; set; } = new();
+    public int CurrentStepIndex { get; set; }
+    public string RequestedItemId { get; set; } = string.Empty;
+    public string RequestedItemLabel { get; set; } = string.Empty;
+    public string QuestionTopic { get; set; } = string.Empty;
+    public int DueTotalDays { get; set; } = -1;
+    public string Reason { get; set; } = string.Empty;
+    public string Status { get; set; } = "Pending";
+    public int RewardMoney { get; set; }
+    public bool MoneyRewardClaimable { get; set; }
+}
+
+internal sealed class HelpRequestQuestStepProjection
+{
+    public string Type { get; set; } = "item_request";
+    public string Summary { get; set; } = string.Empty;
+    public string RequestedItemId { get; set; } = string.Empty;
+    public string RequestedItemLabel { get; set; } = string.Empty;
+    public string QuestionTopic { get; set; } = string.Empty;
+    public string Status { get; set; } = "Pending";
+}
+
+/// <summary>farmhand → 主机：玩家尝试把当前手持物交给指定 NPC 的求助任务。</summary>
+internal sealed class ItemDeliveryRequestMessage : ISyncMessage
+{
+    public int SchemaVersion { get; set; } = SyncProtocol.Version;
+    public string RequestId { get; set; } = string.Empty;
+    public string QuestLogId { get; set; } = string.Empty;
+    public string NpcName { get; set; } = string.Empty;
+    public string ItemId { get; set; } = string.Empty;
+    public string ItemLabel { get; set; } = string.Empty;
+    public int ItemQuality { get; set; }
+}
+
+/// <summary>主机 → farmhand：物品交付的权威判定及本地生成答复所需的纯数据。</summary>
+internal sealed class ItemDeliveryResultMessage : ISyncMessage
+{
+    public int SchemaVersion { get; set; } = SyncProtocol.Version;
+    public string RequestId { get; set; } = string.Empty;
+    public string QuestLogId { get; set; } = string.Empty;
+    public string NpcName { get; set; } = string.Empty;
+    public string ItemId { get; set; } = string.Empty;
+    public string ItemLabel { get; set; } = string.Empty;
+    public int ItemQuality { get; set; }
+    public int TasteScore { get; set; }
+    public bool Accepted { get; set; }
+    public bool RequestFulfilled { get; set; }
+    public int FriendshipDelta { get; set; }
+    public List<ItemGrant> ItemGrants { get; set; } = new();
+    public string PromptContext { get; set; } = string.Empty;
+    public string HudMessage { get; set; } = string.Empty;
+    public string FailureReason { get; set; } = string.Empty;
+}
+
+/// <summary>farmhand → 主机：玩家已从本地代理任务领取主机授权的金钱奖励。</summary>
+internal sealed class QuestRewardClaimedMessage : ISyncMessage
+{
+    public int SchemaVersion { get; set; } = SyncProtocol.Version;
+    public string QuestLogId { get; set; } = string.Empty;
 }
 
 /// <summary>本进程玩家在多人拓扑里的角色。</summary>

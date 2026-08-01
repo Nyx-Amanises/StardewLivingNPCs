@@ -30,7 +30,214 @@ public sealed class ExchangeReportSyncTests
         Assert.Equal("{\"rapportDelta\":3}", received.AnalysisJson);
         Assert.Equal(123, received.TotalDays);
         Assert.Equal(1640, received.TimeOfDay);
-        Assert.Single(network.Sent.Where(message => message.Type == SyncProtocol.TypeExchangeReport));
+        Assert.True(Guid.TryParseExact(received.ReportId, "N", out _));
+        Assert.Single(network.Sent, message => message.Type == SyncProtocol.TypeExchangeReport);
+    }
+
+    [Fact]
+    public void HostDeduplicatesPendingReportAndReplaysCompletedAckWithoutReapplying()
+    {
+        (InMemoryModMessageNetwork network, MultiplayerSyncService host, InMemoryModMessageBus farmhandBus) =
+            CreateHostWithCompatibleRawFarmhand();
+        int callbacks = 0;
+        host.RemoteExchangeReceived = (playerId, message) =>
+        {
+            Assert.Equal(2, playerId);
+            Assert.Equal("report-1", message.ReportId);
+            callbacks++;
+        };
+        var report = new ExchangeReportMessage
+        {
+            ReportId = "report-1",
+            NpcName = "Emily",
+            PlayerName = "Farmhand",
+            PlayerText = "hello",
+            NpcResponse = "hi",
+            AnalysisJson = "{}"
+        };
+
+        farmhandBus.Send(report, SyncProtocol.TypeExchangeReport, new[] { 1L });
+        farmhandBus.Send(report, SyncProtocol.TypeExchangeReport, new[] { 1L });
+
+        Assert.Equal(1, callbacks);
+        Assert.DoesNotContain(network.Sent, message => message.Type == SyncProtocol.TypeExchangeAck);
+
+        var acknowledgement = new ExchangeAckMessage
+        {
+            ReportId = report.ReportId,
+            NpcName = report.NpcName,
+            FriendshipDelta = 4,
+            FeedbackMessages = new List<string> { "applied once" }
+        };
+        host.SendExchangeAck(2, acknowledgement);
+        farmhandBus.Send(report, SyncProtocol.TypeExchangeReport, new[] { 1L });
+
+        Assert.Equal(1, callbacks);
+        ExchangeAckMessage[] acknowledgements = network.Sent
+            .Where(message => message.Type == SyncProtocol.TypeExchangeAck)
+            .Select(message => Assert.IsType<ExchangeAckMessage>(message.Payload))
+            .ToArray();
+        Assert.Equal(2, acknowledgements.Length);
+        Assert.All(acknowledgements, replayed =>
+        {
+            Assert.Equal("report-1", replayed.ReportId);
+            Assert.Equal("Emily", replayed.NpcName);
+            Assert.Equal(4, replayed.FriendshipDelta);
+            Assert.Equal(new[] { "applied once" }, replayed.FeedbackMessages);
+        });
+        Assert.All(
+            network.Sent.Where(message => message.Type == SyncProtocol.TypeExchangeAck),
+            message => Assert.Equal(2, message.ToPlayerId));
+    }
+
+    [Fact]
+    public void ItemDeliveryRequestAndResultRoundTripOnlyBetweenFarmhandAndHost()
+    {
+        (InMemoryModMessageNetwork network, MultiplayerSyncService host, MultiplayerSyncService farmhand, _) = CreateConnectedPair();
+        network.AddEndpoint(3, isHost: false);
+        network.Sent.Clear();
+        long receivedFromPlayerId = -1;
+        ItemDeliveryRequestMessage? receivedRequest = null;
+        ItemDeliveryResultMessage? receivedResult = null;
+        host.RemoteItemDeliveryReceived = (playerId, message) =>
+        {
+            receivedFromPlayerId = playerId;
+            receivedRequest = message;
+        };
+        farmhand.ItemDeliveryResultReceived = message => receivedResult = message;
+
+        bool sent = farmhand.TrySendItemDeliveryRequest(
+            "quest-1",
+            "Emily",
+            "(O)80",
+            "Quartz",
+            itemQuality: 2);
+
+        Assert.True(sent);
+        Assert.Equal(2, receivedFromPlayerId);
+        Assert.NotNull(receivedRequest);
+        Assert.True(Guid.TryParseExact(receivedRequest!.RequestId, "N", out _));
+        Assert.Equal("quest-1", receivedRequest.QuestLogId);
+        Assert.Equal("Emily", receivedRequest.NpcName);
+        Assert.Equal("(O)80", receivedRequest.ItemId);
+        Assert.Equal("Quartz", receivedRequest.ItemLabel);
+        Assert.Equal(2, receivedRequest.ItemQuality);
+        SentModMessage requestWireMessage = Assert.Single(
+            network.Sent,
+            message => message.Type == SyncProtocol.TypeItemDeliveryRequest);
+        Assert.Equal((2L, 1L), (requestWireMessage.FromPlayerId, requestWireMessage.ToPlayerId));
+
+        host.SendItemDeliveryResult(
+            2,
+            new ItemDeliveryResultMessage
+            {
+                RequestId = receivedRequest.RequestId,
+                QuestLogId = receivedRequest.QuestLogId,
+                NpcName = receivedRequest.NpcName,
+                ItemId = receivedRequest.ItemId,
+                ItemLabel = receivedRequest.ItemLabel,
+                ItemQuality = receivedRequest.ItemQuality,
+                TasteScore = 4,
+                Accepted = false,
+                FailureReason = "test rejection"
+            });
+
+        Assert.NotNull(receivedResult);
+        Assert.Equal(receivedRequest.RequestId, receivedResult!.RequestId);
+        Assert.Equal("quest-1", receivedResult.QuestLogId);
+        Assert.Equal(4, receivedResult.TasteScore);
+        Assert.False(receivedResult.Accepted);
+        SentModMessage resultWireMessage = Assert.Single(
+            network.Sent,
+            message => message.Type == SyncProtocol.TypeItemDeliveryResult);
+        Assert.Equal((1L, 2L), (resultWireMessage.FromPlayerId, resultWireMessage.ToPlayerId));
+        Assert.DoesNotContain(
+            network.Sent,
+            message => (message.Type is SyncProtocol.TypeItemDeliveryRequest or SyncProtocol.TypeItemDeliveryResult)
+                && message.ToPlayerId == 3);
+    }
+
+    [Fact]
+    public void QuestRewardClaimedRoundTripsOnlyFromFarmhandToHost()
+    {
+        (InMemoryModMessageNetwork network, MultiplayerSyncService host, MultiplayerSyncService farmhand, _) = CreateConnectedPair();
+        network.AddEndpoint(3, isHost: false);
+        network.Sent.Clear();
+        long receivedFromPlayerId = -1;
+        QuestRewardClaimedMessage? received = null;
+        host.RemoteQuestRewardClaimed = (playerId, message) =>
+        {
+            receivedFromPlayerId = playerId;
+            received = message;
+        };
+
+        bool sent = farmhand.TrySendQuestRewardClaimed("quest-reward-1");
+
+        Assert.True(sent);
+        Assert.Equal(2, receivedFromPlayerId);
+        Assert.NotNull(received);
+        Assert.Equal(SyncProtocol.Version, received!.SchemaVersion);
+        Assert.Equal("quest-reward-1", received.QuestLogId);
+        SentModMessage wireMessage = Assert.Single(
+            network.Sent,
+            message => message.Type == SyncProtocol.TypeQuestRewardClaimed);
+        Assert.Equal((2L, 1L), (wireMessage.FromPlayerId, wireMessage.ToPlayerId));
+        Assert.DoesNotContain(
+            network.Sent,
+            message => message.Type == SyncProtocol.TypeQuestRewardClaimed && message.ToPlayerId == 3);
+    }
+
+    [Fact]
+    public void WorldActionMessagesIgnoreWrongSchemaAndItemResultFromNonHost()
+    {
+        (InMemoryModMessageNetwork network, MultiplayerSyncService host, MultiplayerSyncService farmhand, InMemoryModMessageBus farmhandBus) =
+            CreateConnectedPair();
+        InMemoryModMessageBus nonHostBus = network.AddEndpoint(3, isHost: false);
+        int deliveryRequests = 0;
+        int deliveryResults = 0;
+        int rewardClaims = 0;
+        host.RemoteItemDeliveryReceived = (_, _) => deliveryRequests++;
+        host.RemoteQuestRewardClaimed = (_, _) => rewardClaims++;
+        farmhand.ItemDeliveryResultReceived = _ => deliveryResults++;
+        network.Sent.Clear();
+
+        farmhandBus.Send(
+            new ItemDeliveryRequestMessage
+            {
+                SchemaVersion = SyncProtocol.Version + 1,
+                RequestId = "bad-request",
+                QuestLogId = "quest-1"
+            },
+            SyncProtocol.TypeItemDeliveryRequest,
+            new[] { 1L });
+        farmhandBus.Send(
+            new QuestRewardClaimedMessage
+            {
+                SchemaVersion = SyncProtocol.Version + 1,
+                QuestLogId = "quest-1"
+            },
+            SyncProtocol.TypeQuestRewardClaimed,
+            new[] { 1L });
+        host.SendItemDeliveryResult(
+            2,
+            new ItemDeliveryResultMessage
+            {
+                SchemaVersion = SyncProtocol.Version + 1,
+                RequestId = "bad-result",
+                QuestLogId = "quest-1"
+            });
+        nonHostBus.Send(
+            new ItemDeliveryResultMessage
+            {
+                RequestId = "rogue-result",
+                QuestLogId = "quest-1"
+            },
+            SyncProtocol.TypeItemDeliveryResult,
+            new[] { 2L });
+
+        Assert.Equal(0, deliveryRequests);
+        Assert.Equal(0, rewardClaims);
+        Assert.Equal(0, deliveryResults);
     }
 
     [Fact]
@@ -173,6 +380,30 @@ public sealed class ExchangeReportSyncTests
         return (network, host, farmhand, farmhandBus, farmhandMonitor);
     }
 
+    private static (InMemoryModMessageNetwork Network, MultiplayerSyncService Host, InMemoryModMessageBus FarmhandBus) CreateHostWithCompatibleRawFarmhand()
+    {
+        var network = new InMemoryModMessageNetwork();
+        InMemoryModMessageBus hostBus = network.AddEndpoint(1, isHost: true);
+        InMemoryModMessageBus farmhandBus = network.AddEndpoint(2, isHost: false);
+        MultiplayerSyncService host = CreateService(
+            hostBus,
+            new FakeMultiplayerRuntimeContext
+            {
+                IsMainPlayer = true,
+                IsOnHostComputer = true,
+                HostPlayerId = 1,
+                LocalPlayerName = "Host"
+            },
+            out _);
+        host.OnPeerConnected(new ModMessagePeer(2, IsHost: false, IsSplitScreen: false, HasMod: true));
+        farmhandBus.Send(
+            new ProtocolHelloAckMessage { Compatible = true },
+            SyncProtocol.TypeProtocolHelloAck,
+            new[] { 1L });
+        network.Sent.Clear();
+        return (network, host, farmhandBus);
+    }
+
     private static MultiplayerSyncService CreateService(
         IModMessageBus bus,
         IMultiplayerRuntimeContext runtime,
@@ -191,6 +422,7 @@ public sealed class ExchangeReportSyncTests
             monitor,
             config,
             new NpcRelationshipViewStore(),
+            new HelpRequestQuestProjectionStore(),
             new BehaviorFeedbackService(config, monitor),
             ModId);
     }

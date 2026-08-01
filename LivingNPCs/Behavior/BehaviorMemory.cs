@@ -328,7 +328,10 @@ internal sealed class BehaviorMemory
         int helpRequestCooldownDays,
         int maxExtraFriendshipPerDay,
         int maxDialogueBehaviorInfluenceDays,
-        bool allowHelpRequestProgress = true)
+        bool allowHelpRequestProgress = true,
+        long helpRequestPlayerId = -1,
+        string helpRequestPlayerName = "",
+        int helpRequestFriendshipHearts = -1)
     {
         return this.ExchangeApplication.Apply(
             npc,
@@ -341,7 +344,10 @@ internal sealed class BehaviorMemory
             helpRequestCooldownDays,
             maxExtraFriendshipPerDay,
             maxDialogueBehaviorInfluenceDays,
-            allowHelpRequestProgress
+            allowHelpRequestProgress,
+            helpRequestPlayerId,
+            helpRequestPlayerName,
+            helpRequestFriendshipHearts
         );
     }
 
@@ -364,10 +370,21 @@ internal sealed class BehaviorMemory
         return this.StateUpdates.UpdateForGift(this.GetOrCreateState(npc), npc, gift);
     }
 
-    public IReadOnlyList<NpcHelpRequestFact> TryCompleteItemHelpRequests(NPC npc, GiftMemoryDetails gift, int maxEntriesPerNpc)
+    public IReadOnlyList<NpcHelpRequestFact> TryCompleteItemHelpRequests(
+        NPC npc,
+        GiftMemoryDetails gift,
+        int maxEntriesPerNpc,
+        string questLogId = "",
+        long assignedPlayerId = -1)
     {
         var state = this.GetOrCreateState(npc);
-        return this.HelpRequests.TryCompleteItemHelpRequests(npc, state, gift, maxEntriesPerNpc);
+        return this.HelpRequests.TryCompleteItemHelpRequests(
+            npc,
+            state,
+            gift,
+            maxEntriesPerNpc,
+            questLogId,
+            assignedPlayerId);
     }
 
     public LivingNpcState UpdateStateForEventInteraction(NPC npc, string eventContext)

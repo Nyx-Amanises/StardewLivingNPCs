@@ -25,7 +25,8 @@ internal sealed class ValleyTalkContextService
     private readonly BehaviorMailService mailService;
     private readonly Func<NPC, string> buildCompanionOutingContext;
     private readonly NpcRelationshipViewStore relationshipViews;
-    private readonly Func<bool>? suppressOpportunitySections;
+    private readonly Func<bool>? useHostRelationshipViews;
+    private readonly Func<bool>? suppressCompanionOutingOpportunity;
 
     /// <summary>Per-NPC one-shot immediate cues; consumed by the next BuildPromptContext.</summary>
     private readonly Dictionary<string, string> immediateContexts = new(StringComparer.OrdinalIgnoreCase);
@@ -38,7 +39,8 @@ internal sealed class ValleyTalkContextService
         BehaviorMailService mailService,
         Func<NPC, string> buildCompanionOutingContext,
         NpcRelationshipViewStore relationshipViews,
-        Func<bool>? suppressOpportunitySections = null)
+        Func<bool>? useHostRelationshipViews = null,
+        Func<bool>? suppressCompanionOutingOpportunity = null)
     {
         this.monitor = monitor;
         this.config = config;
@@ -47,15 +49,16 @@ internal sealed class ValleyTalkContextService
         this.mailService = mailService;
         this.buildCompanionOutingContext = buildCompanionOutingContext;
         this.relationshipViews = relationshipViews;
-        this.suppressOpportunitySections = suppressOpportunitySections;
+        this.useHostRelationshipViews = useHostRelationshipViews;
+        this.suppressCompanionOutingOpportunity = suppressCompanionOutingOpportunity;
     }
 
     /// <summary>
-    /// 多人 v1（主机权威下的远程 farmhand）：机会段引导模型发起世界动作（送礼/求助/出游），
-    /// 而世界动作只属于主机玩家自己的会话——farmhand 上报的动作会被主机剥除。抑制注入并
-    /// 显式告知模型"不可送礼 / 出游不可安排"，避免 NPC 口头答应却无事发生。
+    /// 多人 v1：基础心智与礼物/求助机会只读主机关系视图；仅出游机会固定不可用。
     /// </summary>
-    private bool SuppressOpportunitySections => this.suppressOpportunitySections?.Invoke() == true;
+    private bool UseHostRelationshipViews => this.useHostRelationshipViews?.Invoke() == true;
+
+    private bool SuppressCompanionOutingOpportunity => this.suppressCompanionOutingOpportunity?.Invoke() == true;
 
     public void PushInteractionContext(NPC npc, string debugMessage, string immediatePromptContext = "")
     {
@@ -89,12 +92,12 @@ internal sealed class ValleyTalkContextService
         }
 
         string promptContext = ResolveBasePromptContext(
-            this.SuppressOpportunitySections,
+            this.UseHostRelationshipViews,
             npc.Name,
             this.relationshipViews,
             () => this.BuildRelationshipSummary(npc, markRecalled: true),
             out bool hasAuthoritativeContext);
-        if (this.SuppressOpportunitySections && !hasAuthoritativeContext)
+        if (this.UseHostRelationshipViews && !hasAuthoritativeContext)
         {
             return string.Empty;
         }
@@ -110,7 +113,7 @@ internal sealed class ValleyTalkContextService
             promptContext = $"{promptContext}\n{helpRequestOpportunityContext}";
         }
 
-        string companionOutingContext = this.SuppressOpportunitySections
+        string companionOutingContext = this.SuppressCompanionOutingOpportunity
             ? PromptFragments.Outing.UnavailableSection()
             : this.buildCompanionOutingContext(npc);
         if (!string.IsNullOrWhiteSpace(companionOutingContext))
@@ -169,12 +172,7 @@ internal sealed class ValleyTalkContextService
 
     private string BuildGiftOpportunityPromptContext(NPC npc)
     {
-        if (this.SuppressOpportunitySections)
-        {
-            return PromptFragments.GiftOpportunity.NoOpportunitySection();
-        }
-
-        var state = this.memory.GetState(npc);
+        LivingNpcState? state = this.ResolveReadOnlyState(npc);
         if (state == null)
         {
             return string.Empty;
@@ -210,9 +208,8 @@ internal sealed class ValleyTalkContextService
 
     private string BuildHelpRequestOpportunityPromptContext(NPC npc)
     {
-        var state = this.memory.GetState(npc);
+        LivingNpcState? state = this.ResolveReadOnlyState(npc);
         if (state == null
-            || this.SuppressOpportunitySections
             || !this.config.EnableHelpRequests
             || state.DailyHelpRequestOpportunityTotalDays != Game1.Date.TotalDays
             || state.HighestUnresolvedConflictSeverity >= 30
@@ -231,11 +228,6 @@ internal sealed class ValleyTalkContextService
     /// </summary>
     public string BuildGiftResponseContext(NPC npc, string giftItemId, string giftName, int taste)
     {
-        if (this.SuppressOpportunitySections)
-        {
-            return string.Empty;
-        }
-
         var labels = GiftMemoryDetailsFactory.DescribeTaste(taste);
         var gift = new GiftMemoryDetails(
             giftItemId ?? string.Empty,
@@ -245,7 +237,11 @@ internal sealed class ValleyTalkContextService
             taste,
             GiftMemoryDetailsFactory.IsBirthdayGift(npc)
         );
-        LivingNpcState state = this.memory.GetOrCreateState(npc);
+        LivingNpcState? state = this.ResolveReadOnlyState(npc);
+        if (state == null)
+        {
+            return string.Empty;
+        }
 
         var matchingHelpRequests = FindMatchingItemHelpRequestGiftContexts(state, gift).ToList();
         if (matchingHelpRequests.Count > 0)
@@ -260,11 +256,24 @@ internal sealed class ValleyTalkContextService
 
         // Read-only: the reciprocal-gift roll happens once, in ConversationStartRecorder, after the
         // gift is confirmed accepted. Rolling here too would stack a second chance per gift.
-        bool hasResponseMail = this.mailService.HasPendingGiftMail(state, "reciprocal")
-            || this.mailService.HasPendingGiftMail(state, "birthday");
+        bool hasResponseMail = !this.UseHostRelationshipViews
+            && (this.mailService.HasPendingGiftMail(state, "reciprocal")
+                || this.mailService.HasPendingGiftMail(state, "birthday"));
         return hasResponseMail
             ? BuildGiftResponseMailPrompt(npc, gift)
             : string.Empty;
+    }
+
+    private LivingNpcState? ResolveReadOnlyState(NPC npc)
+    {
+        if (!this.UseHostRelationshipViews)
+        {
+            return this.memory.GetState(npc);
+        }
+
+        return this.relationshipViews.TryGet(npc.Name, out NpcRelationshipViewMessage? view)
+            ? view?.BookState
+            : null;
     }
 
     private static IEnumerable<NpcHelpRequestFact> FindMatchingItemHelpRequestGiftContexts(

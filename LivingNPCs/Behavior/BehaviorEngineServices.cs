@@ -40,6 +40,7 @@ internal sealed class BehaviorEngineServices
     public DialogueBehaviorInfluenceRuntime DialogueBehaviorInfluences { get; }
     public Multiplayer.SmapiModMessageBus ModMessageBus { get; }
     public Multiplayer.NpcRelationshipViewStore RelationshipViews { get; } = new();
+    public Multiplayer.HelpRequestQuestProjectionStore QuestProjections { get; } = new();
     public Multiplayer.MultiplayerSyncService MultiplayerSync { get; }
 
     /// <summary>Engine-owned cleanup invoked after the debug command wipes behavior memory.</summary>
@@ -59,6 +60,7 @@ internal sealed class BehaviorEngineServices
             monitor,
             config,
             this.RelationshipViews,
+            this.QuestProjections,
             this.Feedback,
             modUniqueId);
         this.CommunityRipples = new CommunityRippleRuntime(config, monitor, this.Memory, this.Random);
@@ -88,7 +90,8 @@ internal sealed class BehaviorEngineServices
             this.MailService,
             npc => companionOutings?.BuildPromptContext(npc) ?? string.Empty,
             this.RelationshipViews,
-            () => this.MultiplayerSync.SuppressLocalOpportunities
+            () => this.MultiplayerSync.UseHostRelationshipViews,
+            () => this.MultiplayerSync.SuppressCompanionOutingOpportunity
         );
 
         this.GiftOpportunities = new GiftOpportunityService(
@@ -148,9 +151,11 @@ internal sealed class BehaviorEngineServices
             this.GiftOpportunities,
             this.HelpRequestRewards,
             this.HelpRequestQuestLog,
+            this.QuestProjections,
+            this.MultiplayerSync,
             this.Locator.TryFindNpcForInteraction,
             (npc, debugMessage, immediatePromptContext) => this.ContextService.PushInteractionContext(npc, debugMessage, immediatePromptContext),
-            () => this.MultiplayerSync.SuppressLocalOpportunities
+            () => this.MultiplayerSync.SuppressHostLedgerSideEffects
         );
         this.DelayedTravelActions = new DelayedTravelActionRuntime(
             config,
@@ -165,7 +170,11 @@ internal sealed class BehaviorEngineServices
             npcName => this.Locator.TryFindNpcInCurrentLocation(npcName, out NPC? npc) ? npc : null,
             (npc, text) => this.Feedback.TryShowNpcSpeechBubble(npc, text),
             (npc, debugMessage) => this.ContextService.PushInteractionContext(npc, debugMessage),
-            this.HelpRequestQuestLog.Sync
+            () =>
+            {
+                this.HelpRequestQuestLog.Sync();
+                this.MultiplayerSync.BroadcastQuestProjections();
+            }
         );
         this.DialogueBehaviorInfluences = new DialogueBehaviorInfluenceRuntime(
             config,

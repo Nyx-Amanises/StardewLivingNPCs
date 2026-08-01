@@ -38,6 +38,8 @@ internal sealed class ConversationStartRecorder
     private readonly GiftOpportunityService giftOpportunities;
     private readonly HelpRequestRewardService helpRequestRewards;
     private readonly HelpRequestQuestLogService helpRequestQuestLog;
+    private readonly Multiplayer.HelpRequestQuestProjectionStore questProjections;
+    private readonly Multiplayer.MultiplayerSyncService multiplayerSync;
     private readonly TryFindNpcForInteractionHandler tryFindNpcForInteraction;
     private readonly Action<NPC, string, string> pushInteractionContext;
     private readonly Func<bool>? suppressHostLedgerSideEffects;
@@ -55,6 +57,8 @@ internal sealed class ConversationStartRecorder
         GiftOpportunityService giftOpportunities,
         HelpRequestRewardService helpRequestRewards,
         HelpRequestQuestLogService helpRequestQuestLog,
+        Multiplayer.HelpRequestQuestProjectionStore questProjections,
+        Multiplayer.MultiplayerSyncService multiplayerSync,
         TryFindNpcForInteractionHandler tryFindNpcForInteraction,
         Action<NPC, string, string> pushInteractionContext,
         Func<bool>? suppressHostLedgerSideEffects = null)
@@ -69,6 +73,8 @@ internal sealed class ConversationStartRecorder
         this.giftOpportunities = giftOpportunities;
         this.helpRequestRewards = helpRequestRewards;
         this.helpRequestQuestLog = helpRequestQuestLog;
+        this.questProjections = questProjections;
+        this.multiplayerSync = multiplayerSync;
         this.tryFindNpcForInteraction = tryFindNpcForInteraction;
         this.pushInteractionContext = pushInteractionContext;
         this.suppressHostLedgerSideEffects = suppressHostLedgerSideEffects;
@@ -85,6 +91,60 @@ internal sealed class ConversationStartRecorder
     {
         this.lastConversationMemoryTimeByNpc.Clear();
         this.pendingGiftVerifications.Clear();
+    }
+
+    public void ApplyRemoteItemDeliveryResult(Multiplayer.ItemDeliveryResultMessage result)
+    {
+        if (!result.Accepted)
+        {
+            if (this.config.Debug && !string.IsNullOrWhiteSpace(result.FailureReason))
+            {
+                this.monitor.Log(
+                    $"Remote help-request delivery rejected: {result.FailureReason}",
+                    LogLevel.Trace);
+            }
+
+            return;
+        }
+
+        NPC? npc = Game1.getCharacterFromName(result.NpcName);
+        if (npc == null || npc.currentLocation != Game1.currentLocation)
+        {
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.PromptContext))
+        {
+            this.pushInteractionContext(
+                npc,
+                $"Remote help-request delivery accepted for {npc.Name}.",
+                result.PromptContext);
+        }
+
+        try
+        {
+            SObject deliveredItem = ItemRegistry.Create<SObject>(result.ItemId);
+            deliveredItem.Quality = Math.Max(0, result.ItemQuality);
+            if (!this.dialogueLink.TryRequestGiftDialogue(npc, deliveredItem, result.TasteScore))
+            {
+                this.feedback.QueueAmbientRemark(
+                    npc,
+                    result.RequestFulfilled ? I18n.Get("help.thanksFulfilled") : I18n.Get("help.thanksReceived"),
+                    0);
+            }
+        }
+        catch (Exception ex)
+        {
+            if (this.config.Debug)
+            {
+                this.monitor.Log($"Remote delivery dialogue item was invalid: {ex.Message}", LogLevel.Trace);
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(result.HudMessage))
+        {
+            this.feedback.Show(result.HudMessage);
+        }
     }
 
     public void TryRecord(ButtonPressedEventArgs e)
@@ -105,17 +165,38 @@ internal sealed class ConversationStartRecorder
         GiftMemoryDetails? heldGiftDetails = heldGift != null ? GiftMemoryDetailsFactory.Build(npc, heldGift) : null;
         if (heldGift != null
             && heldGiftDetails != null
-            && this.config.EnableHelpRequests
-            && !this.SuppressHostLedgerSideEffects
-            && this.HasPendingItemHelpRequest(npc, heldGiftDetails))
+            && this.config.EnableHelpRequests)
         {
-            // Deliveries run BEFORE the per-10-minute interaction marker: they are idempotent
-            // (the pending predicate stops matching once the step completes), and a second click
-            // inside the same window must still be suppressed and delivered — otherwise vanilla
-            // gifting consumes the quest item as an ordinary daily gift.
-            this.helper.Input.Suppress(e.Button);
-            this.DeliverHelpRequestItem(npc, heldGift, heldGiftDetails);
-            return;
+            if (this.SuppressHostLedgerSideEffects
+                && this.questProjections.TryFindPendingItem(
+                    npc.Name,
+                    heldGiftDetails.ItemId,
+                    out Multiplayer.HelpRequestQuestProjection? projection)
+                && projection != null)
+            {
+                // farmhand 不先扣物；主机校验 owner/任务/场景/背包并权威扣除，结果回传后
+                // 只在本地生成答复与 HUD。重复点击由同步服务的 pending 集合抑制。
+                this.helper.Input.Suppress(e.Button);
+                this.multiplayerSync.TrySendItemDeliveryRequest(
+                    projection.QuestLogId,
+                    npc.Name,
+                    heldGiftDetails.ItemId,
+                    heldGiftDetails.ItemName,
+                    heldGift.Quality);
+                return;
+            }
+
+            if (!this.SuppressHostLedgerSideEffects
+                && this.HasPendingItemHelpRequest(npc, heldGiftDetails))
+            {
+                // Deliveries run BEFORE the per-10-minute interaction marker: they are idempotent
+                // (the pending predicate stops matching once the step completes), and a second click
+                // inside the same window must still be suppressed and delivered — otherwise vanilla
+                // gifting consumes the quest item as an ordinary daily gift.
+                this.helper.Input.Suppress(e.Button);
+                this.DeliverHelpRequestItem(npc, heldGift, heldGiftDetails);
+                return;
+            }
         }
 
         int timeMarker = (Game1.Date.TotalDays * 10000) + Game1.timeOfDay;
@@ -370,7 +451,7 @@ internal sealed class ConversationStartRecorder
         }
     }
 
-    private static string BuildHelpRequestDeliveryPrompt(
+    internal static string BuildHelpRequestDeliveryPrompt(
         NPC npc,
         GiftMemoryDetails gift,
         IReadOnlyList<NpcHelpRequestFact> changedHelpRequests

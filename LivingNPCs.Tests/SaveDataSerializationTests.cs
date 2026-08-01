@@ -44,6 +44,8 @@ public sealed class SaveDataSerializationTests
                     [
                         new NpcHelpRequestFact
                         {
+                            AssignedPlayerId = 987654321,
+                            AssignedPlayerName = "Farmhand",
                             NpcDisplayName = "Emily",
                             Type = "item_request",
                             Summary = "Bring quartz.",
@@ -70,6 +72,8 @@ public sealed class SaveDataSerializationTests
         Assert.Equal("(O)395", Assert.Single(state.RecentAiGiftItemIds));
         Assert.Equal("promise", Assert.Single(state.LongTermMemories).Kind);
         var helpRequest = Assert.Single(state.HelpRequests);
+        Assert.Equal(987654321, helpRequest.AssignedPlayerId);
+        Assert.Equal("Farmhand", helpRequest.AssignedPlayerName);
         Assert.Equal("(O)80", helpRequest.RequestedItemId);
         Assert.Equal(240, helpRequest.RewardMoney);
         Assert.True(helpRequest.RewardMoneyClaimQueued);

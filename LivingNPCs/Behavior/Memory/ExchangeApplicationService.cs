@@ -68,7 +68,10 @@ internal sealed class ExchangeApplicationService
         int helpRequestCooldownDays,
         int maxExtraFriendshipPerDay,
         int maxDialogueBehaviorInfluenceDays,
-        bool allowHelpRequestProgress = true)
+        bool allowHelpRequestProgress = true,
+        long helpRequestPlayerId = -1,
+        string helpRequestPlayerName = "",
+        int helpRequestFriendshipHearts = -1)
     {
         (int totalDays, int timeOfDay) = this.getGameTime();
         var analysis = ValleyTalkExchangeParser.Parse(analysisJson);
@@ -137,7 +140,10 @@ internal sealed class ExchangeApplicationService
                     candidate,
                     playerText,
                     maxPendingHelpRequestsPerNpc,
-                    helpRequestCooldownDays))
+                    helpRequestCooldownDays,
+                    helpRequestPlayerId,
+                    helpRequestPlayerName,
+                    helpRequestFriendshipHearts))
             {
                 storedHelpRequests++;
                 var entry = this.createEntry(
@@ -160,7 +166,10 @@ internal sealed class ExchangeApplicationService
                 playerText,
                 npcResponse,
                 maxPendingHelpRequestsPerNpc,
-                helpRequestCooldownDays))
+                helpRequestCooldownDays,
+                helpRequestPlayerId,
+                helpRequestPlayerName,
+                helpRequestFriendshipHearts))
         {
             storedHelpRequests++;
             this.addEntry(
@@ -173,7 +182,12 @@ internal sealed class ExchangeApplicationService
                      .Where(update => allowHelpRequestProgress && !string.IsNullOrWhiteSpace(update.Summary))
                      .Take(2))
         {
-            if (this.helpRequests.ApplyUpdate(state, candidate, playerText, out NpcHelpRequestFact? fulfilledRequest))
+            if (this.helpRequests.ApplyUpdate(
+                    state,
+                    candidate,
+                    playerText,
+                    out NpcHelpRequestFact? fulfilledRequest,
+                    helpRequestPlayerId))
             {
                 updatedHelpRequests++;
                 if (fulfilledRequest != null)
@@ -192,7 +206,8 @@ internal sealed class ExchangeApplicationService
 
         // Deterministic fallback: if the farmer's reply clearly agrees to help and an offered
         // request is still waiting, accept it even when the AI did not emit an accepted update.
-        if (allowHelpRequestProgress && this.helpRequests.TryAcceptOfferedFromPlayerAffirmation(state, playerText))
+        if (allowHelpRequestProgress
+            && this.helpRequests.TryAcceptOfferedFromPlayerAffirmation(state, playerText, helpRequestPlayerId))
         {
             updatedHelpRequests++;
             this.addEntry(

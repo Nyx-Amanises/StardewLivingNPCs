@@ -37,7 +37,9 @@ internal sealed class HelpRequestMemoryService
         NPC npc,
         LivingNpcState state,
         GiftMemoryDetails gift,
-        int maxEntriesPerNpc)
+        int maxEntriesPerNpc,
+        string questLogId = "",
+        long assignedPlayerId = -1)
     {
         // One handed-over item advances exactly one request (the most urgent match): the delivery
         // consumes a single item, so completing several matching requests with it would double
@@ -45,6 +47,8 @@ internal sealed class HelpRequestMemoryService
         var fulfilled = state.HelpRequests
             .Where(request => request.Status == "Pending"
                 && request.Type == "item_request"
+                && BelongsToPlayer(request, assignedPlayerId)
+                && (string.IsNullOrWhiteSpace(questLogId) || request.QuestLogId == questLogId)
                 && string.Equals(request.RequestedItemId, gift.ItemId, StringComparison.OrdinalIgnoreCase))
             .OrderBy(request => request.DueTotalDays)
             .Take(1)
@@ -103,7 +107,10 @@ internal sealed class HelpRequestMemoryService
         ValleyTalkHelpRequestCandidate candidate,
         string playerText,
         int maxPendingHelpRequestsPerNpc,
-        int helpRequestCooldownDays)
+        int helpRequestCooldownDays,
+        long assignedPlayerId = -1,
+        string assignedPlayerName = "",
+        int friendshipHearts = -1)
     {
         var steps = BuildSteps(npc, candidate);
         if (steps.Count == 0)
@@ -121,6 +128,7 @@ internal sealed class HelpRequestMemoryService
         string normalizedType = firstStep.Type;
         var existing = state.HelpRequests.FirstOrDefault(request =>
             request.Status is "Offered" or "Pending"
+            && BelongsToPlayer(request, assignedPlayerId)
             && IsSameOpenRequest(request, normalizedSummary, firstStep.RequestedItemId));
         if (existing != null)
         {
@@ -130,12 +138,20 @@ internal sealed class HelpRequestMemoryService
             return true;
         }
 
-        if (!HelpRequestMemoryRules.CanOpen(
+        bool canOpen = friendshipHearts >= 0
+            ? HelpRequestMemoryRules.EvaluateReadiness(
+                state,
+                friendshipHearts,
+                maxPendingHelpRequestsPerNpc,
+                helpRequestCooldownDays,
+                Game1.Date.TotalDays).Allowed
+            : HelpRequestMemoryRules.CanOpen(
                 npc,
                 state,
                 maxPendingHelpRequestsPerNpc,
                 helpRequestCooldownDays,
-                out _))
+                out _);
+        if (!canOpen)
         {
             return false;
         }
@@ -151,6 +167,8 @@ internal sealed class HelpRequestMemoryService
 
         state.HelpRequests.Add(new NpcHelpRequestFact
         {
+            AssignedPlayerId = assignedPlayerId,
+            AssignedPlayerName = assignedPlayerName?.Trim() ?? string.Empty,
             NpcDisplayName = npc.displayName,
             QuestLogId = Guid.NewGuid().ToString("N"),
             Type = normalizedType,
@@ -193,12 +211,14 @@ internal sealed class HelpRequestMemoryService
         LivingNpcState state,
         ValleyTalkHelpRequestUpdateCandidate candidate,
         string playerText,
-        out NpcHelpRequestFact? fulfilledRequest)
+        out NpcHelpRequestFact? fulfilledRequest,
+        long assignedPlayerId = -1)
     {
         fulfilledRequest = null;
         string normalizedSummary = NormalizeMemorySummary(candidate.Summary);
         var openRequests = state.HelpRequests
-            .Where(request => request.Status is "Offered" or "Pending")
+            .Where(request => request.Status is "Offered" or "Pending"
+                && BelongsToPlayer(request, assignedPlayerId))
             .OrderBy(request => request.DueTotalDays)
             .ToList();
         var existing = openRequests
@@ -279,7 +299,10 @@ internal sealed class HelpRequestMemoryService
     /// Deterministic safety net: when the farmer's reply clearly agrees to help and an offered
     /// request is still waiting, accept it without relying on the AI to emit an accepted update.
     /// </summary>
-    public bool TryAcceptOfferedFromPlayerAffirmation(LivingNpcState state, string playerText)
+    public bool TryAcceptOfferedFromPlayerAffirmation(
+        LivingNpcState state,
+        string playerText,
+        long assignedPlayerId = -1)
     {
         if (!LooksLikeFarmerAcceptingHelp(playerText))
         {
@@ -287,7 +310,8 @@ internal sealed class HelpRequestMemoryService
         }
 
         var request = state.HelpRequests
-            .Where(candidate => candidate.Status == "Offered")
+            .Where(candidate => candidate.Status == "Offered"
+                && BelongsToPlayer(candidate, assignedPlayerId))
             .OrderBy(candidate => candidate.DueTotalDays)
             .FirstOrDefault();
         if (request == null)
@@ -311,7 +335,10 @@ internal sealed class HelpRequestMemoryService
         string playerText,
         string npcResponse,
         int maxPendingHelpRequestsPerNpc,
-        int helpRequestCooldownDays)
+        int helpRequestCooldownDays,
+        long assignedPlayerId = -1,
+        string assignedPlayerName = "",
+        int friendshipHearts = -1)
     {
         if (string.IsNullOrWhiteSpace(npcResponse))
         {
@@ -355,7 +382,10 @@ internal sealed class HelpRequestMemoryService
                 candidate,
                 playerText,
                 maxPendingHelpRequestsPerNpc,
-                helpRequestCooldownDays);
+                helpRequestCooldownDays,
+                assignedPlayerId,
+                assignedPlayerName,
+                friendshipHearts);
         }
 
         return false;
@@ -442,6 +472,13 @@ internal sealed class HelpRequestMemoryService
         {
             return fallback;
         }
+    }
+
+    private static bool BelongsToPlayer(NpcHelpRequestFact request, long assignedPlayerId)
+    {
+        return assignedPlayerId < 0
+            ? request.AssignedPlayerId < 0
+            : request.AssignedPlayerId == assignedPlayerId;
     }
 
     private List<NpcHelpRequestStepFact> BuildSteps(NPC npc, ValleyTalkHelpRequestCandidate candidate)

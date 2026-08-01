@@ -663,6 +663,8 @@ internal sealed class LivingNpcState
             HelpRequests = this.HelpRequests
                 .Select(request => new NpcHelpRequestFact
                 {
+                    AssignedPlayerId = request.AssignedPlayerId,
+                    AssignedPlayerName = request.AssignedPlayerName,
                     NpcDisplayName = request.NpcDisplayName,
                     QuestLogId = request.QuestLogId,
                     Type = request.Type,

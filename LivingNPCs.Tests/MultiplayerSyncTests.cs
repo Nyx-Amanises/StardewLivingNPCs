@@ -1,6 +1,10 @@
 using LivingNPCs.Behavior;
 using LivingNPCs.Behavior.Multiplayer;
+using LivingNPCs.Tests.Dialogue.Llm;
 using Newtonsoft.Json;
+using System.Text.Json.Nodes;
+using StardewValley;
+using StardewValley.Network;
 
 namespace LivingNPCs.Tests;
 
@@ -31,16 +35,21 @@ public sealed class MultiplayerSyncTests
         """;
 
     [Fact]
-    public void SanitizeStripsWorldActionsAndHelpFieldsCaseInsensitively()
+    public void SanitizeKeepsAllowedActionAndHelpFieldsWhileDroppingOuting()
     {
         string sanitized = RemoteExchangePolicy.SanitizeAnalysisJson(FullAnalysisJson, out var droppedActionTypes);
 
-        Assert.Equal(new[] { "companion_outing", "give_small_gift" }, droppedActionTypes);
+        Assert.Equal(new[] { "companion_outing" }, droppedActionTypes);
 
         var analysis = ValleyTalkExchangeParser.Parse(sanitized);
-        Assert.Empty(analysis.Actions);
-        Assert.Empty(analysis.HelpRequests);
-        Assert.Empty(analysis.HelpRequestUpdates);
+        var action = Assert.Single(analysis.Actions);
+        Assert.Equal("give_small_gift", action.Type);
+        Assert.Equal("(O)395", action.ItemId);
+        Assert.Single(analysis.HelpRequests);
+        Assert.Equal("item_request", analysis.HelpRequests[0].Type);
+        Assert.Equal("(O)80", analysis.HelpRequests[0].RequestedItemId);
+        Assert.Single(analysis.HelpRequestUpdates);
+        Assert.Equal("accepted", analysis.HelpRequestUpdates[0].Status);
 
         // 心智账本字段原样保留。
         Assert.Equal(9, analysis.RapportDelta);
@@ -86,6 +95,105 @@ public sealed class MultiplayerSyncTests
         var analysis = ValleyTalkExchangeParser.Parse(sanitized);
         Assert.Empty(analysis.Actions);
         Assert.Equal(1, analysis.RapportDelta);
+    }
+
+    [Theory]
+    [InlineData("give_small_gift")]
+    [InlineData("give_meaningful_gift")]
+    [InlineData("give_money")]
+    public void SanitizeKeepsEveryAllowedRemoteWorldAction(string actionType)
+    {
+        string json = $$"""{"actions":[{"type":"{{actionType}}","amount":999}],"rapportDelta":2}""";
+
+        string sanitized = RemoteExchangePolicy.SanitizeAnalysisJson(json, out var dropped);
+
+        Assert.Empty(dropped);
+        Assert.Equal(json, sanitized);
+        var action = Assert.Single(ValleyTalkExchangeParser.Parse(sanitized).Actions);
+        Assert.Equal(actionType, action.Type);
+        Assert.Equal(250, action.Amount);
+    }
+
+    [Fact]
+    public void SanitizeDropsOutingFestivalAliasAndUnknownButKeepsAllowedAction()
+    {
+        const string json = """
+            {
+              "actions": [
+                { "type": "companion_outing", "targetLocation": "Beach" },
+                { "type": "festival_interaction" },
+                { "type": "escort_to_location", "targetLocation": "Town" },
+                { "type": "teleport_farmer" },
+                { "type": "give_money", "amount": 75 }
+              ],
+              "helpRequests": [{ "type": "item_request", "summary": "Quartz", "requestedItemId": "(O)80" }],
+              "helpRequestUpdates": [{ "summary": "Quartz", "status": "accepted" }],
+              "memories": [{ "kind": "fact", "summary": "the farmer likes rain", "importance": 60 }]
+            }
+            """;
+
+        string sanitized = RemoteExchangePolicy.SanitizeAnalysisJson(json, out var dropped);
+
+        Assert.Equal(
+            new[] { "companion_outing", "festival_interaction", "escort_to_location", "teleport_farmer" },
+            dropped);
+        var analysis = ValleyTalkExchangeParser.Parse(sanitized);
+        Assert.Equal("give_money", Assert.Single(analysis.Actions).Type);
+        Assert.Single(analysis.HelpRequests);
+        Assert.Single(analysis.HelpRequestUpdates);
+        Assert.Equal("the farmer likes rain", Assert.Single(analysis.Memories).Summary);
+    }
+
+    [Fact]
+    public void SanitizeFiltersEveryCaseVariantOfActionsAndType()
+    {
+        const string json = """
+            {
+              "Actions": [
+                { "TYPE": "COMPANION_OUTING" },
+                { "Type": "GIVE_SMALL_GIFT", "itemId": "(O)20" }
+              ],
+              "HELPREQUESTS": [{ "TYPE": "ITEM_REQUEST", "SUMMARY": "Quartz", "REQUESTEDITEMID": "(O)80" }]
+            }
+            """;
+
+        string sanitized = RemoteExchangePolicy.SanitizeAnalysisJson(json, out var dropped);
+
+        Assert.Equal(new[] { "COMPANION_OUTING" }, dropped);
+        var analysis = ValleyTalkExchangeParser.Parse(sanitized);
+        Assert.Equal("give_small_gift", Assert.Single(analysis.Actions).Type);
+        Assert.Single(analysis.HelpRequests);
+    }
+
+    [Fact]
+    public void SanitizePreservesEveryNonActionNode()
+    {
+        const string json = """
+            {
+              "rapportDelta": -3,
+              "endConversation": true,
+              "emotionImpact": { "emotion": "worried", "intensityDelta": 7, "reason": null },
+              "memories": [{ "kind": "shared_event", "summary": "rainy walk", "importance": 71 }],
+              "conflicts": [{ "summary": "late delivery", "severity": 24 }],
+              "behaviorInfluences": [{ "type": "avoid_topic", "summary": "money", "durationDays": 2 }],
+              "helpRequests": [{ "type": "item_request", "summary": "Quartz", "requestedItemId": "(O)80" }],
+              "helpRequestUpdates": [{ "summary": "Quartz", "status": "accepted" }],
+              "futureMindField": { "nested": [1, true, "keep me", null] },
+              "actions": [
+                { "type": "companion_outing", "targetLocation": "Beach" },
+                { "type": "give_money", "amount": 80 }
+              ]
+            }
+            """;
+
+        string sanitized = RemoteExchangePolicy.SanitizeAnalysisJson(json, out var dropped);
+
+        Assert.Equal(new[] { "companion_outing" }, dropped);
+        JsonObject expected = Assert.IsType<JsonObject>(JsonNode.Parse(json));
+        JsonObject actual = Assert.IsType<JsonObject>(JsonNode.Parse(sanitized));
+        expected.Remove("actions");
+        actual.Remove("actions");
+        Assert.Equal(expected.ToJsonString(), actual.ToJsonString());
     }
 
     // ---- 开书决策 / 角色判定 / 协议 ----
@@ -253,5 +361,56 @@ public sealed class MultiplayerSyncTests
         Assert.Equal("local context", local);
         Assert.True(localHasContext);
         Assert.Equal(1, localBuilds);
+    }
+
+    [Fact]
+    public void FarmhandHostViewKeepsGiftAndHelpOpportunitiesButAlwaysDisablesOuting()
+    {
+        var originalWorldState = Game1.netWorldState;
+        Game1.netWorldState = new(new NetWorldState());
+        try
+        {
+            int today = Game1.Date.TotalDays;
+            NpcRelationshipViewMessage view = BuildSampleView();
+            view.BehaviorContextSummary = "host-owned relationship context";
+            view.BookState!.DailyGiftOpportunityTotalDays = today;
+            view.BookState.DailyGiftOpportunityReason = "host-authorized gift opportunity";
+            view.BookState.LastAiSmallGiftTotalDays = today - 1;
+            view.BookState.LastAiMeaningfulGiftTotalDays = today - 1;
+            view.BookState.DailyHelpRequestOpportunityTotalDays = today;
+            var relationshipViews = new NpcRelationshipViewStore();
+            relationshipViews.Apply(view);
+            var config = new ModConfig
+            {
+                EnableAiWorldActions = true,
+                AllowAiSmallGifts = true,
+                EnableHelpRequests = true,
+                MaxPendingHelpRequestsPerNpc = 1
+            };
+            var npc = new NPC { Name = "Emily", displayName = "Emily" };
+            var service = new ValleyTalkContextService(
+                new FakeMonitor(),
+                config,
+                new BehaviorMemory(),
+                new GiftSelector(new Random(1)),
+                null!,
+                _ => "host outing context must not be used",
+                relationshipViews,
+                useHostRelationshipViews: () => true,
+                suppressCompanionOutingOpportunity: () => true);
+
+            string context = service.BuildPromptContext(npc);
+
+            Assert.Contains("host-owned relationship context", context);
+            Assert.Contains("## LivingNPCs Gift Opportunity", context);
+            Assert.Contains("host-authorized gift opportunity", context);
+            Assert.Contains("## LivingNPCs Help Request Opportunity", context);
+            Assert.Contains("## Companion Outing Unavailable", context);
+            Assert.DoesNotContain("host outing context must not be used", context);
+        }
+        finally
+        {
+            Game1.netWorldState = originalWorldState;
+        }
     }
 }

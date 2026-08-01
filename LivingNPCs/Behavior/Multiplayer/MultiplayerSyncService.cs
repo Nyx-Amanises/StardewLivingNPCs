@@ -24,6 +24,7 @@ internal sealed class MultiplayerSyncService
     private readonly IMonitor monitor;
     private readonly ModConfig config;
     private readonly NpcRelationshipViewStore relationshipViews;
+    private readonly HelpRequestQuestProjectionStore questProjections;
     private readonly BehaviorFeedbackService feedback;
     private readonly string modUniqueId;
     private readonly Action<int, int> notifyProtocolMismatch;
@@ -37,9 +38,30 @@ internal sealed class MultiplayerSyncService
     /// <summary>主机侧列出关系视图的权威 NPC 名单（engine 晚绑定）。</summary>
     public Func<IReadOnlyList<string>>? RelationshipNpcNamesProvider { get; set; }
 
+    /// <summary>主机侧按玩家装配其当前求助任务完整投影。</summary>
+    public Func<long, QuestProjectionMessage>? QuestProjectionProvider { get; set; }
+
+    /// <summary>farmhand 侧任务投影缓存替换后的主线程通知。</summary>
+    public Action? QuestProjectionApplied { get; set; }
+
+    /// <summary>主机侧收到 farmhand 物品交付请求后的主线程入口。</summary>
+    public Action<long, ItemDeliveryRequestMessage>? RemoteItemDeliveryReceived { get; set; }
+
+    /// <summary>farmhand 侧收到主机交付判定后的主线程入口。</summary>
+    public Action<ItemDeliveryResultMessage>? ItemDeliveryResultReceived { get; set; }
+
+    /// <summary>主机侧收到 farmhand 已领取代理任务金钱奖励的通知。</summary>
+    public Action<long, QuestRewardClaimedMessage>? RemoteQuestRewardClaimed { get; set; }
+
     private readonly Dictionary<long, long> lastSnapshotSentTicksByPeer = new();
     private readonly HashSet<long> compatiblePeerIds = new();
     private readonly Queue<ExchangeReportMessage> pendingExchangeReports = new();
+    private readonly HashSet<string> pendingItemDeliveryQuestIds = new(StringComparer.Ordinal);
+    private readonly HashSet<(long PlayerId, string ReportId)> pendingRemoteExchangeIds = new();
+    private readonly Dictionary<(long PlayerId, string ReportId), ExchangeAckMessage> completedRemoteExchangeAcks = new();
+    private readonly HashSet<string> appliedExchangeAckIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> appliedItemDeliveryResultIds = new(StringComparer.Ordinal);
+    private readonly HashSet<string> pendingQuestRewardClaimIds = new(StringComparer.Ordinal);
     private bool loggedIncompatibleVersion;
     private bool protocolMismatchNotified;
     private ProtocolHandshakeState handshakeState = ProtocolHandshakeState.AwaitingHost;
@@ -51,6 +73,7 @@ internal sealed class MultiplayerSyncService
         IMonitor monitor,
         ModConfig config,
         NpcRelationshipViewStore relationshipViews,
+        HelpRequestQuestProjectionStore questProjections,
         BehaviorFeedbackService feedback,
         string modUniqueId,
         Action<int, int>? notifyProtocolMismatch = null)
@@ -60,6 +83,7 @@ internal sealed class MultiplayerSyncService
         this.monitor = monitor;
         this.config = config;
         this.relationshipViews = relationshipViews;
+        this.questProjections = questProjections;
         this.feedback = feedback;
         this.modUniqueId = modUniqueId;
         this.notifyProtocolMismatch = notifyProtocolMismatch
@@ -101,10 +125,14 @@ internal sealed class MultiplayerSyncService
         && this.handshakeState == ProtocolHandshakeState.Compatible;
 
     /// <summary>
-    /// 行为上下文是否抑制机会注入（礼物/求助机会与出游可用性）：这些段落引导模型发起
-    /// 世界动作，而世界动作在主机权威下只属于主机玩家自己的会话（决策 3 的推广）。
+    /// farmhand 行为上下文从主机关系视图读取，且本地不得写主机账本副作用。
     /// </summary>
-    public bool SuppressLocalOpportunities => this.UseHostAuthority;
+    public bool UseHostRelationshipViews => this.UseHostAuthority;
+
+    public bool SuppressHostLedgerSideEffects => this.UseHostAuthority;
+
+    /// <summary>v1 唯一被整体禁用的 farmhand 世界动作机会：陪伴出游。</summary>
+    public bool SuppressCompanionOutingOpportunity => this.UseHostAuthority;
 
     public int PendingExchangeReportCount => this.pendingExchangeReports.Count;
 
@@ -154,6 +182,23 @@ internal sealed class MultiplayerSyncService
 
                 if (!this.TryRead(e, out ExchangeReportMessage message)
                     || !this.CheckVersion(message.SchemaVersion, e.Type))
+                {
+                    return;
+                }
+
+                if (string.IsNullOrWhiteSpace(message.ReportId))
+                {
+                    return;
+                }
+
+                var key = (e.FromPlayerId, message.ReportId);
+                if (this.completedRemoteExchangeAcks.TryGetValue(key, out ExchangeAckMessage? completedAck))
+                {
+                    this.bus.Send(completedAck, SyncProtocol.TypeExchangeAck, new[] { e.FromPlayerId });
+                    return;
+                }
+
+                if (!this.pendingRemoteExchangeIds.Add(key))
                 {
                     return;
                 }
@@ -239,6 +284,86 @@ internal sealed class MultiplayerSyncService
                 this.relationshipViews.Clear();
                 return;
             }
+
+            case SyncProtocol.TypeQuestProjection:
+            {
+                if (this.runtime.IsMainPlayer || !this.IsFromHost(e.FromPlayerId) || !this.UseHostAuthority)
+                {
+                    return;
+                }
+
+                if (!this.TryRead(e, out QuestProjectionMessage message)
+                    || !this.CheckVersion(message.SchemaVersion, e.Type))
+                {
+                    return;
+                }
+
+                this.questProjections.Apply(message);
+                this.QuestProjectionApplied?.Invoke();
+                return;
+            }
+
+            case SyncProtocol.TypeItemDeliveryRequest:
+            {
+                if (!this.runtime.IsMainPlayer || !this.compatiblePeerIds.Contains(e.FromPlayerId))
+                {
+                    return;
+                }
+
+                if (!this.TryRead(e, out ItemDeliveryRequestMessage message)
+                    || !this.CheckVersion(message.SchemaVersion, e.Type))
+                {
+                    return;
+                }
+
+                this.RemoteItemDeliveryReceived?.Invoke(e.FromPlayerId, message);
+                return;
+            }
+
+            case SyncProtocol.TypeItemDeliveryResult:
+            {
+                if (this.runtime.IsMainPlayer || !this.IsFromHost(e.FromPlayerId) || !this.UseHostAuthority)
+                {
+                    return;
+                }
+
+                if (!this.TryRead(e, out ItemDeliveryResultMessage message)
+                    || !this.CheckVersion(message.SchemaVersion, e.Type))
+                {
+                    return;
+                }
+
+                this.pendingItemDeliveryQuestIds.Remove(message.QuestLogId);
+                if (!string.IsNullOrWhiteSpace(message.RequestId)
+                    && !this.appliedItemDeliveryResultIds.Add(message.RequestId))
+                {
+                    return;
+                }
+
+                if (message.Accepted)
+                {
+                    this.ApplyLocalPlayerGrants(message.NpcName, message.FriendshipDelta, 0, message.ItemGrants);
+                }
+                this.ItemDeliveryResultReceived?.Invoke(message);
+                return;
+            }
+
+            case SyncProtocol.TypeQuestRewardClaimed:
+            {
+                if (!this.runtime.IsMainPlayer || !this.compatiblePeerIds.Contains(e.FromPlayerId))
+                {
+                    return;
+                }
+
+                if (!this.TryRead(e, out QuestRewardClaimedMessage message)
+                    || !this.CheckVersion(message.SchemaVersion, e.Type))
+                {
+                    return;
+                }
+
+                this.RemoteQuestRewardClaimed?.Invoke(e.FromPlayerId, message);
+                return;
+            }
         }
     }
 
@@ -261,6 +386,13 @@ internal sealed class MultiplayerSyncService
     {
         this.lastSnapshotSentTicksByPeer.Remove(playerId);
         this.compatiblePeerIds.Remove(playerId);
+        this.pendingRemoteExchangeIds.RemoveWhere(key => key.PlayerId == playerId);
+        foreach ((long PlayerId, string ReportId) key in this.completedRemoteExchangeAcks.Keys
+                     .Where(key => key.PlayerId == playerId)
+                     .ToList())
+        {
+            this.completedRemoteExchangeAcks.Remove(key);
+        }
         if (!this.runtime.IsMainPlayer && this.runtime.HostPlayerId == playerId)
         {
             this.handshakeState = ProtocolHandshakeState.AwaitingHost;
@@ -271,6 +403,11 @@ internal sealed class MultiplayerSyncService
     public void OnSaveLoaded()
     {
         this.lastSnapshotSentTicksByPeer.Clear();
+        this.pendingRemoteExchangeIds.Clear();
+        this.completedRemoteExchangeAcks.Clear();
+        this.appliedExchangeAckIds.Clear();
+        this.appliedItemDeliveryResultIds.Clear();
+        this.pendingQuestRewardClaimIds.Clear();
     }
 
     public void OnReturnedToTitle()
@@ -279,6 +416,13 @@ internal sealed class MultiplayerSyncService
         this.lastSnapshotSentTicksByPeer.Clear();
         this.compatiblePeerIds.Clear();
         this.relationshipViews.Clear();
+        this.questProjections.Clear();
+        this.pendingItemDeliveryQuestIds.Clear();
+        this.pendingRemoteExchangeIds.Clear();
+        this.completedRemoteExchangeAcks.Clear();
+        this.appliedExchangeAckIds.Clear();
+        this.appliedItemDeliveryResultIds.Clear();
+        this.pendingQuestRewardClaimIds.Clear();
         this.handshakeState = ProtocolHandshakeState.AwaitingHost;
         this.protocolMismatchNotified = false;
         this.loggedIncompatibleVersion = false;
@@ -287,6 +431,7 @@ internal sealed class MultiplayerSyncService
     public void OnUpdateTicked()
     {
         this.RetryPendingExchangeReports();
+        this.RetryPendingQuestRewardClaims();
     }
 
     // ---- farmhand 侧动作 ----
@@ -301,6 +446,7 @@ internal sealed class MultiplayerSyncService
 
         var message = new ExchangeReportMessage
         {
+            ReportId = Guid.NewGuid().ToString("N"),
             NpcName = npcName,
             PlayerName = this.runtime.LocalPlayerName,
             PlayerText = playerText,
@@ -331,6 +477,66 @@ internal sealed class MultiplayerSyncService
         return true;
     }
 
+    public bool TrySendItemDeliveryRequest(
+        string questLogId,
+        string npcName,
+        string itemId,
+        string itemLabel,
+        int itemQuality)
+    {
+        long? hostId = this.TryGetHostPlayerId();
+        if (!this.UseHostAuthority
+            || hostId == null
+            || string.IsNullOrWhiteSpace(questLogId)
+            || !this.pendingItemDeliveryQuestIds.Add(questLogId))
+        {
+            return false;
+        }
+
+        try
+        {
+            this.bus.Send(
+                new ItemDeliveryRequestMessage
+                {
+                    RequestId = Guid.NewGuid().ToString("N"),
+                    QuestLogId = questLogId,
+                    NpcName = npcName,
+                    ItemId = itemId,
+                    ItemLabel = itemLabel,
+                    ItemQuality = itemQuality
+                },
+                SyncProtocol.TypeItemDeliveryRequest,
+                new[] { hostId.Value });
+            return true;
+        }
+        catch
+        {
+            this.pendingItemDeliveryQuestIds.Remove(questLogId);
+            return false;
+        }
+    }
+
+    public bool TrySendQuestRewardClaimed(string questLogId)
+    {
+        long? hostId = this.TryGetHostPlayerId();
+        if (!this.UseHostAuthority || hostId == null || string.IsNullOrWhiteSpace(questLogId))
+        {
+            return false;
+        }
+
+        if (!this.pendingQuestRewardClaimIds.Add(questLogId))
+        {
+            return true;
+        }
+
+        if (this.TrySendQuestRewardClaimedCore(questLogId, hostId.Value))
+        {
+            this.pendingQuestRewardClaimIds.Remove(questLogId);
+        }
+
+        return true;
+    }
+
     /// <summary>存档边界不持久化补偿队列；v1 明确丢弃并留 Trace。</summary>
     public void OnSaving()
     {
@@ -345,20 +551,33 @@ internal sealed class MultiplayerSyncService
 
     private void ApplyExchangeAck(ExchangeAckMessage message)
     {
-        NPC? npc = Game1.getCharacterFromName(message.NpcName);
-        if (npc == null)
+        if (!string.IsNullOrWhiteSpace(message.ReportId)
+            && !this.appliedExchangeAckIds.Add(message.ReportId))
         {
             return;
         }
 
-        if (message.FriendshipDelta > 0 && Game1.player != null)
-        {
-            Game1.player.changeFriendship(message.FriendshipDelta, npc);
-        }
+        this.ApplyLocalPlayerGrants(
+            message.NpcName,
+            message.FriendshipDelta,
+            message.MoneyGrant,
+            message.ItemGrants);
 
-        if (!string.IsNullOrWhiteSpace(message.AmbientText) && this.config.EnableDialogueFollowUps)
+        NPC? npc = Game1.getCharacterFromName(message.NpcName);
+
+        if (npc != null
+            && !string.IsNullOrWhiteSpace(message.AmbientText)
+            && this.config.EnableDialogueFollowUps)
         {
             this.feedback.QueueAmbientRemark(npc, message.AmbientText, message.AmbientDelayMinutes);
+        }
+
+        foreach (string feedbackMessage in message.FeedbackMessages ?? new List<string>())
+        {
+            if (!string.IsNullOrWhiteSpace(feedbackMessage))
+            {
+                this.feedback.ShowAfterDialogue(feedbackMessage);
+            }
         }
 
         if (this.config.Debug)
@@ -382,10 +601,70 @@ internal sealed class MultiplayerSyncService
             return;
         }
 
+        if (!string.IsNullOrWhiteSpace(message.ReportId))
+        {
+            var key = (toPlayerId, message.ReportId);
+            this.pendingRemoteExchangeIds.Remove(key);
+            this.completedRemoteExchangeAcks[key] = message;
+        }
+
         this.bus.Send(
             message,
             SyncProtocol.TypeExchangeAck,
             new[] { toPlayerId });
+    }
+
+    private void ApplyLocalPlayerGrants(
+        string npcName,
+        int friendshipDelta,
+        int moneyGrant,
+        IReadOnlyList<ItemGrant>? itemGrants)
+    {
+        if (Game1.player == null)
+        {
+            return;
+        }
+
+        NPC? npc = Game1.getCharacterFromName(npcName);
+        if (npc != null && friendshipDelta > 0)
+        {
+            Game1.player.changeFriendship(friendshipDelta, npc);
+        }
+
+        if (moneyGrant > 0)
+        {
+            Game1.player.Money += moneyGrant;
+        }
+
+        foreach (ItemGrant grant in itemGrants ?? Array.Empty<ItemGrant>())
+        {
+            if (string.IsNullOrWhiteSpace(grant.ItemId))
+            {
+                continue;
+            }
+
+            try
+            {
+                StardewValley.Object item = ItemRegistry.Create<StardewValley.Object>(grant.ItemId);
+                item.Stack = Math.Max(1, grant.Stack);
+                item.Quality = Math.Max(0, grant.Quality);
+                if (!Game1.player.addItemToInventoryBool(item))
+                {
+                    Game1.player.addItemByMenuIfNecessary(item);
+                }
+
+                if (!string.IsNullOrWhiteSpace(grant.HudMessage))
+                {
+                    this.feedback.ShowAfterDialogue(grant.HudMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                this.monitor.Log(
+                    $"Ignored invalid multiplayer item grant '{grant.ItemId}': {ex.Message}",
+                    LogLevel.Trace);
+            }
+        }
     }
 
     /// <summary>主机在任一交换入账后只刷新该 NPC 的关系视图。</summary>
@@ -444,6 +723,47 @@ internal sealed class MultiplayerSyncService
         {
             this.bus.Send(new RelationshipViewsClearedMessage(), SyncProtocol.TypeRelationshipViewsCleared, targets);
         }
+    }
+
+    public void SendQuestProjection(long toPlayerId)
+    {
+        if (!this.runtime.IsMultiplayer
+            || !this.runtime.IsMainPlayer
+            || !this.SyncEnabled
+            || !this.compatiblePeerIds.Contains(toPlayerId))
+        {
+            return;
+        }
+
+        QuestProjectionMessage message = this.QuestProjectionProvider?.Invoke(toPlayerId)
+            ?? new QuestProjectionMessage();
+        this.bus.Send(message, SyncProtocol.TypeQuestProjection, new[] { toPlayerId });
+    }
+
+    public void BroadcastQuestProjections()
+    {
+        if (!this.runtime.IsMultiplayer || !this.runtime.IsMainPlayer || !this.SyncEnabled)
+        {
+            return;
+        }
+
+        foreach (long playerId in this.GetRemotePeerIdsWithMod())
+        {
+            this.SendQuestProjection(playerId);
+        }
+    }
+
+    public void SendItemDeliveryResult(long toPlayerId, ItemDeliveryResultMessage message)
+    {
+        if (!this.runtime.IsMultiplayer
+            || !this.runtime.IsMainPlayer
+            || !this.SyncEnabled
+            || !this.compatiblePeerIds.Contains(toPlayerId))
+        {
+            return;
+        }
+
+        this.bus.Send(message, SyncProtocol.TypeItemDeliveryResult, new[] { toPlayerId });
     }
 
     private void SendInitialRelationshipViewsToPeer(long playerId)
@@ -545,6 +865,42 @@ internal sealed class MultiplayerSyncService
         }
     }
 
+    private void RetryPendingQuestRewardClaims()
+    {
+        long? hostId = this.TryGetHostPlayerId();
+        if (!this.UseHostAuthority || hostId == null || this.pendingQuestRewardClaimIds.Count == 0)
+        {
+            return;
+        }
+
+        foreach (string questLogId in this.pendingQuestRewardClaimIds.ToList())
+        {
+            if (this.TrySendQuestRewardClaimedCore(questLogId, hostId.Value))
+            {
+                this.pendingQuestRewardClaimIds.Remove(questLogId);
+            }
+        }
+    }
+
+    private bool TrySendQuestRewardClaimedCore(string questLogId, long hostPlayerId)
+    {
+        try
+        {
+            this.bus.Send(
+                new QuestRewardClaimedMessage { QuestLogId = questLogId },
+                SyncProtocol.TypeQuestRewardClaimed,
+                new[] { hostPlayerId });
+            return true;
+        }
+        catch (Exception ex)
+        {
+            this.monitor.Log(
+                $"Queued multiplayer quest reward claim '{questLogId}' for retry: {ex.GetType().Name}",
+                LogLevel.Trace);
+            return false;
+        }
+    }
+
     private void DiscardPendingExchangeReports(string reason)
     {
         int count = this.pendingExchangeReports.Count;
@@ -617,6 +973,7 @@ internal sealed class MultiplayerSyncService
 
         this.compatiblePeerIds.Add(playerId);
         this.SendInitialRelationshipViewsToPeer(playerId);
+        this.SendQuestProjection(playerId);
     }
 
     private bool TryRead<TMessage>(ReceivedModMessage received, out TMessage message)

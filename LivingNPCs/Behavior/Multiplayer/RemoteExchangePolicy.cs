@@ -23,19 +23,21 @@ internal enum FarmhandBookAction
 }
 
 /// <summary>
-/// 远程交换入账的纯策略（单测覆盖）。v1 裁决：farmhand 的交换只入"心智账本"
-/// （记忆/偏好/冲突/情绪/行为倾向/好感增量），世界动作（出游/送礼/送钱/节日互动）与
-/// 求助请求全部剥除——它们的执行副作用（NPC 寻路、物品与金钱、任务栏）属于主机玩家
-/// 自己的会话；主机收到 farmhand 的这类请求直接丢弃并记 Trace。
+/// 远程交换入账的纯策略（单测覆盖）。v1 只允许 farmhand 请求由主机权威裁决的礼物、
+/// 金钱与物品型求助；出游、节日互动和未知世界动作在进入既有 RecordExchange 管道前
+/// 剥除并交给调用方记 Trace。其余心智字段与求助字段保持原样，继续由现有解析器、
+/// 白名单和上限规则做最终裁决。
 /// </summary>
 internal static class RemoteExchangePolicy
 {
-    /// <summary>剥除的顶层字段（大小写不敏感，与 ValleyTalkExchangeParser 的读取口径一致）。</summary>
-    private static readonly string[] StrippedFields = { "actions", "helpRequests", "helpRequestUpdates" };
+    private static readonly IReadOnlySet<string> AllowedRemoteWorldActions = new HashSet<string>(
+        new[] { "give_small_gift", "give_meaningful_gift", "give_money" },
+        StringComparer.Ordinal);
 
     /// <summary>
-    /// 从分析 JSON 中剥掉世界动作与求助字段，返回净化后的 JSON 与被丢弃的动作类型清单
-    /// （供主机 Trace 记录，出游即在其中）。JSON 无效或非对象时原样返回（解析器自会兜底）。
+    /// 仅保留主机允许 farmhand 发起的礼物/金钱动作，返回净化后的 JSON 与被丢弃的原始
+    /// 动作类型清单（供主机 Trace 记录）。helpRequests/helpRequestUpdates 与所有心智字段
+    /// 不在这里改写；JSON 无效或非对象时原样返回（解析器自会安全兜底）。
     /// </summary>
     public static string SanitizeAnalysisJson(string analysisJson, out List<string> droppedActionTypes)
     {
@@ -61,43 +63,65 @@ internal static class RemoteExchangePolicy
         }
 
         bool changed = false;
-        foreach (string field in StrippedFields)
+        // JSON 属性名大小写敏感，但下游反序列化大小写不敏感；若恶意/畸形负载同时给出
+        // actions/Actions，也必须逐个净化，不能只处理第一项让另一项绕过策略。
+        foreach (string actualKey in root
+                     .Select(pair => pair.Key)
+                     .Where(key => string.Equals(key, "actions", StringComparison.OrdinalIgnoreCase))
+                     .ToList())
         {
-            string? actualKey = root
-                .Select(pair => pair.Key)
-                .FirstOrDefault(key => string.Equals(key, field, StringComparison.OrdinalIgnoreCase));
-            if (actualKey == null)
+            if (root[actualKey] is not JsonArray actions)
             {
+                root.Remove(actualKey);
+                changed = true;
                 continue;
             }
 
-            if (string.Equals(field, "actions", StringComparison.OrdinalIgnoreCase)
-                && root[actualKey] is JsonArray actions)
+            var rejectedIndexes = new List<int>();
+            for (int index = 0; index < actions.Count; index++)
             {
-                foreach (JsonNode? action in actions)
+                JsonNode? action = actions[index];
+                string rawType = string.Empty;
+                if (action is not JsonObject actionObject
+                    || !TryReadUnambiguousActionType(actionObject, out rawType)
+                    || !AllowedRemoteWorldActions.Contains(BehaviorValueNormalizer.NormalizeWorldActionType(rawType)))
                 {
-                    if (action is not JsonObject actionObject)
+                    rejectedIndexes.Add(index);
+                    if (!string.IsNullOrWhiteSpace(rawType))
                     {
-                        continue;
-                    }
-
-                    JsonNode? typeNode = actionObject
-                        .FirstOrDefault(pair => string.Equals(pair.Key, "type", StringComparison.OrdinalIgnoreCase))
-                        .Value;
-                    if (typeNode is JsonValue typeValue
-                        && typeValue.TryGetValue(out string? type)
-                        && !string.IsNullOrWhiteSpace(type))
-                    {
-                        droppedActionTypes.Add(type.Trim());
+                        droppedActionTypes.Add(rawType);
                     }
                 }
             }
 
-            root.Remove(actualKey);
-            changed = true;
+            for (int index = rejectedIndexes.Count - 1; index >= 0; index--)
+            {
+                actions.RemoveAt(rejectedIndexes[index]);
+            }
+
+            changed |= rejectedIndexes.Count > 0;
         }
 
         return changed ? root.ToJsonString() : analysisJson;
+    }
+
+    private static bool TryReadUnambiguousActionType(JsonObject action, out string rawType)
+    {
+        rawType = string.Empty;
+        List<JsonNode?> typeNodes = action
+            .Where(pair => string.Equals(pair.Key, "type", StringComparison.OrdinalIgnoreCase))
+            .Select(pair => pair.Value)
+            .ToList();
+        if (typeNodes.Count != 1
+            || typeNodes[0] is not JsonValue typeValue
+            || !typeValue.TryGetValue(out string? value)
+            || string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        rawType = value.Trim();
+        return true;
     }
 
     /// <summary>farmhand 开书决策：快照到达即开新；未超时继续等；超时按镜像有无降级。</summary>

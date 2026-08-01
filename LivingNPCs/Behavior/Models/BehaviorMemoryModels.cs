@@ -236,6 +236,9 @@ internal sealed class DialogueBehaviorInfluenceFact
 
 internal sealed class NpcHelpRequestFact
 {
+    /// <summary>-1 表示主机/旧存档；正值是被分配 farmhand 的 UniqueMultiplayerID。</summary>
+    public long AssignedPlayerId { get; set; } = -1;
+    public string AssignedPlayerName { get; set; } = string.Empty;
     public string NpcDisplayName { get; set; } = string.Empty;
     public string QuestLogId { get; set; } = string.Empty;
     public string Type { get; set; } = "item_request";

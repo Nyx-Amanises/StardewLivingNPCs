@@ -28,7 +28,8 @@ public sealed class MultiplayerProtocolTests
             {
                 SyncProtocol.TypeProtocolHello,
                 SyncProtocol.TypeProtocolHelloAck,
-                SyncProtocol.TypeRelationshipViewSetComplete
+                SyncProtocol.TypeRelationshipViewSetComplete,
+                SyncProtocol.TypeQuestProjection
             },
             network.Sent.Select(message => message.Type));
         Assert.All(
@@ -85,8 +86,17 @@ public sealed class MultiplayerProtocolTests
         service.BroadcastNpcRelationshipView("Emily");
         service.BroadcastRelationshipViewsCleared();
         bool exchangeSent = service.TrySendExchangeReport("Emily", "hello", "hi", "{}");
+        bool itemDeliverySent = service.TrySendItemDeliveryRequest(
+            "quest-1",
+            "Emily",
+            "(O)80",
+            "Quartz",
+            itemQuality: 0);
+        bool rewardClaimSent = service.TrySendQuestRewardClaimed("quest-1");
 
         Assert.False(exchangeSent);
+        Assert.False(itemDeliverySent);
+        Assert.False(rewardClaimSent);
         Assert.Empty(network.Sent);
     }
 
@@ -151,7 +161,8 @@ public sealed class MultiplayerProtocolTests
                 SyncProtocol.TypeProtocolHelloAck,
                 SyncProtocol.TypeNpcRelationshipView,
                 SyncProtocol.TypeNpcRelationshipView,
-                SyncProtocol.TypeRelationshipViewSetComplete
+                SyncProtocol.TypeRelationshipViewSetComplete,
+                SyncProtocol.TypeQuestProjection
             },
             network.Sent.Select(message => message.Type));
     }
@@ -213,6 +224,10 @@ public sealed class MultiplayerProtocolTests
             .ToArray();
 
         Assert.NotEmpty(messageTypes);
+        Assert.Contains(typeof(QuestProjectionMessage), messageTypes);
+        Assert.Contains(typeof(ItemDeliveryRequestMessage), messageTypes);
+        Assert.Contains(typeof(ItemDeliveryResultMessage), messageTypes);
+        Assert.Contains(typeof(QuestRewardClaimedMessage), messageTypes);
         foreach (Type messageType in messageTypes)
         {
             var message = Assert.IsAssignableFrom<ISyncMessage>(Activator.CreateInstance(messageType));
@@ -243,6 +258,7 @@ public sealed class MultiplayerProtocolTests
             monitor,
             config,
             relationshipViews ?? new NpcRelationshipViewStore(),
+            new HelpRequestQuestProjectionStore(),
             new BehaviorFeedbackService(config, monitor),
             ModId,
             notifyProtocolMismatch);

@@ -25,7 +25,7 @@ internal sealed class GiftOpportunityService
         this.random = random;
     }
 
-    public void TryPrepareDailyGiftOpportunity(NPC npc, LivingNpcState state)
+    public void TryPrepareDailyGiftOpportunity(NPC npc, LivingNpcState state, int friendshipHearts = -1)
     {
         if (!this.config.EnableAiWorldActions
             || !this.config.AllowAiSmallGifts
@@ -36,7 +36,10 @@ internal sealed class GiftOpportunityService
             return;
         }
 
-        if (WorldContext.For(npc).FriendshipHearts < GiftActionRules.MeaningfulGiftMinFriendshipHearts)
+        int resolvedFriendshipHearts = friendshipHearts >= 0
+            ? friendshipHearts
+            : WorldContext.For(npc).FriendshipHearts;
+        if (resolvedFriendshipHearts < GiftActionRules.MeaningfulGiftMinFriendshipHearts)
         {
             return;
         }
@@ -65,7 +68,7 @@ internal sealed class GiftOpportunityService
 
         state.DailyGiftOpportunityTotalDays = Game1.Date.TotalDays;
         state.DailyGiftOpportunityChancePercent = chance;
-        state.DailyGiftOpportunityReason = $"{npc.displayName} is at {WorldContext.For(npc).FriendshipHearts} hearts and may naturally offer a small everyday gift during this conversation";
+        state.DailyGiftOpportunityReason = $"{npc.displayName} is at {resolvedFriendshipHearts} hearts and may naturally offer a small everyday gift during this conversation";
     }
 
     /// <summary>
@@ -73,7 +76,7 @@ internal sealed class GiftOpportunityService
     /// feel inclined to ask the farmer for a small favor during this chat (mirrors the daily gift
     /// opportunity). The readiness gate (vanilla hearts/cooldown/active request) still applies.
     /// </summary>
-    public void TryPrepareDailyHelpRequestOpportunity(NPC npc, LivingNpcState state)
+    public void TryPrepareDailyHelpRequestOpportunity(NPC npc, LivingNpcState state, int friendshipHearts = -1)
     {
         if (!this.config.EnableHelpRequests
             || this.config.HelpRequestDailyOfferChancePercent <= 0
@@ -87,7 +90,7 @@ internal sealed class GiftOpportunityService
 
         var readiness = BehaviorMemory.EvaluateHelpRequestReadiness(
             state,
-            WorldContext.For(npc).FriendshipHearts,
+            friendshipHearts >= 0 ? friendshipHearts : WorldContext.For(npc).FriendshipHearts,
             this.config.MaxPendingHelpRequestsPerNpc,
             this.config.HelpRequestCooldownDays,
             Game1.Date.TotalDays
