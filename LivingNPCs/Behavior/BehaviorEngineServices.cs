@@ -39,6 +39,7 @@ internal sealed class BehaviorEngineServices
     public HelpRequestRuntime HelpRequests { get; }
     public DialogueBehaviorInfluenceRuntime DialogueBehaviorInfluences { get; }
     public Multiplayer.SmapiModMessageBus ModMessageBus { get; }
+    public Multiplayer.NpcRelationshipViewStore RelationshipViews { get; } = new();
     public Multiplayer.MultiplayerSyncService MultiplayerSync { get; }
 
     /// <summary>Engine-owned cleanup invoked after the debug command wipes behavior memory.</summary>
@@ -57,7 +58,7 @@ internal sealed class BehaviorEngineServices
             Multiplayer.GameMultiplayerRuntimeContext.Instance,
             monitor,
             config,
-            this.Memory,
+            this.RelationshipViews,
             this.Feedback,
             modUniqueId);
         this.CommunityRipples = new CommunityRippleRuntime(config, monitor, this.Memory, this.Random);
@@ -86,6 +87,7 @@ internal sealed class BehaviorEngineServices
             this.GiftSelector,
             this.MailService,
             npc => companionOutings?.BuildPromptContext(npc) ?? string.Empty,
+            this.RelationshipViews,
             () => this.MultiplayerSync.SuppressLocalOpportunities
         );
 

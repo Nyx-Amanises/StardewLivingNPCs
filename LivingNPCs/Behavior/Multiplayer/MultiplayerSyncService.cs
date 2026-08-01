@@ -9,14 +9,13 @@ namespace LivingNPCs.Behavior.Multiplayer;
 /// <summary>
 /// 多人同步运行时（v1 主机权威，见 <see cref="SyncProtocol"/>）。主机侧：接收 farmhand 的
 /// 交换上报（转交 <see cref="BehaviorEngine"/> 主线程队列入账）、回发入账确认、按 NPC 推送
-/// 心智视图、应答全量快照请求；farmhand 侧：上报交换、应用确认（好感/随境跟话）、维护
-/// 只读镜像、驱动记忆手册的"请求快照 → 异步开书 → 超时降级"流程。所有回调都由
+/// 关系视图；farmhand 侧：上报交换、应用确认（好感/随境跟话）、维护只读关系视图。
+/// 所有回调都由
 /// BehaviorEngine 的 SafeRun 包裹调用，事件均在主线程触发。
 /// 主机未装本 mod（或本开关关闭）时 farmhand 自动回退旧行为：本地临时入账、不上报。
 /// </summary>
 internal sealed class MultiplayerSyncService
 {
-    private const long BookSyncTimeoutMs = 5_000;
     private const long SnapshotSendThrottleMs = 1_000;
     private const int ExchangeRetryIntervalTicks = 60;
 
@@ -24,7 +23,7 @@ internal sealed class MultiplayerSyncService
     private readonly IMultiplayerRuntimeContext runtime;
     private readonly IMonitor monitor;
     private readonly ModConfig config;
-    private readonly BehaviorMemory memory;
+    private readonly NpcRelationshipViewStore relationshipViews;
     private readonly BehaviorFeedbackService feedback;
     private readonly string modUniqueId;
     private readonly Action<int, int> notifyProtocolMismatch;
@@ -32,12 +31,11 @@ internal sealed class MultiplayerSyncService
     /// <summary>主机侧收到交换上报后的入账入口（engine 晚绑定：入队主线程统一消费）。</summary>
     public Action<long, ExchangeReportMessage>? RemoteExchangeReceived { get; set; }
 
-    /// <summary>farmhand 快照到位后从镜像开书（engine 晚绑定）。</summary>
-    public Action? OpenBookFromMirror { get; set; }
+    /// <summary>主机侧按 NPC 装配只读关系视图（engine 晚绑定，始终在主线程调用）。</summary>
+    public Func<string, NpcRelationshipViewMessage?>? RelationshipViewProvider { get; set; }
 
-    private bool bookRequestPending;
-    private long bookRequestDeadlineTicks;
-    private bool bookSnapshotArrived;
+    /// <summary>主机侧列出关系视图的权威 NPC 名单（engine 晚绑定）。</summary>
+    public Func<IReadOnlyList<string>>? RelationshipNpcNamesProvider { get; set; }
 
     private readonly Dictionary<long, long> lastSnapshotSentTicksByPeer = new();
     private readonly HashSet<long> compatiblePeerIds = new();
@@ -52,7 +50,7 @@ internal sealed class MultiplayerSyncService
         IMultiplayerRuntimeContext runtime,
         IMonitor monitor,
         ModConfig config,
-        BehaviorMemory memory,
+        NpcRelationshipViewStore relationshipViews,
         BehaviorFeedbackService feedback,
         string modUniqueId,
         Action<int, int>? notifyProtocolMismatch = null)
@@ -61,7 +59,7 @@ internal sealed class MultiplayerSyncService
         this.runtime = runtime;
         this.monitor = monitor;
         this.config = config;
-        this.memory = memory;
+        this.relationshipViews = relationshipViews;
         this.feedback = feedback;
         this.modUniqueId = modUniqueId;
         this.notifyProtocolMismatch = notifyProtocolMismatch
@@ -94,7 +92,7 @@ internal sealed class MultiplayerSyncService
 
     /// <summary>
     /// farmhand 是否处于主机权威模式：远程帮工 + 两端开关 + 主机装了本 mod。
-    /// 为真时交换上报主机、镜像只读、机会注入抑制；为假时回退旧的本地临时行为。
+    /// 为真时交换上报主机、关系视图只读、机会注入抑制；为假时回退旧的本地临时行为。
     /// </summary>
     public bool UseHostAuthority => this.SyncEnabled
         && this.runtime.IsMultiplayer
@@ -181,48 +179,31 @@ internal sealed class MultiplayerSyncService
                 return;
             }
 
-            case SyncProtocol.TypeNpcView:
+            case SyncProtocol.TypeNpcRelationshipView:
             {
                 if (this.runtime.IsMainPlayer || !this.IsFromHost(e.FromPlayerId) || !this.UseHostAuthority)
                 {
                     return;
                 }
 
-                if (!this.TryRead(e, out NpcMindViewMessage message)
+                if (!this.TryRead(e, out NpcRelationshipViewMessage message)
                     || !this.CheckVersion(message.SchemaVersion, e.Type))
                 {
                     return;
                 }
 
-                this.memory.ImportNpcView(message, this.config.MaxMemoryEntriesPerNpc);
+                this.relationshipViews.Apply(message);
                 return;
             }
 
-            case SyncProtocol.TypeSnapshotRequest:
-            {
-                if (!this.runtime.IsMainPlayer || !this.compatiblePeerIds.Contains(e.FromPlayerId))
-                {
-                    return;
-                }
-
-                if (!this.TryRead(e, out SnapshotRequestMessage message)
-                    || !this.CheckVersion(message.SchemaVersion, e.Type))
-                {
-                    return;
-                }
-
-                this.SendFullSnapshotToPeer(e.FromPlayerId);
-                return;
-            }
-
-            case SyncProtocol.TypeSnapshotComplete:
+            case SyncProtocol.TypeRelationshipViewSetComplete:
             {
                 if (this.runtime.IsMainPlayer || !this.IsFromHost(e.FromPlayerId) || !this.UseHostAuthority)
                 {
                     return;
                 }
 
-                if (!this.TryRead(e, out SnapshotCompleteMessage message)
+                if (!this.TryRead(e, out RelationshipViewSetCompleteMessage message)
                     || !this.CheckVersion(message.SchemaVersion, e.Type))
                 {
                     return;
@@ -231,8 +212,7 @@ internal sealed class MultiplayerSyncService
                 var keep = new HashSet<string>(
                     message.NpcNames ?? new List<string>(),
                     StringComparer.OrdinalIgnoreCase);
-                this.memory.RetainOnlyNpcs(keep);
-                this.bookSnapshotArrived = true;
+                this.relationshipViews.RetainOnly(keep);
                 if (this.config.Debug)
                 {
                     this.monitor.Log(
@@ -240,6 +220,23 @@ internal sealed class MultiplayerSyncService
                         LogLevel.Debug);
                 }
 
+                return;
+            }
+
+            case SyncProtocol.TypeRelationshipViewsCleared:
+            {
+                if (this.runtime.IsMainPlayer || !this.IsFromHost(e.FromPlayerId) || !this.UseHostAuthority)
+                {
+                    return;
+                }
+
+                if (!this.TryRead(e, out RelationshipViewsClearedMessage message)
+                    || !this.CheckVersion(message.SchemaVersion, e.Type))
+                {
+                    return;
+                }
+
+                this.relationshipViews.Clear();
                 return;
             }
         }
@@ -270,62 +267,26 @@ internal sealed class MultiplayerSyncService
         }
     }
 
-    /// <summary>读档后：farmhand 主动请求一次全量快照（与主机 PeerConnected 推送互为兜底）。</summary>
+    /// <summary>读档后清理主机的加入快照节流；关系视图只在握手加入时发送全量。</summary>
     public void OnSaveLoaded()
     {
-        this.ResetBookRequest();
         this.lastSnapshotSentTicksByPeer.Clear();
-        if (this.UseHostAuthority)
-        {
-            this.SendToHost(new SnapshotRequestMessage { Reason = "resync" }, SyncProtocol.TypeSnapshotRequest);
-        }
     }
 
     public void OnReturnedToTitle()
     {
         this.DiscardPendingExchangeReports("returned to title");
-        this.ResetBookRequest();
         this.lastSnapshotSentTicksByPeer.Clear();
         this.compatiblePeerIds.Clear();
+        this.relationshipViews.Clear();
         this.handshakeState = ProtocolHandshakeState.AwaitingHost;
         this.protocolMismatchNotified = false;
         this.loggedIncompatibleVersion = false;
     }
 
-    /// <summary>farmhand 开书流程的超时/到位巡查（BehaviorEngine 的 UpdateTicked 驱动）。</summary>
     public void OnUpdateTicked()
     {
         this.RetryPendingExchangeReports();
-        if (!this.bookRequestPending)
-        {
-            return;
-        }
-
-        FarmhandBookAction action = RemoteExchangePolicy.PlanBookOpen(
-            this.bookSnapshotArrived,
-            Environment.TickCount64 >= this.bookRequestDeadlineTicks,
-            this.memory.GetTrackedStates().Any());
-        switch (action)
-        {
-            case FarmhandBookAction.Wait:
-                return;
-
-            case FarmhandBookAction.OpenFresh:
-                this.ResetBookRequest();
-                this.OpenBookFromMirror?.Invoke();
-                return;
-
-            case FarmhandBookAction.OpenStaleWithNotice:
-                this.ResetBookRequest();
-                this.feedback.Show(I18n.Get("book.hud.syncStale"));
-                this.OpenBookFromMirror?.Invoke();
-                return;
-
-            default:
-                this.ResetBookRequest();
-                this.feedback.Show(I18n.Get("book.hud.syncTimeout"));
-                return;
-        }
     }
 
     // ---- farmhand 侧动作 ----
@@ -376,28 +337,10 @@ internal sealed class MultiplayerSyncService
         this.DiscardPendingExchangeReports("saving");
     }
 
-    /// <summary>
-    /// farmhand 记忆手册入口：主机权威下改为"请求快照 → 异步开书"。返回 true 表示已接管
-    /// （由 OnUpdateTicked 在快照到位或超时后开书）；false 表示走本地直开。
-    /// </summary>
+    /// <summary>P5 将在独立 BookSnapshot 协议上接管；关系视图不会冒充手册请求。</summary>
     public bool TryBeginRemoteBookOpen()
     {
-        if (!this.UseHostAuthority)
-        {
-            return false;
-        }
-
-        if (this.bookRequestPending)
-        {
-            return true;
-        }
-
-        this.bookRequestPending = true;
-        this.bookSnapshotArrived = false;
-        this.bookRequestDeadlineTicks = Environment.TickCount64 + BookSyncTimeoutMs;
-        this.SendToHost(new SnapshotRequestMessage { Reason = "book" }, SyncProtocol.TypeSnapshotRequest);
-        this.feedback.Show(I18n.Get("book.hud.syncing"));
-        return true;
+        return false;
     }
 
     private void ApplyExchangeAck(ExchangeAckMessage message)
@@ -445,8 +388,8 @@ internal sealed class MultiplayerSyncService
             new[] { toPlayerId });
     }
 
-    /// <summary>主机在任一交换入账后刷新该 NPC 的镜像（无远程对端时零开销）。</summary>
-    public void BroadcastNpcView(string npcName)
+    /// <summary>主机在任一交换入账后只刷新该 NPC 的关系视图。</summary>
+    public void BroadcastNpcRelationshipView(string npcName)
     {
         if (!this.runtime.IsMultiplayer || !this.runtime.IsMainPlayer || !this.SyncEnabled)
         {
@@ -459,17 +402,17 @@ internal sealed class MultiplayerSyncService
             return;
         }
 
-        NpcMindViewMessage? view = this.memory.ExportNpcView(npcName);
+        NpcRelationshipViewMessage? view = this.RelationshipViewProvider?.Invoke(npcName);
         if (view == null)
         {
             return;
         }
 
-        this.bus.Send(view, SyncProtocol.TypeNpcView, targets);
+        this.bus.Send(view, SyncProtocol.TypeNpcRelationshipView, targets);
     }
 
-    /// <summary>主机全量广播（日开始账本结算后 / 手动清记忆后）。</summary>
-    public void BroadcastFullSnapshot()
+    /// <summary>日开始时逐 NPC 推送刷新；不发送全量完成标记，也不修剪 farmhand 缓存。</summary>
+    public void BroadcastAllNpcRelationshipViews()
     {
         if (!this.runtime.IsMultiplayer || !this.runtime.IsMainPlayer || !this.SyncEnabled)
         {
@@ -482,10 +425,28 @@ internal sealed class MultiplayerSyncService
             return;
         }
 
-        this.SendFullSnapshotCore(targets);
+        foreach (NpcRelationshipViewMessage view in this.BuildAllRelationshipViews())
+        {
+            this.bus.Send(view, SyncProtocol.TypeNpcRelationshipView, targets);
+        }
     }
 
-    private void SendFullSnapshotToPeer(long playerId)
+    /// <summary>主机手动清空账本时通知 farmhand 清空只读缓存。</summary>
+    public void BroadcastRelationshipViewsCleared()
+    {
+        if (!this.runtime.IsMultiplayer || !this.runtime.IsMainPlayer || !this.SyncEnabled)
+        {
+            return;
+        }
+
+        long[] targets = this.GetRemotePeerIdsWithMod();
+        if (targets.Length > 0)
+        {
+            this.bus.Send(new RelationshipViewsClearedMessage(), SyncProtocol.TypeRelationshipViewsCleared, targets);
+        }
+    }
+
+    private void SendInitialRelationshipViewsToPeer(long playerId)
     {
         long now = Environment.TickCount64;
         if (this.lastSnapshotSentTicksByPeer.TryGetValue(playerId, out long last)
@@ -495,20 +456,20 @@ internal sealed class MultiplayerSyncService
         }
 
         this.lastSnapshotSentTicksByPeer[playerId] = now;
-        this.SendFullSnapshotCore(new[] { playerId });
+        this.SendInitialRelationshipViewsCore(new[] { playerId });
     }
 
-    private void SendFullSnapshotCore(long[] targets)
+    private void SendInitialRelationshipViewsCore(long[] targets)
     {
-        List<NpcMindViewMessage> views = this.memory.ExportAllNpcViews();
-        foreach (NpcMindViewMessage view in views)
+        List<NpcRelationshipViewMessage> views = this.BuildAllRelationshipViews();
+        foreach (NpcRelationshipViewMessage view in views)
         {
-            this.bus.Send(view, SyncProtocol.TypeNpcView, targets);
+            this.bus.Send(view, SyncProtocol.TypeNpcRelationshipView, targets);
         }
 
         this.bus.Send(
-            new SnapshotCompleteMessage { NpcNames = views.Select(view => view.NpcName).ToList() },
-            SyncProtocol.TypeSnapshotComplete,
+            new RelationshipViewSetCompleteMessage { NpcNames = views.Select(view => view.NpcName).ToList() },
+            SyncProtocol.TypeRelationshipViewSetComplete,
             targets);
         if (this.config.Debug)
         {
@@ -516,6 +477,17 @@ internal sealed class MultiplayerSyncService
                 I18n.Get("log.mp.snapshotSent", new { count = views.Count, player = string.Join(",", targets) }),
                 LogLevel.Debug);
         }
+    }
+
+    private List<NpcRelationshipViewMessage> BuildAllRelationshipViews()
+    {
+        IReadOnlyList<string> npcNames = this.RelationshipNpcNamesProvider?.Invoke()
+            ?? Array.Empty<string>();
+        return npcNames
+            .Select(npcName => this.RelationshipViewProvider?.Invoke(npcName))
+            .Where(view => view != null)
+            .Select(view => view!)
+            .ToList();
     }
 
     // ---- 杂项 ----
@@ -644,7 +616,7 @@ internal sealed class MultiplayerSyncService
         }
 
         this.compatiblePeerIds.Add(playerId);
-        this.SendFullSnapshotToPeer(playerId);
+        this.SendInitialRelationshipViewsToPeer(playerId);
     }
 
     private bool TryRead<TMessage>(ReceivedModMessage received, out TMessage message)
@@ -665,17 +637,6 @@ internal sealed class MultiplayerSyncService
                 LogLevel.Warn);
             return false;
         }
-    }
-
-    private void SendToHost(SnapshotRequestMessage message, string type)
-    {
-        long? hostId = this.TryGetHostPlayerId();
-        if (!this.runtime.IsMultiplayer || hostId == null)
-        {
-            return;
-        }
-
-        this.bus.Send(message, type, new[] { hostId.Value });
     }
 
     private long? TryGetHostPlayerId()
@@ -727,10 +688,4 @@ internal sealed class MultiplayerSyncService
         return false;
     }
 
-    private void ResetBookRequest()
-    {
-        this.bookRequestPending = false;
-        this.bookSnapshotArrived = false;
-        this.bookRequestDeadlineTicks = 0;
-    }
 }

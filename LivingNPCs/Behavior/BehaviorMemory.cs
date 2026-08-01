@@ -345,105 +345,13 @@ internal sealed class BehaviorMemory
         );
     }
 
-    // ---- 多人心智视图（v1 主机权威；见 Multiplayer/SyncProtocol.cs） ----
-
-    /// <summary>导出单个 NPC 的心智视图（状态克隆 + 近期行为记忆副本）；无任何数据时返回 null。</summary>
-    public Multiplayer.NpcMindViewMessage? ExportNpcView(string npcName)
-    {
-        if (string.IsNullOrWhiteSpace(npcName))
-        {
-            return null;
-        }
-
-        bool hasState = this.statesByNpc.TryGetValue(npcName, out LivingNpcState? state);
-        bool hasEntries = this.entriesByNpc.TryGetValue(npcName, out List<BehaviorMemoryEntry>? entries);
-        if (!hasState && !hasEntries)
-        {
-            return null;
-        }
-
-        return new Multiplayer.NpcMindViewMessage
-        {
-            NpcName = npcName,
-            State = hasState ? state!.Clone() : null,
-            Entries = hasEntries ? entries!.ToList() : new List<BehaviorMemoryEntry>()
-        };
-    }
-
-    public List<Multiplayer.NpcMindViewMessage> ExportAllNpcViews()
+    /// <summary>主机关系视图发布时使用的权威 NPC 名单。</summary>
+    public IReadOnlyList<string> GetTrackedNpcNames()
     {
         return this.statesByNpc.Keys
             .Concat(this.entriesByNpc.Keys)
             .Distinct(System.StringComparer.OrdinalIgnoreCase)
-            .Select(this.ExportNpcView)
-            .Where(view => view != null)
-            .Select(view => view!)
             .ToList();
-    }
-
-    /// <summary>
-    /// farmhand 侧：用主机推来的视图整体替换该 NPC 的镜像。入档归一化与 Load 一致
-    /// （Clamp / 求助修复 / 昵称恢复 / 条目排序截断）；State 为空时清掉旧镜像状态。
-    /// </summary>
-    /// <param name="stateNormalizerOverride">
-    /// 测试缝：Clamp 依赖 Game1（进行中日期），无游戏环境的单测注入 no-op；生产不传。
-    /// </param>
-    public void ImportNpcView(
-        Multiplayer.NpcMindViewMessage? view,
-        int maxEntriesPerNpc,
-        System.Action<LivingNpcState>? stateNormalizerOverride = null)
-    {
-        if (view == null || string.IsNullOrWhiteSpace(view.NpcName))
-        {
-            return;
-        }
-
-        if (view.State != null && !string.IsNullOrWhiteSpace(view.State.NpcName))
-        {
-            LivingNpcState state = view.State;
-            (stateNormalizerOverride ?? this.NormalizeImportedState)(state);
-            this.statesByNpc[view.NpcName] = state;
-        }
-        else
-        {
-            this.statesByNpc.Remove(view.NpcName);
-        }
-
-        var entries = (view.Entries ?? new List<BehaviorMemoryEntry>())
-            .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.NpcName))
-            .OrderBy(entry => entry.TotalDays)
-            .ThenBy(entry => entry.TimeOfDay)
-            .TakeLast(System.Math.Max(0, maxEntriesPerNpc))
-            .ToList();
-        if (entries.Count > 0)
-        {
-            this.entriesByNpc[view.NpcName] = entries;
-        }
-        else
-        {
-            this.entriesByNpc.Remove(view.NpcName);
-        }
-    }
-
-    private void NormalizeImportedState(LivingNpcState state)
-    {
-        state.Clamp();
-        this.HelpRequests.NormalizeLoadedRequests(state);
-        NicknamePreferenceService.RecoverStateFromStoredMemories(state);
-    }
-
-    /// <summary>farmhand 侧：全量快照收尾时按主机名单修剪镜像（清掉主机已不存在的 NPC）。</summary>
-    public void RetainOnlyNpcs(IReadOnlySet<string> npcNames)
-    {
-        foreach (string key in this.statesByNpc.Keys.Where(key => !npcNames.Contains(key)).ToList())
-        {
-            this.statesByNpc.Remove(key);
-        }
-
-        foreach (string key in this.entriesByNpc.Keys.Where(key => !npcNames.Contains(key)).ToList())
-        {
-            this.entriesByNpc.Remove(key);
-        }
     }
 
     public LivingNpcState UpdateStateForBehavior(NPC npc, BehaviorIntent intent, string source)
@@ -615,7 +523,8 @@ internal sealed class BehaviorMemory
         int maxEntries,
         bool includeState,
         int maxPendingHelpRequestsPerNpc,
-        int helpRequestCooldownDays)
+        int helpRequestCooldownDays,
+        bool markRecalled = true)
     {
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
         var disposition = NpcDisposition.For(npc);
@@ -652,8 +561,11 @@ internal sealed class BehaviorMemory
             Game1.Date.TotalDays,
             Game1.timeOfDay
         );
-        this.MarkMemoriesRecalled(recallPlan);
-        this.MarkCommunityImpressionsRecalled(communityImpressions);
+        if (markRecalled)
+        {
+            this.MarkMemoriesRecalled(recallPlan);
+            this.MarkCommunityImpressionsRecalled(communityImpressions);
+        }
 
         return prompt;
     }

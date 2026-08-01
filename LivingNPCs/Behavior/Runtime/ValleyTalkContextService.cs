@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using LivingNPCs.Behavior.Multiplayer;
 using StardewModdingAPI;
 using StardewValley;
 
@@ -23,6 +24,7 @@ internal sealed class ValleyTalkContextService
     private readonly GiftSelector giftSelector;
     private readonly BehaviorMailService mailService;
     private readonly Func<NPC, string> buildCompanionOutingContext;
+    private readonly NpcRelationshipViewStore relationshipViews;
     private readonly Func<bool>? suppressOpportunitySections;
 
     /// <summary>Per-NPC one-shot immediate cues; consumed by the next BuildPromptContext.</summary>
@@ -35,6 +37,7 @@ internal sealed class ValleyTalkContextService
         GiftSelector giftSelector,
         BehaviorMailService mailService,
         Func<NPC, string> buildCompanionOutingContext,
+        NpcRelationshipViewStore relationshipViews,
         Func<bool>? suppressOpportunitySections = null)
     {
         this.monitor = monitor;
@@ -43,6 +46,7 @@ internal sealed class ValleyTalkContextService
         this.giftSelector = giftSelector;
         this.mailService = mailService;
         this.buildCompanionOutingContext = buildCompanionOutingContext;
+        this.relationshipViews = relationshipViews;
         this.suppressOpportunitySections = suppressOpportunitySections;
     }
 
@@ -84,13 +88,16 @@ internal sealed class ValleyTalkContextService
             return string.Empty;
         }
 
-        string promptContext = this.memory.BuildPromptContext(
-            npc,
-            this.config.PromptMemoryEntries,
-            this.config.EnableNpcState,
-            this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
-            this.config.HelpRequestCooldownDays
-        );
+        string promptContext = ResolveBasePromptContext(
+            this.SuppressOpportunitySections,
+            npc.Name,
+            this.relationshipViews,
+            () => this.BuildRelationshipSummary(npc, markRecalled: true),
+            out bool hasAuthoritativeContext);
+        if (this.SuppressOpportunitySections && !hasAuthoritativeContext)
+        {
+            return string.Empty;
+        }
         string giftOpportunityContext = this.BuildGiftOpportunityPromptContext(npc);
         if (!string.IsNullOrWhiteSpace(giftOpportunityContext))
         {
@@ -122,18 +129,55 @@ internal sealed class ValleyTalkContextService
         return RsvAiPolicy.RemoveBlockedLines(promptContext);
     }
 
+    internal static string ResolveBasePromptContext(
+        bool useHostRelationshipView,
+        string npcName,
+        NpcRelationshipViewStore relationshipViews,
+        Func<string> buildLocalContext,
+        out bool hasAuthoritativeContext)
+    {
+        if (!useHostRelationshipView)
+        {
+            hasAuthoritativeContext = true;
+            return buildLocalContext();
+        }
+
+        hasAuthoritativeContext = relationshipViews.TryGetBehaviorContext(npcName, out string context);
+        return hasAuthoritativeContext ? context : string.Empty;
+    }
+
+    /// <summary>
+    /// Builds the host-owned continuity summary stored in a relationship view. Publishing a view is
+    /// observational, so it must not consume recall counters that should advance only for dialogue.
+    /// </summary>
+    public string BuildRelationshipSummary(NPC npc)
+    {
+        return this.BuildRelationshipSummary(npc, markRecalled: false);
+    }
+
+    private string BuildRelationshipSummary(NPC npc, bool markRecalled)
+    {
+        return this.memory.BuildPromptContext(
+            npc,
+            this.config.PromptMemoryEntries,
+            this.config.EnableNpcState,
+            this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
+            this.config.HelpRequestCooldownDays,
+            markRecalled
+        );
+    }
+
     private string BuildGiftOpportunityPromptContext(NPC npc)
     {
+        if (this.SuppressOpportunitySections)
+        {
+            return PromptFragments.GiftOpportunity.NoOpportunitySection();
+        }
+
         var state = this.memory.GetState(npc);
         if (state == null)
         {
             return string.Empty;
-        }
-
-        if (this.SuppressOpportunitySections)
-        {
-            // 镜像里可能带着主机滚出的当日礼物机会；对 farmhand 明确声明"今天不送"。
-            return PromptFragments.GiftOpportunity.NoOpportunitySection();
         }
 
         if (!this.config.EnableAiWorldActions
@@ -187,6 +231,11 @@ internal sealed class ValleyTalkContextService
     /// </summary>
     public string BuildGiftResponseContext(NPC npc, string giftItemId, string giftName, int taste)
     {
+        if (this.SuppressOpportunitySections)
+        {
+            return string.Empty;
+        }
+
         var labels = GiftMemoryDetailsFactory.DescribeTaste(taste);
         var gift = new GiftMemoryDetails(
             giftItemId ?? string.Empty,
@@ -198,12 +247,7 @@ internal sealed class ValleyTalkContextService
         );
         LivingNpcState state = this.memory.GetOrCreateState(npc);
 
-        // 主机权威下的 farmhand：镜像里的待办求助/待发回礼邮件都属于主机玩家的账本——
-        // farmhand 的这次送礼在求助系统里什么都没推进（交付拦截也已禁用），邮件也只会
-        // 寄给主机。按普通礼物回应，不注入上交/回礼暗示。
-        var matchingHelpRequests = this.SuppressOpportunitySections
-            ? new List<NpcHelpRequestFact>()
-            : FindMatchingItemHelpRequestGiftContexts(state, gift).ToList();
+        var matchingHelpRequests = FindMatchingItemHelpRequestGiftContexts(state, gift).ToList();
         if (matchingHelpRequests.Count > 0)
         {
             return BuildHelpRequestGiftResponsePrompt(npc, gift, matchingHelpRequests);
@@ -216,9 +260,8 @@ internal sealed class ValleyTalkContextService
 
         // Read-only: the reciprocal-gift roll happens once, in ConversationStartRecorder, after the
         // gift is confirmed accepted. Rolling here too would stack a second chance per gift.
-        bool hasResponseMail = !this.SuppressOpportunitySections
-            && (this.mailService.HasPendingGiftMail(state, "reciprocal")
-                || this.mailService.HasPendingGiftMail(state, "birthday"));
+        bool hasResponseMail = this.mailService.HasPendingGiftMail(state, "reciprocal")
+            || this.mailService.HasPendingGiftMail(state, "birthday");
         return hasResponseMail
             ? BuildGiftResponseMailPrompt(npc, gift)
             : string.Empty;

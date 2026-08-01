@@ -28,7 +28,7 @@ public sealed class MultiplayerProtocolTests
             {
                 SyncProtocol.TypeProtocolHello,
                 SyncProtocol.TypeProtocolHelloAck,
-                SyncProtocol.TypeSnapshotComplete
+                SyncProtocol.TypeRelationshipViewSetComplete
             },
             network.Sent.Select(message => message.Type));
         Assert.All(
@@ -81,7 +81,9 @@ public sealed class MultiplayerProtocolTests
 
         service.OnPeerConnected(new ModMessagePeer(2, IsHost: false, IsSplitScreen: false, HasMod: true));
         service.OnSaveLoaded();
-        service.BroadcastFullSnapshot();
+        service.BroadcastAllNpcRelationshipViews();
+        service.BroadcastNpcRelationshipView("Emily");
+        service.BroadcastRelationshipViewsCleared();
         bool exchangeSent = service.TrySendExchangeReport("Emily", "hello", "hi", "{}");
 
         Assert.False(exchangeSent);
@@ -94,27 +96,112 @@ public sealed class MultiplayerProtocolTests
         var network = new InMemoryModMessageNetwork();
         InMemoryModMessageBus hostBus = network.AddEndpoint(1, isHost: true);
         InMemoryModMessageBus farmhandBus = network.AddEndpoint(2, isHost: false);
-        BehaviorMemory farmhandMemory = new();
+        var relationshipViews = new NpcRelationshipViewStore();
         MultiplayerSyncService farmhand = CreateService(
             farmhandBus,
             isMainPlayer: false,
             hostPlayerId: 1,
-            memory: farmhandMemory);
+            relationshipViews: relationshipViews);
         hostBus.Send(new ProtocolHelloMessage(), SyncProtocol.TypeProtocolHello, new[] { 2L });
         Assert.True(farmhand.UseHostAuthority);
 
         hostBus.Send(new ProtocolHelloMessage(), "FutureMessageType", new[] { 2L });
         hostBus.Send(
-            new NpcMindViewMessage
+            new NpcRelationshipViewMessage
             {
                 SchemaVersion = SyncProtocol.Version + 1,
                 NpcName = "Emily",
-                State = TestScenarios.TrustedState("Emily")
+                BehaviorContextSummary = "must be ignored",
+                BookState = TestScenarios.TrustedState("Emily")
             },
-            SyncProtocol.TypeNpcView,
+            SyncProtocol.TypeNpcRelationshipView,
             new[] { 2L });
 
-        Assert.Empty(farmhandMemory.GetTrackedStates());
+        Assert.Equal(0, relationshipViews.Count);
+    }
+
+    [Fact]
+    public void JoinHandshakeReceivesCompleteRelationshipViewSetAndPrunesStaleEntries()
+    {
+        var network = new InMemoryModMessageNetwork();
+        InMemoryModMessageBus hostBus = network.AddEndpoint(1, isHost: true);
+        InMemoryModMessageBus farmhandBus = network.AddEndpoint(2, isHost: false);
+        var relationshipViews = new NpcRelationshipViewStore();
+        relationshipViews.Apply(BuildView("Stale", "stale context"));
+        MultiplayerSyncService host = CreateService(hostBus, isMainPlayer: true, hostPlayerId: 1);
+        MultiplayerSyncService farmhand = CreateService(
+            farmhandBus,
+            isMainPlayer: false,
+            hostPlayerId: 1,
+            relationshipViews: relationshipViews);
+        host.RelationshipNpcNamesProvider = () => new[] { "Emily", "Haley" };
+        host.RelationshipViewProvider = npcName => BuildView(npcName, $"host context for {npcName}");
+
+        host.OnPeerConnected(new ModMessagePeer(2, IsHost: false, IsSplitScreen: false, HasMod: true));
+
+        Assert.True(farmhand.UseHostAuthority);
+        Assert.Equal(2, relationshipViews.Count);
+        Assert.False(relationshipViews.TryGet("Stale", out _));
+        Assert.True(relationshipViews.TryGetBehaviorContext("Emily", out string emilyContext));
+        Assert.Equal("host context for Emily", emilyContext);
+        Assert.Equal(
+            new[]
+            {
+                SyncProtocol.TypeProtocolHello,
+                SyncProtocol.TypeProtocolHelloAck,
+                SyncProtocol.TypeNpcRelationshipView,
+                SyncProtocol.TypeNpcRelationshipView,
+                SyncProtocol.TypeRelationshipViewSetComplete
+            },
+            network.Sent.Select(message => message.Type));
+    }
+
+    [Fact]
+    public void ExchangeRefreshSendsOnlyChangedNpcRelationshipView()
+    {
+        var network = new InMemoryModMessageNetwork();
+        InMemoryModMessageBus hostBus = network.AddEndpoint(1, isHost: true);
+        InMemoryModMessageBus farmhandBus = network.AddEndpoint(2, isHost: false);
+        var relationshipViews = new NpcRelationshipViewStore();
+        MultiplayerSyncService host = CreateService(hostBus, isMainPlayer: true, hostPlayerId: 1);
+        CreateService(farmhandBus, isMainPlayer: false, hostPlayerId: 1, relationshipViews: relationshipViews);
+        host.RelationshipNpcNamesProvider = () => new[] { "Emily", "Haley" };
+        host.RelationshipViewProvider = npcName => BuildView(npcName, $"updated {npcName}");
+        host.OnPeerConnected(new ModMessagePeer(2, IsHost: false, IsSplitScreen: false, HasMod: true));
+        network.Sent.Clear();
+
+        host.BroadcastNpcRelationshipView("Emily");
+
+        SentModMessage sent = Assert.Single(network.Sent);
+        Assert.Equal(SyncProtocol.TypeNpcRelationshipView, sent.Type);
+        Assert.Equal("Emily", Assert.IsType<NpcRelationshipViewMessage>(sent.Payload).NpcName);
+        Assert.True(relationshipViews.TryGetBehaviorContext("Emily", out string context));
+        Assert.Equal("updated Emily", context);
+    }
+
+    [Fact]
+    public void DayRefreshSendsIndividualViewsWithoutJoinCompletionMarker()
+    {
+        var network = new InMemoryModMessageNetwork();
+        InMemoryModMessageBus hostBus = network.AddEndpoint(1, isHost: true);
+        InMemoryModMessageBus farmhandBus = network.AddEndpoint(2, isHost: false);
+        var relationshipViews = new NpcRelationshipViewStore();
+        MultiplayerSyncService host = CreateService(hostBus, isMainPlayer: true, hostPlayerId: 1);
+        CreateService(farmhandBus, isMainPlayer: false, hostPlayerId: 1, relationshipViews: relationshipViews);
+        host.RelationshipNpcNamesProvider = () => new[] { "Emily", "Haley" };
+        host.RelationshipViewProvider = npcName => BuildView(npcName, $"day refresh {npcName}");
+        host.OnPeerConnected(new ModMessagePeer(2, IsHost: false, IsSplitScreen: false, HasMod: true));
+        network.Sent.Clear();
+
+        host.BroadcastAllNpcRelationshipViews();
+
+        Assert.Equal(2, network.Sent.Count);
+        Assert.All(network.Sent, sent => Assert.Equal(SyncProtocol.TypeNpcRelationshipView, sent.Type));
+        Assert.DoesNotContain(network.Sent, sent => sent.Type == SyncProtocol.TypeRelationshipViewSetComplete);
+
+        host.BroadcastRelationshipViewsCleared();
+        Assert.Equal(0, relationshipViews.Count);
+        Assert.Equal(SyncProtocol.TypeRelationshipViewsCleared, network.Sent[^1].Type);
     }
 
     [Fact]
@@ -139,7 +226,7 @@ public sealed class MultiplayerProtocolTests
         bool isMainPlayer,
         long hostPlayerId,
         bool isMultiplayer = true,
-        BehaviorMemory? memory = null,
+        NpcRelationshipViewStore? relationshipViews = null,
         Action<int, int>? notifyProtocolMismatch = null)
     {
         var config = new ModConfig { EnableMultiplayerSync = true, ShowHudMessages = false };
@@ -155,10 +242,22 @@ public sealed class MultiplayerProtocolTests
             },
             monitor,
             config,
-            memory ?? new BehaviorMemory(),
+            relationshipViews ?? new NpcRelationshipViewStore(),
             new BehaviorFeedbackService(config, monitor),
             ModId,
             notifyProtocolMismatch);
+    }
+
+    private static NpcRelationshipViewMessage BuildView(string npcName, string context)
+    {
+        return new NpcRelationshipViewMessage
+        {
+            NpcName = npcName,
+            BehaviorContextSummary = context,
+            BookState = TestScenarios.TrustedState(npcName),
+            UpdatedTotalDays = 100,
+            UpdatedTimeOfDay = 1200
+        };
     }
 
     private static void AssertPureDataGraph(Type type, HashSet<Type> visited)

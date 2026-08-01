@@ -6,7 +6,7 @@ namespace LivingNPCs.Tests;
 
 /// <summary>
 /// 多人 v1（主机权威）的纯逻辑面：远程交换净化策略、协议兼容、角色判定、
-/// farmhand 开书决策、心智视图的导入导出与消息序列化往返。
+/// farmhand 开书决策、关系视图缓存与消息序列化往返。
 /// </summary>
 public sealed class MultiplayerSyncTests
 {
@@ -146,122 +146,112 @@ public sealed class MultiplayerSyncTests
         }
     }
 
-    // ---- 心智视图：序列化往返 + 镜像导入导出 ----
+    // ---- 关系视图：序列化往返 + 只读缓存 ----
 
-    /// <param name="includeMemory">
-    /// 长期记忆的 Clamp 排序在无游戏环境会读 Game1.Date（生产导入总在游戏内跑），
-    /// 走 ImportNpcView 的用例传 false。
-    /// </param>
-    private static NpcMindViewMessage BuildSampleView(string npcName = "Emily", bool includeMemory = true)
+    private static NpcRelationshipViewMessage BuildSampleView(string npcName = "Emily")
     {
         var state = TestScenarios.TrustedState(npcName);
         state.FarmerNickname = "小雪";
-        if (includeMemory)
-        {
-            state.LongTermMemories.Add(TestScenarios.Memory("the farmer keeps bees", importance: 70));
-        }
+        state.LongTermMemories.Add(TestScenarios.Memory("the farmer keeps bees", importance: 70));
 
-        return new NpcMindViewMessage
+        return new NpcRelationshipViewMessage
         {
             NpcName = npcName,
-            State = state,
-            Entries = new List<BehaviorMemoryEntry>
-            {
-                new() { NpcName = npcName, Kind = "Conversation", Action = "ConversationStarted", TotalDays = 99, TimeOfDay = 900 },
-                new() { NpcName = npcName, Kind = "Gift", Action = "GiftOffered", TotalDays = 100, TimeOfDay = 1200 }
-            }
+            BehaviorContextSummary = $"relationship summary for {npcName}",
+            BookState = state,
+            UpdatedTotalDays = 100,
+            UpdatedTimeOfDay = 1200
         };
     }
 
     [Fact]
-    public void NpcMindViewRoundTripsThroughJson()
+    public void NpcRelationshipViewRoundTripsThroughJson()
     {
         // SMAPI 的 ModMessage 负载走 Newtonsoft 序列化；这里做同型往返。
-        NpcMindViewMessage original = BuildSampleView();
+        NpcRelationshipViewMessage original = BuildSampleView();
         string json = JsonConvert.SerializeObject(original);
-        NpcMindViewMessage? restored = JsonConvert.DeserializeObject<NpcMindViewMessage>(json);
+        NpcRelationshipViewMessage? restored = JsonConvert.DeserializeObject<NpcRelationshipViewMessage>(json);
 
         Assert.NotNull(restored);
         Assert.Equal(SyncProtocol.Version, restored!.SchemaVersion);
         Assert.Equal("Emily", restored.NpcName);
-        Assert.NotNull(restored.State);
-        Assert.Equal("小雪", restored.State!.FarmerNickname);
-        Assert.Equal(80, restored.State.RelationshipTrust);
-        Assert.Equal("the farmer keeps bees", Assert.Single(restored.State.LongTermMemories).Summary);
-        Assert.Equal(2, restored.Entries.Count);
-        Assert.Equal("GiftOffered", restored.Entries[1].Action);
+        Assert.Equal("relationship summary for Emily", restored.BehaviorContextSummary);
+        Assert.NotNull(restored.BookState);
+        Assert.Equal("小雪", restored.BookState!.FarmerNickname);
+        Assert.Equal(80, restored.BookState.RelationshipTrust);
+        Assert.Equal("the farmer keeps bees", Assert.Single(restored.BookState.LongTermMemories).Summary);
+        Assert.Equal(100, restored.UpdatedTotalDays);
+        Assert.Equal(1200, restored.UpdatedTimeOfDay);
     }
 
     [Fact]
-    public void ImportNpcViewNormalizesSortsAndTrimsEntries()
+    public void RelationshipViewStoreClonesInputAndOutput()
     {
-        var memory = new BehaviorMemory();
-        var view = BuildSampleView(includeMemory: false);
-        view.Entries = new List<BehaviorMemoryEntry>
-        {
-            new() { NpcName = "Emily", Action = "newest", TotalDays = 102, TimeOfDay = 900 },
-            new() { NpcName = "Emily", Action = "oldest", TotalDays = 98, TimeOfDay = 900 },
-            new() { NpcName = string.Empty, Action = "dropped-no-name", TotalDays = 101, TimeOfDay = 900 },
-            new() { NpcName = "Emily", Action = "middle", TotalDays = 100, TimeOfDay = 900 }
-        };
+        var store = new NpcRelationshipViewStore();
+        NpcRelationshipViewMessage input = BuildSampleView();
+        store.Apply(input);
+        input.BehaviorContextSummary = "mutated input";
+        input.BookState!.RelationshipTrust = 1;
 
-        memory.ImportNpcView(view, maxEntriesPerNpc: 2, stateNormalizerOverride: _ => { });
+        Assert.True(store.TryGet("emily", out NpcRelationshipViewMessage? first));
+        Assert.NotNull(first);
+        Assert.Equal("relationship summary for Emily", first!.BehaviorContextSummary);
+        Assert.Equal(80, first.BookState!.RelationshipTrust);
 
-        LivingNpcState state = Assert.Single(memory.GetTrackedStates());
-        Assert.Equal("Emily", state.NpcName);
-
-        NpcMindViewMessage exported = memory.ExportNpcView("Emily")!;
-        Assert.Equal(new[] { "middle", "newest" }, exported.Entries.Select(entry => entry.Action));
+        first.BehaviorContextSummary = "mutated output";
+        first.BookState.RelationshipTrust = 2;
+        Assert.True(store.TryGet("Emily", out NpcRelationshipViewMessage? second));
+        Assert.Equal("relationship summary for Emily", second!.BehaviorContextSummary);
+        Assert.Equal(80, second.BookState!.RelationshipTrust);
     }
 
     [Fact]
-    public void ImportNpcViewWithNullStateClearsMirroredState()
+    public void RelationshipViewStoreRetainsOnlyAuthoritativeJoinSet()
     {
-        var memory = new BehaviorMemory();
-        memory.ImportNpcView(BuildSampleView(includeMemory: false), maxEntriesPerNpc: 10, stateNormalizerOverride: _ => { });
-        Assert.Single(memory.GetTrackedStates());
+        var store = new NpcRelationshipViewStore();
+        store.Apply(BuildSampleView("Emily"));
+        store.Apply(BuildSampleView("Haley"));
+        Assert.Equal(2, store.Count);
 
-        memory.ImportNpcView(
-            new NpcMindViewMessage
-            {
-                NpcName = "Emily",
-                State = null,
-                Entries = new List<BehaviorMemoryEntry>
-                {
-                    new() { NpcName = "Emily", Action = "kept", TotalDays = 100, TimeOfDay = 900 }
-                }
-            },
-            maxEntriesPerNpc: 10,
-            stateNormalizerOverride: _ => { });
+        store.RetainOnly(new HashSet<string>(new[] { "Haley" }, StringComparer.OrdinalIgnoreCase));
 
-        Assert.Empty(memory.GetTrackedStates());
-        Assert.Equal("kept", Assert.Single(memory.ExportNpcView("Emily")!.Entries).Action);
+        Assert.Equal(1, store.Count);
+        Assert.True(store.TryGet("haley", out _));
+        Assert.False(store.TryGet("Emily", out _));
     }
 
     [Fact]
-    public void RetainOnlyNpcsPrunesStaleMirrorEntries()
+    public void HostAuthorityContextUsesOnlyRelationshipViewAndFallsBackToEmpty()
     {
-        var memory = new BehaviorMemory();
-        memory.ImportNpcView(BuildSampleView("Emily", includeMemory: false), maxEntriesPerNpc: 10, stateNormalizerOverride: _ => { });
-        memory.ImportNpcView(BuildSampleView("Haley", includeMemory: false), maxEntriesPerNpc: 10, stateNormalizerOverride: _ => { });
-        Assert.Equal(2, memory.ExportAllNpcViews().Count);
+        var store = new NpcRelationshipViewStore();
+        int localBuilds = 0;
 
-        memory.RetainOnlyNpcs(new HashSet<string>(new[] { "Haley" }, StringComparer.OrdinalIgnoreCase));
+        string missing = ValleyTalkContextService.ResolveBasePromptContext(
+            useHostRelationshipView: true,
+            "Emily",
+            store,
+            () => { localBuilds++; return "local context"; },
+            out bool missingHasView);
+        store.Apply(BuildSampleView());
+        string mirrored = ValleyTalkContextService.ResolveBasePromptContext(
+            useHostRelationshipView: true,
+            "Emily",
+            store,
+            () => { localBuilds++; return "local context"; },
+            out bool mirroredHasView);
+        string local = ValleyTalkContextService.ResolveBasePromptContext(
+            useHostRelationshipView: false,
+            "Emily",
+            store,
+            () => { localBuilds++; return "local context"; },
+            out bool localHasContext);
 
-        NpcMindViewMessage remaining = Assert.Single(memory.ExportAllNpcViews());
-        Assert.Equal("Haley", remaining.NpcName);
-        Assert.Null(memory.ExportNpcView("Emily"));
-    }
-
-    [Fact]
-    public void ExportNpcViewClonesStateInsteadOfSharingIt()
-    {
-        var memory = new BehaviorMemory();
-        memory.ImportNpcView(BuildSampleView(includeMemory: false), maxEntriesPerNpc: 10, stateNormalizerOverride: _ => { });
-
-        NpcMindViewMessage exported = memory.ExportNpcView("Emily")!;
-        exported.State!.RelationshipTrust = 1;
-
-        Assert.Equal(80, Assert.Single(memory.GetTrackedStates()).RelationshipTrust);
+        Assert.Empty(missing);
+        Assert.False(missingHasView);
+        Assert.Equal("relationship summary for Emily", mirrored);
+        Assert.True(mirroredHasView);
+        Assert.Equal("local context", local);
+        Assert.True(localHasContext);
+        Assert.Equal(1, localBuilds);
     }
 }

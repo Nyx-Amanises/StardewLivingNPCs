@@ -102,7 +102,8 @@ internal sealed class BehaviorEngine
         this.contextService = this.services.ContextService;
         this.multiplayerSync = this.services.MultiplayerSync;
         this.multiplayerSync.RemoteExchangeReceived = this.EnqueueRemoteValleyTalkExchange;
-        this.multiplayerSync.OpenBookFromMirror = this.OpenMemoryBookFromLocalMemory;
+        this.multiplayerSync.RelationshipNpcNamesProvider = this.memory.GetTrackedNpcNames;
+        this.multiplayerSync.RelationshipViewProvider = this.BuildNpcRelationshipView;
     }
 
     public void RegisterEvents()
@@ -171,8 +172,8 @@ internal sealed class BehaviorEngine
             this.conversationStartRecorder.Clear();
             if (Context.IsMainPlayer)
             {
-                // 账本类操作（礼物信生成/排程、任务栏投影）只属于主机；farmhand 的记忆是
-                // 主机镜像，读档后经多人同步请求全量快照（OnSaveLoaded 下面那行）。
+                // 账本类操作（礼物信生成/排程、任务栏投影）只属于主机；farmhand 的
+                // BehaviorMemory 保持为空，提示词只读独立的主机关系视图缓存。
                 this.mailService.ResolvePendingGiftMailGenerations();
                 this.mailService.QueueDueGiftMailsForTomorrow();
             }
@@ -213,7 +214,7 @@ internal sealed class BehaviorEngine
         if (Context.IsMainPlayer)
         {
             this.helper.Data.WriteSaveData(SaveDataKey, this.memory.ToSaveData());
-            this.multiplayerSync.BroadcastFullSnapshot();
+            this.multiplayerSync.BroadcastRelationshipViewsCleared();
         }
 
         this.contextService.ClearImmediateContexts();
@@ -237,8 +238,8 @@ internal sealed class BehaviorEngine
             // RSV aliases before either subsystem can send saved text to an LLM.
             RsvAiPolicy.RegisterGameThreadAliases();
 
-            // 心智账本的日结（衰减/涟漪/印象压缩/礼物信）只在主机跑：farmhand 的记忆是主机
-            // 镜像，本地日结既无意义又会在下一次快照前造成短暂漂移（分屏副屏同理，由主屏跑）。
+            // 心智账本的日结（衰减/涟漪/印象压缩/礼物信）只在主机跑；farmhand 仅持有
+            // 只读关系视图，分屏副屏也由主屏统一结算。
             bool ledgerOwner = Context.IsMainPlayer;
             if (ledgerOwner && this.config.EnableNpcState)
             {
@@ -270,7 +271,7 @@ internal sealed class BehaviorEngine
             if (ledgerOwner)
             {
                 // 日结后的状态广播给远程 farmhand（无对端时零开销）。
-                this.multiplayerSync.BroadcastFullSnapshot();
+                this.multiplayerSync.BroadcastAllNpcRelationshipViews();
             }
         });
     }
@@ -709,7 +710,7 @@ internal sealed class BehaviorEngine
                 AmbientText = this.config.EnableDialogueFollowUps ? result.AmbientFollowUpText : string.Empty,
                 AmbientDelayMinutes = result.AmbientFollowUpDelayMinutes
             });
-        this.multiplayerSync.BroadcastNpcView(exchange.NpcName);
+        this.multiplayerSync.BroadcastNpcRelationshipView(exchange.NpcName);
 
         if (this.config.Debug)
         {
@@ -753,8 +754,8 @@ internal sealed class BehaviorEngine
             this.config.MaxDialogueBehaviorInfluenceDays
         );
 
-        // 主机本人交换入账后同样刷新远程 farmhand 的该 NPC 镜像（无对端时零开销）。
-        this.multiplayerSync.BroadcastNpcView(exchange.NpcName);
+        // 主机本人交换入账后同样刷新远程 farmhand 的该 NPC 关系视图（无对端时零开销）。
+        this.multiplayerSync.BroadcastNpcRelationshipView(exchange.NpcName);
 
         if (!result.HasEffect)
         {
@@ -825,6 +826,24 @@ internal sealed class BehaviorEngine
                     friendship = result.AppliedFriendshipDelta
                 })
         );
+    }
+
+    private Multiplayer.NpcRelationshipViewMessage? BuildNpcRelationshipView(string npcName)
+    {
+        NPC? npc = Game1.getCharacterFromName(npcName);
+        if (npc == null || RsvAiPolicy.IsBlockedNpc(npc))
+        {
+            return null;
+        }
+
+        return new Multiplayer.NpcRelationshipViewMessage
+        {
+            NpcName = npc.Name,
+            BehaviorContextSummary = this.contextService.BuildRelationshipSummary(npc),
+            BookState = this.memory.GetState(npc)?.Clone(),
+            UpdatedTotalDays = Game1.Date.TotalDays,
+            UpdatedTimeOfDay = Game1.timeOfDay
+        };
     }
 
     public string GetConversationContext(string npcName, string npcDisplayName)

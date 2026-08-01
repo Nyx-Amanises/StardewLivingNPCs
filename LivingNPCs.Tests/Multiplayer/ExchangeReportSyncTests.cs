@@ -190,7 +190,7 @@ public sealed class ExchangeReportSyncTests
             runtime,
             monitor,
             config,
-            new BehaviorMemory(),
+            new NpcRelationshipViewStore(),
             new BehaviorFeedbackService(config, monitor),
             ModId);
     }
