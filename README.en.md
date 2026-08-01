@@ -140,9 +140,9 @@ If generation fails, times out, or returns unusable content, the mod falls back 
 ## SVE and custom NPCs
 
 - `EnableSveCompatibility` is on by default. With SVE installed, built-in SVE profiles, relationships, and progression context are used; SVE is never required.
-- Third-party NPCs use game data and a conservative generic fallback; without a dedicated profile, characters may be less detailed. The community can drop JSON profiles into `Mods/LivingNPCs/npc_profiles/` to add or override characters — see [npc_profiles/README.md](./LivingNPCs/npc_profiles/README.md).
+- Third-party NPCs use game data and a conservative generic fallback; without dedicated data, characters may be less detailed. Community authors can use [`npc_profiles/`](./LivingNPCs/npc_profiles/README.md) for lightweight behavior/personality hints or [`npc_bios/`](./LivingNPCs/npc_bios/README.en.md) for complete dialogue biographies mapped to `Mods/Yuki.LivingNPCs/Bios/<InternalName>`.
 - LivingNPCs respects content authors' AI-use permissions. Text from content packs that do not permit AI use is not copied into prompts.
-- This release does not claim dedicated, hand-tuned support for other large expansions such as Ridgeside Village or East Scarp.
+- This release does not claim dedicated, hand-tuned support for other large expansions such as East Scarp. Ridgeside Village remains blocked by the current AI compatibility policy; adding a profile or biography does not bypass it.
 
 ## Multiplayer (v1: host-authoritative)
 

@@ -16,6 +16,8 @@ namespace LivingNPCs.Dialogue.Content;
 internal sealed class GameContentPipeline : IContentPipeline
 {
     private readonly IModHelper helper;
+    private readonly object communityBioRootsLock = new();
+    private IReadOnlyList<string>? activeCommunityBioRoots;
 
     public GameContentPipeline(IModHelper helper)
     {
@@ -94,9 +96,20 @@ internal sealed class GameContentPipeline : IContentPipeline
     {
         try
         {
-            return Game1.characterData != null && Game1.characterData.TryGetValue(npcName, out CharacterData? data)
-                ? data
-                : null;
+            if (Game1.characterData == null)
+            {
+                return null;
+            }
+
+            foreach (string candidate in SveContentRules.GetGameDataLookupNames(npcName))
+            {
+                if (Game1.characterData.TryGetValue(candidate, out CharacterData? data))
+                {
+                    return data;
+                }
+            }
+
+            return null;
         }
         catch
         {
@@ -113,21 +126,31 @@ internal sealed class GameContentPipeline : IContentPipeline
                 return null;
             }
 
+            bool foundEntry = false;
+            foreach (string candidate in SveContentRules.GetGameDataLookupNames(npcName))
+            {
+                if (!Game1.NPCGiftTastes.TryGetValue(candidate, out string? data))
+                {
+                    continue;
+                }
+
+                foundEntry = true;
+                string[] segments = (data ?? string.Empty).Split('/');
+                if (segments.Length < 8)
+                {
+                    // A malformed preferred entry should not prevent the next alias/canonical
+                    // candidate from supplying valid data.
+                    continue;
+                }
+
+                return (ResolveItemNames(segments[1]), ResolveItemNames(segments[7]));
+            }
+
             // Many non-social, temporary, or content-pack NPCs intentionally have no personal
-            // Data/NPCGiftTastes entry. That is a valid empty topic source, not malformed data and
-            // should not produce one warning per character during bio discovery.
-            if (!Game1.NPCGiftTastes.TryGetValue(npcName, out string? data))
-            {
-                return (Array.Empty<string>(), Array.Empty<string>());
-            }
-
-            string[] segments = data.Split('/');
-            if (segments.Length < 8)
-            {
-                return null;
-            }
-
-            return (ResolveItemNames(segments[1]), ResolveItemNames(segments[7]));
+            // entry. That is a valid empty topic source; a present but malformed entry stays null.
+            return foundEntry
+                ? null
+                : (Array.Empty<string>(), Array.Empty<string>());
         }
         catch
         {
@@ -175,6 +198,88 @@ internal sealed class GameContentPipeline : IContentPipeline
                     $"Failed to load content asset '{relativePath}': {ex.Message}"),
                 LogLevel.Warn);
             return null;
+        }
+    }
+
+    /// <summary>
+    /// 严格读取玩家/社区投放的完整传记：保留 Missing/Invalid/Valid 三态，
+    /// 限制文件大小，并把 JSON 语法与契约严格校验交给纯逻辑加载器。
+    /// </summary>
+    internal CommunityBioLoader.BioFileReadResult ReadCommunityBioFile(string relativePath)
+    {
+        string fullPath = Path.Combine(this.helper.DirectoryPath, relativePath);
+        if (!File.Exists(fullPath))
+        {
+            return CommunityBioLoader.BioFileReadResult.Missing();
+        }
+
+        try
+        {
+            long length = new FileInfo(fullPath).Length;
+            if (length > CommunityBioLoader.MaxFileBytes)
+            {
+                return CommunityBioLoader.BioFileReadResult.Invalid(
+                    $"file size {length} bytes exceeds {CommunityBioLoader.MaxFileBytes} bytes");
+            }
+
+            return CommunityBioLoader.ParseJson(File.ReadAllText(fullPath));
+        }
+        catch (FileNotFoundException)
+        {
+            // 文件可能在 File.Exists 与实际读取之间被移除；按 Missing 处理即可。
+            return CommunityBioLoader.BioFileReadResult.Missing();
+        }
+        catch (DirectoryNotFoundException)
+        {
+            return CommunityBioLoader.BioFileReadResult.Missing();
+        }
+        catch (Exception ex)
+        {
+            return CommunityBioLoader.BioFileReadResult.Invalid($"cannot read file: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// 找出 <c>npc_bios/&lt;目标 Mod UniqueID&gt;/</c> 中已安装目标 Mod 的命名空间。
+    /// Mod 列表与磁盘目录在一次游戏进程中都按“修改后重启”契约保持不变，因此结果可缓存。
+    /// </summary>
+    internal IReadOnlyList<string> GetActiveCommunityBioRoots()
+    {
+        lock (this.communityBioRootsLock)
+        {
+            if (this.activeCommunityBioRoots != null)
+            {
+                return this.activeCommunityBioRoots;
+            }
+
+            string rootPath = Path.Combine(this.helper.DirectoryPath, ContentAssetNames.CommunityBiosDir);
+            if (!Directory.Exists(rootPath))
+            {
+                return this.activeCommunityBioRoots = Array.Empty<string>();
+            }
+
+            try
+            {
+                this.activeCommunityBioRoots = Directory.EnumerateDirectories(rootPath)
+                    .Where(directory =>
+                        Directory.Exists(Path.Combine(directory, "bios"))
+                        || Directory.Exists(Path.Combine(directory, "locales")))
+                    .Where(directory => this.helper.ModRegistry.IsLoaded(Path.GetFileName(directory)))
+                    .Select(directory => Path.GetRelativePath(this.helper.DirectoryPath, directory).Replace('\\', '/'))
+                    .OrderBy(directory => directory, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                return this.activeCommunityBioRoots;
+            }
+            catch (Exception ex)
+            {
+                DialogueServices.Monitor?.Log(
+                    Util.GetConsoleString(
+                        "dialogue.log.assetLoadFailed",
+                        new { asset = ContentAssetNames.CommunityBiosDir, error = ex.Message },
+                        $"Failed to scan community biography directories: {ex.Message}"),
+                    LogLevel.Warn);
+                return this.activeCommunityBioRoots = Array.Empty<string>();
+            }
         }
     }
 

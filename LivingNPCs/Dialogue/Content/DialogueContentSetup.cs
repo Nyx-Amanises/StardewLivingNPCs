@@ -353,6 +353,41 @@ internal static class DialogueContentSetup
             return new NpcBio();
         }
 
+        CommunityBioLoader.LoadResult community = CommunityBioLoader.Load(
+            ContentAssetNames.CommunityBiosDir,
+            npcName,
+            pipeline.CurrentLocale,
+            pipeline.ReadCommunityBioFile);
+        LogCommunityBioFailures(community.InvalidCandidates);
+
+        if (community.Bio != null)
+        {
+            LogCommunityBioLoaded(npcName, community.RelativePath!);
+            return community.Bio;
+        }
+
+        CommunityBioLoader.ScopedLoadResult scoped = CommunityBioLoader.LoadScopedSources(
+            pipeline.GetActiveCommunityBioRoots(),
+            npcName,
+            pipeline.CurrentLocale,
+            pipeline.ReadCommunityBioFile);
+        LogCommunityBioFailures(scoped.InvalidCandidates);
+        if (scoped.ConflictingPaths.Count > 0)
+        {
+            string assets = string.Join(", ", scoped.ConflictingPaths);
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.communityBioConflict",
+                    new { npc = npcName, assets },
+                    $"Skipped conflicting community biographies for '{npcName}': {assets}"),
+                LogLevel.Warn);
+        }
+        else if (scoped.Bio != null)
+        {
+            LogCommunityBioLoaded(npcName, scoped.RelativePath!);
+            return scoped.Bio;
+        }
+
         bool zh = pipeline.CurrentLocale.StartsWith("zh", StringComparison.OrdinalIgnoreCase);
         bool sveActive = pipeline.IsSveLoaded && DialogueServices.Config.EnableSveCompatibility;
 
@@ -384,5 +419,28 @@ internal static class DialogueContentSetup
         }
 
         return new NpcBio();
+    }
+
+    private static void LogCommunityBioFailures(IEnumerable<CommunityBioLoader.ValidationFailure> failures)
+    {
+        foreach (CommunityBioLoader.ValidationFailure failure in failures)
+        {
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.communityBioInvalid",
+                    new { asset = failure.RelativePath, problem = failure.Problem },
+                    $"Skipped invalid community biography '{failure.RelativePath}': {failure.Problem}"),
+                LogLevel.Warn);
+        }
+    }
+
+    private static void LogCommunityBioLoaded(string npcName, string relativePath)
+    {
+        DialogueServices.Monitor?.Log(
+            Util.GetConsoleString(
+                "dialogue.log.communityBioLoaded",
+                new { npc = npcName, asset = relativePath },
+                $"Loaded community biography for '{npcName}' from '{relativePath}'."),
+            LogLevel.Debug);
     }
 }

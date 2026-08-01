@@ -2,7 +2,9 @@
 
 `npc_profiles/` 是 LivingNPCs 的社区人物资料入口。
 
-只要把合法的 `.json` 文件放进这个目录，LivingNPCs 启动时就会自动读取它们。这样自定义 NPC 不需要等待主程序重新编译，也能获得更贴近角色的：
+这里提供的是轻量行为与性格资料，不是完整对话传记。需要直接填充 `Mods/Yuki.LivingNPCs/Bios/<NPC内部名>` 虚拟资产时，请使用并阅读 [`npc_bios/README.md`](../npc_bios/README.md)。同一个 NPC 可以同时拥有 profile 和 bio。
+
+只要把合法的 `.json` 文件放进这个目录，LivingNPCs 启动时就会自动读取它们。这样已经由其他 Mod 加入游戏的自定义 NPC 不需要等待主程序重新编译，也能获得更贴近角色的：
 
 - 性格倾向。
 - 背景摘要。

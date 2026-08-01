@@ -31,10 +31,15 @@ internal interface IContentPipeline
     /// <summary>经内容管线加载单个传记资产（LoadLocalized 挂载点）。异常时返回 null。</summary>
     NpcBio? LoadBioAsset(string normalizedName);
 
-    /// <summary>游戏 Data/Characters 条目；没有该 NPC 返回 null。</summary>
+    /// <summary>
+    /// 游戏 Data/Characters 条目；SVE 规范名会按原始内部名优先、规范名兜底查询，没有该 NPC 返回 null。
+    /// </summary>
     CharacterData? GetCharacterData(string npcName);
 
-    /// <summary>解析 Game1.NPCGiftTastes 第 1、7 段的礼物显示名；段数不足或无条目返回 null（调用方记 Debug 跳过）。</summary>
+    /// <summary>
+    /// 解析 Game1.NPCGiftTastes 第 1、7 段的礼物显示名；SVE 规范名会按原始内部名优先、规范名兜底查询。
+    /// 段数不足返回 null；没有个人条目可返回空集合。
+    /// </summary>
     (IReadOnlyList<string> Loved, IReadOnlyList<string> Hated)? GetGiftTasteNames(string npcName);
 
     /// <summary>从磁盘读 SVE 世界增量文件；缺失/坏损返回 null。</summary>

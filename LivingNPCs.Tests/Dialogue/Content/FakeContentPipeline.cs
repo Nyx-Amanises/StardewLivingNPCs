@@ -70,12 +70,28 @@ internal sealed class FakeContentPipeline : IContentPipeline
 
     public CharacterData? GetCharacterData(string npcName)
     {
-        return this.Characters.TryGetValue(npcName, out CharacterData? data) ? data : null;
+        foreach (string candidate in SveContentRules.GetGameDataLookupNames(npcName))
+        {
+            if (this.Characters.TryGetValue(candidate, out CharacterData? data))
+            {
+                return data;
+            }
+        }
+
+        return null;
     }
 
     public (IReadOnlyList<string> Loved, IReadOnlyList<string> Hated)? GetGiftTasteNames(string npcName)
     {
-        return this.GiftTastes.TryGetValue(npcName, out var tastes) ? tastes : null;
+        foreach (string candidate in SveContentRules.GetGameDataLookupNames(npcName))
+        {
+            if (this.GiftTastes.TryGetValue(candidate, out var tastes))
+            {
+                return tastes;
+            }
+        }
+
+        return null;
     }
 
     public WorldSummary? LoadSveWorldDelta(bool optimized)

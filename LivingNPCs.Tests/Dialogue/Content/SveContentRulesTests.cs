@@ -30,6 +30,30 @@ public sealed class SveContentRulesTests
         Assert.True(SveContentRules.IsExpansionCompatibilityEnabled("Olivia", sveCompatibilityEnabled: true));
         // 别名也要命中名单。
         Assert.False(SveContentRules.IsExpansionCompatibilityEnabled("GuntherSilvian", sveCompatibilityEnabled: false));
+        Assert.False(SveContentRules.IsExpansionCompatibilityEnabled("MarlonFay", sveCompatibilityEnabled: false));
+        Assert.False(SveContentRules.IsExpansionCompatibilityEnabled("HankSVE", sveCompatibilityEnabled: false));
+        // 调用方已经规整过名字时也必须命中。
+        Assert.False(SveContentRules.IsExpansionCompatibilityEnabled("Marlon", sveCompatibilityEnabled: false));
+        Assert.False(SveContentRules.IsExpansionCompatibilityEnabled("Hank", sveCompatibilityEnabled: false));
+    }
+
+    [Theory]
+    [InlineData("Gunther", "Gunther", "GuntherSilvian")]
+    [InlineData("MarlonFay", "Marlon", "MarlonFay")]
+    [InlineData("Morris", "Morris", "MorrisTod")]
+    [InlineData("HankSVE", "Hank", "HankSVE")]
+    public void GameDataLookupNames_UsesSveOriginalThenCanonicalFallback(
+        string input,
+        string canonical,
+        string original)
+    {
+        Assert.Equal(new[] { original, canonical }, SveContentRules.GetGameDataLookupNames(input));
+    }
+
+    [Fact]
+    public void GameDataLookupNames_OrdinaryNpc_UsesCanonicalOnly()
+    {
+        Assert.Equal(new[] { "Abigail" }, SveContentRules.GetGameDataLookupNames("Abigail·"));
     }
 
     [Fact]
@@ -88,7 +112,7 @@ public sealed class SveContentRulesTests
     }
 
     [Fact]
-    public void ApplyRelationshipPatch_OverridesSameKeyAndAddsNew()
+    public void ApplyRelationshipPatch_PreservesExistingKeyAndAddsMissingKey()
     {
         var bio = new NpcBio();
         bio.Relationships["Lewis"] = new BioListEntry { Id = "Lewis", Heading = "Lewis", Description = "old" };
@@ -99,7 +123,7 @@ public sealed class SveContentRulesTests
             ["Sophia"] = new() { Id = "Sophia", Heading = "Sophia", Description = "new" }
         });
 
-        Assert.Equal("sve", bio.Relationships["Lewis"].Description);
+        Assert.Equal("old", bio.Relationships["Lewis"].Description);
         Assert.Equal("new", bio.Relationships["Sophia"].Description);
     }
 

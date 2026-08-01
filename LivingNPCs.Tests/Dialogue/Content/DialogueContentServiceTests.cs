@@ -202,19 +202,74 @@ public sealed class DialogueContentServiceTests : IDisposable
     }
 
     [Fact]
-    public void GetBio_SveActive_AppliesRelationshipPatch()
+    public void GetBio_SveCanonicalName_UsesOriginalGameDataForFallbackAndDerivedFields()
+    {
+        this.pipeline.Characters["HankSVE"] = Character(StardewValley.Gender.Male, "Scarlett");
+        this.pipeline.GiftTastes["HankSVE"] = (new[] { "Pumpkin Soup" }, new[] { "Joja Cola" });
+        this.config.EnableSveCompatibility = false;
+        DialogueContentService service = this.CreateService();
+
+        NpcBio canonical = service.GetBio("Hank");
+        NpcBio alias = service.GetBio("HankSVE");
+
+        Assert.Same(canonical, alias);
+        Assert.False(canonical.Missing);
+        Assert.Equal(BioFallbackBuilder.FallbackDisclaimer, canonical.BiographyEnd);
+        Assert.Equal(PromptGender.Male, canonical.ResolvedGender);
+        Assert.Contains("Scarlett", canonical.Relationships.Keys);
+        Assert.Contains("Pumpkin Soup", canonical.TopicPool);
+        Assert.Contains("Joja Cola", canonical.TopicPool);
+        Assert.Equal(0, this.pipeline.BioLoadCount);
+    }
+
+    [Fact]
+    public void GetBio_SveGameDataLookup_PrefersOriginalSveEntry()
+    {
+        this.pipeline.Bios["Marlon"] = new NpcBio { Biography = "guild man" };
+        this.pipeline.Characters["Marlon"] = Character(StardewValley.Gender.Female);
+        this.pipeline.Characters["MarlonFay"] = Character(StardewValley.Gender.Male);
+        this.pipeline.GiftTastes["Marlon"] = (new[] { "Canonical Gift" }, Array.Empty<string>());
+        this.pipeline.GiftTastes["MarlonFay"] = (new[] { "Alias Gift" }, Array.Empty<string>());
+        DialogueContentService service = this.CreateService();
+
+        NpcBio bio = service.GetBio("MarlonFay");
+
+        Assert.Equal(PromptGender.Male, bio.ResolvedGender);
+        Assert.Contains("Alias Gift", bio.TopicPool);
+        Assert.DoesNotContain("Canonical Gift", bio.TopicPool);
+    }
+
+    [Fact]
+    public void GetBio_SveActive_PreservesAssetRelationshipAndAddsMissingPatch()
     {
         this.pipeline.IsSveLoaded = true;
-        this.pipeline.Bios["Marlon"] = new NpcBio { Biography = "guild man" };
+        this.pipeline.Bios["Marlon"] = new NpcBio
+        {
+            Biography = "guild man",
+            Relationships =
+            {
+                ["Alesia"] = new BioListEntry
+                {
+                    Id = "Alesia",
+                    Heading = "Alesia",
+                    Description = "asset-authored veteran",
+                },
+            },
+        };
         this.pipeline.RelationshipPatches = new Dictionary<string, Dictionary<string, BioListEntry>>
         {
-            ["Marlon"] = new() { ["Alesia"] = new BioListEntry { Id = "Alesia", Heading = "Alesia", Description = "fellow veteran" } }
+            ["Marlon"] = new()
+            {
+                ["Alesia"] = new BioListEntry { Id = "Alesia", Heading = "Alesia", Description = "built-in patch" },
+                ["Gil"] = new BioListEntry { Id = "Gil", Heading = "Gil", Description = "guild partner" },
+            },
         };
         DialogueContentService service = this.CreateService();
 
         NpcBio bio = service.GetBio("MarlonFay");
 
-        Assert.Equal("fellow veteran", bio.Relationships["Alesia"].Description);
+        Assert.Equal("asset-authored veteran", bio.Relationships["Alesia"].Description);
+        Assert.Equal("guild partner", bio.Relationships["Gil"].Description);
     }
 
     [Fact]

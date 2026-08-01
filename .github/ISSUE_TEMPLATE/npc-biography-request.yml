@@ -1,0 +1,71 @@
+name: NPC biography request
+description: Request or coordinate a full LivingNPCs dialogue biography for a custom NPC.
+title: "[NPC Bio] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form coordinates a biography request; it does not grant permission to copy the source mod's text. Please use stable facts and respect spoilers and author permissions.
+  - type: input
+    id: source_mod
+    attributes:
+      label: Source mod
+      description: Name and public URL of the mod that adds the NPC.
+    validations:
+      required: true
+  - type: input
+    id: unique_id
+    attributes:
+      label: Source UniqueID and version
+      description: The source mod's manifest UniqueID and the version you tested.
+    validations:
+      required: true
+  - type: input
+    id: npc_name
+    attributes:
+      label: NPC internal and display names
+      description: Include the exact internal name, not only the translated display name.
+    validations:
+      required: true
+  - type: dropdown
+    id: language
+    attributes:
+      label: Requested language
+      options:
+        - English
+        - Chinese
+        - English and Chinese
+        - Another locale
+    validations:
+      required: true
+  - type: dropdown
+    id: spoilers
+    attributes:
+      label: Spoiler level
+      options:
+        - None
+        - Minor
+        - Major
+    validations:
+      required: true
+  - type: textarea
+    id: facts
+    attributes:
+      label: Stable facts and sources
+      description: Summarize facts in your own words. Do not paste dialogue, event text, wiki prose, or mod-page prose.
+    validations:
+      required: true
+  - type: textarea
+    id: permission
+    attributes:
+      label: Permission information
+      description: Link any author permission or license relevant to AI use or redistribution. PermitAiUse alone is not a copyright license.
+  - type: checkboxes
+    id: acknowledgements
+    attributes:
+      label: Acknowledgements
+      options:
+        - label: I understand that a biography does not create or enable an otherwise blocked NPC.
+          required: true
+        - label: I will not submit copied source text without explicit redistribution permission.
+          required: true

@@ -16,6 +16,12 @@ internal static class ContentAssetNames
     /// <summary>mod 文件夹内的默认数据根（相对 helper.DirectoryPath）。</summary>
     public const string AssetRoot = "assets/dialogue";
 
+    /// <summary>
+    /// 完整社区传记的可投放目录。这里是 mod 文件夹内的物理路径；加载后对外仍表现为
+    /// <c>Mods/Yuki.LivingNPCs/Bios/&lt;NPC内部名&gt;</c> 虚拟资产。
+    /// </summary>
+    public const string CommunityBiosDir = "npc_bios";
+
     public const string WorldDir = AssetRoot + "/world";
     public const string WorldSveDir = AssetRoot + "/world-sve";
     public const string BiosDir = AssetRoot + "/bios";

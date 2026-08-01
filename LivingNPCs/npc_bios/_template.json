@@ -1,0 +1,26 @@
+{
+  "Biography": "Write a clean-room summary of the NPC's stable background, daily life, tensions, preferences, and relationship arc with the farmer. Do not copy dialogue, event text, wiki prose, or the source mod page.",
+  "Relationships": {
+    "ExampleRelation": {
+      "id": "ExampleRelation",
+      "Heading": "Example relation",
+      "Description": "Describe the relationship in your own words, including only facts the NPC may safely know from the start."
+    }
+  },
+  "Traits": {
+    "core_trait": {
+      "id": "core_trait",
+      "Heading": "Core trait",
+      "Description": "Describe how this trait changes the NPC's choices, tone, or reactions instead of listing a single adjective."
+    }
+  },
+  "BiographyEnd": "Describe the NPC's speaking rhythm, restraint, humor, and emotional boundaries in one short paragraph.",
+  "Gender": "",
+  "Unique": "",
+  "ExtraPortraits": {},
+  "Preoccupations": [],
+  "Dialogue": {},
+  "HomeLocationBed": false,
+  "UsePatchedDialogue": false,
+  "PromptOverrides": {}
+}

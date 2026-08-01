@@ -209,10 +209,10 @@ AI 上下文可以感知当前日期、时间、季节、天气、节日、地�
 ## SVE 与自定义 NPC
 
 - <code>EnableSveCompatibility</code> 默认开启。安装 SVE 时会使用内置的 SVE 人物资料、关系和进度上下文；未安装 SVE 时不会强制要求它。
-- 第三方 NPC 可以使用游戏数据和保守的通用回退，但没有专门资料时，角色深度可能不如原版与 SVE 精修角色。社区可以把 JSON 人物资料直接放进 <code>Mods/LivingNPCs/npc_profiles/</code> 来补充或修正角色，写法见 [npc_profiles/README.md](./LivingNPCs/npc_profiles/README.md)。
+- 第三方 NPC 可以使用游戏数据和保守的通用回退，但没有专门资料时，角色深度可能不如原版与 SVE 精修角色。社区现在有两层 JSON 扩展：<code>npc_profiles/</code> 提供轻量行为与性格提示；<code>npc_bios/</code> 提供映射到 <code>Mods/Yuki.LivingNPCs/Bios/&lt;内部名&gt;</code> 的完整对话传记。写法分别见 [轻量人物资料](./LivingNPCs/npc_profiles/README.md) 与 [完整对话传记](./LivingNPCs/npc_bios/README.md)。
 - LivingNPCs 尊重内容作者对 AI 使用的许可。未明确允许 AI 使用的内容包文本不会被复制到提示词中；游戏内容本身仍可正常显示。
 
-当前没有宣称对 Ridgeside Village、East Scarp 等其他大型扩展提供专属精修适配。
+当前没有宣称对 East Scarp 等其他大型扩展提供专属精修适配；Ridgeside Village 目前仍受硬性 AI 兼容策略限制，添加资料不会解除该限制。
 
 ## 多人联机（v1：主机权威）
 

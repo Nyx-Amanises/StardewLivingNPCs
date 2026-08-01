@@ -594,9 +594,15 @@ LivingNPCs 会保存一层“主动求助”，让 NPC 自己开口请玩家帮�
   - 有些角色有手写摘要。
   - 其余角色会保留所属 Mod 的世界观提示，并回退到基础推断。
 - `npc_profiles/` 目录支持社区直接放入 JSON 人物资料：
-  - 可新增自定义 NPC；
+  - 可为已由其他 Mod 加入游戏的自定义 NPC 补充轻量行为资料；
   - 也可覆盖已有条目做修正；
   - 模板与提交流程见 [`npc_profiles/README.md`](./npc_profiles/README.md)。
+- `npc_bios/` 目录支持完整 `NpcBio` 对话传记：
+  - 物理 JSON 会映射到 `Mods/Yuki.LivingNPCs/Bios/<NPC内部名>` 虚拟资产；
+  - 支持精确 locale、父语言和默认文件回退；
+  - 模板、字段、安全边界与社区提交流程见 [`npc_bios/README.md`](./npc_bios/README.md)。
+
+两种资料都不会创建 NPC 本体，也不会绕过角色资格或大型扩展的兼容限制。Ridgeside Village 当前仍为硬性 AI 屏蔽范围。
 
 ## 使用方法
 

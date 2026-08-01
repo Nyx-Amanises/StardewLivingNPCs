@@ -1,0 +1,31 @@
+name: Validate community biographies
+
+on:
+  pull_request:
+    paths:
+      - "LivingNPCs/npc_bios/**"
+      - "LivingNPCs/Dialogue/Content/CommunityBioLoader.cs"
+      - "LivingNPCs/Dialogue/Content/GameContentPipeline.cs"
+      - "LivingNPCs/Dialogue/Content/NpcBio.cs"
+      - "LivingNPCs/Dialogue/Content/PortraitMarkerRules.cs"
+      - "tools/validate_community_bios.py"
+      - ".github/workflows/validate-community-bios.yml"
+  push:
+    paths:
+      - "LivingNPCs/npc_bios/**"
+      - "LivingNPCs/Dialogue/Content/CommunityBioLoader.cs"
+      - "LivingNPCs/Dialogue/Content/GameContentPipeline.cs"
+      - "LivingNPCs/Dialogue/Content/NpcBio.cs"
+      - "LivingNPCs/Dialogue/Content/PortraitMarkerRules.cs"
+      - "tools/validate_community_bios.py"
+      - ".github/workflows/validate-community-bios.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python tools/validate_community_bios.py --repository LivingNPCs/npc_bios
