@@ -6,22 +6,6 @@ using System.Text.Json.Nodes;
 
 namespace LivingNPCs.Behavior.Multiplayer;
 
-/// <summary>farmhand 记忆手册打开时机的纯决策。</summary>
-internal enum FarmhandBookAction
-{
-    /// <summary>快照未到且未超时：继续等。</summary>
-    Wait,
-
-    /// <summary>快照已到：用新数据开书。</summary>
-    OpenFresh,
-
-    /// <summary>超时但镜像里有旧数据：先开旧数据并提示。</summary>
-    OpenStaleWithNotice,
-
-    /// <summary>超时且镜像为空：放弃并提示占位。</summary>
-    GiveUpWithNotice
-}
-
 /// <summary>
 /// 远程交换入账的纯策略（单测覆盖）。v1 只允许 farmhand 请求由主机权威裁决的礼物、
 /// 金钱与物品型求助；出游、节日互动和未知世界动作在进入既有 RecordExchange 管道前
@@ -124,19 +108,4 @@ internal static class RemoteExchangePolicy
         return true;
     }
 
-    /// <summary>farmhand 开书决策：快照到达即开新；未超时继续等；超时按镜像有无降级。</summary>
-    public static FarmhandBookAction PlanBookOpen(bool snapshotArrived, bool timedOut, bool mirrorHasData)
-    {
-        if (snapshotArrived)
-        {
-            return FarmhandBookAction.OpenFresh;
-        }
-
-        if (!timedOut)
-        {
-            return FarmhandBookAction.Wait;
-        }
-
-        return mirrorHasData ? FarmhandBookAction.OpenStaleWithNotice : FarmhandBookAction.GiveUpWithNotice;
-    }
 }

@@ -17,6 +17,7 @@ namespace LivingNPCs.Behavior.Multiplayer;
 internal sealed class MultiplayerSyncService
 {
     private const long SnapshotSendThrottleMs = 1_000;
+    private const long BookSnapshotTimeoutMs = 5_000;
     private const int ExchangeRetryIntervalTicks = 60;
 
     private readonly IModMessageBus bus;
@@ -28,6 +29,7 @@ internal sealed class MultiplayerSyncService
     private readonly BehaviorFeedbackService feedback;
     private readonly string modUniqueId;
     private readonly Action<int, int> notifyProtocolMismatch;
+    private readonly Func<long> nowMilliseconds;
 
     /// <summary>主机侧收到交换上报后的入账入口（engine 晚绑定：入队主线程统一消费）。</summary>
     public Action<long, ExchangeReportMessage>? RemoteExchangeReceived { get; set; }
@@ -53,6 +55,15 @@ internal sealed class MultiplayerSyncService
     /// <summary>主机侧收到 farmhand 已领取代理任务金钱奖励的通知。</summary>
     public Action<long, QuestRewardClaimedMessage>? RemoteQuestRewardClaimed { get; set; }
 
+    /// <summary>主机侧按请求装配记忆手册只读快照（engine 晚绑定，主线程调用）。</summary>
+    public Func<BookSnapshotRequestMessage, BookSnapshotMessage?>? BookSnapshotProvider { get; set; }
+
+    /// <summary>farmhand 侧收到与当前请求匹配的主机快照后的主线程通知。</summary>
+    public Action<BookSnapshotMessage>? BookSnapshotReceived { get; set; }
+
+    /// <summary>farmhand 侧当前手册请求失败、超时或因主机断线终止后的主线程通知。</summary>
+    public Action? BookSnapshotTimedOut { get; set; }
+
     private readonly Dictionary<long, long> lastSnapshotSentTicksByPeer = new();
     private readonly HashSet<long> compatiblePeerIds = new();
     private readonly Queue<ExchangeReportMessage> pendingExchangeReports = new();
@@ -66,6 +77,8 @@ internal sealed class MultiplayerSyncService
     private bool protocolMismatchNotified;
     private ProtocolHandshakeState handshakeState = ProtocolHandshakeState.AwaitingHost;
     private int exchangeRetryTicksRemaining;
+    private string pendingBookSnapshotRequestId = string.Empty;
+    private long pendingBookSnapshotDeadlineMs;
 
     public MultiplayerSyncService(
         IModMessageBus bus,
@@ -76,7 +89,8 @@ internal sealed class MultiplayerSyncService
         HelpRequestQuestProjectionStore questProjections,
         BehaviorFeedbackService feedback,
         string modUniqueId,
-        Action<int, int>? notifyProtocolMismatch = null)
+        Action<int, int>? notifyProtocolMismatch = null,
+        Func<long>? nowMilliseconds = null)
     {
         this.bus = bus;
         this.runtime = runtime;
@@ -90,6 +104,7 @@ internal sealed class MultiplayerSyncService
             ?? ((hostVersion, localVersion) => this.feedback.Show(I18n.Get(
                 "hud.mp.protocolMismatch",
                 new { host = hostVersion, local = localVersion })));
+        this.nowMilliseconds = nowMilliseconds ?? (() => Environment.TickCount64);
         this.bus.MessageReceived += this.OnModMessageReceived;
     }
 
@@ -133,6 +148,9 @@ internal sealed class MultiplayerSyncService
 
     /// <summary>v1 唯一被整体禁用的 farmhand 世界动作机会：陪伴出游。</summary>
     public bool SuppressCompanionOutingOpportunity => this.UseHostAuthority;
+
+    /// <summary>远程 farmhand 的手册只读快照也只在兼容握手完成后走主机权威路径。</summary>
+    public bool UseHostAuthorityForBook => this.UseHostAuthority;
 
     public int PendingExchangeReportCount => this.pendingExchangeReports.Count;
 
@@ -364,6 +382,76 @@ internal sealed class MultiplayerSyncService
                 this.RemoteQuestRewardClaimed?.Invoke(e.FromPlayerId, message);
                 return;
             }
+
+            case SyncProtocol.TypeBookSnapshotRequest:
+            {
+                if (!this.runtime.IsMainPlayer || !this.compatiblePeerIds.Contains(e.FromPlayerId))
+                {
+                    return;
+                }
+
+                if (!this.TryRead(e, out BookSnapshotRequestMessage message)
+                    || !this.CheckVersion(message.SchemaVersion, e.Type)
+                    || string.IsNullOrWhiteSpace(message.RequestId))
+                {
+                    return;
+                }
+
+                BookSnapshotMessage? response;
+                try
+                {
+                    response = this.BookSnapshotProvider?.Invoke(message);
+                }
+                catch (Exception ex)
+                {
+                    this.monitor.Log(
+                        $"LivingNPCs book snapshot provider rejected {message.RequestId}: {ex.GetType().Name}",
+                        LogLevel.Warn);
+                    return;
+                }
+
+                if (response == null)
+                {
+                    return;
+                }
+
+                response.RequestId = message.RequestId;
+                try
+                {
+                    this.bus.Send(response, SyncProtocol.TypeBookSnapshot, new[] { e.FromPlayerId });
+                }
+                catch (Exception ex)
+                {
+                    this.monitor.Log(
+                        $"LivingNPCs book snapshot response failed for {message.RequestId}: {ex.GetType().Name}",
+                        LogLevel.Trace);
+                }
+
+                return;
+            }
+
+            case SyncProtocol.TypeBookSnapshot:
+            {
+                if (this.runtime.IsMainPlayer || !this.IsFromHost(e.FromPlayerId) || !this.UseHostAuthorityForBook)
+                {
+                    return;
+                }
+
+                if (!this.TryRead(e, out BookSnapshotMessage message)
+                    || !this.CheckVersion(message.SchemaVersion, e.Type)
+                    || string.IsNullOrWhiteSpace(this.pendingBookSnapshotRequestId)
+                    || !string.Equals(
+                        message.RequestId,
+                        this.pendingBookSnapshotRequestId,
+                        StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                this.ClearPendingBookSnapshot();
+                this.BookSnapshotReceived?.Invoke(message);
+                return;
+            }
         }
     }
 
@@ -395,6 +483,7 @@ internal sealed class MultiplayerSyncService
         }
         if (!this.runtime.IsMainPlayer && this.runtime.HostPlayerId == playerId)
         {
+            this.CompleteBookSnapshotTimeout();
             this.handshakeState = ProtocolHandshakeState.AwaitingHost;
         }
     }
@@ -408,6 +497,7 @@ internal sealed class MultiplayerSyncService
         this.appliedExchangeAckIds.Clear();
         this.appliedItemDeliveryResultIds.Clear();
         this.pendingQuestRewardClaimIds.Clear();
+        this.ClearPendingBookSnapshot();
     }
 
     public void OnReturnedToTitle()
@@ -423,6 +513,7 @@ internal sealed class MultiplayerSyncService
         this.appliedExchangeAckIds.Clear();
         this.appliedItemDeliveryResultIds.Clear();
         this.pendingQuestRewardClaimIds.Clear();
+        this.ClearPendingBookSnapshot();
         this.handshakeState = ProtocolHandshakeState.AwaitingHost;
         this.protocolMismatchNotified = false;
         this.loggedIncompatibleVersion = false;
@@ -432,6 +523,11 @@ internal sealed class MultiplayerSyncService
     {
         this.RetryPendingExchangeReports();
         this.RetryPendingQuestRewardClaims();
+        if (!string.IsNullOrWhiteSpace(this.pendingBookSnapshotRequestId)
+            && this.nowMilliseconds() >= this.pendingBookSnapshotDeadlineMs)
+        {
+            this.CompleteBookSnapshotTimeout();
+        }
     }
 
     // ---- farmhand 侧动作 ----
@@ -543,10 +639,71 @@ internal sealed class MultiplayerSyncService
         this.DiscardPendingExchangeReports("saving");
     }
 
-    /// <summary>P5 将在独立 BookSnapshot 协议上接管；关系视图不会冒充手册请求。</summary>
+    /// <summary>
+    /// farmhand 请求一次主机手册快照。同步 fake 总线可能在 Send 内立即回包，因此调用方
+    /// 必须先创建并挂上 loading 菜单。pending 期间重复调用只复用当前请求，不重复发送。
+    /// </summary>
     public bool TryBeginRemoteBookOpen()
     {
-        return false;
+        if (!this.UseHostAuthorityForBook)
+        {
+            return false;
+        }
+
+        if (!string.IsNullOrWhiteSpace(this.pendingBookSnapshotRequestId))
+        {
+            return true;
+        }
+
+        long? hostId = this.TryGetHostPlayerId();
+        if (hostId == null)
+        {
+            this.BookSnapshotTimedOut?.Invoke();
+            return true;
+        }
+
+        string requestId = Guid.NewGuid().ToString("N");
+        this.pendingBookSnapshotRequestId = requestId;
+        this.pendingBookSnapshotDeadlineMs = this.nowMilliseconds() + BookSnapshotTimeoutMs;
+        try
+        {
+            this.bus.Send(
+                new BookSnapshotRequestMessage { RequestId = requestId },
+                SyncProtocol.TypeBookSnapshotRequest,
+                new[] { hostId.Value });
+        }
+        catch (Exception ex)
+        {
+            this.monitor.Log(
+                $"LivingNPCs book snapshot request failed: {ex.GetType().Name}",
+                LogLevel.Trace);
+            this.CompleteBookSnapshotTimeout();
+        }
+
+        return true;
+    }
+
+    /// <summary>菜单被主动关闭时取消尚未完成的请求；迟到响应将因没有 pending ID 被忽略。</summary>
+    public void CancelPendingBookSnapshot()
+    {
+        this.ClearPendingBookSnapshot();
+    }
+
+    private void CompleteBookSnapshotTimeout()
+    {
+        if (string.IsNullOrWhiteSpace(this.pendingBookSnapshotRequestId))
+        {
+            return;
+        }
+
+        this.ClearPendingBookSnapshot();
+        this.BookSnapshotTimedOut?.Invoke();
+    }
+
+    private void ClearPendingBookSnapshot()
+    {
+        this.pendingBookSnapshotRequestId = string.Empty;
+        this.pendingBookSnapshotDeadlineMs = 0;
     }
 
     private void ApplyExchangeAck(ExchangeAckMessage message)

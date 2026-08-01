@@ -24,6 +24,8 @@ internal static class SyncProtocol
     public const string TypeItemDeliveryRequest = "ItemDeliveryRequest";
     public const string TypeItemDeliveryResult = "ItemDeliveryResult";
     public const string TypeQuestRewardClaimed = "QuestRewardClaimed";
+    public const string TypeBookSnapshotRequest = "BookSnapshotRequest";
+    public const string TypeBookSnapshot = "BookSnapshot";
 
     public static bool IsCompatible(int schemaVersion)
     {

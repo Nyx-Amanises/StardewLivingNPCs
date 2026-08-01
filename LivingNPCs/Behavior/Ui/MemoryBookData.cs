@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Linq;
 using System.Text.RegularExpressions;
+using LivingNPCs.Behavior.Multiplayer;
 using LivingNPCs.Dialogue;
 using LivingNPCs.Dialogue.Persistence;
 
@@ -32,6 +34,52 @@ internal sealed record MemoryBookNpcSummary(
     string SubtitleText
 );
 
+/// <summary>
+/// 从联机 DTO 物化出的手册只读源。内部状态与消息负载彼此深拷贝；每次导出也返回克隆，
+/// 因而菜单只能读取本次快照，不能反向污染消息缓存或主机心智。
+/// </summary>
+internal sealed class MemoryBookSnapshotSource
+{
+    private readonly Dictionary<string, LivingNpcState> statesByName;
+
+    public MemoryBookSnapshotSource(
+        IEnumerable<MemoryBookNpcSummary> roster,
+        IEnumerable<LivingNpcState> states,
+        int capturedTotalDays)
+    {
+        this.Roster = new ReadOnlyCollection<MemoryBookNpcSummary>(roster.ToList());
+        this.statesByName = states
+            .Where(state => !string.IsNullOrWhiteSpace(state.NpcName))
+            .GroupBy(state => state.NpcName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First().Clone(),
+                StringComparer.OrdinalIgnoreCase);
+        this.CapturedTotalDays = capturedTotalDays;
+    }
+
+    public IReadOnlyList<MemoryBookNpcSummary> Roster { get; }
+
+    public int CapturedTotalDays { get; }
+
+    public bool TryGetState(string npcName, out LivingNpcState? state)
+    {
+        if (this.statesByName.TryGetValue(npcName, out LivingNpcState? stored))
+        {
+            state = stored.Clone();
+            return true;
+        }
+
+        state = null;
+        return false;
+    }
+
+    public List<LivingNpcState> ExportStates()
+    {
+        return this.statesByName.Values.Select(state => state.Clone()).ToList();
+    }
+}
+
 /// <summary>手册标签页。</summary>
 internal enum MemoryBookTab
 {
@@ -51,6 +99,197 @@ internal static class MemoryBookData
     internal delegate string Translate(string key, object? tokens = null);
 
     private static readonly string[] MemoryKindOrder = ["fact", "preference", "promise", "boundary", "relationship"];
+
+    // ---- 联机只读快照 ----
+
+    /// <summary>
+    /// 从主机权威状态装配一次手册快照。只复制手册实际消费的字段；空状态与本地名册一样
+    /// 不进入负载，对话历史也明确不属于该消息。
+    /// </summary>
+    public static BookSnapshotMessage CreateBookSnapshot(
+        string requestId,
+        int capturedTotalDays,
+        IEnumerable<LivingNpcState> states)
+    {
+        ArgumentNullException.ThrowIfNull(states);
+
+        return new BookSnapshotMessage
+        {
+            RequestId = requestId ?? string.Empty,
+            CapturedTotalDays = capturedTotalDays,
+            Npcs = states
+                .Where(state => state != null
+                    && !string.IsNullOrWhiteSpace(state.NpcName)
+                    && HasAnythingToShow(state))
+                .GroupBy(state => state.NpcName, StringComparer.OrdinalIgnoreCase)
+                .Select(group => CreateBookNpcSnapshot(group.First()))
+                .ToList()
+        };
+    }
+
+    /// <summary>把单个权威状态深拷贝成不含游戏对象的协议 DTO。</summary>
+    public static BookNpcSnapshot CreateBookNpcSnapshot(LivingNpcState state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+
+        return new BookNpcSnapshot
+        {
+            NpcName = state.NpcName ?? string.Empty,
+            CurrentEmotion = state.CurrentEmotion ?? "Calm",
+            EmotionIntensity = state.EmotionIntensity,
+            InteractionComfortTier = state.InteractionComfortTier ?? "Distant",
+            RelationshipTrust = state.RelationshipTrust,
+            FarmerNickname = state.FarmerNickname ?? string.Empty,
+            ConsecutiveConversationDays = state.ConsecutiveConversationDays,
+            LastConversationTotalDays = state.LastConversationTotalDays,
+            RelationshipImpression = state.RelationshipImpression ?? string.Empty,
+            RelationshipImpressionUpdatedTotalDays = state.RelationshipImpressionUpdatedTotalDays,
+            LastGiftName = state.LastGiftName ?? string.Empty,
+            LastGiftTotalDays = state.LastGiftTotalDays,
+            LastUpdatedTotalDays = state.LastUpdatedTotalDays,
+            LongTermMemories = state.LongTermMemories
+                .Select(memory => new BookLongTermMemorySnapshot
+                {
+                    Kind = memory.Kind ?? "fact",
+                    Summary = memory.Summary ?? string.Empty,
+                    Importance = memory.Importance,
+                    LastUpdatedTotalDays = memory.LastUpdatedTotalDays,
+                    TimesReinforced = memory.TimesReinforced
+                })
+                .ToList(),
+            PlayerPreferenceMemories = state.PlayerPreferenceMemories
+                .Select(memory => new BookPlayerPreferenceSnapshot
+                {
+                    Summary = memory.Summary ?? string.Empty,
+                    Importance = memory.Importance
+                })
+                .ToList(),
+            SharedExperiences = state.SharedExperiences
+                .Select(experience => new BookSharedExperienceSnapshot
+                {
+                    Summary = experience.Summary ?? string.Empty,
+                    LocationName = experience.LocationName ?? string.Empty,
+                    LocationLabel = experience.LocationLabel ?? string.Empty,
+                    CreatedTotalDays = experience.CreatedTotalDays,
+                    LastUpdatedTotalDays = experience.LastUpdatedTotalDays
+                })
+                .ToList(),
+            HelpRequests = state.HelpRequests
+                .Select(request => new BookHelpRequestSnapshot
+                {
+                    Summary = request.Summary ?? string.Empty,
+                    Status = request.Status ?? "Pending",
+                    CreatedTotalDays = request.CreatedTotalDays
+                })
+                .ToList(),
+            Conflicts = state.Conflicts
+                .Select(conflict => new BookConflictSnapshot
+                {
+                    CauseKind = conflict.CauseKind ?? "dialogue",
+                    Summary = conflict.Summary ?? string.Empty,
+                    Severity = conflict.Severity,
+                    Status = conflict.Status ?? "Active"
+                })
+                .ToList()
+        };
+    }
+
+    /// <summary>
+    /// 把收到的纯 DTO 物化为独立只读源。显示名、心数与翻译均在 farmhand 本地求值；
+    /// 由此不会把主机玩家的关系数值或语言混进手册界面。
+    /// </summary>
+    public static MemoryBookSnapshotSource BuildSourceFromSnapshot(
+        BookSnapshotMessage snapshot,
+        Func<string, string> displayName,
+        Func<string, int> hearts,
+        Translate translate)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+        ArgumentNullException.ThrowIfNull(displayName);
+        ArgumentNullException.ThrowIfNull(hearts);
+        ArgumentNullException.ThrowIfNull(translate);
+
+        List<LivingNpcState> states = (snapshot.Npcs ?? new List<BookNpcSnapshot>())
+            .Where(npc => npc != null && !string.IsNullOrWhiteSpace(npc.NpcName))
+            .Select(BuildStateFromSnapshot)
+            .GroupBy(state => state.NpcName, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .ToList();
+        List<MemoryBookNpcSummary> roster = BuildRoster(
+            states,
+            displayName,
+            hearts,
+            snapshot.CapturedTotalDays,
+            translate);
+        return new MemoryBookSnapshotSource(roster, states, snapshot.CapturedTotalDays);
+    }
+
+    /// <summary>从协议 DTO 重建仅供手册读取的临时状态；不会进入 BehaviorMemory。</summary>
+    public static LivingNpcState BuildStateFromSnapshot(BookNpcSnapshot snapshot)
+    {
+        ArgumentNullException.ThrowIfNull(snapshot);
+
+        return new LivingNpcState
+        {
+            NpcName = snapshot.NpcName ?? string.Empty,
+            CurrentEmotion = snapshot.CurrentEmotion ?? "Calm",
+            EmotionIntensity = snapshot.EmotionIntensity,
+            InteractionComfortTier = snapshot.InteractionComfortTier ?? "Distant",
+            RelationshipTrust = snapshot.RelationshipTrust,
+            FarmerNickname = snapshot.FarmerNickname ?? string.Empty,
+            ConsecutiveConversationDays = snapshot.ConsecutiveConversationDays,
+            LastConversationTotalDays = snapshot.LastConversationTotalDays,
+            RelationshipImpression = snapshot.RelationshipImpression ?? string.Empty,
+            RelationshipImpressionUpdatedTotalDays = snapshot.RelationshipImpressionUpdatedTotalDays,
+            LastGiftName = snapshot.LastGiftName ?? string.Empty,
+            LastGiftTotalDays = snapshot.LastGiftTotalDays,
+            LastUpdatedTotalDays = snapshot.LastUpdatedTotalDays,
+            LongTermMemories = (snapshot.LongTermMemories ?? new List<BookLongTermMemorySnapshot>())
+                .Select(memory => new LongTermMemoryFact
+                {
+                    Kind = memory.Kind ?? "fact",
+                    Summary = memory.Summary ?? string.Empty,
+                    Importance = memory.Importance,
+                    LastUpdatedTotalDays = memory.LastUpdatedTotalDays,
+                    TimesReinforced = memory.TimesReinforced
+                })
+                .ToList(),
+            PlayerPreferenceMemories = (snapshot.PlayerPreferenceMemories ?? new List<BookPlayerPreferenceSnapshot>())
+                .Select(memory => new PlayerPreferenceFact
+                {
+                    Summary = memory.Summary ?? string.Empty,
+                    Importance = memory.Importance
+                })
+                .ToList(),
+            SharedExperiences = (snapshot.SharedExperiences ?? new List<BookSharedExperienceSnapshot>())
+                .Select(experience => new SharedExperienceFact
+                {
+                    Summary = experience.Summary ?? string.Empty,
+                    LocationName = experience.LocationName ?? string.Empty,
+                    LocationLabel = experience.LocationLabel ?? string.Empty,
+                    CreatedTotalDays = experience.CreatedTotalDays,
+                    LastUpdatedTotalDays = experience.LastUpdatedTotalDays
+                })
+                .ToList(),
+            HelpRequests = (snapshot.HelpRequests ?? new List<BookHelpRequestSnapshot>())
+                .Select(request => new NpcHelpRequestFact
+                {
+                    Summary = request.Summary ?? string.Empty,
+                    Status = request.Status ?? "Pending",
+                    CreatedTotalDays = request.CreatedTotalDays
+                })
+                .ToList(),
+            Conflicts = (snapshot.Conflicts ?? new List<BookConflictSnapshot>())
+                .Select(conflict => new NpcConflictFact
+                {
+                    CauseKind = conflict.CauseKind ?? "dialogue",
+                    Summary = conflict.Summary ?? string.Empty,
+                    Severity = conflict.Severity,
+                    Status = conflict.Status ?? "Active"
+                })
+                .ToList()
+        };
+    }
 
     // ---- 名册 ----
 

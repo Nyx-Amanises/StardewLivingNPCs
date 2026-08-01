@@ -19,6 +19,13 @@ namespace LivingNPCs.Behavior.Ui;
 /// </summary>
 internal sealed class MemoryBookMenu : IClickableMenu
 {
+    private enum RemoteLoadState
+    {
+        Ready,
+        Loading,
+        TimedOut
+    }
+
     private const int RosterRowHeight = 100;
     private const int TabButtonHeight = 64;
     private const int ContentPadding = 24;
@@ -28,6 +35,8 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
     private readonly MemoryBookData.Translate translate;
     private readonly Func<string, StardewEventHistory> getHistory;
+    private readonly Func<string> getFarmerName;
+    private readonly bool uiInitialized;
     private readonly Dictionary<string, LivingNpcState> statesByName;
     private readonly List<MemoryBookNpcSummary> roster;
     private readonly Dictionary<(string Npc, MemoryBookTab Tab), List<MemoryBookLine>> pageCache = new();
@@ -45,6 +54,8 @@ internal sealed class MemoryBookMenu : IClickableMenu
     private int selectedRosterIndex;
     private MemoryBookTab activeTab = MemoryBookTab.Relationship;
     private string hoverText = string.Empty;
+    private int capturedTotalDays;
+    private RemoteLoadState remoteLoadState;
 
     /// <summary>换好行的绘制行（按当前列宽缓存；列宽或数据变化时重建）。</summary>
     private readonly List<(MemoryBookLine Line, string Wrapped, float Height)> wrappedLines = new();
@@ -55,22 +66,33 @@ internal sealed class MemoryBookMenu : IClickableMenu
         List<MemoryBookNpcSummary> roster,
         Dictionary<string, LivingNpcState> statesByName,
         Func<string, StardewEventHistory> getHistory,
-        MemoryBookData.Translate translate)
+        Func<string> getFarmerName,
+        MemoryBookData.Translate translate,
+        int capturedTotalDays,
+        RemoteLoadState remoteLoadState,
+        bool initializeUi)
     {
         this.roster = roster;
         this.statesByName = statesByName;
         this.getHistory = getHistory;
+        this.getFarmerName = getFarmerName;
         this.translate = translate;
+        this.capturedTotalDays = capturedTotalDays;
+        this.remoteLoadState = remoteLoadState;
+        this.uiInitialized = initializeUi;
 
-        this.RebuildLayout();
-        this.initializeUpperRightCloseButton();
-        Game1.playSound("bigSelect");
+        if (initializeUi)
+        {
+            this.RebuildLayout();
+            this.initializeUpperRightCloseButton();
+            Game1.playSound("bigSelect");
+        }
     }
 
     /// <summary>入口：没有任何可展示的 NPC 时返回 null（调用方给 HUD 提示）。</summary>
     public static MemoryBookMenu? TryCreate(BehaviorMemory memory)
     {
-        MemoryBookData.Translate translate = static (key, tokens) => I18n.Get(key, tokens);
+        MemoryBookData.Translate translate = TranslateI18n;
         int nowTotalDays = Game1.Date.TotalDays;
         var states = memory.GetTrackedStates().ToList();
         var statesByName = states
@@ -94,7 +116,46 @@ internal sealed class MemoryBookMenu : IClickableMenu
             roster,
             statesByName,
             npcName => DialogueHistoryStore.Instance.GetHistory(npcName),
-            translate);
+            () => Game1.player?.Name ?? "Farmer",
+            translate,
+            nowTotalDays,
+            RemoteLoadState.Ready,
+            initializeUi: true);
+    }
+
+    /// <summary>
+    /// farmhand 入口：立即打开安全的加载中菜单；对话页解析器仍指向本地历史，
+    /// 收到主机快照后由 <see cref="ApplySnapshot"/> 原地填充。
+    /// </summary>
+    public static MemoryBookMenu CreateRemoteLoading()
+    {
+        MemoryBookData.Translate translate = TranslateI18n;
+        return new MemoryBookMenu(
+            new List<MemoryBookNpcSummary>(),
+            new Dictionary<string, LivingNpcState>(StringComparer.OrdinalIgnoreCase),
+            npcName => DialogueHistoryStore.Instance.GetHistory(npcName),
+            () => Game1.player?.Name ?? "Farmer",
+            translate,
+            Game1.Date.TotalDays,
+            RemoteLoadState.Loading,
+            initializeUi: true);
+    }
+
+    /// <summary>无游戏绘制依赖的构造缝，仅用于验证菜单状态与本地历史路由。</summary>
+    internal static MemoryBookMenu CreateRemoteLoading(
+        Func<string, StardewEventHistory> getHistory,
+        Func<string> getFarmerName,
+        MemoryBookData.Translate translate)
+    {
+        return new MemoryBookMenu(
+            new List<MemoryBookNpcSummary>(),
+            new Dictionary<string, LivingNpcState>(StringComparer.OrdinalIgnoreCase),
+            getHistory,
+            getFarmerName,
+            translate,
+            capturedTotalDays: -1,
+            RemoteLoadState.Loading,
+            initializeUi: false);
     }
 
     private static int SafeHearts(string npcName)
@@ -107,6 +168,11 @@ internal sealed class MemoryBookMenu : IClickableMenu
         {
             return 0;
         }
+    }
+
+    private static string TranslateI18n(string key, object? tokens = null)
+    {
+        return tokens == null ? I18n.Get(key) : I18n.Get(key, tokens);
     }
 
     // ---- 布局 ----
@@ -179,15 +245,57 @@ internal sealed class MemoryBookMenu : IClickableMenu
     public override void gameWindowSizeChanged(Rectangle oldBounds, Rectangle newBounds)
     {
         base.gameWindowSizeChanged(oldBounds, newBounds);
+        if (!this.uiInitialized)
+        {
+            return;
+        }
+
         this.RebuildLayout();
         this.initializeUpperRightCloseButton();
     }
 
     // ---- 数据 ----
 
-    private MemoryBookNpcSummary SelectedNpc => this.roster[Math.Clamp(this.selectedRosterIndex, 0, this.roster.Count - 1)];
+    internal bool IsRemoteLoading => this.remoteLoadState == RemoteLoadState.Loading;
 
-    private List<MemoryBookLine> GetPageLines(string npcName, MemoryBookTab tab)
+    internal bool IsRemoteTimedOut => this.remoteLoadState == RemoteLoadState.TimedOut;
+
+    internal bool HasBrowsableContent => this.remoteLoadState == RemoteLoadState.Ready && this.roster.Count > 0;
+
+    internal string? SelectedNpcName
+    {
+        get
+        {
+            return this.TryGetSelectedNpc(out MemoryBookNpcSummary? npc) && npc != null
+                ? npc.NpcName
+                : null;
+        }
+    }
+
+    internal string StatusText => this.GetStatusText();
+
+    internal int CachedPageCount => this.pageCache.Count;
+
+    /// <summary>把主机快照原地装入当前菜单；成功的空快照与超时是两个不同状态。</summary>
+    public void ApplySnapshot(MemoryBookSnapshotSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        this.ApplySnapshot(source.Roster, source.ExportStates(), source.CapturedTotalDays);
+    }
+
+    /// <summary>请求超时时保留菜单壳并显示占位；迟到的有效快照仍可随后覆盖该状态。</summary>
+    public void MarkTimedOut()
+    {
+        if (this.remoteLoadState != RemoteLoadState.Loading)
+        {
+            return;
+        }
+
+        this.remoteLoadState = RemoteLoadState.TimedOut;
+        this.ResetTransientViewState();
+    }
+
+    internal List<MemoryBookLine> GetPageLines(string npcName, MemoryBookTab tab)
     {
         var cacheKey = (npcName, tab);
         if (this.pageCache.TryGetValue(cacheKey, out List<MemoryBookLine>? cached))
@@ -195,28 +303,129 @@ internal sealed class MemoryBookMenu : IClickableMenu
             return cached;
         }
 
-        int nowTotalDays = Game1.Date.TotalDays;
+        MemoryBookNpcSummary? summary = this.roster.FirstOrDefault(
+            entry => string.Equals(entry.NpcName, npcName, StringComparison.OrdinalIgnoreCase));
+        string displayName = summary?.DisplayName ?? npcName;
+        int hearts = summary?.Hearts ?? 0;
+
+        // 对话历史属于当前 farmhand 本地文件，绝不依赖主机快照里是否有该 NPC 的行为状态。
         List<MemoryBookLine> lines;
-        if (!this.statesByName.TryGetValue(npcName, out LivingNpcState? state))
+        if (tab == MemoryBookTab.Conversations)
+        {
+            lines = MemoryBookData.BuildConversationLines(
+                this.SafeHistory(npcName),
+                displayName,
+                this.SafeFarmerName(),
+                this.translate);
+        }
+        else if (!this.statesByName.TryGetValue(npcName, out LivingNpcState? state))
         {
             lines = new List<MemoryBookLine> { new(MemoryBookLineKind.Empty, this.translate("book.memories.empty")) };
         }
         else
         {
-            string displayName = this.SelectedNpc.DisplayName;
             lines = tab switch
             {
                 MemoryBookTab.Relationship => MemoryBookData.BuildRelationshipCard(
-                    state, displayName, this.SelectedNpc.Hearts, nowTotalDays, this.translate),
-                MemoryBookTab.Memories => MemoryBookData.BuildMemoryLines(state, nowTotalDays, this.translate),
-                MemoryBookTab.Conversations => MemoryBookData.BuildConversationLines(
-                    this.SafeHistory(npcName), displayName, Game1.player?.Name ?? "Farmer", this.translate),
-                _ => MemoryBookData.BuildMomentLines(state, nowTotalDays, this.translate)
+                    state, displayName, hearts, this.capturedTotalDays, this.translate),
+                MemoryBookTab.Memories => MemoryBookData.BuildMemoryLines(state, this.capturedTotalDays, this.translate),
+                _ => MemoryBookData.BuildMomentLines(state, this.capturedTotalDays, this.translate)
             };
         }
 
         this.pageCache[cacheKey] = lines;
         return lines;
+    }
+
+    private void ApplySnapshot(
+        IEnumerable<MemoryBookNpcSummary> incomingRoster,
+        IEnumerable<LivingNpcState> incomingStates,
+        int capturedTotalDays)
+    {
+        string? previouslySelectedNpc = this.SelectedNpcName;
+        List<MemoryBookNpcSummary> rosterCopy = incomingRoster
+            .Where(entry => entry != null && !string.IsNullOrWhiteSpace(entry.NpcName))
+            .GroupBy(entry => entry.NpcName, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .Select(entry => new MemoryBookNpcSummary(
+                entry.NpcName,
+                entry.DisplayName,
+                entry.Hearts,
+                entry.LastContactTotalDays,
+                entry.SubtitleText))
+            .ToList();
+        Dictionary<string, LivingNpcState> stateCopies = incomingStates
+            .Where(state => state != null && !string.IsNullOrWhiteSpace(state.NpcName))
+            .GroupBy(state => state.NpcName, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(
+                group => group.Key,
+                group => group.First().Clone(),
+                StringComparer.OrdinalIgnoreCase);
+
+        this.roster.Clear();
+        this.roster.AddRange(rosterCopy);
+        this.statesByName.Clear();
+        foreach ((string npcName, LivingNpcState state) in stateCopies)
+        {
+            this.statesByName[npcName] = state;
+        }
+
+        this.capturedTotalDays = capturedTotalDays;
+        this.remoteLoadState = RemoteLoadState.Ready;
+        int preservedIndex = previouslySelectedNpc == null
+            ? -1
+            : this.roster.FindIndex(entry => string.Equals(
+                entry.NpcName,
+                previouslySelectedNpc,
+                StringComparison.OrdinalIgnoreCase));
+        this.selectedRosterIndex = preservedIndex >= 0 ? preservedIndex : 0;
+        this.ResetTransientViewState();
+
+        if (this.uiInitialized)
+        {
+            this.RebuildLayout();
+        }
+        else
+        {
+            this.ClampScrolls();
+        }
+    }
+
+    private bool TryGetSelectedNpc(out MemoryBookNpcSummary? npc)
+    {
+        if (!this.HasBrowsableContent)
+        {
+            npc = null;
+            return false;
+        }
+
+        this.selectedRosterIndex = Math.Clamp(this.selectedRosterIndex, 0, this.roster.Count - 1);
+        npc = this.roster[this.selectedRosterIndex];
+        return true;
+    }
+
+    private string GetStatusText()
+    {
+        string key = this.remoteLoadState switch
+        {
+            RemoteLoadState.Loading => "book.remote.loading",
+            RemoteLoadState.TimedOut => "book.remote.timeout",
+            _ when this.roster.Count == 0 => "book.remote.empty",
+            _ => string.Empty
+        };
+        return string.IsNullOrEmpty(key) ? string.Empty : this.translate(key);
+    }
+
+    private void ResetTransientViewState()
+    {
+        this.pageCache.Clear();
+        this.wrappedLines.Clear();
+        this.wrappedForWidth = -1;
+        this.wrappedForPage = null;
+        this.rosterScrollIndex = 0;
+        this.contentScroll = 0f;
+        this.contentHeight = 0f;
+        this.hoverText = string.Empty;
     }
 
     private StardewEventHistory SafeHistory(string npcName)
@@ -231,10 +440,31 @@ internal sealed class MemoryBookMenu : IClickableMenu
         }
     }
 
+    private string SafeFarmerName()
+    {
+        try
+        {
+            string name = this.getFarmerName();
+            return string.IsNullOrWhiteSpace(name) ? "Farmer" : name;
+        }
+        catch
+        {
+            return "Farmer";
+        }
+    }
+
     private void EnsureWrapped()
     {
+        if (!this.TryGetSelectedNpc(out MemoryBookNpcSummary? selectedNpc) || selectedNpc == null)
+        {
+            this.wrappedLines.Clear();
+            this.wrappedForPage = null;
+            this.contentHeight = 0f;
+            return;
+        }
+
         int textWidth = this.contentBounds.Width - (ContentPadding * 2) - 40;
-        var page = (this.SelectedNpc.NpcName, this.activeTab);
+        var page = (selectedNpc.NpcName, this.activeTab);
         if (this.wrappedForWidth == textWidth && this.wrappedForPage == page)
         {
             return;
@@ -296,8 +526,13 @@ internal sealed class MemoryBookMenu : IClickableMenu
         this.contentScroll = Math.Clamp(this.contentScroll, 0f, maxScroll);
     }
 
-    private void SelectRoster(int index, bool playSound = true)
+    internal void SelectRoster(int index, bool playSound = true)
     {
+        if (!this.HasBrowsableContent)
+        {
+            return;
+        }
+
         index = Math.Clamp(index, 0, this.roster.Count - 1);
         if (index == this.selectedRosterIndex)
         {
@@ -315,7 +550,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
             this.rosterScrollIndex = index - this.VisibleRosterRows + 1;
         }
 
-        if (playSound)
+        if (playSound && this.uiInitialized)
         {
             Game1.playSound("smallSelect");
         }
@@ -330,7 +565,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
         this.activeTab = tab;
         this.contentScroll = 0f;
-        if (playSound)
+        if (playSound && this.uiInitialized)
         {
             Game1.playSound("shwip");
         }
@@ -340,6 +575,16 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
     public override void receiveLeftClick(int x, int y, bool playSound = true)
     {
+        if (!this.HasBrowsableContent)
+        {
+            if (this.uiInitialized)
+            {
+                base.receiveLeftClick(x, y, playSound);
+            }
+
+            return;
+        }
+
         base.receiveLeftClick(x, y, playSound);
 
         for (int i = 0; i < this.rosterRows.Count; i++)
@@ -374,6 +619,11 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
     public override void receiveScrollWheelAction(int direction)
     {
+        if (!this.HasBrowsableContent)
+        {
+            return;
+        }
+
         base.receiveScrollWheelAction(direction);
         Point cursor = Game1.getMousePosition(true);
         if (this.rosterBounds.Contains(cursor))
@@ -387,12 +637,17 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
     private void ScrollRoster(int delta)
     {
+        if (!this.HasBrowsableContent)
+        {
+            return;
+        }
+
         int previous = this.rosterScrollIndex;
         this.rosterScrollIndex = Math.Clamp(
             this.rosterScrollIndex + delta,
             0,
             Math.Max(0, this.roster.Count - this.VisibleRosterRows));
-        if (previous != this.rosterScrollIndex)
+        if (previous != this.rosterScrollIndex && this.uiInitialized)
         {
             Game1.playSound("shiny4");
         }
@@ -400,6 +655,11 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
     private void ScrollContent(float delta)
     {
+        if (!this.HasBrowsableContent)
+        {
+            return;
+        }
+
         this.contentScroll += delta;
         this.ClampScrolls();
     }
@@ -409,6 +669,11 @@ internal sealed class MemoryBookMenu : IClickableMenu
         if (key is Keys.Escape)
         {
             this.exitThisMenu();
+            return;
+        }
+
+        if (!this.HasBrowsableContent)
+        {
             return;
         }
 
@@ -433,11 +698,19 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
     public override void receiveGamePadButton(Buttons b)
     {
+        if (b == Buttons.B)
+        {
+            this.exitThisMenu();
+            return;
+        }
+
+        if (!this.HasBrowsableContent)
+        {
+            return;
+        }
+
         switch (b)
         {
-            case Buttons.B:
-                this.exitThisMenu();
-                return;
             case Buttons.LeftShoulder:
                 this.SelectTab(PreviousTab(this.activeTab));
                 return;
@@ -473,8 +746,18 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
     public override void performHoverAction(int x, int y)
     {
-        base.performHoverAction(x, y);
         this.hoverText = string.Empty;
+        if (!this.HasBrowsableContent)
+        {
+            if (this.uiInitialized)
+            {
+                base.performHoverAction(x, y);
+            }
+
+            return;
+        }
+
+        base.performHoverAction(x, y);
         this.rosterUpArrow?.tryHover(x, y);
         this.rosterDownArrow?.tryHover(x, y);
 
@@ -525,6 +808,14 @@ internal sealed class MemoryBookMenu : IClickableMenu
             this.xPositionOnScreen + this.width / 2,
             this.yPositionOnScreen - 8);
 
+        if (!this.HasBrowsableContent)
+        {
+            this.DrawStatusPlaceholder(b);
+            base.draw(b);
+            this.drawMouse(b);
+            return;
+        }
+
         this.DrawRoster(b);
         this.DrawDivider(b);
         this.DrawTabs(b);
@@ -538,6 +829,22 @@ internal sealed class MemoryBookMenu : IClickableMenu
         }
 
         this.drawMouse(b);
+    }
+
+    private void DrawStatusPlaceholder(SpriteBatch b)
+    {
+        string text = Game1.parseText(
+            this.GetStatusText(),
+            Game1.dialogueFont,
+            Math.Max(320, this.width - 240));
+        Vector2 size = Game1.dialogueFont.MeasureString(text);
+        b.DrawString(
+            Game1.dialogueFont,
+            text,
+            new Vector2(
+                this.xPositionOnScreen + (this.width - size.X) / 2f,
+                this.yPositionOnScreen + (this.height - size.Y) / 2f),
+            new Color(120, 100, 80));
     }
 
     private void DrawRoster(SpriteBatch b)

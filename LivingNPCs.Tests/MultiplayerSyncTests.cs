@@ -10,7 +10,7 @@ namespace LivingNPCs.Tests;
 
 /// <summary>
 /// 多人 v1（主机权威）的纯逻辑面：远程交换净化策略、协议兼容、角色判定、
-/// farmhand 开书决策、关系视图缓存与消息序列化往返。
+/// 关系视图缓存与消息序列化往返。
 /// </summary>
 public sealed class MultiplayerSyncTests
 {
@@ -196,21 +196,7 @@ public sealed class MultiplayerSyncTests
         Assert.Equal(expected.ToJsonString(), actual.ToJsonString());
     }
 
-    // ---- 开书决策 / 角色判定 / 协议 ----
-
-    [Theory]
-    [InlineData(true, false, false, (int)FarmhandBookAction.OpenFresh)]
-    [InlineData(true, true, true, (int)FarmhandBookAction.OpenFresh)]
-    [InlineData(false, false, false, (int)FarmhandBookAction.Wait)]
-    [InlineData(false, false, true, (int)FarmhandBookAction.Wait)]
-    [InlineData(false, true, true, (int)FarmhandBookAction.OpenStaleWithNotice)]
-    [InlineData(false, true, false, (int)FarmhandBookAction.GiveUpWithNotice)]
-    public void PlansFarmhandBookOpen(bool snapshotArrived, bool timedOut, bool mirrorHasData, int expected)
-    {
-        Assert.Equal(
-            (FarmhandBookAction)expected,
-            RemoteExchangePolicy.PlanBookOpen(snapshotArrived, timedOut, mirrorHasData));
-    }
+    // ---- 角色判定 / 协议 ----
 
     [Theory]
     [InlineData(true, true, (int)MultiplayerRole.HostPlayer)]

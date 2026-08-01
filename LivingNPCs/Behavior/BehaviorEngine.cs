@@ -75,6 +75,7 @@ internal sealed class BehaviorEngine
     private string pendingGiftMailKey = string.Empty;
     private int pendingGiftMailTrackTicks;
     private string activeGiftMailKey = string.Empty;
+    private Ui.MemoryBookMenu? remoteMemoryBookMenu;
 
     public BehaviorEngine(IModHelper helper, IMonitor monitor, ModConfig config, string modUniqueId = "Yuki.LivingNPCs")
     {
@@ -115,6 +116,9 @@ internal sealed class BehaviorEngine
         this.multiplayerSync.RemoteItemDeliveryReceived = this.ApplyRemoteItemDelivery;
         this.multiplayerSync.ItemDeliveryResultReceived = this.conversationStartRecorder.ApplyRemoteItemDeliveryResult;
         this.multiplayerSync.RemoteQuestRewardClaimed = this.ApplyRemoteQuestRewardClaimed;
+        this.multiplayerSync.BookSnapshotProvider = this.BuildBookSnapshot;
+        this.multiplayerSync.BookSnapshotReceived = this.ApplyRemoteBookSnapshot;
+        this.multiplayerSync.BookSnapshotTimedOut = this.MarkRemoteBookSnapshotTimedOut;
     }
 
     public void RegisterEvents()
@@ -337,6 +341,7 @@ internal sealed class BehaviorEngine
             this.delayedTravelActions.Clear();
             this.itemDeliveryResults.Clear();
             this.multiplayerSync.OnReturnedToTitle();
+            this.remoteMemoryBookMenu = null;
         });
     }
 
@@ -383,17 +388,98 @@ internal sealed class BehaviorEngine
 
     /// <summary>
     /// 打开游戏内记忆手册（原快捷键行为是控制台摘要，现由 livingnpcs_debug 命令承担）。
-    /// 远程 farmhand 在主机权威下先向主机请求只读快照，快照到位（或超时降级）后再开书；
+    /// 远程 farmhand 在主机权威下立即打开 loading 菜单，再向主机请求只读快照并原地填充；
     /// 其余场合直接从本地记忆开。还没有任何可展示 NPC 时给 HUD 提示而不是弹一本空书。
     /// </summary>
     private void OpenMemoryBook()
     {
-        if (this.multiplayerSync.TryBeginRemoteBookOpen())
+        if (!Context.IsWorldReady || Game1.activeClickableMenu != null)
         {
             return;
         }
 
+        if (this.multiplayerSync.UseHostAuthorityForBook)
+        {
+            Ui.MemoryBookMenu menu = Ui.MemoryBookMenu.CreateRemoteLoading();
+            this.remoteMemoryBookMenu = menu;
+            // 同步 fake 总线会在 Send 内立即回包；菜单必须先成为当前菜单，回调才能安全填充。
+            Game1.activeClickableMenu = menu;
+            if (this.multiplayerSync.TryBeginRemoteBookOpen())
+            {
+                return;
+            }
+
+            // 握手状态可能在创建菜单与发送之间变化；此时撤销 loading 壳并按本地路径降级。
+            this.remoteMemoryBookMenu = null;
+            if (ReferenceEquals(Game1.activeClickableMenu, menu))
+            {
+                Game1.activeClickableMenu = null;
+            }
+        }
+
         this.OpenMemoryBookFromLocalMemory();
+    }
+
+    private Multiplayer.BookSnapshotMessage BuildBookSnapshot(Multiplayer.BookSnapshotRequestMessage request)
+    {
+        int capturedTotalDays = Context.IsWorldReady ? Game1.Date.TotalDays : -1;
+        return Ui.MemoryBookData.CreateBookSnapshot(
+            request.RequestId,
+            capturedTotalDays,
+            this.memory.GetTrackedStates());
+    }
+
+    private void ApplyRemoteBookSnapshot(Multiplayer.BookSnapshotMessage snapshot)
+    {
+        Ui.MemoryBookMenu? menu = this.remoteMemoryBookMenu;
+        if (menu == null || !ReferenceEquals(Game1.activeClickableMenu, menu))
+        {
+            this.remoteMemoryBookMenu = null;
+            return;
+        }
+
+        Ui.MemoryBookSnapshotSource source = Ui.MemoryBookData.BuildSourceFromSnapshot(
+            snapshot,
+            SafeBookDisplayName,
+            SafeBookHearts,
+            static (key, tokens) => tokens == null ? I18n.Get(key) : I18n.Get(key, tokens));
+        menu.ApplySnapshot(source);
+    }
+
+    private void MarkRemoteBookSnapshotTimedOut()
+    {
+        Ui.MemoryBookMenu? menu = this.remoteMemoryBookMenu;
+        if (menu == null || !ReferenceEquals(Game1.activeClickableMenu, menu))
+        {
+            this.remoteMemoryBookMenu = null;
+            return;
+        }
+
+        menu.MarkTimedOut();
+    }
+
+    private static string SafeBookDisplayName(string npcName)
+    {
+        try
+        {
+            return Game1.getCharacterFromName(npcName)?.displayName ?? npcName;
+        }
+        catch
+        {
+            return npcName;
+        }
+    }
+
+    private static int SafeBookHearts(string npcName)
+    {
+        try
+        {
+            return Game1.player?.getFriendshipHeartLevelForNPC(npcName) ?? 0;
+        }
+        catch
+        {
+            return 0;
+        }
     }
 
     /// <summary>从本地记忆（主机真身或 farmhand 镜像）开书；延迟打开时防菜单叠加。</summary>
@@ -418,6 +504,14 @@ internal sealed class BehaviorEngine
     {
         this.SafeRun("menu changed", () =>
         {
+            if (this.remoteMemoryBookMenu != null
+                && ReferenceEquals(e.OldMenu, this.remoteMemoryBookMenu)
+                && !ReferenceEquals(e.NewMenu, this.remoteMemoryBookMenu))
+            {
+                this.multiplayerSync.CancelPendingBookSnapshot();
+                this.remoteMemoryBookMenu = null;
+            }
+
             if (e.OldMenu is LetterViewerMenu)
             {
                 string mailKey = string.IsNullOrWhiteSpace(this.activeGiftMailKey)
