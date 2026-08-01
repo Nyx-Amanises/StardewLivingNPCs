@@ -71,6 +71,7 @@ internal sealed class BehaviorEngineServices
             config,
             this.Memory,
             this.MailService,
+            this.MultiplayerSync.GetDebugStatus,
             this.Feedback.Show,
             () => this.AfterManualMemoryClear?.Invoke()
         );

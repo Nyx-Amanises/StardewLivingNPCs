@@ -75,6 +75,7 @@ var tests = new List<RegressionCheck>
             "livingnpcs_eval"
         ]
     ),
+    CheckMultiplayerDebugStatusChain(root),
     CheckFileContains(
         "README 记录调试工具",
         Path.Combine(root, "README.md"),
@@ -154,6 +155,74 @@ static RegressionCheck CheckDirectoryContains(string name, string path, IReadOnl
     return missing.Count == 0
         ? new RegressionCheck(name, true, $"已扫描 {sourceFiles.Length} 个源码文件")
         : new RegressionCheck(name, false, $"缺少：{string.Join(", ", missing)}");
+}
+
+static RegressionCheck CheckMultiplayerDebugStatusChain(string root)
+{
+    string statusPath = Path.Combine(
+        root,
+        "LivingNPCs",
+        "Behavior",
+        "Multiplayer",
+        "MultiplayerDebugStatus.cs");
+    string syncServicePath = Path.Combine(
+        root,
+        "LivingNPCs",
+        "Behavior",
+        "Multiplayer",
+        "MultiplayerSyncService.cs");
+    string debugHandlerPath = Path.Combine(
+        root,
+        "LivingNPCs",
+        "Behavior",
+        "Diagnostics",
+        "BehaviorDebugCommandHandler.cs");
+    string compositionPath = Path.Combine(root, "LivingNPCs", "Behavior", "BehaviorEngineServices.cs");
+
+    var missingFiles = new[] { statusPath, syncServicePath, debugHandlerPath, compositionPath }
+        .Where(path => !File.Exists(path))
+        .ToList();
+    if (missingFiles.Count > 0)
+    {
+        return new RegressionCheck(
+            "livingnpcs_debug 包含联机同步状态",
+            false,
+            $"文件不存在：{string.Join(", ", missingFiles)}");
+    }
+
+    string statusText = File.ReadAllText(statusPath);
+    string syncServiceText = File.ReadAllText(syncServicePath);
+    string debugHandlerText = File.ReadAllText(debugHandlerPath);
+    string compositionText = File.ReadAllText(compositionPath);
+    var missing = new List<string>();
+
+    Require(statusText, "MultiplayerDebugStatus", "MultiplayerDebugStatus", missing);
+    Require(statusText, "RelationshipViewCount", "关系视图缓存字段", missing);
+    Require(statusText, "PendingExchangeReportCount", "待上报交换字段", missing);
+    Require(syncServiceText, "GetDebugStatus", "MultiplayerSyncService.GetDebugStatus", missing);
+    Require(debugHandlerText, "livingnpcs_debug", "livingnpcs_debug 命令", missing);
+    Require(debugHandlerText, "MultiplayerDebugStatus", "调试命令消费联机状态", missing);
+    Require(debugHandlerText, "RelationshipViewCount", "调试命令输出关系视图缓存", missing);
+    Require(debugHandlerText, "PendingExchangeReportCount", "调试命令输出待上报交换", missing);
+    Require(compositionText, "GetDebugStatus", "组合根接入 GetDebugStatus", missing);
+
+    return missing.Count == 0
+        ? new RegressionCheck(
+            "livingnpcs_debug 包含联机同步状态",
+            true,
+            "状态 DTO、采集入口、命令输出与组合根接线均存在")
+        : new RegressionCheck(
+            "livingnpcs_debug 包含联机同步状态",
+            false,
+            $"缺少：{string.Join(", ", missing)}");
+}
+
+static void Require(string text, string snippet, string label, ICollection<string> missing)
+{
+    if (!text.Contains(snippet, StringComparison.Ordinal))
+    {
+        missing.Add(label);
+    }
 }
 
 internal sealed record RegressionCheck(string Name, bool Passed, string Detail);

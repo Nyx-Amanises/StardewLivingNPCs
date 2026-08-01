@@ -154,6 +154,22 @@ internal sealed class MultiplayerSyncService
 
     public int PendingExchangeReportCount => this.pendingExchangeReports.Count;
 
+    /// <summary>
+    /// 为控制台诊断一次性复制当前联机状态；调用方不会取得内部集合或可变运行时对象。
+    /// </summary>
+    public MultiplayerDebugStatus GetDebugStatus()
+    {
+        return new MultiplayerDebugStatus(
+            IsMultiplayer: this.runtime.IsMultiplayer,
+            Role: MultiplayerRoles.Decide(this.runtime.IsMainPlayer, this.runtime.IsOnHostComputer),
+            ProtocolVersion: SyncProtocol.Version,
+            HandshakeState: this.handshakeState,
+            HostAuthorityActive: this.UseHostAuthority,
+            RelationshipViewCount: this.relationshipViews.Count,
+            PendingExchangeReportCount: this.pendingExchangeReports.Count,
+            CompatiblePeerCount: this.compatiblePeerIds.Count);
+    }
+
     // ---- SMAPI 事件（经 BehaviorEngine SafeRun 转发） ----
 
     private void OnModMessageReceived(ReceivedModMessage e)

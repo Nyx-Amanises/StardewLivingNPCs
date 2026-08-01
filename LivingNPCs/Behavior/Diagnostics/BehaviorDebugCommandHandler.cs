@@ -21,6 +21,7 @@ internal sealed class BehaviorDebugCommandHandler
     private readonly ModConfig config;
     private readonly BehaviorMemory memory;
     private readonly BehaviorMailService mailService;
+    private readonly Func<Multiplayer.MultiplayerDebugStatus> getMultiplayerDebugStatus;
     private readonly Action<string> showFeedback;
     private readonly Action afterMemoryCleared;
 
@@ -30,6 +31,7 @@ internal sealed class BehaviorDebugCommandHandler
         ModConfig config,
         BehaviorMemory memory,
         BehaviorMailService mailService,
+        Func<Multiplayer.MultiplayerDebugStatus> getMultiplayerDebugStatus,
         Action<string> showFeedback,
         Action afterMemoryCleared)
     {
@@ -38,6 +40,7 @@ internal sealed class BehaviorDebugCommandHandler
         this.config = config;
         this.memory = memory;
         this.mailService = mailService;
+        this.getMultiplayerDebugStatus = getMultiplayerDebugStatus;
         this.showFeedback = showFeedback;
         this.afterMemoryCleared = afterMemoryCleared;
     }
@@ -206,13 +209,113 @@ internal sealed class BehaviorDebugCommandHandler
             return;
         }
 
-        if (!this.TryResolveNpcArgument(args, out NPC? npc, out string error) || npc == null)
+        WriteDebugCommandOutput(
+            this.getMultiplayerDebugStatus(),
+            () =>
+            {
+                if (!this.TryResolveNpcArgument(args, out NPC? npc, out string error) || npc == null)
+                {
+                    return error;
+                }
+
+                return this.memory.BuildDebugSummary(
+                    npc,
+                    this.config.PromptMemoryEntries,
+                    this.config.EnableNpcState);
+            },
+            section => this.monitor.Log(section, LogLevel.Info),
+            TranslateI18n);
+    }
+
+    /// <summary>
+    /// 按控制台顺序写出调试段。联机段先写，再求值 NPC 段，因此附近无 NPC 或 NPC
+    /// 解析较慢时也不会吞掉最关键的同步状态。
+    /// </summary>
+    internal static void WriteDebugCommandOutput(
+        Multiplayer.MultiplayerDebugStatus status,
+        Func<string> getNpcSection,
+        Action<string> writeSection,
+        Func<string, object?, string> translate)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        ArgumentNullException.ThrowIfNull(getNpcSection);
+        ArgumentNullException.ThrowIfNull(writeSection);
+        ArgumentNullException.ThrowIfNull(translate);
+
+        writeSection(FormatMultiplayerStatus(status, translate));
+        writeSection(getNpcSection());
+    }
+
+    /// <summary>把不可变联机状态快照格式化为独立控制台段；不访问 SMAPI 或游戏对象。</summary>
+    internal static string FormatMultiplayerStatus(
+        Multiplayer.MultiplayerDebugStatus status,
+        Func<string, object?, string> translate)
+    {
+        ArgumentNullException.ThrowIfNull(status);
+        ArgumentNullException.ThrowIfNull(translate);
+
+        string roleKey;
+        string syncStatusKey;
+        object? syncStatusTokens = null;
+
+        if (!status.IsMultiplayer)
         {
-            this.monitor.Log(error, LogLevel.Info);
-            return;
+            roleKey = "debug.multiplayer.role.singlePlayer";
+            syncStatusKey = "debug.multiplayer.sync.singlePlayer";
+        }
+        else
+        {
+            roleKey = status.Role switch
+            {
+                Multiplayer.MultiplayerRole.HostPlayer => "debug.multiplayer.role.hostPlayer",
+                Multiplayer.MultiplayerRole.SplitScreenSecondary => "debug.multiplayer.role.splitScreenSecondary",
+                Multiplayer.MultiplayerRole.RemoteFarmhand => "debug.multiplayer.role.remoteFarmhand",
+                _ => "debug.multiplayer.role.unknown"
+            };
+            switch (status.Role)
+            {
+                case Multiplayer.MultiplayerRole.HostPlayer:
+                    syncStatusKey = "debug.multiplayer.sync.hosting";
+                    syncStatusTokens = new { count = status.CompatiblePeerCount };
+                    break;
+                case Multiplayer.MultiplayerRole.SplitScreenSecondary:
+                    syncStatusKey = "debug.multiplayer.sync.splitScreenDisabled";
+                    break;
+                case Multiplayer.MultiplayerRole.RemoteFarmhand:
+                    syncStatusKey = status.HandshakeState switch
+                    {
+                        Multiplayer.ProtocolHandshakeState.AwaitingHost => "debug.multiplayer.sync.awaitingHost",
+                        Multiplayer.ProtocolHandshakeState.Compatible when status.HostAuthorityActive
+                            => "debug.multiplayer.sync.compatible",
+                        Multiplayer.ProtocolHandshakeState.Compatible
+                            => "debug.multiplayer.sync.compatibleInactive",
+                        Multiplayer.ProtocolHandshakeState.Incompatible => "debug.multiplayer.sync.incompatible",
+                        _ => "debug.multiplayer.sync.unknown"
+                    };
+                    break;
+                default:
+                    syncStatusKey = "debug.multiplayer.sync.unknown";
+                    break;
+            }
         }
 
-        this.monitor.Log(this.memory.BuildDebugSummary(npc, this.config.PromptMemoryEntries, this.config.EnableNpcState), LogLevel.Info);
+        string role = translate(roleKey, null);
+        string syncStatus = translate(syncStatusKey, syncStatusTokens);
+
+        return string.Join(Environment.NewLine, new[]
+        {
+            translate("debug.multiplayer.heading", null),
+            translate("debug.multiplayer.role", new { role }),
+            translate("debug.multiplayer.protocol", new { version = status.ProtocolVersion }),
+            translate("debug.multiplayer.syncStatus", new { status = syncStatus }),
+            translate("debug.multiplayer.relationshipViews", new { count = status.RelationshipViewCount }),
+            translate("debug.multiplayer.pendingExchanges", new { count = status.PendingExchangeReportCount })
+        });
+    }
+
+    private static string TranslateI18n(string key, object? tokens)
+    {
+        return tokens == null ? I18n.Get(key) : I18n.Get(key, tokens);
     }
 
     private void OnPromptCommand(string command, string[] args)
