@@ -48,6 +48,68 @@ public sealed class RecentOutingInvitationResolverTests
     }
 
     [Fact]
+    public void SameConversationDelayIsPromotedAndRecoversFarm()
+    {
+        ConversationAnalysis analysis = AcceptedOuting(
+            target: string.Empty,
+            delayMinutes: 10,
+            consent: "accepted_later");
+
+        RecentOutingInvitationResolver.NormalizeCompanionOutingActions(
+            analysis,
+            PennyFarmNegotiation(),
+            "好啊，等会儿再去吧。先让我收拾一下。");
+
+        ConversationWorldActionRequest action = Assert.Single(analysis.Actions);
+        Assert.Equal("Farm", action.TargetLocation);
+        Assert.Equal("accepted_now", action.TravelConsent);
+        Assert.Equal(0, action.DelayMinutes);
+        Assert.Contains("same-conversation departure", action.Reason);
+    }
+
+    [Fact]
+    public void MissingActionIsSynthesizedFromBriefDepartureAndRecentFarmInvitation()
+    {
+        ConversationAnalysis analysis = new();
+
+        RecentOutingInvitationResolver.NormalizeCompanionOutingActions(
+            analysis,
+            PennyFarmNegotiation(),
+            "好呀，等会再去，我们很快就回来。");
+
+        ConversationWorldActionRequest action = Assert.Single(analysis.Actions);
+        Assert.Equal("Farm", action.TargetLocation);
+        Assert.Equal("accepted_now", action.TravelConsent);
+        Assert.Equal(0, action.DelayMinutes);
+    }
+
+    [Fact]
+    public void FutureDayPlanDoesNotPromoteOrSynthesizeAnOuting()
+    {
+        ConversationAnalysis deferred = AcceptedOuting(
+            target: "Farm",
+            delayMinutes: 10,
+            consent: "accepted_later");
+
+        RecentOutingInvitationResolver.NormalizeCompanionOutingActions(
+            deferred,
+            PennyFarmNegotiation(),
+            "好呀，不过我们明天再去吧。");
+
+        ConversationWorldActionRequest action = Assert.Single(deferred.Actions);
+        Assert.Equal("accepted_later", action.TravelConsent);
+        Assert.Equal(0, action.DelayMinutes);
+
+        ConversationAnalysis missing = new();
+        RecentOutingInvitationResolver.NormalizeCompanionOutingActions(
+            missing,
+            PennyFarmNegotiation(),
+            "好呀，不过我们明天再去吧。");
+
+        Assert.Empty(missing.Actions);
+    }
+
+    [Fact]
     public void BackgroundFarmMentionDoesNotBecomeDestination()
     {
         ConversationAnalysis analysis = AcceptedOuting(target: string.Empty);
@@ -118,7 +180,10 @@ public sealed class RecentOutingInvitationResolverTests
             Player("太好了，我们走吧！"));
     }
 
-    private static ConversationAnalysis AcceptedOuting(string target, int delayMinutes = 0)
+    private static ConversationAnalysis AcceptedOuting(
+        string target,
+        int delayMinutes = 0,
+        string consent = "accepted_now")
     {
         return new ConversationAnalysis
         {
@@ -127,7 +192,7 @@ public sealed class RecentOutingInvitationResolverTests
                 new()
                 {
                     Type = "companion_outing",
-                    TravelConsent = "accepted_now",
+                    TravelConsent = consent,
                     TargetLocation = target,
                     DelayMinutes = delayMinutes,
                     DurationMinutes = 60,

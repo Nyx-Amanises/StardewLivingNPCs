@@ -22,6 +22,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="MonoGame.Framework">
+      <HintPath>$(GamePath)\MonoGame.Framework.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
     <Reference Include="Stardew Valley">
       <HintPath>$(GamePath)\Stardew Valley.dll</HintPath>
       <Private>true</Private>

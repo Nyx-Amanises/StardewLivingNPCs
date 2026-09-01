@@ -325,9 +325,9 @@ internal sealed class HelpRequestMemoryService
 
     /// <summary>
     /// Creation safety net: when the AI omits the structured helpRequests field but the visible
-    /// dialogue clearly has the NPC ask the farmer for one of its currently-requestable items,
-    /// synthesize that request and store it through the normal gate (Offered, or Pending if the
-    /// farmer already agreed in this reply).
+    /// dialogue clearly has the NPC ask the farmer for one or more currently-requestable items,
+    /// synthesize the complete ordered request and store it through the normal gate. Optional
+    /// "and another would be nice" add-ons fail closed instead of silently becoming mandatory.
     /// </summary>
     public bool TrySynthesizeItemRequestFromDialogue(
         NPC npc,
@@ -340,55 +340,63 @@ internal sealed class HelpRequestMemoryService
         string assignedPlayerName = "",
         int friendshipHearts = -1)
     {
-        if (string.IsNullOrWhiteSpace(npcResponse))
+        if (string.IsNullOrWhiteSpace(npcResponse) || Game1.player == null)
         {
             return false;
         }
 
-        string combined = $"{playerText} {npcResponse}";
-        // The favor phrasing must come from the NPC's own reply: judging the combined text let a
-        // farmer's "能不能给我带点面包" synthesize a reversed request where the NPC asks the farmer.
-        if (LooksLikeNpcOfferingItemToFarmer(npcResponse) || !LooksLikeItemFavorRequested(npcResponse))
+        IReadOnlyList<ExplicitHelpRequestItem> visibleRequests = HelpRequestDialogueAnalyzer.FindExplicitItemRequests(
+            npcResponse,
+            this.BuildRequestableItemAliases(npc));
+        bool farmerOnBoard = LooksLikeFarmerAcceptingHelp(playerText)
+            || IsFarmerExplicitlyOfferingHelp(playerText);
+        if (!HelpRequestDialogueAnalyzer.TryBuildSynthesisCandidate(
+                visibleRequests,
+                farmerOnBoard,
+                HelpRequestMemoryRules.GetMaxStepsForCurrentWorldStage(),
+                out ValleyTalkHelpRequestCandidate candidate))
         {
             return false;
         }
 
-        foreach (var item in HelpRequestAdvisor.GetRequestableItems(npc))
+        // Store applies the readiness gate; this is only a synthesis of the complete candidate the
+        // AI failed to emit, never a bypass of vanilla hearts/cooldown rules.
+        return this.Store(
+            npc,
+            state,
+            candidate,
+            playerText,
+            maxPendingHelpRequestsPerNpc,
+            helpRequestCooldownDays,
+            assignedPlayerId,
+            assignedPlayerName,
+            friendshipHearts);
+    }
+
+    /// <summary>
+    /// Checks the ordered item sequence that the NPC visibly requested against the hidden request.
+    /// A high-confidence mismatch is rejected before it can become a partial or phantom quest.
+    /// </summary>
+    public bool IsCandidateConsistentWithVisibleDialogue(
+        NPC npc,
+        ValleyTalkHelpRequestCandidate candidate,
+        string npcResponse)
+    {
+        // Requestable items depend on the active save's progression. During early startup, test
+        // harnesses, or teardown there may be no local farmer yet; fail closed instead of trying
+        // to create a quest from incomplete world state.
+        if (Game1.player == null)
         {
-            string localizedName = this.resolveItemDisplayName(item.ItemId, item.Label);
-            if (!ContainsAny(combined, localizedName, item.Label))
-            {
-                continue;
-            }
-
-            bool farmerOnBoard = LooksLikeFarmerAcceptingHelp(playerText)
-                || IsFarmerExplicitlyOfferingHelp(playerText);
-            var candidate = new ValleyTalkHelpRequestCandidate
-            {
-                Type = "item_request",
-                Summary = localizedName,
-                RequestedItemId = item.ItemId,
-                RequestedItemLabel = localizedName,
-                DueInDays = 3,
-                RequiresAcceptance = !farmerOnBoard,
-                FollowUpPotential = "none"
-            };
-
-            // Store applies the readiness gate; this is only a synthesis of the candidate the AI
-            // failed to emit, never a bypass of vanilla hearts/cooldown rules.
-            return this.Store(
-                npc,
-                state,
-                candidate,
-                playerText,
-                maxPendingHelpRequestsPerNpc,
-                helpRequestCooldownDays,
-                assignedPlayerId,
-                assignedPlayerName,
-                friendshipHearts);
+            return false;
         }
 
-        return false;
+        IReadOnlyList<ExplicitHelpRequestItem> visibleRequests = HelpRequestDialogueAnalyzer.FindExplicitItemRequests(
+            npcResponse,
+            this.BuildRequestableItemAliases(npc));
+        return HelpRequestDialogueAnalyzer.IsCandidateSequenceConsistent(
+            candidate,
+            visibleRequests,
+            HelpRequestMemoryRules.GetMaxStepsForCurrentWorldStage());
     }
 
     internal static bool LooksLikeItemFavorRequested(string text)
@@ -498,8 +506,16 @@ internal sealed class HelpRequestMemoryService
                 }
             };
 
+        int maxSteps = HelpRequestMemoryRules.GetMaxStepsForCurrentWorldStage();
+        if (rawSteps.Count > maxSteps)
+        {
+            // Never truncate a visible multi-item favor into a different, partially completable
+            // quest. The model must keep the whole request within the current world-stage limit.
+            return new List<NpcHelpRequestStepFact>();
+        }
+
         var steps = new List<NpcHelpRequestStepFact>();
-        foreach (var rawStep in rawSteps.Take(HelpRequestMemoryRules.GetMaxStepsForCurrentWorldStage()))
+        foreach (var rawStep in rawSteps)
         {
             string type = BehaviorValueNormalizer.NormalizeHelpRequestType(rawStep.Type);
             if (type == "item_request")
@@ -509,12 +525,12 @@ internal sealed class HelpRequestMemoryService
                 if (!AllowedHelpRequestItemIds.Contains(rawStep.RequestedItemId)
                     || !HelpRequestAdvisor.IsCurrentlyRequestableItem(rawStep.RequestedItemId, npc))
                 {
-                    continue;
+                    return new List<NpcHelpRequestStepFact>();
                 }
             }
             else
             {
-                continue;
+                return new List<NpcHelpRequestStepFact>();
             }
 
             string rawLabel = rawStep.RequestedItemLabel?.Trim() ?? string.Empty;
@@ -534,7 +550,23 @@ internal sealed class HelpRequestMemoryService
             });
         }
 
-        return steps;
+        return steps.Count == rawSteps.Count
+            ? steps
+            : new List<NpcHelpRequestStepFact>();
+    }
+
+    private IReadOnlyList<HelpRequestItemAlias> BuildRequestableItemAliases(NPC npc)
+    {
+        return HelpRequestAdvisor.GetRequestableItems(npc)
+            .Select(item =>
+            {
+                string localizedName = this.resolveItemDisplayName(item.ItemId, item.Label);
+                return new HelpRequestItemAlias(
+                    item.ItemId,
+                    localizedName,
+                    new[] { localizedName, item.Label });
+            })
+            .ToList();
     }
 
     /// <summary>

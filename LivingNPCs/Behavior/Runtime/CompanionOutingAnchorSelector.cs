@@ -23,6 +23,14 @@ internal sealed record CompanionOutingAnchorPreview(
 
 internal sealed class CompanionOutingAnchorSelector
 {
+    private const CollisionMask AnchorRouteCollisionMask =
+        CollisionMask.Buildings
+        | CollisionMask.Flooring
+        | CollisionMask.Furniture
+        | CollisionMask.Objects
+        | CollisionMask.TerrainFeatures
+        | CollisionMask.LocationSpecific;
+
     private sealed record AuthoredAnchor(
         Point Tile,
         int FacingDirection,
@@ -420,14 +428,51 @@ internal sealed class CompanionOutingAnchorSelector
         IReadOnlySet<Point> reservedTiles,
         out CompanionOutingAnchor? anchor)
     {
+        return this.TrySelect(
+            npc,
+            location,
+            targetLocation,
+            sourceLocation,
+            activityStyle,
+            reason,
+            totalDays,
+            reservedTiles,
+            explicitFarmOriginTile: null,
+            out anchor
+        );
+    }
+
+    public bool TrySelect(
+        NPC npc,
+        GameLocation location,
+        string targetLocation,
+        string sourceLocation,
+        string activityStyle,
+        string reason,
+        int totalDays,
+        IReadOnlySet<Point> reservedTiles,
+        Point? explicitFarmOriginTile,
+        out CompanionOutingAnchor? anchor)
+    {
         bool isFarmTarget = IsFarmTarget(targetLocation);
+        bool hasActualFarmOrigin = isFarmTarget
+            && explicitFarmOriginTile is Point actualFarmOrigin
+            && IsInBounds(location, actualFarmOrigin.X, actualFarmOrigin.Y);
         var candidates = new List<CompanionOutingAnchor>();
-        var entryTiles = isFarmTarget
+        var inferredEntryTiles = isFarmTarget
             ? GetLikelyFarmEntryTiles(location, sourceLocation).ToList()
             : GetLikelyEntryTiles(location, sourceLocation).ToList();
+        var entryTiles = isFarmTarget
+            ? ResolveFarmReachabilitySeeds(explicitFarmOriginTile, inferredEntryTiles).ToList()
+            : inferredEntryTiles;
         var farmReachableTiles = isFarmTarget
-            ? BuildReachableTileSet(location, entryTiles, npc)
+            ? BuildReachableTileSet(location, entryTiles, npc, forceSeedTiles: hasActualFarmOrigin)
             : null;
+        bool enforceFarmReachability = isFarmTarget
+            && ShouldEnforceFarmReachability(
+                hasActualFarmOrigin,
+                entryTiles.Count,
+                farmReachableTiles?.Count ?? 0);
         var farmHomeTiles = isFarmTarget
             ? GetFarmhouseDoorTiles(location).ToList()
             : [];
@@ -438,7 +483,8 @@ internal sealed class CompanionOutingAnchorSelector
             foreach (var candidate in authored)
             {
                 if (!candidate.Styles.Contains(activityStyle, StringComparer.OrdinalIgnoreCase)
-                    || !this.IsUsable(location, candidate.Tile, npc, reservedTiles))
+                    || !this.IsUsable(location, candidate.Tile, npc, reservedTiles)
+                    || (enforceFarmReachability && !farmReachableTiles!.Contains(candidate.Tile)))
                 {
                     continue;
                 }
@@ -473,7 +519,7 @@ internal sealed class CompanionOutingAnchorSelector
                     continue;
                 }
 
-                if (farmReachableTiles is { Count: > 0 } && !farmReachableTiles.Contains(tile))
+                if (enforceFarmReachability && !farmReachableTiles!.Contains(tile))
                 {
                     continue;
                 }
@@ -632,6 +678,7 @@ internal sealed class CompanionOutingAnchorSelector
     {
         if (reservedTiles.Contains(tile)
             || !this.isSafeDestinationTile(location, tile, npc)
+            || IsBlockedByAnchorRouteObstacle(location, tile)
             || IsWarpOrDoorLikeTile(location, tile))
         {
             return false;
@@ -732,6 +779,8 @@ internal sealed class CompanionOutingAnchorSelector
             {
                 score += homeDistance <= 16 ? 30 : -15;
             }
+
+            score += ScoreFarmhouseYardBias(tile, nearestHome);
         }
 
         if (entryTiles.Count > 0)
@@ -749,6 +798,33 @@ internal sealed class CompanionOutingAnchorSelector
         }
 
         return score;
+    }
+
+    internal static int ScoreFarmhouseYardBias(Point tile, Point farmhouseEntry)
+    {
+        int deltaX = Math.Abs(tile.X - farmhouseEntry.X);
+        int deltaY = tile.Y - farmhouseEntry.Y;
+        if (deltaY is >= 2 and <= 8)
+        {
+            if (deltaX is >= 2 and <= 10)
+            {
+                return 44;
+            }
+
+            if (deltaX <= 1)
+            {
+                return 24;
+            }
+
+            return deltaX <= 14 ? 12 : 0;
+        }
+
+        if (deltaY < 0)
+        {
+            return -24;
+        }
+
+        return deltaY <= 1 ? -8 : 0;
     }
 
     private static string DetermineAnchorFocus(
@@ -905,6 +981,7 @@ internal sealed class CompanionOutingAnchorSelector
             var vector = new Vector2(neighbor.X, neighbor.Y);
             if (location.isTileLocationOpen(vector)
                 && location.isTilePassable(vector)
+                && !IsBlockedByAnchorRouteObstacle(location, neighbor)
                 && !location.characters.Any(candidate => candidate != ignoredNpc && candidate.TilePoint == neighbor))
             {
                 count++;
@@ -957,17 +1034,91 @@ internal sealed class CompanionOutingAnchorSelector
             : GetLikelyEntryTiles(location, sourceLocation);
     }
 
+    private static IReadOnlyList<Point> ResolveFarmReachabilitySeeds(
+        Point? explicitFarmOriginTile,
+        IReadOnlyList<Point> inferredEntryTiles)
+    {
+        return explicitFarmOriginTile is Point actualOrigin
+            ? [actualOrigin]
+            : inferredEntryTiles;
+    }
+
+    internal static IReadOnlyList<Point> ResolveFarmReachabilitySeedsForTesting(
+        Point? explicitFarmOriginTile,
+        IReadOnlyList<Point> inferredEntryTiles)
+    {
+        return ResolveFarmReachabilitySeeds(explicitFarmOriginTile, inferredEntryTiles);
+    }
+
+    private static bool ShouldEnforceFarmReachability(
+        bool hasActualFarmOrigin,
+        int seedCount,
+        int reachableTileCount)
+    {
+        // Once the NPC has really crossed into Farm, their current tile is authoritative and we
+        // must never choose an anchor in another disconnected component. Before arrival, inferred
+        // warp data is only a compatibility hint: if a custom farm exposes a blocked/nonstandard
+        // warp, preserve the old live-map candidate scan instead of rejecting the outing outright.
+        return hasActualFarmOrigin || (seedCount > 0 && reachableTileCount > 0);
+    }
+
+    internal static bool ShouldEnforceFarmReachabilityForTesting(
+        bool hasActualFarmOrigin,
+        int seedCount,
+        int reachableTileCount)
+    {
+        return ShouldEnforceFarmReachability(hasActualFarmOrigin, seedCount, reachableTileCount);
+    }
+
     private static IEnumerable<Point> GetFarmhouseDoorTiles(GameLocation location)
     {
-        return location.warps
+        var result = new List<Point>();
+        if (location is Farm farm)
+        {
+            try
+            {
+                Point mainEntry = farm.GetMainFarmHouseEntry();
+                if (IsInBounds(location, mainEntry.X, mainEntry.Y))
+                {
+                    result.Add(mainEntry);
+                }
+            }
+            catch
+            {
+                // A custom farm can replace farmhouse placement data in ways the vanilla helper
+                // doesn't expect. Its live farmhouse warp remains a safe compatibility fallback.
+            }
+        }
+
+        result.AddRange(location.warps
             .Where(warp => IsFarmhouseWarpTarget(ScheduleReflectionReader.GetWarpTargetName(warp)))
-            .Select(warp => new Point(warp.X, warp.Y));
+            .Select(warp => new Point(warp.X, warp.Y)));
+        return result.Distinct();
     }
 
     private static HashSet<Point> BuildReachableTileSet(
         GameLocation location,
         IReadOnlyList<Point> entryTiles,
-        NPC npc)
+        NPC npc,
+        bool forceSeedTiles = false)
+    {
+        int width = location.Map.Layers[0].LayerWidth;
+        int height = location.Map.Layers[0].LayerHeight;
+        return BuildReachableTileSet(
+            width,
+            height,
+            entryTiles,
+            tile => IsTraversableForAnchorRouteScan(location, tile, npc),
+            forceSeedTiles
+        );
+    }
+
+    private static HashSet<Point> BuildReachableTileSet(
+        int width,
+        int height,
+        IReadOnlyList<Point> entryTiles,
+        Func<Point, bool> isTraversable,
+        bool forceSeedTiles)
     {
         var reachable = new HashSet<Point>();
         if (entryTiles.Count == 0)
@@ -978,9 +1129,24 @@ internal sealed class CompanionOutingAnchorSelector
         var queue = new Queue<Point>();
         foreach (Point entry in entryTiles)
         {
+            if (entry.X < 0 || entry.Y < 0 || entry.X >= width || entry.Y >= height)
+            {
+                continue;
+            }
+
+            if (forceSeedTiles && reachable.Add(entry))
+            {
+                queue.Enqueue(entry);
+            }
+
             foreach (Point start in GetCardinalNeighbors(entry).Append(entry))
             {
-                if (IsTraversableForAnchorRouteScan(location, start, npc) && reachable.Add(start))
+                if (start.X >= 0
+                    && start.Y >= 0
+                    && start.X < width
+                    && start.Y < height
+                    && isTraversable(start)
+                    && reachable.Add(start))
                 {
                     queue.Enqueue(start);
                 }
@@ -992,7 +1158,12 @@ internal sealed class CompanionOutingAnchorSelector
             Point current = queue.Dequeue();
             foreach (Point neighbor in GetCardinalNeighbors(current))
             {
-                if (IsTraversableForAnchorRouteScan(location, neighbor, npc) && reachable.Add(neighbor))
+                if (neighbor.X >= 0
+                    && neighbor.Y >= 0
+                    && neighbor.X < width
+                    && neighbor.Y < height
+                    && isTraversable(neighbor)
+                    && reachable.Add(neighbor))
                 {
                     queue.Enqueue(neighbor);
                 }
@@ -1000,6 +1171,22 @@ internal sealed class CompanionOutingAnchorSelector
         }
 
         return reachable;
+    }
+
+    internal static IReadOnlySet<Point> BuildReachableTileSetForTesting(
+        int width,
+        int height,
+        IReadOnlyList<Point> entryTiles,
+        Func<Point, bool> isTraversable,
+        bool forceSeedTiles = false)
+    {
+        return BuildReachableTileSet(
+            width,
+            height,
+            entryTiles,
+            isTraversable,
+            forceSeedTiles
+        );
     }
 
     private static bool IsTraversableForAnchorRouteScan(GameLocation location, Point tile, NPC? ignoredNpc)
@@ -1012,7 +1199,18 @@ internal sealed class CompanionOutingAnchorSelector
         var vector = new Vector2(tile.X, tile.Y);
         return location.isTileLocationOpen(vector)
             && location.isTilePassable(vector)
+            && !IsBlockedByAnchorRouteObstacle(location, tile)
             && !location.characters.Any(candidate => candidate != ignoredNpc && candidate.TilePoint == tile);
+    }
+
+    private static bool IsBlockedByAnchorRouteObstacle(GameLocation location, Point tile)
+    {
+        return location.IsTileBlockedBy(
+            new Vector2(tile.X, tile.Y),
+            AnchorRouteCollisionMask,
+            AnchorRouteCollisionMask,
+            useFarmerTile: false
+        );
     }
 
     private static bool IsFarmOutdoorBoundaryTarget(string targetName)

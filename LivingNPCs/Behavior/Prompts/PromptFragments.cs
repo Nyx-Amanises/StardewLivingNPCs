@@ -717,7 +717,9 @@ internal static class PromptFragments
                 "\n",
                 "## LivingNPCs Help Request Opportunity",
                 $"- Today {npcDisplayName} is inclined to ask the farmer for one small favor during this conversation.",
-                "- If the visible reply allows, naturally bring up needing one concrete item from the help-request fit list, and include exactly one hidden helpRequests entry (item_request) with that itemId — do not leave the favor only in the spoken text.",
+                "- If the visible reply allows, naturally bring up one concrete item favor from the help-request fit list, and include exactly one hidden helpRequests entry for the whole favor — do not leave the favor only in spoken text.",
+                "- For a one-step favor, the visible reply may request only the one item encoded by requestedItemId/requestedItemLabel. If it genuinely requests multiple items, encode every named item as ordered steps in that same helpRequests entry, matching the exact spoken order.",
+                "- Never add an unencoded optional or bonus item with wording like 'if you can also bring', 'while you're at it', 'another would be better', or 'that would make it perfect'. Either make every requested item an encoded required step or do not mention it as part of the favor.",
                 "- Keep it brief and in character; if the moment genuinely does not fit, it is fine to wait for another day rather than forcing it."
             );
         }

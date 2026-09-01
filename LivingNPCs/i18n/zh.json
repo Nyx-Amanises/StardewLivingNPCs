@@ -552,6 +552,7 @@
   "log.community.impressionPropagated": "已由 {{npc}} 通过 {{circles}} 传播社区印象：传递深度 {{depth}}，失真 {{distortion}}，接收者 {{recipients}} 个。",
   "log.outing.cancelledByError": "{{npc}} 的陪伴出游遇到错误，已取消以保证 NPC 安全：{{error}}",
   "log.outing.routeFailed": "无法为 {{npc}} 构建原版风格陪伴出游路线：{{from}} -> {{to}}（{{x}}, {{y}}）。",
+  "log.outing.farmAnchorRecovery": "{{npc}} 无法走到安全的农场停留点；正在返回，不会再把农场入口误当作目的地。",
   "log.help.suppressedGiftNoMatch": "已拦截 {{npc}} 的礼物互动，但没有为 {{item}} 完成匹配的求助。",
   "log.help.selectedRewardGift": "已为 {{npc}} 选择求助谢礼：{{gift}}（{{item}}）；{{reason}}。",
   "log.travel.rejected": "出行动作请求被拒绝",

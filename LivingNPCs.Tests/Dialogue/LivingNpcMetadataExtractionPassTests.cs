@@ -1,3 +1,4 @@
+using LivingNPCs.Behavior;
 using LivingNPCs.Dialogue.Engine;
 using LivingNPCs.Dialogue.Persistence;
 using Xunit;
@@ -386,5 +387,43 @@ public sealed class LivingNpcMetadataExtractionPassTests
         Assert.Contains("One ordinary polite question about family", prompt);
         Assert.Contains("does not prove visibility, adjacency, distance, or a route", prompt);
         Assert.Contains("Do not store first meeting", prompt);
+    }
+
+    [Fact]
+    public void HelpRequestPromptsRequireExactOrderedVisibleMetadataParity()
+    {
+        var character = new Character("Haley");
+        var context = new DialogueContext
+        {
+            Location = "Town",
+            TimeOfDay = "1200",
+            LivingNpcExtraPrompt = "Help-request fit: Sweet Pea (O)402, Sugar (O)245."
+        };
+
+        string metadataPrompt = LivingNpcMetadataExtractionPass.BuildPromptForTesting(
+            character,
+            context,
+            "需要我帮忙吗？",
+            "请带一朵甜豌豆；如果还能带糖就更完美。",
+            farmerOptions: null);
+        string actionPrompt = LivingNpcActionDecisionPass.BuildPromptForTesting(
+            character,
+            context,
+            "需要我帮忙吗？",
+            "请带一朵甜豌豆；如果还能带糖就更完美。");
+        string opportunityPrompt = PromptFragments.HelpRequestOpportunity.Section("Haley");
+
+        foreach (string prompt in new[] { metadataPrompt, actionPrompt })
+        {
+            Assert.Contains("\"steps\":[{\"type\":\"item_request\"", prompt, StringComparison.Ordinal);
+            Assert.Contains("A one-step request may name only its single requestedItemId/requestedItemLabel", prompt, StringComparison.Ordinal);
+            Assert.Contains("ordered steps", prompt, StringComparison.Ordinal);
+            Assert.Contains("exact spoken order", prompt, StringComparison.Ordinal);
+            Assert.Contains("if you can also bring", prompt, StringComparison.Ordinal);
+        }
+
+        Assert.Contains("same helpRequests entry", opportunityPrompt, StringComparison.Ordinal);
+        Assert.Contains("matching the exact spoken order", opportunityPrompt, StringComparison.Ordinal);
+        Assert.Contains("unencoded optional or bonus item", opportunityPrompt, StringComparison.Ordinal);
     }
 }

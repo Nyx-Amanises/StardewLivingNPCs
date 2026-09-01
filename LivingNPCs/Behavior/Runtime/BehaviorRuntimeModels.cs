@@ -96,6 +96,11 @@ internal sealed class PendingCompanionOuting
     public string FarmBoundaryLocationName { get; set; } = string.Empty;
     public Point FarmBoundarySourceTile { get; set; } = Point.Zero;
     public Point FarmBoundaryTargetTile { get; set; } = Point.Zero;
+    /// <summary>
+    /// Allows a final schedule teleport only when an aborted farm arrival cannot walk back across
+    /// the boundary. Normal farm outings still use natural return routing and never teleport.
+    /// </summary>
+    public bool AllowEmergencyScheduleTeleport { get; set; }
 
     // ---- Vehicle-gateway leg (Desert / IslandSouth / MovieTheater / BathHouse_Entry) ----
     public string VehicleKind { get; set; } = string.Empty;

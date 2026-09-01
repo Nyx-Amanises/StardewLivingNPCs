@@ -552,6 +552,7 @@
   "log.community.impressionPropagated": "Propagated community impression from {{npc}} through {{circles}}: depth {{depth}}, distortion {{distortion}}, recipients {{recipients}}.",
   "log.outing.cancelledByError": "Companion outing for {{npc}} hit an error and was cancelled to keep the NPC safe: {{error}}",
   "log.outing.routeFailed": "Could not build vanilla-style companion outing route for {{npc}}: {{from}} -> {{to}} ({{x}}, {{y}}).",
+  "log.outing.farmAnchorRecovery": "Farm outing for {{npc}} could not reach a safe farmyard spot; returning from the farm instead of treating the entrance as the destination.",
   "log.help.suppressedGiftNoMatch": "Suppressed gift interaction for {{npc}}, but no matching help request was completed for {{item}}.",
   "log.help.selectedRewardGift": "Selected help request reward gift for {{npc}}: {{gift}} ({{item}}); {{reason}}.",
   "log.travel.rejected": "travel action request rejected",

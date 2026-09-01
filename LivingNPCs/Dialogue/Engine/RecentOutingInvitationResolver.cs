@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using LivingNPCs.Behavior;
 using LivingNPCs.Dialogue.Persistence;
+using LivingNpcs.Shared;
 
 namespace LivingNPCs.Dialogue.Engine;
 
@@ -37,11 +38,6 @@ internal static class RecentOutingInvitationResolver
         "这就去",
         "出发吧",
         "走吧",
-        "等会再去",
-        "等会儿再去",
-        "等一下就去",
-        "一会儿就走",
-        "待会儿就走",
         "let's go",
         "let us go",
         "i'll go with you",
@@ -50,6 +46,34 @@ internal static class RecentOutingInvitationResolver
         "i can come with you",
         "we can go now",
         "we'll leave in a moment"
+    ];
+
+    private static readonly string[] SameConversationDepartureFragments =
+    [
+        "等会去",
+        "等会再去",
+        "等会儿去",
+        "等会儿再去",
+        "待会去",
+        "待会再去",
+        "待会儿去",
+        "待会儿再去",
+        "一会去",
+        "一会再去",
+        "一会儿去",
+        "一会儿再去",
+        "等一下就去",
+        "等我一下就去",
+        "等一下就走",
+        "等我一下就走",
+        "一会儿就走",
+        "待会儿就走",
+        "准备一下就走",
+        "收拾一下就走",
+        "go in a moment",
+        "leave in a moment",
+        "we'll leave in a moment",
+        "we will leave in a moment"
     ];
 
     private static readonly string[] DirectAgreementFragments =
@@ -208,10 +232,21 @@ internal static class RecentOutingInvitationResolver
             // game-time delay queue. The runtime begins after the final dialogue is dismissed.
             action.DelayMinutes = 0;
 
-            bool acceptedNow = string.Equals(
-                action.TravelConsent,
-                "accepted_now",
-                StringComparison.OrdinalIgnoreCase);
+            string consent = LivingNpcMetadataRules.NormalizeTravelConsent(action.TravelConsent);
+            bool acceptedNow = string.Equals(consent, "accepted_now", StringComparison.OrdinalIgnoreCase);
+            if (string.Equals(consent, "accepted_later", StringComparison.OrdinalIgnoreCase)
+                && IsSameConversationDepartureCommitment(visibleNpcReply))
+            {
+                // With no delayed queue, a short "wait a moment / let's go in a moment" promise
+                // launches when the final line closes. Preserve accepted_later for a genuinely
+                // future meeting such as tomorrow, another day, or after today's obligations.
+                action.TravelConsent = "accepted_now";
+                action.Reason = AppendReason(
+                    action.Reason,
+                    "short same-conversation departure wording normalized to accepted_now");
+                acceptedNow = true;
+            }
+
             if (acceptedNow && IsPendingConfirmationQuestion(visibleNpcReply))
             {
                 // "I can only go briefly... is that okay?" is still negotiating the agreement.
@@ -242,6 +277,25 @@ internal static class RecentOutingInvitationResolver
             action.Reason = AppendReason(
                 action.Reason,
                 $"recovered destination {recoveredTarget} from the recent explicit player invitation");
+        }
+
+        if (analysis.Actions.Count == 0
+            && !IsPendingConfirmationQuestion(visibleNpcReply)
+            && IsDecisiveDepartureCommitment(visibleNpcReply)
+            && TryFindRecentExplicitInvitationTarget(context?.ChatHistory, out string synthesizedTarget))
+        {
+            // The auxiliary classifier can omit actions entirely after labeling "等会再去" as
+            // accepted_later. Recover the promised outing from visible evidence instead of losing
+            // it merely because the destination was only stated in an earlier turn.
+            analysis.Actions.Add(new ConversationWorldActionRequest
+            {
+                Type = "companion_outing",
+                TargetLocation = synthesizedTarget,
+                TravelConsent = "accepted_now",
+                DurationMinutes = CompanionOutingRules.MinimumStayMinutes,
+                DelayMinutes = 0,
+                Reason = $"visible departure commitment recovered destination {synthesizedTarget} from the recent explicit player invitation"
+            });
         }
     }
 
@@ -299,7 +353,8 @@ internal static class RecentOutingInvitationResolver
             return false;
         }
 
-        if (ContainsAny(visibleNpcReply, DepartureCommitmentFragments))
+        if (ContainsAny(visibleNpcReply, DepartureCommitmentFragments)
+            || IsSameConversationDepartureCommitment(visibleNpcReply))
         {
             return true;
         }
@@ -310,6 +365,13 @@ internal static class RecentOutingInvitationResolver
         }
 
         return ContainsAny(visibleNpcReply, DirectAgreementFragments);
+    }
+
+    internal static bool IsSameConversationDepartureCommitment(string visibleNpcReply)
+    {
+        return !string.IsNullOrWhiteSpace(visibleNpcReply)
+            && !ContainsAny(visibleNpcReply, FutureOrCancellationFragments)
+            && ContainsAny(visibleNpcReply, SameConversationDepartureFragments);
     }
 
     private static bool IsPendingConfirmationQuestion(string visibleNpcReply)

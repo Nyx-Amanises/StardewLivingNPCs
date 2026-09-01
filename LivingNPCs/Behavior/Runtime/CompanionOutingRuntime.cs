@@ -207,6 +207,9 @@ internal sealed class CompanionOutingRuntime
             .Where(outing => string.Equals(outing.TargetLocation, targetLocation, StringComparison.OrdinalIgnoreCase))
             .Select(outing => outing.AnchorTile)
             .ToHashSet();
+        Point? actualFarmOriginTile = IsFarmTarget(targetLocation) && npc.currentLocation == destination
+            ? npc.TilePoint
+            : null;
         if (!this.anchorSelector.TrySelect(
                 npc,
                 destination,
@@ -216,6 +219,7 @@ internal sealed class CompanionOutingRuntime
                 action.Reason,
                 this.world.TotalDays,
                 reservedTiles,
+                actualFarmOriginTile,
                 out CompanionOutingAnchor? anchor)
             || anchor == null)
         {
@@ -500,12 +504,19 @@ internal sealed class CompanionOutingRuntime
             return;
         }
 
+        if (IsFarmTarget(outing.TargetLocation) && npc.currentLocation == destination)
+        {
+            this.AbortFarmArrivalAndReturn(npc, outing);
+            return;
+        }
+
         this.Stop(outing, npc, returnToSchedule: true);
     }
 
     private bool TryBeginDestinationEntryStay(NPC npc, PendingCompanionOuting outing, GameLocation destination)
     {
-        if (npc.currentLocation != destination)
+        if (npc.currentLocation != destination
+            || !CanUseDestinationEntryFallback(outing.TargetLocation))
         {
             return false;
         }
@@ -579,6 +590,7 @@ internal sealed class CompanionOutingRuntime
         outing.Phase = CompanionOutingPhase.TravelingFromFarmBoundary;
         outing.RouteRetryCount = 0;
         outing.LastAssignedController = null;
+        this.TryRefreshFarmAnchorFromActualOrigin(npc, outing, farm);
         if (IsAtTile(npc, farm, outing.AnchorTile))
         {
             this.BeginStay(npc, outing);
@@ -597,30 +609,30 @@ internal sealed class CompanionOutingRuntime
             return;
         }
 
-        if (this.TryBeginFarmEntryStay(npc, outing, farm))
-        {
-            return;
-        }
-
-        this.Stop(outing, npc, returnToSchedule: true);
+        this.AbortFarmArrivalAndReturn(npc, outing);
     }
 
-    private bool TryBeginFarmEntryStay(NPC npc, PendingCompanionOuting outing, GameLocation farm)
+    private void AbortFarmArrivalAndReturn(NPC npc, PendingCompanionOuting outing)
     {
-        if (!IsFarmTarget(outing.TargetLocation) || npc.currentLocation != farm)
-        {
-            return false;
-        }
-
-        outing.AnchorTile = npc.TilePoint;
-        outing.AnchorFacingDirection = npc.FacingDirection is >= 0 and <= 3 ? npc.FacingDirection : 2;
-        outing.AnchorLabel = "near the farm entrance";
+        // The farm entrance is only the boundary crossing point, never the outing destination.
+        // If every reachable-yard candidate genuinely fails, walk back across the farm boundary;
+        // only this exceptional recovery path may use a final schedule teleport as a last resort.
         this.monitor.Log(
-            $"Farm outing for {npc.Name} could not reach the selected farm anchor; staying near the farm entrance instead.",
+            I18n.Get("log.outing.farmAnchorRecovery", new { npc = npc.Name }),
             LogLevel.Debug
         );
-        this.BeginStay(npc, outing);
-        return true;
+        outing.AllowEmergencyScheduleTeleport = true;
+        this.BeginFarmBoundaryReturn(npc, outing);
+    }
+
+    private static bool CanUseDestinationEntryFallback(string targetLocation)
+    {
+        return !IsFarmTarget(targetLocation);
+    }
+
+    internal static bool CanUseDestinationEntryFallbackForTesting(string targetLocation)
+    {
+        return CanUseDestinationEntryFallback(targetLocation);
     }
 
     private void BeginStay(NPC npc, PendingCompanionOuting outing)
@@ -922,6 +934,7 @@ internal sealed class CompanionOutingRuntime
         }
 
         outing.Phase = CompanionOutingPhase.ReturningToFarmBoundary;
+        outing.RouteRetryCount = 0;
         outing.FarmBoundaryLocationName = boundaryName;
         outing.FarmBoundarySourceTile = farmExitTile;
         outing.FarmBoundaryTargetTile = boundaryEntryTile;
@@ -1657,6 +1670,10 @@ internal sealed class CompanionOutingRuntime
             npc.currentLocation?.Name ?? destination.Name,
             string.Empty
         );
+        Point? actualFarmOriginTile = IsFarmTarget(outing.TargetLocation)
+            && npc.currentLocation == destination
+            ? npc.TilePoint
+            : null;
         if (!this.anchorSelector.TrySelect(
                 npc,
                 destination,
@@ -1666,6 +1683,7 @@ internal sealed class CompanionOutingRuntime
                 outing.Reason,
                 outing.TotalDays + outing.AnchorRelocationCount + 1,
                 reservedTiles,
+                actualFarmOriginTile,
                 out CompanionOutingAnchor? replacement)
             || replacement == null)
         {
@@ -1676,6 +1694,46 @@ internal sealed class CompanionOutingRuntime
         outing.AnchorFacingDirection = replacement.FacingDirection;
         outing.AnchorLabel = replacement.SemanticLabel;
         outing.AnchorRelocationCount++;
+        return true;
+    }
+
+    private bool TryRefreshFarmAnchorFromActualOrigin(
+        NPC npc,
+        PendingCompanionOuting outing,
+        GameLocation farm)
+    {
+        if (!IsFarmTarget(outing.TargetLocation) || npc.currentLocation != farm)
+        {
+            return false;
+        }
+
+        var reservedTiles = this.pendingOutings
+            .Where(candidate => candidate != outing
+                && string.Equals(candidate.TargetLocation, outing.TargetLocation, StringComparison.OrdinalIgnoreCase))
+            .Select(candidate => candidate.AnchorTile)
+            .ToHashSet();
+        if (!this.anchorSelector.TrySelect(
+                npc,
+                farm,
+                outing.TargetLocation,
+                BehaviorMemory.NormalizeTravelLocation(farm.Name, "Farm"),
+                outing.ActivityStyle,
+                outing.Reason,
+                outing.TotalDays,
+                reservedTiles,
+                npc.TilePoint,
+                out CompanionOutingAnchor? replacement)
+            || replacement == null)
+        {
+            return false;
+        }
+
+        outing.AnchorTile = replacement.Tile;
+        outing.AnchorFacingDirection = replacement.FacingDirection;
+        outing.AnchorLabel = replacement.SemanticLabel;
+        outing.RouteRetryCount = 0;
+        outing.AnchorRelocationCount = 0;
+        outing.LastAssignedController = null;
         return true;
     }
 
@@ -1802,7 +1860,26 @@ internal sealed class CompanionOutingRuntime
 
     private bool AllowScheduleFallbackTeleport(PendingCompanionOuting outing, NPC npc)
     {
-        return !IsFarmTarget(outing.TargetLocation) && npc.currentLocation != Game1.currentLocation;
+        return ShouldAllowScheduleFallbackTeleport(
+            outing.AllowEmergencyScheduleTeleport,
+            IsFarmTarget(outing.TargetLocation),
+            npc.currentLocation != Game1.currentLocation);
+    }
+
+    private static bool ShouldAllowScheduleFallbackTeleport(
+        bool emergencyRecovery,
+        bool isFarmTarget,
+        bool npcIsOffscreen)
+    {
+        return emergencyRecovery || (!isFarmTarget && npcIsOffscreen);
+    }
+
+    internal static bool ShouldAllowScheduleFallbackTeleportForTesting(
+        bool emergencyRecovery,
+        bool isFarmTarget,
+        bool npcIsOffscreen)
+    {
+        return ShouldAllowScheduleFallbackTeleport(emergencyRecovery, isFarmTarget, npcIsOffscreen);
     }
 
     private static bool IsAtTile(NPC npc, GameLocation destination, Point tile)

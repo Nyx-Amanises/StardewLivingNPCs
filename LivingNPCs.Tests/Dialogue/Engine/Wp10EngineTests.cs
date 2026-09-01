@@ -1275,6 +1275,34 @@ public class DialogueEngineGenerateTests
     }
 
     [Fact]
+    public async Task Brief_Same_Conversation_Delay_Starts_Outing_When_Dialogue_Closes()
+    {
+        const string reply = """
+            - 好呀，等会儿再去吧，我收拾一下就来。
+            %好，我在这里等你。
+            !LIVINGNPCS_META {"rapportDelta":2,"endConversation":false,"actions":[{"type":"companion_outing","targetLocation":"Farm","travelConsent":"accepted_later","durationMinutes":60,"delayMinutes":10}]}
+            """;
+        var (engine, _, _) = Create(reply);
+
+        var result = await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Penny",
+            Trigger = GenerationTrigger.Conversation,
+            Conversation = new List<ConversationTurn> { new("现在和我一起去农场吗？", true, "p-outing-brief-delay") },
+            Snapshot = new GameStateSnapshot { FarmerName = "Yuki" }
+        }, CancellationToken.None);
+
+        Assert.True(result.EndConversation);
+        Assert.Single(result.ParsedLines);
+
+        ConversationAnalysis analysis = ConversationAnalysis.Parse($"!LIVINGNPCS_META {result.AnalysisJson}");
+        ConversationWorldActionRequest action = Assert.Single(analysis.Actions);
+        Assert.Equal("accepted_now", action.TravelConsent);
+        Assert.Equal("Farm", action.TargetLocation);
+        Assert.Equal(0, action.DelayMinutes);
+    }
+
+    [Fact]
     public async Task ConversationOpening_Is_Stored_And_Merged_Into_FollowUp()
     {
         var (engine, _, store) = Create();

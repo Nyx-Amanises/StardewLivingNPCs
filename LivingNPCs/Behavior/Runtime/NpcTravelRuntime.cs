@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using Microsoft.Xna.Framework;
 using StardewValley;
 using StardewValley.Pathfinding;
@@ -47,14 +48,30 @@ internal static class NpcTravelRuntime
                 return true;
             }
 
-            controller = new PathFindController(
-                npc,
-                source,
-                targetTile,
-                facingDirection is >= 0 and <= 3 ? facingDirection : 2
-            );
-            npc.controller = controller;
-            return true;
+            try
+            {
+                controller = new PathFindController(
+                    npc,
+                    source,
+                    targetTile,
+                    facingDirection is >= 0 and <= 3 ? facingDirection : 2
+                );
+                if (!HasUsableLocalPath(controller.pathToEndPoint))
+                {
+                    controller = null;
+                    npc.controller = null;
+                    return false;
+                }
+
+                npc.controller = controller;
+                return true;
+            }
+            catch
+            {
+                controller = null;
+                npc.controller = null;
+                return false;
+            }
         }
 
         try
@@ -94,6 +111,16 @@ internal static class NpcTravelRuntime
             npc.DirectionsToNewLocation = null;
             return false;
         }
+    }
+
+    private static bool HasUsableLocalPath(Stack<Point>? path)
+    {
+        return path is { Count: > 0 };
+    }
+
+    internal static bool HasUsableLocalPathForTesting(Stack<Point>? path)
+    {
+        return HasUsableLocalPath(path);
     }
 
     public static bool TryGetWarpBoundary(

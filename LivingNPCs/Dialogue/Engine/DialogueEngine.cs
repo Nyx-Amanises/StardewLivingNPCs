@@ -6,6 +6,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using StardewValley;
 
+using LivingNPCs.Behavior;
 using LivingNPCs.Dialogue.Content;
 using LivingNPCs.Dialogue.Diagnostics;
 using LivingNPCs.Dialogue.Llm;
@@ -826,6 +827,21 @@ internal sealed class DialogueEngine : IDialogueEngine
 
         ct.ThrowIfCancellationRequested();
 
+        // Optional task steps do not exist. Remove a visible "and X would be better" add-on and,
+        // if the model incorrectly encoded it as required, reconcile the hidden steps too. Normal
+        // one-step requests, explicitly required multi-step requests, and ordinary dialogue stay
+        // untouched. The cleaned line is also stored in history and passed to the behavior layer.
+        HelpRequestDialogueCleanupResult helpRequestCleanup = HelpRequestDialogueConsistency.Reconcile(
+            parsed.DialogueLine,
+            analysis,
+            this.services.GetItemDisplayName,
+            this.BuildRequestableHelpItemAliases(request.NpcName));
+        string reconciledDialogueLine = helpRequestCleanup.DialogueLine;
+        if (helpRequestCleanup.RemovedOptionalAddOn && !helpRequestCleanup.HasValidRequest)
+        {
+            analysis.EndConversation = true;
+        }
+
         // The model sometimes carries accepted_now across a multi-turn negotiation but omits the
         // destination once both speakers shorten it to "let's go". Recover only from a recent,
         // explicit player invitation in the sanitized current conversation. This also normalizes
@@ -833,17 +849,20 @@ internal sealed class DialogueEngine : IDialogueEngine
         RecentOutingInvitationResolver.NormalizeCompanionOutingActions(
             analysis,
             prepared.Context,
-            parsed.DialogueLine);
+            reconciledDialogueLine);
 
         // 立即出游已经把这轮交流转化成世界动作；NPC 的确认台词应当像明确道别一样
         // 点完即关闭，不能继续显示模型误生成的回应选项。
-        if (HasAcceptedImmediateCompanionOuting(analysis, prepared.LastPlayerLine, parsed.DialogueLine))
+        if (HasAcceptedImmediateCompanionOuting(analysis, prepared.LastPlayerLine, reconciledDialogueLine))
         {
             analysis.EndConversation = true;
         }
 
         // 元数据裁决：EndConversation 且行数 >1 → 只保留台词行（§4.10.8）。
-        var options = parsed.Options;
+        var options = HelpRequestDialogueConsistency.ReconcileOptionsAfterCleanup(
+            parsed.Options,
+            helpRequestCleanup,
+            this.services.GetLocale());
         if (analysis.EndConversation && options.Count > 0)
         {
             options = new List<string>();
@@ -851,7 +870,7 @@ internal sealed class DialogueEngine : IDialogueEngine
 
         // 后处理（§4.11）。
         string visibleDialogueLine = ConversationTextPostProcessor.NormalizeImmediateNicknameReply(
-            parsed.DialogueLine, prepared.LastPlayerLine);
+            reconciledDialogueLine, prepared.LastPlayerLine);
         visibleDialogueLine = ResponseParser.PromoteWeakPositivePortraitsForExplicitJoy(
             visibleDialogueLine,
             BuildAvailablePortraitDescriptions(prepared));
@@ -925,6 +944,40 @@ internal sealed class DialogueEngine : IDialogueEngine
                 action.TravelConsent,
                 playerText,
                 npcVisibleLine));
+    }
+
+    private IReadOnlyList<HelpRequestItemAlias> BuildRequestableHelpItemAliases(string npcName)
+    {
+        try
+        {
+            if (Game1.player == null)
+            {
+                return Array.Empty<HelpRequestItemAlias>();
+            }
+
+            NPC? npc = Game1.getCharacterFromName(npcName);
+            if (npc == null)
+            {
+                return Array.Empty<HelpRequestItemAlias>();
+            }
+
+            return HelpRequestAdvisor.GetRequestableItems(npc)
+                .Select(item =>
+                {
+                    string localizedName = this.services.GetItemDisplayName(item.ItemId);
+                    return new HelpRequestItemAlias(
+                        item.ItemId,
+                        localizedName,
+                        new[] { localizedName, item.Label });
+                })
+                .ToList();
+        }
+        catch
+        {
+            // Prompt metadata still provides aliases for encoded steps. The broader alias list is
+            // a display-time safety net and must never make dialogue generation fail.
+            return Array.Empty<HelpRequestItemAlias>();
+        }
     }
 
     private static IReadOnlyDictionary<string, string> BuildAvailablePortraitDescriptions(

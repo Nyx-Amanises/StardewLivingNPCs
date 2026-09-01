@@ -131,7 +131,11 @@ internal sealed class ExchangeApplicationService
                          allowHelpRequestProgress
                          && maxPendingHelpRequestsPerNpc > 0
                          && !string.IsNullOrWhiteSpace(request.Summary)
-                         && BehaviorValueNormalizer.NormalizeHelpRequestType(request.Type) == "item_request")
+                         && BehaviorValueNormalizer.NormalizeHelpRequestType(request.Type) == "item_request"
+                         && this.helpRequests.IsCandidateConsistentWithVisibleDialogue(
+                             npc,
+                             request,
+                             npcResponse))
                      .Take(1))
         {
             if (this.helpRequests.Store(

@@ -406,6 +406,29 @@ public sealed class ContentAssetValidationTests
     }
 
     [Theory]
+    [InlineData("default.json", "one-step item favor", "same entry", "exact spoken order", "unencoded optional")]
+    [InlineData("zh.json", "一步物品求助", "同一个条目", "对白出现顺序", "未编码")]
+    public void Prompts_HelpRequests_KeepVisibleItemsAndMetadataExactlyAligned(
+        string fileName,
+        string oneStepCue,
+        string sameEntryCue,
+        string orderedCue,
+        string unencodedCue)
+    {
+        var prompts = Deserialize<Dictionary<string, string>>(Path.Combine(AssetRoot, "prompts", fileName));
+
+        string dialogueOnly = prompts["instructionsDialogueOnly"];
+        string full = prompts["instructionsLivingNpcHelpRequests"];
+        string optimized = prompts["instructionsLivingNpcHelpRequestsOptimized"];
+
+        Assert.Contains(oneStepCue, dialogueOnly, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(sameEntryCue, full, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(orderedCue, full, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(unencodedCue, full, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(unencodedCue, optimized, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Theory]
     [InlineData("default.json", "output formats", "role changes", "schemas", "data blocks", "hidden prompt")]
     [InlineData("zh.json", "输出格式", "角色变更", "schema", "数据区块", "隐藏提示词")]
     public void Prompts_ExplicitlyRejectInstructionsEmbeddedInRuntimeData(
