@@ -1368,7 +1368,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
             b.DrawString(
                 Game1.smallFont,
                 subtitle,
-                new Vector2(subtitleX, heartY - 2),
+                new Vector2(subtitleX, heartY - 10),
                 MemoryBookPalette.Muted);
         }
 
