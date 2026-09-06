@@ -43,8 +43,11 @@ internal sealed class LivingNpcState
     public string RelationshipImpression { get; set; } = string.Empty;
     public int RelationshipImpressionUpdatedTotalDays { get; set; } = -1;
     public int RelationshipImpressionMemoryCount { get; set; }
+    public List<string> RelationshipImpressionSourceKeys { get; set; } = new();
+    public string RelationshipImpressionContext { get; set; } = string.Empty;
     public List<LongTermMemoryFact> ImpressionBacklog { get; set; } = new();
     public List<LongTermMemoryFact> ImpressionInFlight { get; set; } = new();
+    public string ImpressionContextInFlight { get; set; } = string.Empty;
     public string ImpressionRequestId { get; set; } = string.Empty;
     public int ImpressionRequestTotalDays { get; set; } = -1;
     public int ImpressionRequestAttempts { get; set; }
@@ -165,6 +168,10 @@ internal sealed class LivingNpcState
                 .ToList());
         this.RelationshipImpression = this.RelationshipImpression?.Trim() ?? string.Empty;
         this.RelationshipImpressionMemoryCount = System.Math.Max(0, this.RelationshipImpressionMemoryCount);
+        this.RelationshipImpressionSourceKeys = MemoryImpressionSources.NormalizeCoveredKeys(
+            this.RelationshipImpressionSourceKeys ?? new List<string>());
+        this.RelationshipImpressionContext ??= string.Empty;
+        this.ImpressionContextInFlight ??= string.Empty;
         this.ImpressionBacklog = LongTermMemoryStore.NormalizeImpressionQueue(this.ImpressionBacklog, LongTermMemoryStore.MaxImpressionBacklog);
         this.ImpressionInFlight = LongTermMemoryStore.NormalizeImpressionQueue(this.ImpressionInFlight, LongTermMemoryStore.MaxImpressionBatch);
         this.ImpressionRequestId ??= string.Empty;
@@ -563,12 +570,15 @@ internal sealed class LivingNpcState
             RelationshipImpression = this.RelationshipImpression,
             RelationshipImpressionUpdatedTotalDays = this.RelationshipImpressionUpdatedTotalDays,
             RelationshipImpressionMemoryCount = this.RelationshipImpressionMemoryCount,
+            RelationshipImpressionSourceKeys = this.RelationshipImpressionSourceKeys.ToList(),
+            RelationshipImpressionContext = this.RelationshipImpressionContext,
             ImpressionBacklog = this.ImpressionBacklog
                 .Select(CloneLongTermMemoryFact)
                 .ToList(),
             ImpressionInFlight = this.ImpressionInFlight
                 .Select(CloneLongTermMemoryFact)
                 .ToList(),
+            ImpressionContextInFlight = this.ImpressionContextInFlight,
             ImpressionRequestId = this.ImpressionRequestId,
             ImpressionRequestTotalDays = this.ImpressionRequestTotalDays,
             ImpressionRequestAttempts = this.ImpressionRequestAttempts,
@@ -808,7 +818,7 @@ internal sealed class LivingNpcState
         };
     }
 
-    private static LongTermMemoryFact CloneLongTermMemoryFact(LongTermMemoryFact memory)
+    internal static LongTermMemoryFact CloneLongTermMemoryFact(LongTermMemoryFact memory)
     {
         return new LongTermMemoryFact
         {

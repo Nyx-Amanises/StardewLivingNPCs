@@ -414,7 +414,7 @@ internal static class PromptFragments
         public static string GiftContextLine(string lastGift) => $"- Recent gift context: {lastGift}.";
         public static string EventContextLine(string lastEvent) => $"- Recent event context: {lastEvent}.";
         public static string MemoryStoreLine(int longTermCount) => $"- Durable memory store: {longTermCount} long-term memories tracked; relevant ones, if any, appear under high-priority continuity.";
-        public static string RelationshipImpressionLine(string impression) => $"- Long-term relationship impression (older memories compressed into background; treat as settled history, not recent events): {impression}";
+        public static string RelationshipImpressionLine(string impression) => $"- Long-term relationship impression (updated from important interactions and remembered history; use current facts and explicit statuses to resolve outdated details, and do not assume all events happened recently): {impression}";
         public static string KnownPreferencesLine(int preferenceCount) => $"- Farmer preference memories tracked: {preferenceCount}; relevant ones, if any, appear under high-priority continuity.";
         public static string BehaviorTendenciesLine(string tendencies) => $"- Conversation-driven behavior tendencies: {tendencies}.";
         public static string SharedExperiencesLine(string sharedExperiences) => $"- Shared experiences with the farmer: {sharedExperiences}.";

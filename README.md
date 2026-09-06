@@ -149,7 +149,7 @@ NPC 可以保存并在合适时召回：
 - 最近的对话走向与长期关系印象；
 - 你们之间尚未解决的误会、冲突或修复过程。
 
-当长期记录超过容量时，旧记忆可以被压缩成较稳定的“关系印象”，避免存档无限增长，同时保留人物关系的连续感。
+每个 NPC 积累 3 条重要记忆后，就会尝试生成“TA 眼中的这段关系”初稿；之后随重要互动、偏好、共同经历、矛盾或关系状态变化更新，每个游戏日最多成功更新一次。相同事实会去重，生成失败会保留原印象和记忆等待重试。旧记忆超过容量时仍会压缩进印象，控制存档大小并延续关系经历。
 
 ### 情绪、关系节奏与修复
 
@@ -187,7 +187,7 @@ NPC 还会记住玩家偏好、形成昵称，并根据性格以不同方式表�
 
 按 <code>LeftShift + J</code>（可在 GMCM 改键）打开游戏内**记忆手册**：左页是认识的 NPC 名册（头像、心数、最近接触时间），右页分四个标签——
 
-- **关系**：TA 当前的情绪、亲近层级、信任程度、给你起的昵称、尚未解开的疙瘩，以及长期沉淀出的"关系印象"；
+- **关系**：TA 当前的情绪、亲近层级、信任程度、给你起的昵称、尚未解开的疙瘩，以及随重要互动更新的"关系印象"；
 - **记忆**：TA 记住的事实、约定、边界与你的喜好，按类别分组，悬停可见重要度与强化次数；
 - **对话**：按日期倒序翻阅你们最近的 AI 对话原文；
 - **经历**：一起出游的时刻、帮过的小忙、最近的礼物。
@@ -251,7 +251,7 @@ Generic Mod Config Menu 中实际提供的设置：
 - AI 对话额外好感：<code>EnableAiDialogueFriendship</code> 及每日上限；
 - 被动行为：<code>EnablePassiveBehaviors</code>、<code>PassiveBehaviorChancePercent</code>（默认关闭；开启前建议先用行为测试键手动测试）；
 - 记忆容量：<code>MaxMemoryEntriesPerNpc</code>、<code>PromptMemoryEntries</code>；
-- 礼物信与记忆压缩：<code>EnableAiGiftMail</code>、<code>EnableMemoryImpressions</code>；
+- 礼物信与关系印象（含旧记忆压缩）：<code>EnableAiGiftMail</code>、<code>EnableMemoryImpressions</code>；
 - 多人同步：<code>EnableMultiplayerSync</code>（默认开启；关闭后帮工不再上报主机、退回本地临时记忆，见"多人联机"一节）；
 - 连接与日志：<code>SuppressConnectionCheck</code>（完全关闭连接自检；默认只在连接设置变化时自检一次）、<code>ExportAiResponseLogs</code>（AI 诊断日志开关；单个日志超过约 8MB 会自动轮转为 <code>.old</code>，不会无限增长）。
 
@@ -303,7 +303,7 @@ API Key 只保存在 <code>Mods/LivingNPCs/config.json</code>，不会写入 Mod
 
 这些文件可能包含你的对话和游戏信息。提交错误报告前请先检查内容并按需要删改隐私信息；**永远不要分享 API Key**。若不希望持续保存 AI 诊断日志，可以在 <code>config.json</code> 中将 <code>ExportAiResponseLogs</code> 设为 <code>false</code>；玩家可读的对话回忆录仍可能用于保留完整聊天历史。
 
-语义路由、正式回复、AI 信件和长期记忆压缩都可能产生模型调用。实际费用取决于模型定价、聊天长度和游玩频率，可用 <code>livingnpcs_tokens</code> 查看统计。
+语义路由、正式回复、AI 信件和关系印象更新（含旧记忆压缩）都可能产生模型调用。实际费用取决于模型定价、聊天长度和游玩频率，可用 <code>livingnpcs_tokens</code> 查看统计。
 
 ## 常见问题
 

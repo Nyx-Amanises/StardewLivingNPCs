@@ -118,6 +118,9 @@ internal sealed class BehaviorEngine
         this.multiplayerSync.BookSnapshotProvider = this.BuildBookSnapshot;
         this.multiplayerSync.BookSnapshotReceived = this.ApplyRemoteBookSnapshot;
         this.multiplayerSync.BookSnapshotTimedOut = this.MarkRemoteBookSnapshotTimedOut;
+        this.memoryImpressions.ImpressionUpdated += npcName => this.SafeRun(
+            "memory impression updated",
+            () => this.multiplayerSync.BroadcastNpcRelationshipView(npcName));
     }
 
     public void RegisterEvents()
@@ -159,6 +162,7 @@ internal sealed class BehaviorEngine
     {
         this.SafeRun("save loaded", () =>
         {
+            this.memoryImpressions.ResetSession();
             BehaviorMemorySaveData? saveData;
             if (!Context.IsMainPlayer)
             {
@@ -226,6 +230,7 @@ internal sealed class BehaviorEngine
 
     private void AfterManualMemoryClear()
     {
+        this.memoryImpressions.ResetSession();
         if (Context.IsMainPlayer)
         {
             this.helper.Data.WriteSaveData(SaveDataKey, this.memory.ToSaveData());
@@ -328,6 +333,7 @@ internal sealed class BehaviorEngine
     {
         this.SafeRun("returned to title", () =>
         {
+            this.memoryImpressions.ResetSession();
             this.memory.ResetDaily();
             this.pendingValleyTalkExchanges.Clear();
             this.contextService.ClearImmediateContexts();
@@ -550,6 +556,12 @@ internal sealed class BehaviorEngine
             if (!Context.IsWorldReady)
             {
                 return;
+            }
+
+            // Update relationship impressions during the day, independently of passive actions.
+            if (Context.IsMainPlayer)
+            {
+                this.memoryImpressions.ProcessPending();
             }
 
             this.helpRequests.UpdateTimers();

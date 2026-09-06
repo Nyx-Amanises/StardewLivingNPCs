@@ -132,13 +132,38 @@ internal static class LongTermMemoryStore
                 continue;
             }
 
-            bool duplicate = state.ImpressionBacklog
-                .Concat(state.ImpressionInFlight)
-                .Any(existing => string.Equals(
-                    BuildKey(existing.Kind, existing.Subject, existing.Summary),
-                    key,
-                    System.StringComparison.OrdinalIgnoreCase));
-            if (!duplicate)
+            // A live fact may have changed since an older version was captured for generation.
+            // Subject identity alone would discard that newer version when it is evicted.
+            string contentKey = MemoryImpressionSources.GetKey(memory);
+            var queued = state.ImpressionBacklog.FirstOrDefault(existing => string.Equals(
+                MemoryImpressionSources.GetKey(existing), contentKey, System.StringComparison.Ordinal));
+            if (queued != null)
+            {
+                // A -> B -> A is still a new state even though the final wording equals the
+                // first A. Keep its latest timestamp and queue order so B cannot win later.
+                if (IsNewerAt(memory.LastUpdatedTotalDays, memory.LastUpdatedTimeOfDay,
+                        queued.LastUpdatedTotalDays, queued.LastUpdatedTimeOfDay)
+                    || (memory.LastUpdatedTotalDays == queued.LastUpdatedTotalDays
+                        && memory.LastUpdatedTimeOfDay == queued.LastUpdatedTimeOfDay))
+                {
+                    state.ImpressionBacklog.Remove(queued);
+                    state.ImpressionBacklog.Add(memory);
+                }
+
+                continue;
+            }
+
+            var inFlight = state.ImpressionInFlight.FirstOrDefault(existing => string.Equals(
+                    MemoryImpressionSources.GetKey(existing),
+                    contentKey,
+                    System.StringComparison.Ordinal));
+            if (inFlight == null
+                || IsNewerAt(memory.LastUpdatedTotalDays, memory.LastUpdatedTimeOfDay,
+                    inFlight.LastUpdatedTotalDays, inFlight.LastUpdatedTimeOfDay)
+                || state.ImpressionBacklog.Any(queuedMemory => string.Equals(
+                    MemoryImpressionSources.GetIdentity(queuedMemory),
+                    MemoryImpressionSources.GetIdentity(memory),
+                    System.StringComparison.Ordinal)))
             {
                 state.ImpressionBacklog.Add(memory);
             }

@@ -9,7 +9,7 @@ using StardewModdingAPI;
 using LivingNPCs.Dialogue.Llm;
 namespace LivingNPCs.Dialogue.Engine;
 
-/// <summary>一次记忆印象压缩的强类型请求（WP16 §4.1：废除 requestId 与 JSON 往返）。
+/// <summary>一次关系印象生成或更新的强类型请求（WP16 §4.1：废除 requestId 与 JSON 往返）。
 /// 每条记忆可带 "[-Nd]" 前缀 = 约 N 游戏日前。</summary>
 internal sealed record MemoryImpressionRequest(
     string NpcName,
@@ -19,8 +19,8 @@ internal sealed record MemoryImpressionRequest(
     int TimeoutSeconds);
 
 /// <summary>
-/// Compresses a batch of evicted long-term memories (supplied by LivingNPCs) plus the existing
-/// relationship impression into an updated biographical impression, using one LLM call.
+/// Updates the relationship impression from existing prose and supplied relationship evidence,
+/// including important active memories, current state, and evicted memories, using one LLM call.
 /// True-async API (WP16): the caller awaits the task; null means failure, so it keeps its backlog
 /// and retries another day — no memory is lost. Everything needed is captured before the first
 /// await, only the network call runs in the background.
@@ -168,8 +168,18 @@ internal sealed class MemoryImpressionGenerator
     private static string BuildSystemPrompt(bool zh)
     {
         string instruction = zh
-            ? "你在为一个游戏角色维护对农夫的长期印象。把现有印象与新增的零散记忆合并成一段更新后的印象叙述。要求:第三人称;保留具体事实(帮忙的次数、喜好、承诺、边界、重要事件);合并重复内容;越久远的事越概括;最多5句话。只输出这段印象文字,不要标题、列表或解释。"
-            : "You maintain a game character's long-term impression of the farmer. Merge the existing impression with the newly evicted memories into one updated impression narrative. Requirements: third person; keep concrete facts (how many times the farmer helped, likes/dislikes, promises, boundaries, notable events); merge duplicates; summarize older events more coarsely; at most 5 sentences. Output ONLY the impression text — no headings, lists, or explanations.";
+            ? "你在为一个游戏角色维护对农夫的当前关系印象。根据已有印象和提供的证据，生成首次印象或更新现有印象。"
+                + "证据可能包括重要的长期记忆、玩家偏好、共同经历、矛盾及其当前状态，以及需压缩的旧记忆。"
+                + "用具体事实支持角色对农夫的看法，保留重要的承诺、边界和关系变化；以最新明确的状态纠正过时的印象，未解决的矛盾不得写成已经和解。"
+                + "证据与已有印象或不同来源之间可能重合：同一事实只算一次，不得把重复记录当作多次互动。"
+                + "不得凭空提升亲密、信任或恋爱关系；区分愿望、约定和实际发生的事，未履约的承诺不能写成已经完成。"
+                + "概括久远细节，避免只堆砌事实或昵称。用中文、第三人称写成一段，最多5句话。只输出完整的印象文字，不要标题、列表或解释。"
+            : "You maintain a game character's current relationship impression of the farmer. Use the existing impression and supplied evidence to write a first impression or update the existing one. "
+                + "Evidence may include important long-term memories, farmer preferences, shared experiences, conflicts and their current status, and older memories being compressed. "
+                + "Ground the character's view of the farmer in concrete facts, preserving important promises, boundaries, and relationship changes. Use the latest explicit status to correct outdated impressions; do not describe unresolved conflicts as reconciled. "
+                + "Evidence may overlap with the existing impression or with other sources: count each fact only once, and never treat duplicate records as repeated interactions. "
+                + "Do not invent greater intimacy, trust, or romance. Distinguish wishes and agreements from events that actually happened; unfulfilled promises are not completed actions. "
+                + "Summarize older details more coarsely, and avoid merely listing facts or nicknames. Write one paragraph in English and third person, with at most 5 sentences. Output ONLY the full impression text, with no headings, lists, or explanations.";
         return instruction + " " + PromptDataBoundary.SystemRule;
     }
 
@@ -186,8 +196,8 @@ internal sealed class MemoryImpressionGenerator
             prompt.AppendLine("现有印象:");
             prompt.AppendLine(PromptDataBoundary.Wrap(
                 "memory_existing_impression",
-                string.IsNullOrWhiteSpace(existingImpression) ? "(尚无,这是第一次总结。)" : existingImpression));
-            prompt.AppendLine("新增记忆(每条开头的 [-N天] 表示大约发生在 N 天前;游戏中一季=28天,一年=112天):");
+                string.IsNullOrWhiteSpace(existingImpression) ? "(尚无，这是首次形成关系印象。)" : existingImpression));
+            prompt.AppendLine("关系证据（含当前事实、状态与待压缩的旧记忆，可能与已有印象重合；每条开头的 [-Nd] 表示大约发生在 N 天前；游戏中一季=28天，一年=112天）：");
         }
         else
         {
@@ -196,8 +206,8 @@ internal sealed class MemoryImpressionGenerator
             prompt.AppendLine("Existing impression:");
             prompt.AppendLine(PromptDataBoundary.Wrap(
                 "memory_existing_impression",
-                string.IsNullOrWhiteSpace(existingImpression) ? "(none yet; this is the first summary.)" : existingImpression));
-            prompt.AppendLine("New memories (the [-Nd] prefix means roughly N in-game days ago; one season = 28 days, one year = 112 days):");
+                string.IsNullOrWhiteSpace(existingImpression) ? "(none yet; this is the first relationship impression.)" : existingImpression));
+            prompt.AppendLine("Relationship evidence (current facts and status, plus older memories to compress; may overlap with the existing impression; the [-Nd] prefix means roughly N in-game days ago; one season = 28 days, one year = 112 days):");
         }
 
         var memoryData = new StringBuilder();

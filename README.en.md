@@ -127,7 +127,7 @@ If generation fails, times out, or returns unusable content, the mod falls back 
 
 ## Main gameplay
 
-- **Long-term memory.** NPCs can keep and recall facts, preferences, dislikes, nicknames, promises, boundaries, shared moments, and unresolved issues. When the record grows past its capacity, older memories are compressed into stable "relationship impressions" so saves do not grow without bound.
+- **Long-term memory.** NPCs can keep and recall facts, preferences, dislikes, nicknames, promises, boundaries, shared moments, and unresolved issues. After 3 important memories, each NPC can form an initial relationship impression and refresh it after meaningful interactions or changes in preferences, shared experiences, conflicts, or relationship status, with at most one successful update per in-game day. Duplicate evidence is merged; failed updates retain existing impressions and memories for retry. Older records still feed memory compression when capacity is exceeded.
 - **Emotion and relationship pacing.** Responses weigh vanilla hearts, conversation history, trust, longer-term emotions, and recent conflict. New acquaintances do not act like lifelong friends; grievances do not vanish in the next line. Apologies, gifts, and follow-ups can gradually repair a relationship.
 - **Community impressions.** Important interactions can leave limited impressions with witnesses and close circles. Retellings decay and blur over time instead of making the whole town omniscient.
 - **Personal help requests.** NPCs may occasionally ask for a suitable item. Once clearly accepted, the request enters the vanilla quest log and only completes when the correct item is actually delivered, with a small friendship or material reward.
@@ -135,7 +135,7 @@ If generation fails, times out, or returns unusable content, the mod falls back 
 - **Companion outings.** After a clearly accepted invitation, an NPC can temporarily leave their schedule, walk through real map boundaries to a supported destination, stay a while, and then resume. Festivals, story events, sleep, bad weather, and unsafe map states are blocked.
 - **Progress awareness.** The AI context can see the date, time, season, weather, festivals, location, relationships, the NPC's current activity, and part of the game progress, so characters talk about what is actually happening.
 - **Small behaviors and world actions.** Dialogue can influence restrained behaviors (facing you, emotes, stepping closer, keeping distance). Every world-affecting action passes a whitelist and a second local validation; the model can never run arbitrary commands.
-- **In-game Memory Book.** Press `LeftShift + J` to open a book with every NPC you know: a relationship card (emotion, closeness, trust, nickname, unresolved tension, the settled "relationship impression"), grouped long-term memories, past AI conversations by date, and shared moments (outings, favors, gifts). Mouse wheel and gamepad supported.
+- **In-game Memory Book.** Press `LeftShift + J` to open a book with every NPC you know: a relationship card (emotion, closeness, trust, nickname, unresolved tension, a "relationship impression" updated after meaningful interactions), grouped long-term memories, past AI conversations by date, and shared moments (outings, favors, gifts). Mouse wheel and gamepad supported.
 
 ## SVE and custom NPCs
 
@@ -181,7 +181,7 @@ The following advanced options **can only be edited in `config.json`** (close th
 - AI-chat bonus friendship: `EnableAiDialogueFriendship` and its daily cap;
 - Passive behaviors: `EnablePassiveBehaviors`, `PassiveBehaviorChancePercent` (off by default; test with the manual behavior hotkey first);
 - Memory sizes: `MaxMemoryEntriesPerNpc`, `PromptMemoryEntries`;
-- Gift mail and memory compression: `EnableAiGiftMail`, `EnableMemoryImpressions`;
+- Gift mail and relationship impressions (including older-memory compression): `EnableAiGiftMail`, `EnableMemoryImpressions`;
 - Multiplayer sync: `EnableMultiplayerSync` (on by default; when off, farmhands stop reporting to the host and fall back to session-local memory — see the Multiplayer section);
 - Connection and logging: `SuppressConnectionCheck` (fully disables the self-check; by default it only runs when connection settings change) and `ExportAiResponseLogs` (AI diagnostic logs; each log rotates to `.old` past ~8MB, so they never grow without bound).
 
@@ -219,7 +219,7 @@ The API key is stored only in `Mods/LivingNPCs/config.json` and is never written
 
 By default 0.2.0 keeps local files under `Mods/LivingNPCs` for review and troubleshooting: `conversation_logs/` (readable per-NPC memoirs), `prompt_logs/`, `ai_response_logs/`, `context_routing_logs/`, `debug_reports/`, and `token_usage/`. These may contain your conversations and game information — review and redact before sharing. Set `ExportAiResponseLogs` to `false` in `config.json` to stop the ongoing AI diagnostic logs.
 
-Semantic routing, the final reply, AI-written mail, and long-term memory compression can all use model calls. Use `livingnpcs_tokens` to inspect usage; billing depends on your provider and playtime.
+Semantic routing, the final reply, AI-written mail, and relationship impression updates (including older-memory compression) can all use model calls. Use `livingnpcs_tokens` to inspect usage; billing depends on your provider and playtime.
 
 ## FAQ
 

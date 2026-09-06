@@ -107,7 +107,7 @@ internal sealed class DialogueEngineLink
         }
     }
 
-    /// <summary>压缩一批被挤出的长期记忆为关系印象；不可用或失败返回 null（调用方保留 backlog）。</summary>
+    /// <summary>根据重要互动和旧记忆生成或更新关系印象；不可用或失败返回 null（调用方保留待处理记忆）。</summary>
     public async Task<string?> GenerateMemoryImpressionAsync(MemoryImpressionRequest request, CancellationToken ct)
     {
         if (request == null

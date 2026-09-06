@@ -70,37 +70,36 @@ public sealed class MemoryImpressionTests
     }
 
     [Fact]
-    public void ShouldRequestNeedsBacklogThresholdOrStaleEntries()
+    public void ShouldRequestPreservesEightEntryThresholdForOrdinaryBacklog()
     {
         var state = TestScenarios.TrustedState();
         Assert.False(MemoryImpressionService.ShouldRequest(state, Today));
 
-        // A few fresh entries: not yet worth a model call.
-        for (int i = 0; i < 3; i++)
+        // Low-importance archive entries still use the original eight-entry threshold.
+        for (int i = 0; i < MemoryImpressionService.TriggerBacklogCount - 1; i++)
         {
             state.ImpressionBacklog.Add(TestScenarios.Memory($"Fresh memory {i}."));
         }
 
         Assert.False(MemoryImpressionService.ShouldRequest(state, Today));
 
-        // Threshold reached: request.
-        for (int i = 0; i < MemoryImpressionService.TriggerBacklogCount; i++)
-        {
-            state.ImpressionBacklog.Add(TestScenarios.Memory($"Extra memory {i}."));
-        }
+        state.ImpressionBacklog.Add(TestScenarios.Memory("Eighth fresh memory."));
 
         Assert.True(MemoryImpressionService.ShouldRequest(state, Today));
     }
 
-    [Fact]
-    public void ShouldRequestTriggersForSmallButStaleBacklog()
+    [Theory]
+    [InlineData(27, false)]
+    [InlineData(28, true)]
+    public void ShouldRequestUsesCreationAgeForSmallBacklog(int age, bool expected)
     {
         var state = TestScenarios.TrustedState();
         var stale = TestScenarios.Memory("An old memory from last season.");
-        stale.CreatedTotalDays = Today - MemoryImpressionService.StaleBacklogAgeDays;
+        stale.CreatedTotalDays = Today - age;
+        stale.LastUpdatedTotalDays = Today;
         state.ImpressionBacklog.Add(stale);
 
-        Assert.True(MemoryImpressionService.ShouldRequest(state, Today));
+        Assert.Equal(expected, MemoryImpressionService.ShouldRequest(state, Today));
     }
 
     [Fact]
@@ -132,14 +131,19 @@ public sealed class MemoryImpressionTests
         state.ImpressionRequestTotalDays = Today - 1;
         state.ImpressionRequestAttempts = 1;
         state.LastImpressionFailureTotalDays = Today - 10;
+        state.ImpressionContextInFlight = "The captured relationship state.";
 
         MemoryImpressionService.ApplyResult(state, " They have known each other for two years. ", Today);
 
         Assert.Equal("They have known each other for two years.", state.RelationshipImpression);
         Assert.Equal(Today, state.RelationshipImpressionUpdatedTotalDays);
         Assert.Equal(5, state.RelationshipImpressionMemoryCount);
+        Assert.Equal(5, state.RelationshipImpressionSourceKeys.Count);
+        Assert.Equal("The captured relationship state.", state.RelationshipImpressionContext);
         Assert.Empty(state.ImpressionInFlight);
+        Assert.Empty(state.ImpressionContextInFlight);
         Assert.Equal(string.Empty, state.ImpressionRequestId);
+        Assert.Equal(-1, state.ImpressionRequestTotalDays);
         Assert.Equal(0, state.ImpressionRequestAttempts);
         Assert.Equal(-1, state.LastImpressionFailureTotalDays);
     }
@@ -175,17 +179,37 @@ public sealed class MemoryImpressionTests
         state.RelationshipImpression = "They are old friends.";
         state.RelationshipImpressionUpdatedTotalDays = Today - 2;
         state.RelationshipImpressionMemoryCount = 12;
+        state.RelationshipImpressionSourceKeys.Add("covered-source");
+        state.RelationshipImpressionContext = "The last successful relationship state.";
         state.ImpressionBacklog.Add(TestScenarios.Memory("Queued memory."));
         state.ImpressionInFlight.Add(TestScenarios.Memory("Requested memory."));
+        state.ImpressionContextInFlight = "The pending relationship state.";
         state.ImpressionRequestId = "impression-Emily-test";
+        state.ImpressionRequestTotalDays = Today;
+        state.ImpressionRequestAttempts = 2;
+        state.LastImpressionFailureTotalDays = Today - 5;
 
         var clone = state.Clone();
 
         Assert.Equal(state.RelationshipImpression, clone.RelationshipImpression);
+        Assert.Equal(state.RelationshipImpressionUpdatedTotalDays, clone.RelationshipImpressionUpdatedTotalDays);
         Assert.Equal(state.RelationshipImpressionMemoryCount, clone.RelationshipImpressionMemoryCount);
+        Assert.Equal(state.RelationshipImpressionSourceKeys, clone.RelationshipImpressionSourceKeys);
+        Assert.Equal(state.RelationshipImpressionContext, clone.RelationshipImpressionContext);
         Assert.Single(clone.ImpressionBacklog);
         Assert.Single(clone.ImpressionInFlight);
+        Assert.Equal(state.ImpressionContextInFlight, clone.ImpressionContextInFlight);
         Assert.Equal(state.ImpressionRequestId, clone.ImpressionRequestId);
+        Assert.Equal(state.ImpressionRequestTotalDays, clone.ImpressionRequestTotalDays);
+        Assert.Equal(state.ImpressionRequestAttempts, clone.ImpressionRequestAttempts);
+        Assert.Equal(state.LastImpressionFailureTotalDays, clone.LastImpressionFailureTotalDays);
+        Assert.NotSame(state.RelationshipImpressionSourceKeys, clone.RelationshipImpressionSourceKeys);
         Assert.NotSame(state.ImpressionBacklog[0], clone.ImpressionBacklog[0]);
+        Assert.NotSame(state.ImpressionInFlight[0], clone.ImpressionInFlight[0]);
+
+        clone.RelationshipImpressionSourceKeys.Add("later-source");
+        clone.ImpressionInFlight[0].Summary = "Changed after saving.";
+        Assert.Single(state.RelationshipImpressionSourceKeys);
+        Assert.Equal("Requested memory.", state.ImpressionInFlight[0].Summary);
     }
 }
