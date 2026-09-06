@@ -23,7 +23,11 @@ internal enum MemoryBookLineKind
 }
 
 /// <summary>一行手册内容（未换行的逻辑行；换行由菜单按实际列宽处理）。</summary>
-internal sealed record MemoryBookLine(MemoryBookLineKind Kind, string Text, string HoverText = "");
+internal sealed record MemoryBookLine(MemoryBookLineKind Kind, string Text, string HoverText = "")
+{
+    /// <summary>分类标题对应的标准化记忆类别，独立于翻译后的显示文字。</summary>
+    public string MemoryKind { get; init; } = string.Empty;
+}
 
 /// <summary>左侧名册里的一位 NPC。</summary>
 internal sealed record MemoryBookNpcSummary(
@@ -432,7 +436,10 @@ internal static class MemoryBookData
 
         foreach (var group in grouped)
         {
-            lines.Add(new(MemoryBookLineKind.SectionHeader, translate($"book.memoryKind.{group.Key}")));
+            lines.Add(new(MemoryBookLineKind.SectionHeader, translate($"book.memoryKind.{group.Key}"))
+            {
+                MemoryKind = group.Key
+            });
             foreach (LongTermMemoryFact memory in group
                 .OrderByDescending(entry => entry.Importance)
                 .ThenByDescending(entry => entry.LastUpdatedTotalDays))

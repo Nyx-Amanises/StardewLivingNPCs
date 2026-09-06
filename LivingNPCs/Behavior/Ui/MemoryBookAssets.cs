@@ -38,7 +38,8 @@ internal enum MemoryBookIcon
     Flower,
     Clock,
     ArrowUp,
-    ArrowDown
+    ArrowDown,
+    Promise
 }
 
 /// <summary>
@@ -111,6 +112,11 @@ internal sealed class MemoryBookAssets
         if (!Enum.IsDefined(typeof(MemoryBookIcon), icon))
         {
             throw new ArgumentOutOfRangeException(nameof(icon), icon, "Unknown memory-book icon.");
+        }
+
+        if (icon == MemoryBookIcon.Promise)
+        {
+            return new Rectangle(64, 80, 16, 16);
         }
 
         int index = (int)icon;

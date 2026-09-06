@@ -1494,7 +1494,10 @@ internal sealed class MemoryBookMenu : IClickableMenu
             {
                 Rectangle header = new(x, y + 2, usableWidth, Math.Max(38, (int)Math.Ceiling(textSize.Y) + 12));
                 this.DrawFrame(b, MemoryBookFrame.Header, header, Color.White, 2f, drawShadow: false);
-                this.DrawIcon(b, IconFor(this.activeTab), new Rectangle(header.X + 8, header.Y + 3, 32, 32));
+                MemoryBookIcon icon = line.MemoryKind == "promise" ? MemoryBookIcon.Promise : IconFor(this.activeTab);
+                // Localized fonts can make the header taller than the 32px icon.
+                Rectangle iconBounds = new(header.X + 8, header.Y + (header.Height - 32) / 2, 32, 32);
+                this.DrawIcon(b, icon, iconBounds);
                 b.DrawString(font, wrapped, new Vector2(header.X + 48, header.Y + 6), ColorFor(line.Kind));
                 break;
             }

@@ -335,6 +335,24 @@ GLYPHS: dict[str, tuple[str, ...]] = {
         "000000000000",
         "000000000000",
     ),
+    "promise": (
+        "................",
+        "................",
+        "...111....111...",
+        "..13321..12331..",
+        "..12.121121.21..",
+        "...12.1331.21...",
+        "....12322321....",
+        ".....123321.....",
+        ".....122221.....",
+        "....121..121....",
+        "...1231..1231...",
+        "...1241..1241...",
+        "....11....11....",
+        "................",
+        "................",
+        "................",
+    ),
 }
 
 
@@ -435,6 +453,15 @@ def main() -> None:
     # A second row contains muted and highlighted tab variants for future skins.
     for index, name in enumerate(("relationship", "memories", "conversations", "moments")):
         paint_map(image, index * 16 + 2, 82, GLYPHS[name], icon_palette(PAPER_BRIGHT, GOLD_LIGHT))
+
+    # The approved 16x16 promise knot occupies the next unused tile in the second row.
+    paint_map(
+        image,
+        64,
+        80,
+        GLYPHS["promise"],
+        {"1": INK, "2": RELATION_RED, "3": LEATHER_LIGHT, "4": GOLD_LIGHT},
+    )
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     image.save(OUTPUT, format="PNG", optimize=False)
