@@ -493,6 +493,11 @@ internal static class MemoryBookData
             foreach (ConversationElement element in conversation.ConversationElements)
             {
                 string cleaned = SanitizeDialogueText(element.Text);
+                if (!element.IsPlayerLine)
+                {
+                    cleaned = ResolveFarmerNameTokens(cleaned, farmerName);
+                }
+
                 if (string.IsNullOrWhiteSpace(cleaned))
                 {
                     continue;
@@ -619,6 +624,23 @@ internal static class MemoryBookData
         }
 
         return cleaned.Trim();
+    }
+
+    /// <summary>仅在展示 NPC 历史台词时展开玩家名；原始历史和玩家输入保留原样。</summary>
+    private static string ResolveFarmerNameTokens(string text, string farmerName)
+    {
+        if (!text.Contains('@') || string.IsNullOrWhiteSpace(farmerName))
+        {
+            return text;
+        }
+
+        // Do not mistake the start of "Same" for the name "Sam". Chinese prose
+        // can still sit immediately beside a name without an intervening space.
+        string name = $@"(?<![A-Za-z0-9_]){Regex.Escape(farmerName)}(?![A-Za-z0-9_])";
+        // Consume adjacent markers and an already-written name together. Matching literal
+        // names in the same pass also keeps an @ inside a player's own name intact.
+        string namedToken = $@"(?:@+[ \t]*)?(?:{name}[ \t]*@+[ \t]*)*{name}(?:[ \t]*@+)*";
+        return Regex.Replace(text, $"{namedToken}|@+", _ => farmerName, RegexOptions.CultureInvariant);
     }
 
     internal static string NormalizeMemoryKind(string? kind)
