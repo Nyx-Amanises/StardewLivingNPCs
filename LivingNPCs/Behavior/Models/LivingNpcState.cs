@@ -31,6 +31,7 @@ internal sealed class LivingNpcState
     public int DailyConversationComfortLimit { get; set; } = 2;
     public int RepeatedConversationPressure { get; set; }
     public int LastFriendshipHearts { get; set; }
+    public string LastGiftItemId { get; set; } = string.Empty;
     public string LastGiftName { get; set; } = string.Empty;
     public string LastGiftTaste { get; set; } = string.Empty;
     public int LastGiftTotalDays { get; set; } = -1;
@@ -556,6 +557,7 @@ internal sealed class LivingNpcState
             DailyConversationComfortLimit = this.DailyConversationComfortLimit,
             RepeatedConversationPressure = this.RepeatedConversationPressure,
             LastFriendshipHearts = this.LastFriendshipHearts,
+            LastGiftItemId = this.LastGiftItemId,
             LastGiftName = this.LastGiftName,
             LastGiftTaste = this.LastGiftTaste,
             LastGiftTotalDays = this.LastGiftTotalDays,

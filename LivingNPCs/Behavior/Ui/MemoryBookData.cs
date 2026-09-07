@@ -148,6 +148,7 @@ internal static class MemoryBookData
             LastConversationTotalDays = state.LastConversationTotalDays,
             RelationshipImpression = state.RelationshipImpression ?? string.Empty,
             RelationshipImpressionUpdatedTotalDays = state.RelationshipImpressionUpdatedTotalDays,
+            LastGiftItemId = state.LastGiftItemId ?? string.Empty,
             LastGiftName = state.LastGiftName ?? string.Empty,
             LastGiftTotalDays = state.LastGiftTotalDays,
             LastUpdatedTotalDays = state.LastUpdatedTotalDays,
@@ -171,6 +172,8 @@ internal static class MemoryBookData
             SharedExperiences = state.SharedExperiences
                 .Select(experience => new BookSharedExperienceSnapshot
                 {
+                    Key = experience.Key ?? string.Empty,
+                    Type = experience.Type ?? string.Empty,
                     Summary = experience.Summary ?? string.Empty,
                     LocationName = experience.LocationName ?? string.Empty,
                     LocationLabel = experience.LocationLabel ?? string.Empty,
@@ -181,7 +184,11 @@ internal static class MemoryBookData
             HelpRequests = state.HelpRequests
                 .Select(request => new BookHelpRequestSnapshot
                 {
+                    Type = request.Type ?? "item_request",
                     Summary = request.Summary ?? string.Empty,
+                    RequestedItemId = request.RequestedItemId ?? string.Empty,
+                    RequestedItemLabel = request.RequestedItemLabel ?? string.Empty,
+                    QuestionTopic = request.QuestionTopic ?? string.Empty,
                     Status = request.Status ?? "Pending",
                     CreatedTotalDays = request.CreatedTotalDays
                 })
@@ -245,6 +252,7 @@ internal static class MemoryBookData
             LastConversationTotalDays = snapshot.LastConversationTotalDays,
             RelationshipImpression = snapshot.RelationshipImpression ?? string.Empty,
             RelationshipImpressionUpdatedTotalDays = snapshot.RelationshipImpressionUpdatedTotalDays,
+            LastGiftItemId = snapshot.LastGiftItemId ?? string.Empty,
             LastGiftName = snapshot.LastGiftName ?? string.Empty,
             LastGiftTotalDays = snapshot.LastGiftTotalDays,
             LastUpdatedTotalDays = snapshot.LastUpdatedTotalDays,
@@ -268,6 +276,8 @@ internal static class MemoryBookData
             SharedExperiences = (snapshot.SharedExperiences ?? new List<BookSharedExperienceSnapshot>())
                 .Select(experience => new SharedExperienceFact
                 {
+                    Key = experience.Key ?? string.Empty,
+                    Type = experience.Type ?? string.Empty,
                     Summary = experience.Summary ?? string.Empty,
                     LocationName = experience.LocationName ?? string.Empty,
                     LocationLabel = experience.LocationLabel ?? string.Empty,
@@ -278,7 +288,11 @@ internal static class MemoryBookData
             HelpRequests = (snapshot.HelpRequests ?? new List<BookHelpRequestSnapshot>())
                 .Select(request => new NpcHelpRequestFact
                 {
+                    Type = request.Type ?? "item_request",
                     Summary = request.Summary ?? string.Empty,
+                    RequestedItemId = request.RequestedItemId ?? string.Empty,
+                    RequestedItemLabel = request.RequestedItemLabel ?? string.Empty,
+                    QuestionTopic = request.QuestionTopic ?? string.Empty,
                     Status = request.Status ?? "Pending",
                     CreatedTotalDays = request.CreatedTotalDays
                 })
@@ -520,9 +534,13 @@ internal static class MemoryBookData
     public static List<MemoryBookLine> BuildMomentLines(
         LivingNpcState state,
         int nowTotalDays,
-        Translate translate)
+        Translate translate,
+        string? npcDisplayName = null,
+        string? locale = null,
+        Func<string, string, string>? localizeItem = null)
     {
         var lines = new List<MemoryBookLine>();
+        var text = new MemoryBookMomentText(npcDisplayName ?? state.NpcName, locale, translate, localizeItem);
 
         var experiences = state.SharedExperiences
             .Where(entry => !string.IsNullOrWhiteSpace(entry.Summary))
@@ -537,13 +555,11 @@ internal static class MemoryBookData
                     experience.LastUpdatedTotalDays >= 0 ? experience.LastUpdatedTotalDays : experience.CreatedTotalDays,
                     nowTotalDays,
                     translate);
-                string location = string.IsNullOrWhiteSpace(experience.LocationLabel)
-                    ? experience.LocationName
-                    : experience.LocationLabel;
+                (string summary, string location) = text.FormatExperience(experience, state.HelpRequests);
                 string suffix = string.IsNullOrWhiteSpace(location)
                     ? when
                     : translate("book.moments.whenWhere", new { when, where = location });
-                lines.Add(new(MemoryBookLineKind.Body, experience.Summary.Trim()));
+                lines.Add(new(MemoryBookLineKind.Body, summary));
                 lines.Add(new(MemoryBookLineKind.Muted, suffix));
             }
         }
@@ -567,7 +583,7 @@ internal static class MemoryBookData
                     "Expired" => "book.help.expired",
                     _ => "book.help.other"
                 };
-                lines.Add(new(MemoryBookLineKind.MemoryFact, translate(statusKey, new { summary = request.Summary.Trim() })));
+                lines.Add(new(MemoryBookLineKind.MemoryFact, translate(statusKey, new { summary = text.FormatHelpRequest(request) })));
             }
         }
 
@@ -576,7 +592,7 @@ internal static class MemoryBookData
             lines.Add(new(MemoryBookLineKind.SectionHeader, translate("book.moments.giftHeader")));
             lines.Add(new(MemoryBookLineKind.Body, translate("book.moments.lastGift", new
             {
-                gift = state.LastGiftName,
+                gift = text.FormatItem(state.LastGiftItemId, state.LastGiftName),
                 ago = FormatDaysAgo(state.LastGiftTotalDays, nowTotalDays, translate)
             })));
         }

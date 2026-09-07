@@ -33,17 +33,31 @@ public sealed class MemoryBookSnapshotDataTests
         Assert.Equal(SyncProtocol.Version, snapshot.SchemaVersion);
 
         original.RelationshipImpression = "mutated";
+        original.LastGiftItemId = "mutated";
         original.LongTermMemories[0].Summary = "mutated";
         original.PlayerPreferenceMemories[0].Summary = "mutated";
         original.SharedExperiences[0].Summary = "mutated";
+        original.SharedExperiences[0].Key = "mutated";
+        original.SharedExperiences[0].Type = "mutated";
         original.HelpRequests[0].Summary = "mutated";
+        original.HelpRequests[0].Type = "mutated";
+        original.HelpRequests[0].RequestedItemId = "mutated";
+        original.HelpRequests[0].RequestedItemLabel = "mutated";
+        original.HelpRequests[0].QuestionTopic = "mutated";
         original.Conflicts[0].Summary = "mutated";
 
         Assert.Equal("A warm, creative friendship.", npc.RelationshipImpression);
+        Assert.Equal("(O)426", npc.LastGiftItemId);
         Assert.Equal("The farmer likes sculpture.", Assert.Single(npc.LongTermMemories).Summary);
         Assert.Equal("Prefers tea.", Assert.Single(npc.PlayerPreferenceMemories).Summary);
         Assert.Equal("Watched the river together.", Assert.Single(npc.SharedExperiences).Summary);
+        Assert.Equal("companion_outing:forest", npc.SharedExperiences[0].Key);
+        Assert.Equal("companion_outing", npc.SharedExperiences[0].Type);
         Assert.Equal("Bring driftwood.", Assert.Single(npc.HelpRequests).Summary);
+        Assert.Equal("item_request", npc.HelpRequests[0].Type);
+        Assert.Equal("(O)169", npc.HelpRequests[0].RequestedItemId);
+        Assert.Equal("Driftwood", npc.HelpRequests[0].RequestedItemLabel);
+        Assert.Equal("sculpture materials", npc.HelpRequests[0].QuestionTopic);
         Assert.Equal("A promise was forgotten.", Assert.Single(npc.Conflicts).Summary);
 
         string json = JsonConvert.SerializeObject(snapshot);
@@ -64,10 +78,13 @@ public sealed class MemoryBookSnapshotDataTests
         Assert.Equal(SyncProtocol.Version, restoredRequest!.SchemaVersion);
         Assert.Equal("book-abc", restoredRequest.RequestId);
 
+        LivingNpcState originalState = BuildRichState("Leah");
+        LivingNpcState clonedState = originalState.Clone();
+        Assert.Equal(originalState.LastGiftItemId, clonedState.LastGiftItemId);
         BookSnapshotMessage original = MemoryBookData.CreateBookSnapshot(
             request.RequestId,
             capturedTotalDays: 42,
-            new[] { BuildRichState("Leah") });
+            new[] { clonedState });
         BookSnapshotMessage? restored = JsonConvert.DeserializeObject<BookSnapshotMessage>(
             JsonConvert.SerializeObject(original));
 
@@ -76,10 +93,76 @@ public sealed class MemoryBookSnapshotDataTests
         Assert.Equal("book-abc", restored.RequestId);
         Assert.Equal(42, restored.CapturedTotalDays);
         BookNpcSnapshot npc = Assert.Single(restored.Npcs);
+        Assert.Equal("(O)426", npc.LastGiftItemId);
+        Assert.Equal("(O)426", MemoryBookData.BuildStateFromSnapshot(npc).LastGiftItemId);
         Assert.Equal("Grateful", npc.CurrentEmotion);
         Assert.Equal("promise", Assert.Single(npc.LongTermMemories).Kind);
         Assert.Equal("Recovering", Assert.Single(npc.Conflicts).Status);
         Assert.Equal("Fulfilled", Assert.Single(npc.HelpRequests).Status);
+        BookSharedExperienceSnapshot experience = Assert.Single(npc.SharedExperiences);
+        Assert.Equal("companion_outing:forest", experience.Key);
+        Assert.Equal("companion_outing", experience.Type);
+        Assert.Equal("item_request", npc.HelpRequests[0].Type);
+        Assert.Equal("(O)169", npc.HelpRequests[0].RequestedItemId);
+        Assert.Equal("Driftwood", npc.HelpRequests[0].RequestedItemLabel);
+        Assert.Equal("sculpture materials", npc.HelpRequests[0].QuestionTopic);
+    }
+
+    [Fact]
+    public void OlderSnapshotWithoutMomentFormattingFieldsStillMaterializes()
+    {
+        const string json = @"{
+            ""RequestId"": ""older-book"",
+            ""CapturedTotalDays"": 42,
+            ""Npcs"": [{
+                ""NpcName"": ""Leah"",
+                ""LastGiftName"": ""Goat Cheese"",
+                ""LastGiftTotalDays"": 39,
+                ""SharedExperiences"": [{
+                    ""Summary"": ""Watched the river together."",
+                    ""LocationName"": ""Forest"",
+                    ""LocationLabel"": ""Cindersap Forest"",
+                    ""CreatedTotalDays"": 35,
+                    ""LastUpdatedTotalDays"": 37
+                }],
+                ""HelpRequests"": [{
+                    ""Summary"": ""Bring driftwood."",
+                    ""Status"": ""Fulfilled"",
+                    ""CreatedTotalDays"": 34
+                }]
+            }]
+        }";
+
+        BookSnapshotMessage? restored = JsonConvert.DeserializeObject<BookSnapshotMessage>(json);
+
+        Assert.NotNull(restored);
+        BookNpcSnapshot npc = Assert.Single(restored!.Npcs);
+        Assert.Equal(string.Empty, npc.LastGiftItemId);
+        BookSharedExperienceSnapshot experience = Assert.Single(npc.SharedExperiences);
+        Assert.Equal(string.Empty, experience.Key);
+        Assert.Equal(string.Empty, experience.Type);
+        BookHelpRequestSnapshot request = Assert.Single(npc.HelpRequests);
+        Assert.Equal("item_request", request.Type);
+        Assert.Equal(string.Empty, request.RequestedItemId);
+        Assert.Equal(string.Empty, request.RequestedItemLabel);
+        Assert.Equal(string.Empty, request.QuestionTopic);
+
+        LivingNpcState state = MemoryBookData.BuildStateFromSnapshot(npc);
+        Assert.Equal(string.Empty, state.LastGiftItemId);
+        Assert.Equal("Goat Cheese", state.LastGiftName);
+        Assert.Equal(39, state.LastGiftTotalDays);
+        SharedExperienceFact oldExperience = Assert.Single(state.SharedExperiences);
+        Assert.Equal("Watched the river together.", oldExperience.Summary);
+        Assert.Equal("Forest", oldExperience.LocationName);
+        Assert.Equal(string.Empty, oldExperience.Key);
+        Assert.Equal(string.Empty, oldExperience.Type);
+        NpcHelpRequestFact oldRequest = Assert.Single(state.HelpRequests);
+        Assert.Equal("Bring driftwood.", oldRequest.Summary);
+        Assert.Equal("Fulfilled", oldRequest.Status);
+        Assert.Equal("item_request", oldRequest.Type);
+        Assert.Equal(string.Empty, oldRequest.RequestedItemId);
+        Assert.Equal(string.Empty, oldRequest.RequestedItemLabel);
+        Assert.Equal(string.Empty, oldRequest.QuestionTopic);
     }
 
     [Fact]
@@ -106,6 +189,7 @@ public sealed class MemoryBookSnapshotDataTests
         Assert.Equal(42, source.CapturedTotalDays);
         Assert.True(source.TryGetState("leah", out LivingNpcState? restored));
         Assert.NotNull(restored);
+        AssertMomentFormattingFields(restored!);
 
         Assert.Equal(
             MemoryBookData.BuildRelationshipCard(state, "local:Leah", 7, 42, Echo),
@@ -132,22 +216,59 @@ public sealed class MemoryBookSnapshotDataTests
             Echo);
 
         snapshot.Npcs[0].RelationshipTrust = 1;
+        snapshot.Npcs[0].LastGiftItemId = "mutated message";
         snapshot.Npcs[0].LongTermMemories[0].Summary = "mutated message";
+        snapshot.Npcs[0].SharedExperiences[0].Key = "mutated message";
+        snapshot.Npcs[0].SharedExperiences[0].Type = "mutated message";
+        snapshot.Npcs[0].HelpRequests[0].Type = "mutated message";
+        snapshot.Npcs[0].HelpRequests[0].RequestedItemId = "mutated message";
+        snapshot.Npcs[0].HelpRequests[0].RequestedItemLabel = "mutated message";
+        snapshot.Npcs[0].HelpRequests[0].QuestionTopic = "mutated message";
 
         Assert.True(source.TryGetState("Leah", out LivingNpcState? first));
         Assert.Equal(64, first!.RelationshipTrust);
         Assert.Equal("The farmer likes sculpture.", Assert.Single(first.LongTermMemories).Summary);
+        AssertMomentFormattingFields(first);
 
         first.RelationshipTrust = 2;
+        first.LastGiftItemId = "mutated export";
         first.LongTermMemories[0].Summary = "mutated export";
+        first.SharedExperiences[0].Key = "mutated export";
+        first.SharedExperiences[0].Type = "mutated export";
+        first.HelpRequests[0].Type = "mutated export";
+        first.HelpRequests[0].RequestedItemId = "mutated export";
+        first.HelpRequests[0].RequestedItemLabel = "mutated export";
+        first.HelpRequests[0].QuestionTopic = "mutated export";
         Assert.True(source.TryGetState("Leah", out LivingNpcState? second));
         Assert.Equal(64, second!.RelationshipTrust);
         Assert.Equal("The farmer likes sculpture.", Assert.Single(second.LongTermMemories).Summary);
+        AssertMomentFormattingFields(second);
 
         List<LivingNpcState> exported = source.ExportStates();
         exported[0].RelationshipImpression = "mutated list";
+        exported[0].LastGiftItemId = "mutated list";
+        exported[0].SharedExperiences[0].Key = "mutated list";
+        exported[0].SharedExperiences[0].Type = "mutated list";
+        exported[0].HelpRequests[0].Type = "mutated list";
+        exported[0].HelpRequests[0].RequestedItemId = "mutated list";
+        exported[0].HelpRequests[0].RequestedItemLabel = "mutated list";
+        exported[0].HelpRequests[0].QuestionTopic = "mutated list";
         Assert.True(source.TryGetState("Leah", out LivingNpcState? third));
         Assert.Equal("A warm, creative friendship.", third!.RelationshipImpression);
+        AssertMomentFormattingFields(third);
+    }
+
+    private static void AssertMomentFormattingFields(LivingNpcState state)
+    {
+        Assert.Equal("(O)426", state.LastGiftItemId);
+        SharedExperienceFact experience = Assert.Single(state.SharedExperiences);
+        Assert.Equal("companion_outing:forest", experience.Key);
+        Assert.Equal("companion_outing", experience.Type);
+        NpcHelpRequestFact request = Assert.Single(state.HelpRequests);
+        Assert.Equal("item_request", request.Type);
+        Assert.Equal("(O)169", request.RequestedItemId);
+        Assert.Equal("Driftwood", request.RequestedItemLabel);
+        Assert.Equal("sculpture materials", request.QuestionTopic);
     }
 
     private static LivingNpcState BuildRichState(string npcName)
@@ -164,6 +285,7 @@ public sealed class MemoryBookSnapshotDataTests
             LastConversationTotalDays = 41,
             RelationshipImpression = "A warm, creative friendship.",
             RelationshipImpressionUpdatedTotalDays = 40,
+            LastGiftItemId = "(O)426",
             LastGiftName = "Goat Cheese",
             LastGiftTotalDays = 39,
             LastUpdatedTotalDays = 41
@@ -183,6 +305,8 @@ public sealed class MemoryBookSnapshotDataTests
         });
         state.SharedExperiences.Add(new SharedExperienceFact
         {
+            Key = "companion_outing:forest",
+            Type = "companion_outing",
             Summary = "Watched the river together.",
             LocationName = "Forest",
             LocationLabel = "Cindersap Forest",
@@ -191,7 +315,11 @@ public sealed class MemoryBookSnapshotDataTests
         });
         state.HelpRequests.Add(new NpcHelpRequestFact
         {
+            Type = "item_request",
             Summary = "Bring driftwood.",
+            RequestedItemId = "(O)169",
+            RequestedItemLabel = "Driftwood",
+            QuestionTopic = "sculpture materials",
             Status = "Fulfilled",
             CreatedTotalDays = 34
         });

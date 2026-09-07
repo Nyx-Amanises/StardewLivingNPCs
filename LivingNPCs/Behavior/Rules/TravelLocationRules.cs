@@ -402,7 +402,7 @@ internal static class TravelLocationRules
         };
     }
 
-    public static string GetLocalizedLabel(string locationName)
+    public static string GetLocalizedLabel(string locationName, System.Func<string, string>? translate = null)
     {
         string normalized = Normalize(locationName, locationName);
         string key = normalized switch
@@ -446,7 +446,7 @@ internal static class TravelLocationRules
             _ => string.Empty
         };
 
-        return string.IsNullOrWhiteSpace(key) ? GetLabel(normalized) : I18n.Get(key);
+        return string.IsNullOrWhiteSpace(key) ? GetLabel(normalized) : (translate?.Invoke(key) ?? I18n.Get(key));
     }
 
     public static string GetChineseLabel(string locationName)

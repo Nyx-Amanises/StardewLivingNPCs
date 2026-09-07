@@ -102,6 +102,7 @@ internal sealed class NpcStateUpdateService
         }
 
         state.GiftsToday += 1;
+        state.LastGiftItemId = gift.ItemId;
         state.LastGiftName = gift.ItemName;
         state.LastGiftTaste = gift.IsBirthdayGift
             ? $"{gift.TasteLabel}，生日礼物"

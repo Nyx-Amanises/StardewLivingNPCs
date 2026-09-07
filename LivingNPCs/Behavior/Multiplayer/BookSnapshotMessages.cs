@@ -34,6 +34,7 @@ internal sealed class BookNpcSnapshot
     public int LastConversationTotalDays { get; set; } = -1;
     public string RelationshipImpression { get; set; } = string.Empty;
     public int RelationshipImpressionUpdatedTotalDays { get; set; } = -1;
+    public string LastGiftItemId { get; set; } = string.Empty;
     public string LastGiftName { get; set; } = string.Empty;
     public int LastGiftTotalDays { get; set; } = -1;
     public int LastUpdatedTotalDays { get; set; } = -1;
@@ -61,6 +62,8 @@ internal sealed class BookPlayerPreferenceSnapshot
 
 internal sealed class BookSharedExperienceSnapshot
 {
+    public string Key { get; set; } = string.Empty;
+    public string Type { get; set; } = string.Empty;
     public string Summary { get; set; } = string.Empty;
     public string LocationName { get; set; } = string.Empty;
     public string LocationLabel { get; set; } = string.Empty;
@@ -70,7 +73,11 @@ internal sealed class BookSharedExperienceSnapshot
 
 internal sealed class BookHelpRequestSnapshot
 {
+    public string Type { get; set; } = "item_request";
     public string Summary { get; set; } = string.Empty;
+    public string RequestedItemId { get; set; } = string.Empty;
+    public string RequestedItemLabel { get; set; } = string.Empty;
+    public string QuestionTopic { get; set; } = string.Empty;
     public string Status { get; set; } = "Pending";
     public int CreatedTotalDays { get; set; } = -1;
 }

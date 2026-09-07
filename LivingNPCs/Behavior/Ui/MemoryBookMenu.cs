@@ -416,7 +416,10 @@ internal sealed class MemoryBookMenu : IClickableMenu
                 MemoryBookTab.Relationship => MemoryBookData.BuildRelationshipCard(
                     state, displayName, hearts, this.capturedTotalDays, this.translate),
                 MemoryBookTab.Memories => MemoryBookData.BuildMemoryLines(state, this.capturedTotalDays, this.translate),
-                _ => MemoryBookData.BuildMomentLines(state, this.capturedTotalDays, this.translate)
+                _ => MemoryBookData.BuildMomentLines(
+                    state, this.capturedTotalDays, this.translate, displayName,
+                    this.uiInitialized ? I18n.Locale : null,
+                    this.uiInitialized ? MemoryBookMomentItemNames.Resolve : null)
             };
         }
 
