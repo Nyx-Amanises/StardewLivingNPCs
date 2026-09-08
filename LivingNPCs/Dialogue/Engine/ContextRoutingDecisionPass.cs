@@ -25,7 +25,7 @@ internal static class ContextRoutingDecisionPass
     private static readonly object CacheGate = new();
     private static string cachedConversationKey;
     private static ContextRoutingPlan cachedRawPlan;
-    private static LegacyLlm cachedClient;
+    private static LegacyLlm? cachedClient;
     private static bool cachedIsFallback;
 
     // This fast path recognizes the entire opening message, not a greeting substring. It never
@@ -642,7 +642,7 @@ internal static class ContextRoutingDecisionPass
         }
     }
 
-    private static void StoreFallbackPlan(string conversationKey, ContextRoutingPlan fallback, LegacyLlm client)
+    private static void StoreFallbackPlan(string? conversationKey, ContextRoutingPlan fallback, LegacyLlm client)
     {
         if (conversationKey != null)
         {
