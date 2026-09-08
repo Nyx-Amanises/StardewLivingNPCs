@@ -45,6 +45,7 @@ internal sealed class DialogueContext
     public int? Hearts { get; set; }
     public string Location { get; set; } = string.Empty;
     public string TimeOfDay { get; set; } = string.Empty;
+    public int? AbsoluteDay { get; set; }
     public List<string> Weather { get; set; } = new();
     public string CurrentActivity { get; set; } = string.Empty;
     public string NextScheduleLocation { get; set; } = string.Empty;

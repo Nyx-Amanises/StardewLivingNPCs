@@ -65,11 +65,46 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         (string? text, TokenUsage? usage) = ExtractTextAndUsage(body);
         if (string.IsNullOrWhiteSpace(text))
         {
-            // 全文为空白视为本次尝试失败；原始响应文本作为错误消息。
-            return new AttemptOutcome(LlmReply.Failure(body, 200));
+            ResponseDiagnostics diagnostics = InspectResponse(body);
+            // A finished generation with no answer is not a transport failure. Repeating it through
+            // bare/instructions candidates wastes tokens and may restore the provider's default thinking.
+            return new AttemptOutcome(
+                LlmReply.Failure(diagnostics.DescribeEmptyResponse(request.MaxTokens), 200,
+                    retryable: !diagnostics.IsTerminal, usage: usage));
         }
 
         return new AttemptOutcome(LlmReply.Success(text, usage));
+    }
+
+    protected override bool ShouldAbortCandidate(Exception exception)
+    {
+        // Retrying an identical rejected body cannot repair it; preserve retries for transient errors.
+        return ExtractHttpStatus(exception) is 400 or 422;
+    }
+
+    protected override bool IsExceptionRetryable(Exception exception)
+    {
+        return ExtractHttpStatus(exception) is not (401 or 403);
+    }
+
+    protected override bool CanChangeRequestShapeAfter(Exception exception)
+    {
+        if (ExtractHttpStatus(exception) is 401 or 403 or 429)
+        {
+            return false;
+        }
+
+        for (Exception? current = exception; current != null; current = current.InnerException)
+        {
+            if (current is TimeoutException or IOException or System.Net.Sockets.SocketException
+                || current is HttpRequestException { StatusCode: null })
+            {
+                return false;
+            }
+        }
+
+        // Keep HTTP 400/422 body compatibility and historical HTTP 500 gateway fallbacks.
+        return true;
     }
 
     public override async IAsyncEnumerable<LlmStreamEvent> StreamAsync(LlmRequest request, [EnumeratorCancellation] CancellationToken ct = default)
@@ -97,6 +132,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         int budget = request.AllowRetry ? 3 : 1;
         bool gotAnyDelta = false;
         bool midStreamFailure = false;
+        bool allowFormatFallback = true;
         string lastRaw = string.Empty;
         string lastError = "Streaming request failed";
         int lastStatus = 500;
@@ -111,6 +147,9 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
             }
 
             var context = new SseAttemptContext();
+            allowFormatFallback = true;
+            bool attemptFailed = false;
+            bool abortStreamRetries = false;
             IAsyncEnumerator<string> deltas = ReadSseDeltasAsync(json, context, ct).GetAsyncEnumerator(ct);
             try
             {
@@ -134,6 +173,13 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
                     {
                         lastError = ex.Message;
                         lastStatus = ExtractHttpStatus(ex);
+                        attemptFailed = true;
+                        abortStreamRetries = ShouldAbortCandidate(ex);
+                        allowFormatFallback = CanChangeRequestShapeAfter(ex);
+                        if (!IsExceptionRetryable(ex))
+                        {
+                            throw new LlmStreamException(lastError, lastStatus, retryable: false);
+                        }
                         // 已向消费方交付过增量后才异常 = 中途断连；尚无增量的失败仍走整轮重试。
                         midStreamFailure = gotAnyDelta;
                         break;
@@ -156,6 +202,36 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
 
             lastRaw = context.RawText.ToString();
             streamUsage = context.Usage ?? streamUsage;
+
+            if (!gotAnyDelta && !attemptFailed)
+            {
+                ct.ThrowIfCancellationRequested();
+                // Some compatible gateways ignore stream and return a complete JSON response.
+                // Consume that response immediately instead of paying for the same generation three times.
+                (string? recoveredText, TokenUsage? recoveredUsage) = TryExtractTextAndUsage(lastRaw);
+                if (!string.IsNullOrWhiteSpace(recoveredText))
+                {
+                    yield return LlmStreamEvent.Delta(recoveredText);
+                    yield return LlmStreamEvent.ForUsage(recoveredUsage ?? TokenUsage.Estimate(
+                        request.SystemPrompt + request.ConcatenatedUserContent(),
+                        recoveredText,
+                        "stream fallback estimate"));
+                    yield return LlmStreamEvent.Done();
+                    yield break;
+                }
+
+                ResponseDiagnostics diagnostics = InspectResponse(lastRaw);
+                if (diagnostics.IsTerminal)
+                {
+                    throw new LlmStreamException(diagnostics.DescribeEmptyResponse(request.MaxTokens), 200,
+                        retryable: false, usage: diagnostics.Usage);
+                }
+            }
+
+            if (abortStreamRetries)
+            {
+                break;
+            }
         }
 
         // 中途断连（增量已交付后传输异常）：已 yield 的文本无法撤回，本层也不能重试
@@ -181,18 +257,11 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
             yield break;
         }
 
-        // 降级 ①：把累计原始响应按非流式格式再解析（有的端点无视 stream 参数直接回完整 JSON）。
-        ct.ThrowIfCancellationRequested();
-        (string? recoveredText, TokenUsage? _) = TryExtractTextAndUsage(lastRaw);
-        if (!string.IsNullOrWhiteSpace(recoveredText))
+        // Changing stream/message formats cannot fix authentication, rate limiting, or a lost
+        // connection. The caller may still retry a transient failure within its overall budget.
+        if (!allowFormatFallback)
         {
-            yield return LlmStreamEvent.Delta(recoveredText);
-            yield return LlmStreamEvent.ForUsage(TokenUsage.Estimate(
-                request.SystemPrompt + request.ConcatenatedUserContent(),
-                recoveredText,
-                "stream fallback estimate"));
-            yield return LlmStreamEvent.Done();
-            yield break;
+            throw new LlmStreamException(lastError, lastStatus);
         }
 
         // 降级 ②：非流式通道兜底（禁止重试，外层已有预算）。
@@ -206,11 +275,12 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
             yield break;
         }
 
-        // 降级 ③：全部失败，最后一次原始文本 + 状态码。
+        // 降级 ③：全部失败，传递诊断、重试资格与已消耗的用量。
         string finalError = !string.IsNullOrWhiteSpace(fallback.ErrorMessage)
             ? fallback.ErrorMessage
-            : (!string.IsNullOrWhiteSpace(lastRaw) ? lastRaw : lastError);
-        throw new LlmStreamException(finalError, fallback.HttpStatus != 0 ? fallback.HttpStatus : lastStatus);
+            : LlmThinking.SummarizeProviderError(lastError);
+        throw new LlmStreamException(finalError, fallback.HttpStatus != 0 ? fallback.HttpStatus : lastStatus,
+            fallback.Retryable, fallback.Usage);
     }
 
     public IReadOnlyList<string> GetModelNames()
@@ -385,7 +455,15 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
             });
         }
 
-        candidates.Add(new RequestCandidate(ChatEndpoint, bare.ToString()));
+        // Omitting DeepSeek's disabled switch turns thinking back on (default effort: high).
+        // Keep the switch in instructions fallbacks too; never silently undo an explicit Off request.
+        if (!LlmThinking.IsDeepSeekThinkingModel(EffectiveModelName) || !LlmThinking.IsOff(level))
+        {
+            candidates.Add(new RequestCandidate(ChatEndpoint, bare.ToString())
+            {
+                RequiresRequestRejection = !JToken.DeepEquals(bare, withThinking)
+            });
+        }
     }
 
     private static (string? Text, TokenUsage? Usage) TryExtractTextAndUsage(string body)
@@ -397,6 +475,84 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         catch
         {
             return (null, null);
+        }
+    }
+
+    private static ResponseDiagnostics InspectResponse(string body)
+    {
+        var diagnostics = new ResponseDiagnostics();
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return diagnostics;
+        }
+
+        try
+        {
+            diagnostics.Read(JObject.Parse(body));
+        }
+        catch (JsonException)
+        {
+            foreach (string rawLine in body.Split('\n'))
+            {
+                string line = rawLine.Trim();
+                string payload = line.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ? line[5..].Trim() : line;
+                if (!payload.StartsWith("{", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    diagnostics.Read(JObject.Parse(payload));
+                }
+                catch (JsonException)
+                {
+                }
+            }
+        }
+
+        return diagnostics;
+    }
+
+    private sealed class ResponseDiagnostics
+    {
+        private string? _finishReason;
+        private bool _hasReasoning;
+        private bool _hasRefusal;
+        private TokenUsage? _usage;
+
+        public TokenUsage? Usage => _usage;
+
+        public bool IsTerminal => !string.IsNullOrWhiteSpace(_finishReason)
+            || _hasReasoning || _hasRefusal || (_usage?.ReasoningTokens ?? 0) > 0;
+
+        public void Read(JObject json)
+        {
+            var choice = (json["choices"] as JArray)?.FirstOrDefault() as JObject;
+            string? finishReason = choice?["finish_reason"]?.Value<string>();
+            if (!string.IsNullOrWhiteSpace(finishReason))
+            {
+                _finishReason = finishReason.Length <= 40 ? finishReason : finishReason[..40];
+            }
+
+            var message = choice?["message"] as JObject ?? choice?["delta"] as JObject;
+            _hasReasoning |= !string.IsNullOrWhiteSpace(message?["reasoning_content"]?.ToString());
+            _hasRefusal |= !string.IsNullOrWhiteSpace(message?["refusal"]?.ToString());
+            if (json["usage"] is JObject usage && usage.HasValues)
+            {
+                _usage = TokenUsage.FromOpenAiUsage(usage);
+            }
+        }
+
+        public string DescribeEmptyResponse(int maxTokens)
+        {
+            string explanation = string.Equals(_finishReason, "length", StringComparison.OrdinalIgnoreCase)
+                ? "The model exhausted its output budget before returning visible text"
+                : "The provider returned no visible text";
+            // Never include message content or reasoning_content in error logs.
+            return $"{explanation} (finish_reason={_finishReason ?? "(none)"}; "
+                + $"completion_tokens={_usage?.CompletionTokens ?? 0}; reasoning_tokens={_usage?.ReasoningTokens ?? 0}; "
+                + $"reasoning_present={_hasReasoning}; max_tokens={maxTokens}).";
         }
     }
 

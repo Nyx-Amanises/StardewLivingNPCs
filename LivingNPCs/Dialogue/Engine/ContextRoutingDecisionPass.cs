@@ -25,15 +25,32 @@ internal static class ContextRoutingDecisionPass
     private static readonly object CacheGate = new();
     private static string cachedConversationKey;
     private static ContextRoutingPlan cachedRawPlan;
+    private static LegacyLlm cachedClient;
+    private static bool cachedIsFallback;
+
+    // This fast path recognizes the entire opening message, not a greeting substring. It never
+    // classifies a question, a follow-up, or an action as small talk, and it is not cached: the
+    // next turn still gets a semantic decision before any context can be omitted.
+    private static readonly HashSet<string> OpeningGreetings = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "你好", "您好", "嗨", "哈喽", "早", "早上好", "早安", "中午好", "午安", "下午好", "晚上好",
+        "hello", "hi", "hey", "good morning", "good afternoon", "good evening"
+    };
+
+    private static readonly char[] GreetingEdgeCharacters =
+    [
+        ' ', '\t', '\r', '\n', ',', '，', '.', '。', '!', '！', '?', '？', '~', '～'
+    ];
 
     // ---- Language boundary ----
     // The fragment tables below (and ConversationCues) are deliberately Chinese/English only.
     // They do NOT decide routing itself — that is the router model, which judges meaning in any
     // language. The tables only gate the cheap deterministic heuristics: refreshing the cached
     // per-conversation plan on a topic shift, and the per-turn location promotion.
-    // When the game language is neither zh nor en, BuildPlanAsync skips the conversation cache
-    // entirely and routes fresh every turn (see TopicShiftGuardCoversLanguage), so other-language
-    // players lose only the one-router-call-per-conversation optimization, never routing quality.
+    // When the game language is neither zh nor en, BuildPlanAsync skips narrowed cached plans
+    // and routes fresh every turn (see TopicShiftGuardCoversLanguage), so other-language players
+    // lose only that optimization, never routing quality. A full failure fallback is safe in any
+    // language and can suppress repeated failures within the same conversation.
     // Remaining gap: a player typing a third language while the game runs in zh/en keeps the
     // cache, so mid-conversation topic shifts may reuse a stale (safe but narrow) plan until the
     // next conversation starts. Documented in README「提示词体积」/ "Prompt size" sections.
@@ -281,6 +298,15 @@ internal static class ContextRoutingDecisionPass
             return ContextRoutingPlan.Full().WithRoutingDiagnostics("disabled-full", 0, 0);
         }
 
+        if (IsOpeningGreeting(character, context))
+        {
+            var greeting = ContextRoutingPlan.ConservativeBrief();
+            ApplyDeterministicBoundaries(greeting, context);
+            greeting.WithRoutingDiagnostics("greeting-deterministic", 0, 0);
+            ExportLog(character.Name, context, greeting.RoutingOutcome, 0, 0, "exact-opening-greeting", greeting.DebugLabel(), string.Empty, string.Empty, string.Empty);
+            return greeting;
+        }
+
         string modelLower = DialogueServices.Config.ModelName?.ToLowerInvariant() ?? string.Empty;
         bool modelForcesThinking = modelLower.Contains("deepseek-r1")
             || modelLower.Contains("thinking")
@@ -315,7 +341,7 @@ internal static class ContextRoutingDecisionPass
         }
 
         // The cached-plan topic-shift guard only reads Chinese/English (fragment tables above).
-        // For any other game language, skip the per-conversation cache and route fresh every turn:
+        // For any other game language, route fresh instead of trusting a narrowed cached plan:
         // one extra lightweight router call per turn buys correct mid-conversation topic handling.
         StardewValley.LocalizedContentManager.LanguageCode gameLanguage = GetCurrentLanguageCodeSafe();
         bool topicGuardCoversLanguage = TopicShiftGuardCoversLanguage(gameLanguage);
@@ -324,16 +350,18 @@ internal static class ContextRoutingDecisionPass
             DialogueServices.Monitor.Log(I18n.Get("log.routing.languageCacheBypass", new { npc = character.Name, language = gameLanguage }), StardewModdingAPI.LogLevel.Debug);
         }
 
-        string conversationKey = topicGuardCoversLanguage ? BuildConversationKey(character, context) : null;
+        // Full failure fallbacks are safe to reuse in every language. Only successful, narrowed
+        // plans need the language-specific topic guard before they can be reused.
+        string conversationKey = BuildConversationKey(character, context);
         string cacheBypassReason = string.Empty;
-        if (conversationKey != null && TryReuseCachedPlan(conversationKey, context, out ContextRoutingPlan cachedPlan, out cacheBypassReason))
+        if (conversationKey != null && TryReuseCachedPlan(conversationKey, context, topicGuardCoversLanguage, out ContextRoutingPlan cachedPlan, out cacheBypassReason))
         {
             if (DialogueServices.Config.Debug)
             {
                 DialogueServices.Monitor.Log(I18n.Get("log.routing.cacheReused", new { npc = character.Name, plan = cachedPlan.DebugLabel() }), StardewModdingAPI.LogLevel.Debug);
             }
 
-            ExportLog(character.Name, context, "cached", 0, 0, "reused-conversation-plan", cachedPlan.DebugLabel(), string.Empty, string.Empty, string.Empty);
+            ExportLog(character.Name, context, cachedPlan.RoutingOutcome, 0, 0, "reused-conversation-plan", cachedPlan.DebugLabel(), string.Empty, string.Empty, string.Empty);
             return cachedPlan;
         }
 
@@ -343,6 +371,7 @@ internal static class ContextRoutingDecisionPass
         }
 
         string prompt = BuildRouterPrompt(character, context);
+        LegacyLlm routingClient = LegacyLlm.Instance;
         LlmResponse response;
         int timeoutSeconds = Math.Clamp(
             DialogueServices.Config.SemanticContextRoutingTimeoutSeconds,
@@ -353,7 +382,7 @@ internal static class ContextRoutingDecisionPass
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
-            var task = LegacyLlm.Instance.RunInference(
+            var task = routingClient.RunInference(
                 LlmThinking.RoutingSystemPrompt() + " " + PromptDataBoundary.SystemRule,
                 string.Empty,
                 BuildRouterNpcIdentity(character),
@@ -371,6 +400,7 @@ internal static class ContextRoutingDecisionPass
         }
         catch (Exception ex)
         {
+            ct.ThrowIfCancellationRequested();
             routeWatch.Stop();
             string outcome = ex is OperationCanceledException || ex is TimeoutException ? "timeout-full" : "failed-full";
             if (DialogueServices.Config.Debug)
@@ -379,6 +409,7 @@ internal static class ContextRoutingDecisionPass
             }
 
             var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
+            StoreFallbackPlan(conversationKey, fallback, routingClient);
             ExportLog(character.Name, context, outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds, ex.GetType().Name, fallback.DebugLabel(), prompt, string.Empty, ex.Message);
             return fallback;
         }
@@ -399,6 +430,7 @@ internal static class ContextRoutingDecisionPass
         {
             string outcome = "response-failed-full";
             var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
+            StoreFallbackPlan(conversationKey, fallback, routingClient);
             ExportLog(character.Name, context, outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds, "empty-or-unsuccessful-response", fallback.DebugLabel(), prompt, response.Text, response.ErrorMessage);
             return fallback;
         }
@@ -416,6 +448,7 @@ internal static class ContextRoutingDecisionPass
             }
 
             var fallback = ContextRoutingPlan.Full().WithRoutingDiagnostics(outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds);
+            StoreFallbackPlan(conversationKey, fallback, routingClient);
             ExportLog(character.Name, context, outcome, routeWatch.ElapsedMilliseconds, timeoutSeconds, parseDetail, fallback.DebugLabel(), prompt, response.Text, response.ErrorMessage);
             return fallback;
         }
@@ -423,9 +456,9 @@ internal static class ContextRoutingDecisionPass
         // Cache the raw (pre-boundary) decision so the rest of this conversation can reuse it
         // without another router round-trip.
         ct.ThrowIfCancellationRequested();
-        if (conversationKey != null)
+        if (conversationKey != null && topicGuardCoversLanguage)
         {
-            StoreCachedPlan(conversationKey, plan.Clone());
+            StoreCachedPlan(conversationKey, plan.Clone(), routingClient);
         }
 
         // BuildPlanAsync is the single place that applies the per-turn deterministic boundaries;
@@ -444,8 +477,8 @@ internal static class ContextRoutingDecisionPass
     /// <summary>
     /// Whether the zh/en fragment tables at the top of this file can assess player text for this
     /// game language. All other official languages and custom language packs (LanguageCode.mod)
-    /// return false, which makes <see cref="BuildPlanAsync"/> skip the conversation cache and
-    /// route fresh every turn instead of trusting a stale cached plan it cannot re-check.
+    /// return false, which makes <see cref="BuildPlanAsync"/> bypass narrowed cached plans instead
+    /// of trusting a stale plan it cannot re-check. Full failure fallbacks remain safe to reuse.
     /// </summary>
     internal static bool TopicShiftGuardCoversLanguage(StardewValley.LocalizedContentManager.LanguageCode languageCode)
     {
@@ -478,18 +511,25 @@ internal static class ContextRoutingDecisionPass
             return null;
         }
 
-        return $"{character.Name}|{history[0].Id}";
+        // A setting change must also invalidate a fallback even if the caller hasn't replaced
+        // the bridge yet. Do not include API credentials or log this internal key.
+        return $"{character.Name}|{history[0].Id}|{context.AbsoluteDay}|{DialogueServices.Config.Provider}|{DialogueServices.Config.ModelName}|{DialogueServices.Config.ServerAddress}";
     }
 
-    private static bool TryReuseCachedPlan(string conversationKey, DialogueContext context, out ContextRoutingPlan plan, out string bypassReason)
+    private static bool TryReuseCachedPlan(string conversationKey, DialogueContext context, bool allowSemanticPlan, out ContextRoutingPlan plan, out string bypassReason)
     {
         bypassReason = string.Empty;
         ContextRoutingPlan raw = null;
+        bool isFallback = false;
         lock (CacheGate)
         {
-            if (string.Equals(cachedConversationKey, conversationKey, StringComparison.Ordinal) && cachedRawPlan != null)
+            if (string.Equals(cachedConversationKey, conversationKey, StringComparison.Ordinal)
+                && ReferenceEquals(cachedClient, LegacyLlm.Instance)
+                && cachedRawPlan != null
+                && (allowSemanticPlan || cachedIsFallback))
             {
                 raw = cachedRawPlan.Clone();
+                isFallback = cachedIsFallback;
             }
         }
 
@@ -506,7 +546,7 @@ internal static class ContextRoutingDecisionPass
         }
 
         ApplyDeterministicBoundaries(raw, context);
-        raw.WithRoutingDiagnostics("cached", 0, 0);
+        raw.WithRoutingDiagnostics(isFallback ? "cached-fallback-full" : "cached", 0, 0);
         plan = raw;
         return true;
     }
@@ -591,13 +631,78 @@ internal static class ContextRoutingDecisionPass
                 || ContainsAny(text, "这里", "这个地方", "this place", "here"));
     }
 
-    private static void StoreCachedPlan(string conversationKey, ContextRoutingPlan rawPlan)
+    private static void StoreCachedPlan(string conversationKey, ContextRoutingPlan rawPlan, LegacyLlm client, bool isFallback = false)
     {
         lock (CacheGate)
         {
             cachedConversationKey = conversationKey;
             cachedRawPlan = rawPlan;
+            cachedClient = client;
+            cachedIsFallback = isFallback;
         }
+    }
+
+    private static void StoreFallbackPlan(string conversationKey, ContextRoutingPlan fallback, LegacyLlm client)
+    {
+        if (conversationKey != null)
+        {
+            // Do not spend another router timeout on each turn of the same conversation. Full
+            // coverage cannot become stale when the topic shifts; a new conversation or client
+            // starts fresh and can use semantic routing again.
+            StoreCachedPlan(conversationKey, fallback.Clone(), client, isFallback: true);
+        }
+    }
+
+    private static bool IsOpeningGreeting(Character character, DialogueContext context)
+    {
+        if (context.Accept != null || context.ChatHistory is not { Count: 1 }
+            || !context.ChatHistory[0].IsPlayerLine)
+        {
+            return false;
+        }
+
+        string text = context.ChatHistory[0].Text?.Trim(GreetingEdgeCharacters) ?? string.Empty;
+        if (OpeningGreetings.Contains(text))
+        {
+            return true;
+        }
+
+        foreach (string name in new[] { character.Name, character.DisplayName })
+        {
+            if (string.IsNullOrWhiteSpace(name) || text.Length <= name.Length)
+            {
+                continue;
+            }
+
+            if (text.EndsWith(name, StringComparison.OrdinalIgnoreCase))
+            {
+                string prefix = text[..^name.Length];
+                if (IsGreetingNameBoundary(prefix[^1])
+                    && OpeningGreetings.Contains(prefix.Trim(GreetingEdgeCharacters)))
+                {
+                    return true;
+                }
+            }
+
+            if (text.StartsWith(name, StringComparison.OrdinalIgnoreCase))
+            {
+                string suffix = text[name.Length..];
+                if (IsGreetingNameBoundary(suffix[0])
+                    && OpeningGreetings.Contains(suffix.Trim(GreetingEdgeCharacters)))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsGreetingNameBoundary(char value)
+    {
+        // Chinese greetings may touch the name; English greetings need whitespace/punctuation
+        // so a custom NPC name like "story" cannot turn the word "history" into "hi, story".
+        return value > 127 || GreetingEdgeCharacters.Contains(value);
     }
 
     private static bool TryParsePlan(string text, out ContextRoutingPlan plan, out string parseDetail)
@@ -713,7 +818,7 @@ internal static class ContextRoutingDecisionPass
 
     internal static void StoreCachedPlanForTesting(string conversationKey, ContextRoutingPlan rawPlan)
     {
-        StoreCachedPlan(conversationKey, rawPlan.Clone());
+        StoreCachedPlan(conversationKey, rawPlan.Clone(), LegacyLlm.Instance);
     }
 
     internal static bool TryReuseCachedPlanForTesting(
@@ -721,7 +826,7 @@ internal static class ContextRoutingDecisionPass
         DialogueContext context,
         out ContextRoutingPlan plan)
     {
-        return TryReuseCachedPlan(conversationKey, context, out plan, out _);
+        return TryReuseCachedPlan(conversationKey, context, allowSemanticPlan: true, out plan, out _);
     }
 
     private static ContextDetail ParseDetail(string value)

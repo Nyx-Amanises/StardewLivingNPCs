@@ -237,6 +237,6 @@ internal static class LlmHttp
     private static InvalidOperationException BuildHttpError(int statusCode, string body)
     {
         var inner = new HttpRequestException($"HTTP {statusCode}", null, (System.Net.HttpStatusCode)statusCode);
-        return new InvalidOperationException($"Request failed (HTTP {statusCode} - {body})", inner);
+        return new InvalidOperationException($"Request failed (HTTP {statusCode} - {LlmThinking.SummarizeProviderError(body)})", inner);
     }
 }

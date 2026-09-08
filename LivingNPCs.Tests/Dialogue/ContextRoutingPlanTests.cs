@@ -10,6 +10,7 @@ using LivingNPCs.Dialogue.Persistence;
 
 namespace LivingNPCs.Tests.Dialogue;
 
+[Collection("LlmLayer")]
 public sealed class ContextRoutingPlanTests
 {
     [Fact]

@@ -1,12 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using LivingNPCs.Dialogue.Llm;
 using LivingNPCs.Dialogue.Persistence;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Newtonsoft.Json.Serialization;
 
 namespace LivingNPCs.Dialogue.Engine;
 
@@ -56,11 +59,20 @@ internal static class LivingNpcMetadataExtractionPass
         "boundary", "goal", "plans to", "承诺", "答应", "约定", "保证", "喜欢", "偏好", "讨厌",
         "不喜欢", "底线", "边界", "目标", "计划"
     };
-    private static readonly string[] RequiredTopLevelFields =
+    private static readonly Dictionary<string, Type> TopLevelFieldTypes = new(StringComparer.Ordinal)
     {
-        "rapportDelta", "endConversation", "ambientFollowUp", "emotionImpact",
-        "behaviorInfluences", "actions", "conflicts", "memories", "helpRequests",
-        "helpRequestUpdates", "travelDecision", "giftDecision"
+        ["rapportDelta"] = typeof(int),
+        ["endConversation"] = typeof(bool),
+        ["ambientFollowUp"] = typeof(ConversationAmbientFollowUp),
+        ["emotionImpact"] = typeof(ConversationEmotionImpact),
+        ["behaviorInfluences"] = typeof(List<ConversationBehaviorInfluenceCandidate>),
+        ["actions"] = typeof(List<ConversationWorldActionRequest>),
+        ["conflicts"] = typeof(List<ConversationConflictCandidate>),
+        ["memories"] = typeof(List<ConversationMemoryCandidate>),
+        ["helpRequests"] = typeof(List<ConversationHelpRequestCandidate>),
+        ["helpRequestUpdates"] = typeof(List<ConversationHelpRequestUpdateCandidate>),
+        ["travelDecision"] = typeof(TravelDecisionSchema),
+        ["giftDecision"] = typeof(GiftDecisionSchema)
     };
 
     public static async Task<LivingNpcMetadataExtractionResult> TryExtractAsync(
@@ -175,22 +187,49 @@ internal static class LivingNpcMetadataExtractionPass
         JObject root;
         try
         {
-            root = JObject.Parse(json);
+            using var reader = new JsonTextReader(new StringReader(json)) { DateParseHandling = DateParseHandling.None };
+            root = JObject.Load(reader, new JsonLoadSettings
+            {
+                DuplicatePropertyNameHandling = DuplicatePropertyNameHandling.Error
+            });
         }
         catch (Exception ex)
         {
             return LivingNpcMetadataExtractionResult.Failed($"invalid JSON: {ex.Message}", prompt, responseText);
         }
 
-        string[] missingFields = RequiredTopLevelFields
-            .Where(field => root.Property(field, StringComparison.Ordinal) == null)
-            .ToArray();
-        if (missingFields.Length > 0)
+        JProperty? completion = root.Property("complete", StringComparison.Ordinal);
+        if (completion != null)
         {
-            return LivingNpcMetadataExtractionResult.Failed(
-                $"incomplete schema; missing: {string.Join(", ", missingFields)}",
-                prompt,
-                responseText);
+            if (completion.Value.Type != JTokenType.Boolean || !completion.Value.Value<bool>())
+            {
+                return LivingNpcMetadataExtractionResult.Failed("complete must be boolean true", prompt, responseText);
+            }
+
+            // ConversationAnalysis.Parse deliberately returns Empty on malformed legacy metadata.
+            // Validate sparse payloads before calling it, so a bad field cannot masquerade as a
+            // successful all-empty classification and overwrite the caller's previous analysis.
+            root.Remove("complete");
+            if (!TryExpandSparseMetadata(root, out string failureReason))
+            {
+                return LivingNpcMetadataExtractionResult.Failed(failureReason, prompt, responseText);
+            }
+
+            // Use the overload also present in the game's bundled Json.NET runtime.
+            json = JsonConvert.SerializeObject(root, Formatting.None, Array.Empty<JsonConverter>());
+        }
+        else
+        {
+            string[] missingFields = TopLevelFieldTypes.Keys
+                .Where(field => root.Property(field, StringComparison.Ordinal) == null)
+                .ToArray();
+            if (missingFields.Length > 0)
+            {
+                return LivingNpcMetadataExtractionResult.Failed(
+                    $"incomplete schema; missing: {string.Join(", ", missingFields)}",
+                    prompt,
+                    responseText);
+            }
         }
 
         string parseText = $"!LIVINGNPCS_META {json}";
@@ -206,6 +245,130 @@ internal static class LivingNpcMetadataExtractionPass
         ApplyConservativeInterpersonalEvidenceRules(analysis, context, playerText, visibleNpcReply);
 
         return LivingNpcMetadataExtractionResult.Succeeded(analysis, prompt, responseText);
+    }
+
+    private static bool TryExpandSparseMetadata(JObject root, out string failureReason)
+    {
+        failureReason = string.Empty;
+        var serializer = new JsonSerializer
+        {
+            MissingMemberHandling = MissingMemberHandling.Error,
+            MetadataPropertyHandling = MetadataPropertyHandling.Ignore
+        };
+
+        try
+        {
+            foreach (JProperty property in root.Properties())
+            {
+                if (!TopLevelFieldTypes.TryGetValue(property.Name, out Type? fieldType))
+                {
+                    failureReason = $"invalid sparse schema; unknown field: {property.Name}";
+                    return false;
+                }
+
+                if (!MatchesSparseFieldType(property.Value, fieldType, serializer, out failureReason))
+                {
+                    return false;
+                }
+
+                // Reuse the existing metadata DTOs for array elements, nested help steps, and
+                // conversion limits instead of maintaining a parallel deserialization model.
+                property.Value.ToObject(fieldType, serializer);
+            }
+
+            JObject defaults = JObject.FromObject(new ConversationAnalysis(), serializer);
+            defaults["travelDecision"] = JObject.FromObject(new TravelDecisionSchema(), serializer);
+            defaults["giftDecision"] = JObject.FromObject(new GiftDecisionSchema(), serializer);
+            foreach (string field in TopLevelFieldTypes.Keys)
+            {
+                if (root.Property(field, StringComparison.Ordinal) == null)
+                {
+                    root.Add(field, defaults[field]!.DeepClone());
+                }
+            }
+
+            return true;
+        }
+        catch (Exception ex)
+        {
+            failureReason = $"invalid sparse schema: {ex.Message}";
+            return false;
+        }
+    }
+
+    private static bool MatchesSparseFieldType(
+        JToken value,
+        Type expectedType,
+        JsonSerializer serializer,
+        out string failureReason)
+    {
+        failureReason = string.Empty;
+        JsonContract contract = serializer.ContractResolver.ResolveContract(expectedType);
+        if (contract is JsonArrayContract arrayContract && value is JArray array)
+        {
+            foreach (JToken item in array)
+            {
+                if (!MatchesSparseFieldType(item, arrayContract.CollectionItemType!, serializer, out failureReason))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        if (contract is JsonObjectContract objectContract && value is JObject obj)
+        {
+            foreach (JProperty property in obj.Properties())
+            {
+                JsonProperty? member = objectContract.Properties.FirstOrDefault(candidate =>
+                    !candidate.Ignored && candidate.Writable
+                    && string.Equals(candidate.PropertyName, property.Name, StringComparison.Ordinal));
+                if (member?.PropertyType == null)
+                {
+                    failureReason = $"invalid sparse schema; unknown field: {property.Path}";
+                    return false;
+                }
+
+                if (!MatchesSparseFieldType(property.Value, member.PropertyType, serializer, out failureReason))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        bool primitiveMatches = expectedType == typeof(int) && value.Type == JTokenType.Integer
+            || expectedType == typeof(bool) && value.Type == JTokenType.Boolean
+            || expectedType == typeof(string) && value.Type == JTokenType.String;
+        if (primitiveMatches)
+        {
+            return true;
+        }
+
+        failureReason = $"invalid sparse schema; wrong type at {value.Path}: expected {expectedType.Name}, got {value.Type}";
+        return false;
+    }
+
+    private sealed class TravelDecisionSchema
+    {
+        [JsonPropertyAttribute("isTravelReply")] public bool IsTravelReply { get; set; }
+        [JsonPropertyAttribute("consent")] public string Consent { get; set; } = "none";
+        [JsonPropertyAttribute("targetLocation")] public string TargetLocation { get; set; } = string.Empty;
+        [JsonPropertyAttribute("delayMinutes")] public int DelayMinutes { get; set; }
+        [JsonPropertyAttribute("durationMinutes")] public int DurationMinutes { get; set; }
+        [JsonPropertyAttribute("reason")] public string Reason { get; set; } = string.Empty;
+    }
+
+    private sealed class GiftDecisionSchema
+    {
+        [JsonPropertyAttribute("isGiftReply")] public bool IsGiftReply { get; set; }
+        [JsonPropertyAttribute("timing")] public string Timing { get; set; } = "none";
+        [JsonPropertyAttribute("tier")] public string Tier { get; set; } = "small";
+        [JsonPropertyAttribute("itemId")] public string ItemId { get; set; } = string.Empty;
+        [JsonPropertyAttribute("itemLabel")] public string ItemLabel { get; set; } = string.Empty;
+        [JsonPropertyAttribute("reason")] public string Reason { get; set; } = string.Empty;
     }
 
     private static string BuildPrompt(
@@ -246,10 +409,14 @@ internal static class LivingNpcMetadataExtractionPass
         prompt.AppendLine(PromptDataBoundary.Wrap("metadata_farmer_options", options));
         prompt.AppendLine();
         prompt.AppendLine("Return exactly one line beginning with !LIVINGNPCS_META followed by compact valid JSON.");
-        prompt.AppendLine("Use this complete top-level schema (include every top-level field):");
-        prompt.AppendLine("{\"rapportDelta\":0,\"endConversation\":false,\"ambientFollowUp\":{\"text\":\"\",\"delayMinutes\":0},\"emotionImpact\":{\"emotion\":\"happy|calm|jealous|worried|grateful|disappointed|uneasy|upset|angry|sad|none\",\"intensityDelta\":0,\"apology\":false,\"repairDelta\":0,\"reason\":\"\"},\"behaviorInfluences\":[{\"type\":\"visit_location|comforted|offended|give_space|stay_near|pause_to_talk\",\"summary\":\"\",\"targetLocation\":\"\",\"targetLocationLabel\":\"\",\"durationDays\":0,\"intensity\":0,\"maxTriggers\":0}],\"actions\":[{\"type\":\"give_small_gift|give_meaningful_gift|give_money|companion_outing|festival_interaction\",\"amount\":0,\"durationMinutes\":0,\"delayMinutes\":0,\"targetLocation\":\"\",\"travelConsent\":\"accepted_now|accepted_later|declined|tentative|none\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"\"}],\"conflicts\":[{\"causeKind\":\"dialogue|gift|boundary|promise\",\"summary\":\"\",\"severity\":0}],\"memories\":[{\"kind\":\"fact|preference|promise|boundary|relationship\",\"summary\":\"\",\"importance\":0,\"playerPreference\":false,\"playerPreferenceKind\":\"liked_item_category|disliked_item|habit|value|goal|none\",\"subject\":\"\",\"tags\":[]}],\"helpRequests\":[{\"type\":\"item_request\",\"summary\":\"\",\"requiresAcceptance\":true,\"steps\":[{\"type\":\"item_request\",\"summary\":\"\",\"requestedItemId\":\"\",\"requestedItemLabel\":\"\",\"questionTopic\":\"\"}],\"requestedItemId\":\"\",\"requestedItemLabel\":\"\",\"questionTopic\":\"\",\"dueInDays\":1,\"reason\":\"\",\"followUpPotential\":\"none|deeper_relationship\"}],\"helpRequestUpdates\":[{\"summary\":\"\",\"status\":\"accepted|declined|advanced|fulfilled\",\"resolution\":\"\"}],\"travelDecision\":{\"isTravelReply\":false,\"consent\":\"accepted_now|accepted_later|declined|tentative|none\",\"targetLocation\":\"\",\"delayMinutes\":0,\"durationMinutes\":0,\"reason\":\"\"},\"giftDecision\":{\"isGiftReply\":false,\"timing\":\"now|later|mail|promise|none\",\"tier\":\"small|meaningful\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"\"}}");
+        prompt.AppendLine("Evaluate every metadata category below, then set complete:true to certify that the classification is complete. This flag is a JSON boolean, never a string.");
+        prompt.AppendLine("Use sparse JSON: include complete:true and only top-level fields with non-default effects in this turn. Omitted fields mean no change, not skipped analysis.");
+        prompt.AppendLine("Omitted defaults: rapportDelta=0; endConversation=false; empty ambientFollowUp and emotionImpact (emotion=none); all arrays=[]; no travel or gift decision.");
+        prompt.AppendLine("If every category has no effect, return !LIVINGNPCS_META {\"complete\":true}. For a rapport-only change, return !LIVINGNPCS_META {\"complete\":true,\"rapportDelta\":2}.");
+        prompt.AppendLine("Field reference (all effect fields are optional; include real effects only, never placeholder array records):");
+        prompt.AppendLine("{\"complete\":true,\"rapportDelta\":0,\"endConversation\":false,\"ambientFollowUp\":{\"text\":\"\",\"delayMinutes\":0},\"emotionImpact\":{\"emotion\":\"happy|calm|jealous|worried|grateful|disappointed|uneasy|upset|angry|sad|none\",\"intensityDelta\":0,\"apology\":false,\"repairDelta\":0,\"reason\":\"\"},\"behaviorInfluences\":[{\"type\":\"visit_location|comforted|offended|give_space|stay_near|pause_to_talk\",\"summary\":\"\",\"targetLocation\":\"\",\"targetLocationLabel\":\"\",\"durationDays\":0,\"intensity\":0,\"maxTriggers\":0}],\"actions\":[{\"type\":\"give_small_gift|give_meaningful_gift|give_money|companion_outing|festival_interaction\",\"amount\":0,\"durationMinutes\":0,\"delayMinutes\":0,\"targetLocation\":\"\",\"travelConsent\":\"accepted_now|accepted_later|declined|tentative|none\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"\"}],\"conflicts\":[{\"causeKind\":\"dialogue|gift|boundary|promise\",\"summary\":\"\",\"severity\":0}],\"memories\":[{\"kind\":\"fact|preference|promise|boundary|relationship\",\"summary\":\"\",\"importance\":0,\"playerPreference\":false,\"playerPreferenceKind\":\"liked_item_category|disliked_item|habit|value|goal|none\",\"subject\":\"\",\"tags\":[]}],\"helpRequests\":[{\"type\":\"item_request\",\"summary\":\"\",\"requiresAcceptance\":true,\"steps\":[{\"type\":\"item_request\",\"summary\":\"\",\"requestedItemId\":\"\",\"requestedItemLabel\":\"\",\"questionTopic\":\"\"}],\"requestedItemId\":\"\",\"requestedItemLabel\":\"\",\"questionTopic\":\"\",\"dueInDays\":1,\"reason\":\"\",\"followUpPotential\":\"none|deeper_relationship\"}],\"helpRequestUpdates\":[{\"summary\":\"\",\"status\":\"accepted|declined|advanced|fulfilled\",\"resolution\":\"\"}],\"travelDecision\":{\"isTravelReply\":false,\"consent\":\"accepted_now|accepted_later|declined|tentative|none\",\"targetLocation\":\"\",\"delayMinutes\":0,\"durationMinutes\":0,\"reason\":\"\"},\"giftDecision\":{\"isGiftReply\":false,\"timing\":\"now|later|mail|promise|none\",\"tier\":\"small|meaningful\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"\"}}");
         prompt.AppendLine("Rules:");
-        prompt.AppendLine("- Use [] and empty strings when nothing applies. Options are hypothetical future player choices, not events that already happened.");
+        prompt.AppendLine("- Omit top-level fields when nothing applies. Use valid typed values and only the documented keys in included fields. Options are hypothetical future player choices, not events that already happened.");
         prompt.AppendLine("- rapportDelta measures new relationship value in this turn: routine pleasant small talk 0-2; genuine new understanding 3-7; clear warmth 8-15; major earned relationship moments 16-24; 25-30 only exceptionally.");
         prompt.AppendLine("- Set endConversation from the NPC's visible reply alone. If the NPC clearly closes the exchange, use true even if the dialogue writer mistakenly supplied farmer options; the game will discard those options.");
         prompt.AppendLine("- Create memories, conflicts, help updates, emotion changes, and behavior influences only from this turn's player input and NPC reply. Context may constrain or de-duplicate them, but never creates a new event by itself.");

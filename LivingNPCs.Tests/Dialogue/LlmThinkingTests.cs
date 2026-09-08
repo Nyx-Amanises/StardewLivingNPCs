@@ -26,8 +26,13 @@ public sealed class LlmThinkingTests
 
     [Theory]
     [InlineData("deepseek-v4-pro", LlmThinking.Off, "disabled", "")]
-    [InlineData("deepseek-v4-flash", LlmThinking.Minimal, "enabled", "high")]
-    [InlineData("deepseek-v4-flash", LlmThinking.Low, "enabled", "high")]
+    [InlineData("deepseek-v4-flash", LlmThinking.Minimal, "enabled", "low")]
+    [InlineData("deepseek-v4-flash", LlmThinking.Low, "enabled", "low")]
+    [InlineData("deepseek-v4-pro", LlmThinking.Low, "enabled", "low")]
+    [InlineData("deepseek-ai/DeepSeek-V4-Flash", LlmThinking.Low, "enabled", "low")]
+    [InlineData("deepseek-v4-flash", LlmThinking.Medium, "enabled", "high")]
+    [InlineData("deepseek-reasoner", LlmThinking.Low, "enabled", "high")]
+    [InlineData("deepseek-r1", LlmThinking.Low, "enabled", "high")]
     [InlineData("deepseek-reasoner", LlmThinking.High, "enabled", "high")]
     [InlineData("deepseek-v4-pro", LlmThinking.XHigh, "enabled", "max")]
     public void DeepSeekThinkingModelsUseOfficialThinkingShape(string model, string level, string expectedType, string expectedEffort)
@@ -39,6 +44,19 @@ public sealed class LlmThinkingTests
         Assert.Equal(expectedType, body["thinking"]?.Value<string>("type"));
         Assert.Equal(string.IsNullOrEmpty(expectedEffort) ? null : expectedEffort, body.Value<string>("reasoning_effort"));
         Assert.Null(body["enable_thinking"]);
+    }
+
+    [Theory]
+    [InlineData("deepseek-v4", true)]
+    [InlineData("DeepSeek-V4-Flash", true)]
+    [InlineData("deepseek-ai/deepseek_v4_pro", true)]
+    [InlineData("deepseek-v40-flash", false)]
+    [InlineData("deepseek-v3.1", false)]
+    [InlineData("deepseek-r1", false)]
+    [InlineData("deepseek-reasoner", false)]
+    public void DeepSeekLowEffortCapabilityIsLimitedToV4(string model, bool expected)
+    {
+        Assert.Equal(expected, LlmThinking.IsDeepSeekV4Model(model));
     }
 
     [Theory]

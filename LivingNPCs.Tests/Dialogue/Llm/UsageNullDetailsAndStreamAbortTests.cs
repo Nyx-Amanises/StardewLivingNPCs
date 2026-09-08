@@ -154,9 +154,9 @@ public sealed class UsageNullDetailsAndStreamAbortTests : LlmTestBase
     }
 
     [Fact]
-    public async Task PreDeltaTransportErrorStillRetriesThenFallsBackToNonStreaming()
+    public async Task PreDeltaTransportErrorRetriesWithoutChangingToNonStreaming()
     {
-        // 尚未交付任何增量的传输异常保持既有行为：3 次流式重试 + 非流式兜底，不上抛。
+        // Connection failures retain same-format retries; changing the payload cannot repair a reset connection.
         var client = new OpenAiClient(Settings("OpenAI"));
         Http.DefaultResponder = request =>
         {
@@ -166,11 +166,12 @@ public sealed class UsageNullDetailsAndStreamAbortTests : LlmTestBase
                 : FakeHttpHandler.Json(CompletionJson);
         };
 
-        List<LlmStreamEvent> events = await CollectAsync(client.StreamAsync(Request(), CancellationToken.None));
+        var exception = await Assert.ThrowsAsync<LlmStreamException>(
+            async () => await CollectAsync(client.StreamAsync(Request(), CancellationToken.None)));
 
-        Assert.Equal(4, Http.Requests.Count);
-        Assert.Equal("Recovered", events[0].Text);
-        Assert.Equal(LlmStreamEventKind.Done, events[^1].Kind);
+        Assert.Equal(3, Http.Requests.Count);
+        Assert.True(exception.Retryable);
+        Assert.All(Http.Requests, request => Assert.True(JObject.Parse(request.Body!).Value<bool?>("stream") == true));
     }
 
     [Fact]

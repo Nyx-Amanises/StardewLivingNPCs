@@ -102,10 +102,10 @@ public sealed class OpenAiFamilyClientTests : LlmTestBase
         LlmReply reply = await client.CompleteAsync(Request(), CancellationToken.None);
 
         Assert.True(reply.IsSuccess);
-        // 思考参数候选独享 3 次预算，随后裸版本一次成功。
-        Assert.Equal(4, Http.Requests.Count);
-        Assert.All(Http.Requests.Take(3), r => Assert.Equal("high", JObject.Parse(r.Body!).Value<string>("reasoning_effort")));
-        Assert.Null(JObject.Parse(Http.Requests[3].Body!)["reasoning_effort"]);
+        // 400 is a body rejection, not a transient failure: immediately try the compatible shape.
+        Assert.Equal(2, Http.Requests.Count);
+        Assert.Equal("high", JObject.Parse(Http.Requests[0].Body!).Value<string>("reasoning_effort"));
+        Assert.Null(JObject.Parse(Http.Requests[1].Body!)["reasoning_effort"]);
         Assert.Single(Monitor.Entries, e => e.Message.Contains("thinking parameters failed", StringComparison.Ordinal));
     }
 

@@ -111,7 +111,7 @@ public sealed class ReasoningModelTokenFieldTests : LlmTestBase
     [Fact]
     public async Task ThinkingCandidateAndBareFallbackBothUseMaxCompletionTokens()
     {
-        // 思考候选（带 reasoning_effort）3 次耗尽后进入裸候选：两种请求体都必须已换字段。
+        // A rejected thinking shape immediately falls back; both must retain the reasoning token field.
         Config.ChatThinkingLevel = "High";
         var client = new OpenAiClient(Settings("OpenAI", modelName: "gpt-5.5"));
         Http.DefaultResponder = request =>
@@ -125,7 +125,7 @@ public sealed class ReasoningModelTokenFieldTests : LlmTestBase
         LlmReply reply = await client.CompleteAsync(Request(), CancellationToken.None);
 
         Assert.True(reply.IsSuccess);
-        Assert.Equal(4, Http.Requests.Count);
+        Assert.Equal(2, Http.Requests.Count);
         Assert.All(Http.Requests, r =>
         {
             var body = JObject.Parse(r.Body!);
@@ -133,7 +133,7 @@ public sealed class ReasoningModelTokenFieldTests : LlmTestBase
             Assert.Null(body["max_tokens"]);
         });
         Assert.Equal("high", JObject.Parse(Http.Requests[0].Body!).Value<string>("reasoning_effort"));
-        Assert.Null(JObject.Parse(Http.Requests[3].Body!)["reasoning_effort"]);
+        Assert.Null(JObject.Parse(Http.Requests[1].Body!)["reasoning_effort"]);
     }
 
     [Fact]

@@ -65,11 +65,13 @@ internal static class LlmThinking
         };
     }
 
-    public static string ToDeepSeekReasoningEffort(string level)
+    public static string ToDeepSeekReasoningEffort(string level, string modelName)
     {
         return Normalize(level) switch
         {
-            Minimal or Low or Medium or High => "high",
+            // DeepSeek v4 supports low/high/max. Keep legacy reasoner/R1 compatibility unchanged.
+            Minimal or Low => IsDeepSeekV4Model(modelName) ? "low" : "high",
+            Medium or High => "high",
             XHigh => "max",
             _ => null
         };
@@ -231,6 +233,15 @@ internal static class LlmThinking
                 || normalized.Contains("r1", StringComparison.OrdinalIgnoreCase));
     }
 
+    public static bool IsDeepSeekV4Model(string modelName)
+    {
+        string normalized = NormalizeModelName(modelName);
+        const string name = "deepseek-v4";
+        int start = normalized.IndexOf(name, StringComparison.OrdinalIgnoreCase);
+        int end = start + name.Length;
+        return start >= 0 && (end == normalized.Length || normalized[end] == '-');
+    }
+
     public static void AddOpenAiCompatibleThinkingParameters(JObject body, string modelName, string level)
     {
         string normalizedLevel = Normalize(level);
@@ -272,7 +283,7 @@ internal static class LlmThinking
                 };
             }
 
-            string effort = ToDeepSeekReasoningEffort(normalizedLevel);
+            string effort = ToDeepSeekReasoningEffort(normalizedLevel, modelName);
             if (!string.IsNullOrWhiteSpace(effort))
             {
                 body["reasoning_effort"] = effort;
@@ -314,12 +325,13 @@ internal static class LlmThinking
         try
         {
             var json = JObject.Parse(text);
-            string message = json["error"]?["message"]?.ToString()
+            var error = json["error"] as JObject;
+            string message = error?["message"]?.ToString()
                 ?? json["message"]?.ToString()
                 ?? json["error"]?.ToString()
                 ?? string.Empty;
-            string code = json["error"]?["code"]?.ToString() ?? json["code"]?.ToString() ?? string.Empty;
-            string type = json["error"]?["type"]?.ToString() ?? json["type"]?.ToString() ?? string.Empty;
+            string code = error?["code"]?.ToString() ?? json["code"]?.ToString() ?? string.Empty;
+            string type = error?["type"]?.ToString() ?? json["type"]?.ToString() ?? string.Empty;
 
             var parts = new List<string>();
             if (!string.IsNullOrWhiteSpace(message))

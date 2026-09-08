@@ -153,6 +153,7 @@ internal sealed class DialogueEngine : IDialogueEngine
                 await Task.Delay(RetryDelay, ct).ConfigureAwait(false);
             }
 
+            var mainWatch = Stopwatch.StartNew();
             try
             {
                 response = await this.RunAttemptAsync(prepared, languageRetry, ct).ConfigureAwait(false);
@@ -168,9 +169,18 @@ internal sealed class DialogueEngine : IDialogueEngine
                 response = null;
                 continue;
             }
+            finally
+            {
+                prepared.MainMilliseconds += mainWatch.ElapsedMilliseconds;
+            }
 
             if (response == null || !response.IsSuccess || string.IsNullOrWhiteSpace(response.Text))
             {
+                if (response?.Retryable == false)
+                {
+                    break;
+                }
+
                 continue;
             }
 
@@ -225,6 +235,7 @@ internal sealed class DialogueEngine : IDialogueEngine
                 await Task.Delay(RetryDelay, ct).ConfigureAwait(false);
             }
 
+            var mainWatch = Stopwatch.StartNew();
             try
             {
                 response = await this.RunStreamingAttemptAsync(prepared, sink, languageRetry, ct).ConfigureAwait(false);
@@ -233,14 +244,35 @@ internal sealed class DialogueEngine : IDialogueEngine
             {
                 throw;
             }
+            catch (LlmStreamException ex) when (!ex.Retryable)
+            {
+                response = new LlmResponse
+                {
+                    IsSuccess = false,
+                    ErrorMessage = ex.Message,
+                    Retryable = false,
+                    Usage = ex.Usage
+                };
+                this.RecordUsage(prepared, this.BuildLlmRequest(prepared, languageRetry), response);
+                break;
+            }
             catch (Exception)
             {
                 response = null;
                 continue;
             }
+            finally
+            {
+                prepared.MainMilliseconds += mainWatch.ElapsedMilliseconds;
+            }
 
             if (response == null || !response.IsSuccess || string.IsNullOrWhiteSpace(response.Text))
             {
+                if (response?.Retryable == false)
+                {
+                    break;
+                }
+
                 continue;
             }
 
@@ -327,6 +359,11 @@ internal sealed class DialogueEngine : IDialogueEngine
         public string GivingGiftItemId { get; init; } = string.Empty;
         public HashSet<string> ValidPortraits { get; init; } = new(StringComparer.OrdinalIgnoreCase);
         public bool FixPunctuation { get; init; }
+        public long MainMilliseconds { get; set; }
+        public long MetadataMilliseconds { get; set; }
+        public long ActionMilliseconds { get; set; }
+        public string MetadataOutcome { get; set; } = "not-requested";
+        public string ActionOutcome { get; set; } = "not-requested";
     }
 
     private async Task<PreparedGeneration> PrepareAsync(GenerationRequest request, CancellationToken ct)
@@ -383,6 +420,7 @@ internal sealed class DialogueEngine : IDialogueEngine
             Hearts = snapshot.FriendshipExists ? snapshot.Hearts : null,
             Location = snapshot.LocationName,
             TimeOfDay = $"{GameStateSnapshot.ClockText(snapshot.TimeOfDay)}",
+            AbsoluteDay = snapshot.Now.ToAbsoluteDays(),
             Weather = snapshot.WeatherFlags.ToList(),
             CurrentActivity = snapshot.CurrentActivity,
             NextScheduleLocation = snapshot.NextScheduleLocation,
@@ -684,6 +722,7 @@ internal sealed class DialogueEngine : IDialogueEngine
             IsSuccess = reply.IsSuccess,
             Text = reply.Text,
             ErrorMessage = reply.ErrorMessage,
+            Retryable = reply.Retryable,
             Usage = reply.Usage
         };
         this.RecordUsage(prepared, request, response);
@@ -732,13 +771,16 @@ internal sealed class DialogueEngine : IDialogueEngine
         if (response == null || !response.IsSuccess || string.IsNullOrWhiteSpace(response.Text))
         {
             // 全部尝试失败或不可解析 → 单行 ... 回退（§4.9；裁决 4：回退不附送礼标记）。
-            if (failure != null)
+            string error = !string.IsNullOrWhiteSpace(response?.ErrorMessage)
+                ? response.ErrorMessage
+                : failure?.Message ?? string.Empty;
+            if (!string.IsNullOrWhiteSpace(error))
             {
                 DialogueServices.Monitor?.Log(
                     Util.GetConsoleString(
                         "dialogue.log.generationFailed",
-                        new { npc = request.NpcName, error = failure.Message },
-                        $"Dialogue generation failed for {request.NpcName}: {failure.Message}"),
+                        new { npc = request.NpcName, error },
+                        $"Dialogue generation failed for {request.NpcName}: {error}"),
                     StardewModdingAPI.LogLevel.Error);
             }
             else
@@ -751,7 +793,7 @@ internal sealed class DialogueEngine : IDialogueEngine
                     StardewModdingAPI.LogLevel.Warn);
             }
 
-            this.ExportAttempt(prepared, response, ConversationAnalysis.Empty, Array.Empty<string>(), attempts, failure != null ? "error" : "unparseable");
+            this.ExportAttempt(prepared, response, ConversationAnalysis.Empty, Array.Empty<string>(), attempts, !string.IsNullOrWhiteSpace(error) ? "error" : "unparseable");
             ct.ThrowIfCancellationRequested();
             return new GenerationResult
             {
@@ -782,9 +824,21 @@ internal sealed class DialogueEngine : IDialogueEngine
                 : prepared.LastPlayerLine;
             try
             {
-                LivingNpcMetadataExtractionResult extracted = await LivingNpcMetadataExtractionPass
-                    .TryExtractAsync(prepared.Character, prepared.Context, playerText, parsed.DialogueLine, parsed.Options, ct)
-                    .ConfigureAwait(false);
+                LivingNpcMetadataExtractionResult extracted;
+                var metadataWatch = Stopwatch.StartNew();
+                prepared.MetadataOutcome = "failed";
+                try
+                {
+                    extracted = await LivingNpcMetadataExtractionPass
+                        .TryExtractAsync(prepared.Character, prepared.Context, playerText, parsed.DialogueLine, parsed.Options, ct)
+                        .ConfigureAwait(false);
+                }
+                finally
+                {
+                    prepared.MetadataMilliseconds = metadataWatch.ElapsedMilliseconds;
+                }
+
+                prepared.MetadataOutcome = extracted.Success ? "success" : "failed";
                 if (extracted.Success)
                 {
                     analysis = extracted.Analysis;
@@ -794,11 +848,23 @@ internal sealed class DialogueEngine : IDialogueEngine
                     // Compatibility fallback: an older/custom model may still have returned inline metadata.
                     // If the full classifier fails, retain that analysis and allow the old action-only pass
                     // to recover a clearly promised action without discarding the visible dialogue.
-                    var supplemented = await LivingNpcActionDecisionPass
-                        .TrySupplementAsync(prepared.Character, prepared.Context, legacyAnalysis, lines, ct)
-                        .ConfigureAwait(false);
+                    LivingNpcActionDecisionResult supplemented;
+                    var actionWatch = Stopwatch.StartNew();
+                    prepared.ActionOutcome = "failed";
+                    try
+                    {
+                        supplemented = await LivingNpcActionDecisionPass
+                            .TrySupplementAsync(prepared.Character, prepared.Context, legacyAnalysis, lines, ct)
+                            .ConfigureAwait(false);
+                    }
+                    finally
+                    {
+                        prepared.ActionMilliseconds = actionWatch.ElapsedMilliseconds;
+                    }
+
                     analysis = supplemented.Analysis;
                     actionDiagnostics = supplemented.Diagnostics;
+                    prepared.ActionOutcome = supplemented.Diagnostics.Outcome;
                     DialogueServices.Monitor?.Log(
                         $"Metadata extraction for {request.NpcName} failed safely: {extracted.FailureReason}",
                         StardewModdingAPI.LogLevel.Trace);
@@ -1208,6 +1274,11 @@ internal sealed class DialogueEngine : IDialogueEngine
                     totalMs = elapsedMilliseconds,
                     routingOutcome = plan.RoutingOutcome,
                     routingMs = plan.RoutingMilliseconds,
+                    mainMs = prepared.MainMilliseconds,
+                    metadataMs = prepared.MetadataMilliseconds,
+                    metadataOutcome = prepared.MetadataOutcome,
+                    actionMs = prepared.ActionMilliseconds,
+                    actionOutcome = prepared.ActionOutcome,
                     attempts,
                     promptChars = prompt.TotalCharacters,
                     responseChars = (response.Text ?? string.Empty).Length,

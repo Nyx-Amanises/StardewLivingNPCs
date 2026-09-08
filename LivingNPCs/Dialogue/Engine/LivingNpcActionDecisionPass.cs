@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -16,6 +17,7 @@ namespace LivingNPCs.Dialogue.Engine;
 internal static class LivingNpcActionDecisionPass
 {
     private const int MaxCompactContextCharacters = 7000;
+    private const int MaxRecentActionTurns = 6;
 
     public static async Task<LivingNpcActionDecisionResult> TrySupplementAsync(
         Character character,
@@ -66,7 +68,7 @@ internal static class LivingNpcActionDecisionPass
 
         string playerText = RsvPromptSanitizer.SafeInline(
             context.ChatHistory?.LastOrDefault(line => line.IsPlayerLine)?.Text);
-        if (!LooksRelevant(playerText, visibleNpcReply, livingNpcContext))
+        if (!LooksRelevant(playerText, visibleNpcReply, context))
         {
             return LivingNpcActionDecisionResult.Skipped(analysis, "no action-relevant cue detected");
         }
@@ -82,6 +84,7 @@ internal static class LivingNpcActionDecisionPass
             TimeoutSeconds = timeoutSeconds
         };
 
+        var watch = Stopwatch.StartNew();
         LlmResponse response;
         try
         {
@@ -108,12 +111,14 @@ internal static class LivingNpcActionDecisionPass
         }
         catch (Exception ex)
         {
+            diagnostics.ElapsedMilliseconds = watch.ElapsedMilliseconds;
             diagnostics.Outcome = "request-failed";
             diagnostics.ErrorMessage = ex.Message;
             LogDiagnostics(character, diagnostics);
             return new LivingNpcActionDecisionResult(analysis, diagnostics);
         }
 
+        diagnostics.ElapsedMilliseconds = watch.ElapsedMilliseconds;
         ct.ThrowIfCancellationRequested();
         diagnostics.ResponseSuccess = response.IsSuccess;
         diagnostics.RawResponse = response.Text ?? string.Empty;
@@ -203,6 +208,15 @@ internal static class LivingNpcActionDecisionPass
         prompt.AppendLine(PromptDataBoundary.Wrap("action_livingnpc_context", compactContext));
         prompt.AppendLine();
         prompt.AppendLine("Conversation turn:");
+        IReadOnlyList<ConversationElement> recentConversation = GetRecentActionConversation(context);
+        if (recentConversation.Count > 1)
+        {
+            // A terse acceptance can refer to an invitation or item request in a previous turn.
+            // Keep that evidence bounded and data-delimited, just like the current exchange.
+            string recentText = string.Join("\n", recentConversation.Select(turn =>
+                $"{(turn.IsPlayerLine ? "Farmer" : "NPC")}: {CleanForPrompt(turn.Text, 300)}"));
+            prompt.AppendLine(PromptDataBoundary.Wrap("action_recent_conversation", recentText));
+        }
         prompt.AppendLine(PromptDataBoundary.Wrap("action_player_input", CleanForPrompt(playerText)));
         prompt.AppendLine(PromptDataBoundary.Wrap("action_npc_reply", CleanForPrompt(visibleNpcReply)));
         prompt.AppendLine();
@@ -625,17 +639,51 @@ internal static class LivingNpcActionDecisionPass
             maxCharacters: MaxCompactContextCharacters);
     }
 
-    private static bool LooksRelevant(string playerText, string visibleNpcReply, string context)
+    private static bool LooksRelevant(string playerText, string visibleNpcReply, DialogueContext context)
     {
-        string combined = $"{playerText}\n{visibleNpcReply}\n{context}";
+        string currentExchange = $"{playerText}\n{visibleNpcReply}";
+        if (ContainsActionCue(currentExchange))
+        {
+            return true;
+        }
+
+        IReadOnlyList<ConversationElement> recentConversation = GetRecentActionConversation(context);
+        if (RecentOutingInvitationResolver.TryFindRecentExplicitInvitationTarget(recentConversation, out _))
+        {
+            return true;
+        }
+
+        bool hasActiveHelpRequest = HasActiveHelpRequest(context.LivingNpcExtraPrompt);
+        if (context.Accept != null && hasActiveHelpRequest)
+        {
+            // A physical requested-item hand-in may have only a brief thank-you as its reply.
+            return true;
+        }
+
+        // Rules, schemas, opportunity lists and "no gift is authorized" are not evidence that
+        // this reply promised an action. Only consult actual state/history for an abbreviated
+        // acceptance or delivery, so a greeting does not buy another classifier round trip.
+        if (!LooksLikeActionContinuation(currentExchange))
+        {
+            return false;
+        }
+
+        return recentConversation.Any(turn => ContainsActionCue(turn.Text))
+            || hasActiveHelpRequest;
+    }
+
+    private static bool ContainsActionCue(string text)
+    {
+        if (Behavior.ConversationActionCueRules.LooksLikeImmediateGiftOffer(text))
+        {
+            return true;
+        }
+
         return ContainsAny(
-            combined,
+            text,
             "companion_outing",
             "helpRequests",
             "helpRequestUpdates",
-            "Gift Opportunity",
-            "Help Request Opportunity",
-            "Help-request fit",
             "带我",
             "带你",
             "一起去",
@@ -660,12 +708,21 @@ internal static class LivingNpcActionDecisionPass
             "需要",
             "找一个",
             "带一个",
+            "带点",
+            "带些",
+            "带一些",
+            "缺点",
+            "缺些",
+            "拿给我",
+            "帮你",
+            "拜托",
             "给你",
             "送你",
             "小礼物",
             "回礼",
             "谢礼",
             "钱",
+            "金币",
             "任务",
             "with me",
             "together",
@@ -678,9 +735,82 @@ internal static class LivingNpcActionDecisionPass
             "help",
             "bring me",
             "find me",
+            "pick up",
+            "bring you",
+            "give me",
+            "give you",
+            "for you",
+            "favor",
+            "favour",
+            "money",
+            "coins",
             "gift",
             "return gift",
             "quest");
+    }
+
+    private static IReadOnlyList<ConversationElement> GetRecentActionConversation(DialogueContext context)
+    {
+        var recent = new List<ConversationElement>();
+        for (int index = (context.ChatHistory?.Count ?? 0) - 1;
+             index >= 0 && recent.Count < MaxRecentActionTurns;
+             index--)
+        {
+            ConversationElement turn = context.ChatHistory![index];
+            string text = RsvPromptSanitizer.SafeInline(turn.Text);
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                // A withheld/blocked turn is a hard boundary, not permission to use older data.
+                break;
+            }
+
+            recent.Add(new ConversationElement(text, turn.IsPlayerLine) { Id = turn.Id });
+        }
+
+        recent.Reverse();
+        return recent;
+    }
+
+    private static bool LooksLikeActionContinuation(string text)
+    {
+        return ContainsAny(
+                text,
+                "没问题", "太好了", "一言为定", "就这么说定", "交给我", "包在我",
+                "答应", "已经完成", "拿到了", "带来了", "找到了", "都齐了", "一个不少",
+                "就是这个", "就是这些", "这正是", "算了吧", "不接了", "做不到",
+                "谢谢", "感谢",
+                "sounds good", "of course", "here it is", "here they are", "i have it",
+                "got it", "that's everything", "that is everything", "last one", "thank you")
+            || Regex.IsMatch(
+                text,
+                @"(?:^|[\s，,。.!！?？;；:：])(?:好|好的|好呀|好啊|好吧|行|行啊|嗯|可以|当然|愿意|不行|不了|不用)(?=$|[\s，,。.!！?？;；:：…])|\b(?:yes|no|ok|okay|sure|agreed|deal|done|great|accept|decline|absolutely|thanks)\b",
+                RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    }
+
+    private static bool HasActiveHelpRequest(string context)
+    {
+        foreach (string rawLine in RsvPromptSanitizer.SafeMultiline(context).Split('\n'))
+        {
+            string line = rawLine.TrimStart(' ', '\t', '-');
+            const string activePrefix = "Active help request:";
+            if (line.StartsWith(activePrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                string value = line[activePrefix.Length..].Trim().TrimEnd('.');
+                if (!string.IsNullOrWhiteSpace(value)
+                    && !Regex.IsMatch(value, @"^(?:none|no\b|<none>)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+                {
+                    return true;
+                }
+            }
+
+            if (line.StartsWith("Help requests involving the farmer:", StringComparison.OrdinalIgnoreCase)
+                && Regex.IsMatch(line, @"\bstatus\s+(?:Offered|Pending)\b", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static void LogDiagnostics(Character character, LivingNpcActionDecisionDiagnostics diagnostics)
@@ -705,7 +835,7 @@ internal static class LivingNpcActionDecisionPass
             StardewModdingAPI.LogLevel.Debug);
     }
 
-    private static string CleanForPrompt(string value)
+    private static string CleanForPrompt(string value, int maxCharacters = 1200)
     {
         value = RsvPromptSanitizer.SafeInline(value);
         if (string.IsNullOrWhiteSpace(value))
@@ -714,7 +844,7 @@ internal static class LivingNpcActionDecisionPass
         }
 
         string cleaned = Regex.Replace(value.Replace("\r", " ").Replace("\n", " "), "\\s+", " ").Trim();
-        return cleaned.Length <= 1200 ? cleaned : cleaned[..1200] + "...";
+        return cleaned.Length <= maxCharacters ? cleaned : cleaned[..maxCharacters] + "...";
     }
 
     private static bool ContainsAny(string text, params string[] fragments)
@@ -957,6 +1087,7 @@ internal sealed class LivingNpcActionDecisionDiagnostics
     public int PromptCharacters { get; set; }
     public int ResponseCharacters { get; set; }
     public int TimeoutSeconds { get; set; }
+    public long ElapsedMilliseconds { get; set; }
     public string ErrorMessage { get; set; } = string.Empty;
     public string DecisionDetail { get; set; } = string.Empty;
     public string Prompt { get; set; } = string.Empty;
@@ -977,6 +1108,7 @@ internal sealed class LivingNpcActionDecisionDiagnostics
             this.PromptCharacters,
             this.ResponseCharacters,
             this.TimeoutSeconds,
+            this.ElapsedMilliseconds,
             this.ErrorMessage,
             this.DecisionDetail
         });

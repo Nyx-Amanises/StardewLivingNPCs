@@ -10,9 +10,15 @@ internal sealed class LlmStreamException : Exception
 {
     public int HttpStatus { get; }
 
-    public LlmStreamException(string message, int httpStatus)
+    public bool Retryable { get; }
+
+    public TokenUsage Usage { get; }
+
+    public LlmStreamException(string message, int httpStatus, bool retryable = true, TokenUsage? usage = null)
         : base(message)
     {
         HttpStatus = httpStatus <= 0 ? 500 : httpStatus;
+        Retryable = retryable;
+        Usage = usage ?? new TokenUsage();
     }
 }

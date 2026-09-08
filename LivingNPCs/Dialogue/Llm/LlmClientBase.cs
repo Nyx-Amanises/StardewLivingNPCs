@@ -69,7 +69,12 @@ internal abstract class LlmClientBase : ILlmClient, ILlmCapabilities
         for (int candidateIndex = 0; candidateIndex < candidates.Count; candidateIndex++)
         {
             RequestCandidate candidate = candidates[candidateIndex];
+            if (candidate.RequiresRequestRejection && lastStatus is not (400 or 422))
+            {
+                continue;
+            }
             bool abortCandidate = false;
+            bool allowCandidateFallback = true;
 
             for (int attempt = 0; attempt < budget && !abortCandidate; attempt++)
             {
@@ -90,7 +95,12 @@ internal abstract class LlmClientBase : ILlmClient, ILlmCapabilities
                     lastError = outcome.Reply.ErrorMessage;
                     lastStatus = outcome.Reply.HttpStatus;
                     abortCandidate = outcome.AbortCandidate;
+                    allowCandidateFallback = true;
                     LogAttemptFailure(candidateIndex, attempt, lastError);
+                    if (!outcome.Reply.Retryable)
+                    {
+                        return outcome.Reply;
+                    }
                 }
                 catch (OperationCanceledException)
                 {
@@ -100,11 +110,24 @@ internal abstract class LlmClientBase : ILlmClient, ILlmCapabilities
                 {
                     lastError = ex.Message;
                     lastStatus = ExtractHttpStatus(ex);
+                    abortCandidate = ShouldAbortCandidate(ex);
+                    allowCandidateFallback = CanChangeRequestShapeAfter(ex);
                     LogAttemptFailure(candidateIndex, attempt, lastError);
+                    if (!IsExceptionRetryable(ex))
+                    {
+                        return LlmReply.Failure(lastError, lastStatus, retryable: false);
+                    }
                 }
             }
 
-            if (candidate.HasThinkingParameters && candidateIndex < candidates.Count - 1 && !thinkingFallbackWarned)
+            if (!allowCandidateFallback)
+            {
+                break;
+            }
+
+            if (candidate.HasThinkingParameters && candidateIndex < candidates.Count - 1
+                && !candidates[candidateIndex + 1].HasThinkingParameters && !thinkingFallbackWarned
+                && (!candidates[candidateIndex + 1].RequiresRequestRejection || lastStatus is 400 or 422))
             {
                 LlmThinking.LogThinkingFallbackWarning(EffectiveModelName, candidate.ThinkingLevel, candidate.ThinkingDescription, lastError);
                 thinkingFallbackWarned = true;
@@ -119,7 +142,7 @@ internal abstract class LlmClientBase : ILlmClient, ILlmCapabilities
         LlmReply reply = await CompleteAsync(request, ct).ConfigureAwait(false);
         if (!reply.IsSuccess)
         {
-            throw new LlmStreamException(reply.ErrorMessage, reply.HttpStatus);
+            throw new LlmStreamException(reply.ErrorMessage, reply.HttpStatus, reply.Retryable, reply.Usage);
         }
 
         if (!string.IsNullOrEmpty(reply.Text))
@@ -135,6 +158,14 @@ internal abstract class LlmClientBase : ILlmClient, ILlmCapabilities
     protected abstract IReadOnlyList<RequestCandidate> BuildRequestCandidates(LlmRequest request);
 
     protected abstract Task<AttemptOutcome> ExecuteCandidateAsync(RequestCandidate candidate, LlmRequest request, CancellationToken ct);
+
+    /// <summary>Provider-specific permanent request errors can move directly to the next compatible request shape.</summary>
+    protected virtual bool ShouldAbortCandidate(Exception exception) => false;
+
+    protected virtual bool IsExceptionRetryable(Exception exception) => true;
+
+    /// <summary>Transport failures can retain retries without trying unrelated compatibility request shapes.</summary>
+    protected virtual bool CanChangeRequestShapeAfter(Exception exception) => true;
 
     /// <summary>从异常链提取 HTTP 状态码：HttpRequestException（本体或内层）的 StatusCode；取不到默认 500。</summary>
     protected internal static int ExtractHttpStatus(Exception exception)
@@ -175,7 +206,7 @@ internal abstract class LlmClientBase : ILlmClient, ILlmCapabilities
         DialogueServices.Monitor?.Log(
             I18n.Get(
                 "log.dialogue.requestAttemptFailed",
-                new { provider = ProviderId, candidate = candidateIndex + 1, attempt = attempt + 1, error }),
+                new { provider = ProviderId, candidate = candidateIndex + 1, attempt = attempt + 1, error = LlmThinking.SummarizeProviderError(error) }),
             LogLevel.Debug);
     }
 
@@ -196,6 +227,9 @@ internal abstract class LlmClientBase : ILlmClient, ILlmCapabilities
         public string ThinkingLevel { get; init; } = string.Empty;
 
         public string ThinkingDescription { get; init; } = string.Empty;
+
+        /// <summary>Dropping optional controls is only justified by an HTTP request-format rejection, not a transient failure.</summary>
+        public bool RequiresRequestRejection { get; init; }
     }
 
     protected readonly struct AttemptOutcome

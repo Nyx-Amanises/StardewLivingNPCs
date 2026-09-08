@@ -58,7 +58,7 @@ public sealed class OpenAiStreamingTests : LlmTestBase
     }
 
     [Fact]
-    public async Task CompleteJsonBodyFallsBackToSingleDeltaWithFallbackEstimate()
+    public async Task CompleteJsonBodyIsConsumedImmediatelyWithProviderUsage()
     {
         var client = new OpenAiClient(Settings("OpenAI"));
         // 端点无视 stream 参数直接回完整 JSON：SSE 解析拿不到增量，降级 ① 把全文一次性推给回调。
@@ -67,13 +67,14 @@ public sealed class OpenAiStreamingTests : LlmTestBase
 
         List<LlmStreamEvent> events = await CollectAsync(client.StreamAsync(Request(), CancellationToken.None));
 
-        // 流式预算 3 次全部拿不到增量后走降级 ①，不再发第 4 个请求。
-        Assert.Equal(3, Http.Requests.Count);
+        // The server already generated a complete answer; do not regenerate it to obtain SSE.
+        Assert.Single(Http.Requests);
         Assert.Equal(
             new[] { LlmStreamEventKind.TextDelta, LlmStreamEventKind.Usage, LlmStreamEventKind.Done },
             events.Select(e => e.Kind).ToArray());
         Assert.Equal("Hi there", events[0].Text);
-        Assert.Equal("stream fallback estimate", events[1].Usage!.Source);
+        Assert.Equal("provider usage", events[1].Usage!.Source);
+        Assert.Equal(11, events[1].Usage!.TotalTokens);
     }
 
     [Fact]
@@ -104,7 +105,7 @@ public sealed class OpenAiStreamingTests : LlmTestBase
     }
 
     [Fact]
-    public async Task ExhaustedFallbackChainThrowsStreamExceptionWithStatus()
+    public async Task RateLimitStopsAfterSameFormatStreamRetries()
     {
         var client = new OpenAiClient(Settings("OpenAI"));
         Http.DefaultResponder = _ => FakeHttpHandler.Json("{\"error\":\"quota\"}", HttpStatusCode.TooManyRequests);
@@ -113,8 +114,9 @@ public sealed class OpenAiStreamingTests : LlmTestBase
             async () => await CollectAsync(client.StreamAsync(Request(), CancellationToken.None)));
 
         Assert.Equal(429, exception.HttpStatus);
-        // 3 次流式 + 1 次非流式兜底全部失败。
-        Assert.Equal(4, Http.Requests.Count);
+        Assert.True(exception.Retryable);
+        // Rate limiting cannot be fixed by changing formats; the caller retains its retry choice.
+        Assert.Equal(3, Http.Requests.Count);
     }
 
     [Fact]

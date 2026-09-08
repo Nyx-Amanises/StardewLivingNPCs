@@ -24,6 +24,202 @@ public sealed class LivingNpcMetadataExtractionPassTests
     }
 
     [Fact]
+    public void SparseCompleteEmptyMetadataIsAuthoritativeWithAllOriginalDefaults()
+    {
+        var result = LivingNpcMetadataExtractionPass.ParseAuthoritativeResponseForTesting(
+            """!LIVINGNPCS_META {"complete":true}""",
+            "你好。",
+            "你好。今天天气不错。");
+
+        Assert.True(result.Success);
+        Assert.False(result.Analysis.HasContent);
+        Assert.Equal(0, result.Analysis.RapportDelta);
+        Assert.False(result.Analysis.EndConversation);
+        Assert.False(result.Analysis.AmbientFollowUp.HasContent);
+        Assert.Equal("none", result.Analysis.EmotionImpact.Emotion);
+        Assert.False(result.Analysis.EmotionImpact.HasContent);
+        Assert.Empty(result.Analysis.BehaviorInfluences);
+        Assert.Empty(result.Analysis.Actions);
+        Assert.Empty(result.Analysis.Conflicts);
+        Assert.Empty(result.Analysis.Memories);
+        Assert.Empty(result.Analysis.HelpRequests);
+        Assert.Empty(result.Analysis.HelpRequestUpdates);
+    }
+
+    [Fact]
+    public void SparseRapportAndEmotionPreserveTheEffectAndDefaultOtherCategories()
+    {
+        var result = LivingNpcMetadataExtractionPass.ParseAuthoritativeResponseForTesting(
+            """{"complete":true,"rapportDelta":2,"emotionImpact":{"emotion":"happy","intensityDelta":3,"reason":"pleasant greeting"}}""",
+            "早上好。",
+            "早上好，很高兴见到你。");
+
+        Assert.True(result.Success);
+        Assert.Equal(2, result.Analysis.RapportDelta);
+        Assert.Equal("Happy", result.Analysis.EmotionImpact.Emotion);
+        Assert.Equal(3, result.Analysis.EmotionImpact.IntensityDelta);
+        Assert.False(result.Analysis.EmotionImpact.Apology);
+        Assert.Equal(0, result.Analysis.EmotionImpact.RepairDelta);
+        Assert.Empty(result.Analysis.Memories);
+        Assert.Empty(result.Analysis.Actions);
+    }
+
+    [Theory]
+    [InlineData("""{"complete":false}""")]
+    [InlineData("""{"complete":"true"}""")]
+    [InlineData("""{"complete":1}""")]
+    [InlineData("""{"complete":null}""")]
+    [InlineData("""{"Complete":true}""")]
+    public void SparseCompletionRequiresTheExactBooleanProtocolMarker(string json)
+    {
+        var result = LivingNpcMetadataExtractionPass.ParseAuthoritativeResponseForTesting(json, "你好。", "你好。");
+
+        Assert.False(result.Success);
+    }
+
+    [Theory]
+    [InlineData("""{"complete":true,"rapportDelta":"2"}""")]
+    [InlineData("""{"complete":true,"rapportDelta":2147483648}""")]
+    [InlineData("""{"complete":true,"endConversation":"false"}""")]
+    [InlineData("""{"complete":true,"ambientFollowUp":null}""")]
+    [InlineData("""{"complete":true,"emotionImpact":[]}""")]
+    [InlineData("""{"complete":true,"emotionImpact":{"apology":"false"}}""")]
+    [InlineData("""{"complete":true,"actions":"bad"}""")]
+    [InlineData("""{"complete":true,"actions":[1]}""")]
+    [InlineData("""{"complete":true,"actions":[{"type":1}]}""")]
+    [InlineData("""{"complete":true,"actions":[{"type":"give_money","amount":"10"}]}""")]
+    [InlineData("""{"complete":true,"actions":[{"type":"give_money","amount":2147483648}]}""")]
+    [InlineData("""{"complete":true,"memories":[null]}""")]
+    [InlineData("""{"complete":true,"memories":[{"summary":"flower preference","tags":"flower"}]}""")]
+    [InlineData("""{"complete":true,"memories":[{"summary":"flower preference","tags":[1]}]}""")]
+    [InlineData("""{"complete":true,"helpRequests":[{"summary":"bring something","steps":"bad"}]}""")]
+    [InlineData("""{"complete":true,"helpRequests":[{"summary":"bring something","steps":[1]}]}""")]
+    [InlineData("""{"complete":true,"helpRequestUpdates":[false]}""")]
+    [InlineData("""{"complete":true,"travelDecision":{"isTravelReply":"true"}}""")]
+    [InlineData("""{"complete":true,"travelDecision":{"durationMinutes":1.5}}""")]
+    [InlineData("""{"complete":true,"giftDecision":false}""")]
+    [InlineData("""{"complete":true,"giftDecision":{"itemLabel":[]}}""")]
+    public void WrongSparseFieldTypesFailInsteadOfBecomingAuthoritativeEmptyMetadata(string json)
+    {
+        var result = LivingNpcMetadataExtractionPass.ParseAuthoritativeResponseForTesting(json, "你好。", "你好。");
+
+        Assert.False(result.Success);
+        Assert.Contains("invalid sparse schema", result.FailureReason);
+    }
+
+    [Theory]
+    [InlineData("""{"complete":true,"rapportdelta":2}""")]
+    [InlineData("""{"complete":true,"emotionImpact":{"mood":"happy"}}""")]
+    [InlineData("""{"complete":true,"ambientFollowUp":{"HasContent":true}}""")]
+    [InlineData("""{"complete":true,"actions":[{"type":"give_money","money":5}]}""")]
+    [InlineData("""{"complete":true,"travelDecision":{"isTravel":true}}""")]
+    [InlineData("""{"complete":true,"giftDecision":{"giftTiming":"now"}}""")]
+    [InlineData("""{"complete":true,"helpRequests":[{"steps":[{"item":"flower"}]}]}""")]
+    public void UnknownSparseKeysFailAtAnyDepth(string json)
+    {
+        var result = LivingNpcMetadataExtractionPass.ParseAuthoritativeResponseForTesting(json, "你好。", "你好。");
+
+        Assert.False(result.Success);
+        Assert.Contains("unknown field", result.FailureReason);
+    }
+
+    [Fact]
+    public void DuplicateCompletionMarkersAreNotAuthoritative()
+    {
+        var result = LivingNpcMetadataExtractionPass.ParseAuthoritativeResponseForTesting(
+            """{"complete":false,"complete":true}""", "你好。", "你好。");
+
+        Assert.False(result.Success);
+        Assert.Contains("invalid JSON", result.FailureReason);
+    }
+
+    [Fact]
+    public void SparseImmediateGiftStillUsesTheExistingGiftDecisionConversion()
+    {
+        var result = LivingNpcMetadataExtractionPass.ParseAuthoritativeResponseForTesting(
+            """{"complete":true,"giftDecision":{"isGiftReply":true,"timing":"now","tier":"small","itemId":"(O)20","itemLabel":"韭葱","reason":"现在送出"}}""",
+            "你好。",
+            "这根韭葱送给你。");
+
+        Assert.True(result.Success);
+        var action = Assert.Single(result.Analysis.Actions);
+        Assert.Equal("give_small_gift", action.Type);
+        Assert.Equal("(O)20", action.ItemId);
+    }
+
+    [Fact]
+    public void SparseFutureGiftDoesNotBecomeAnImmediateWorldAction()
+    {
+        var result = LivingNpcMetadataExtractionPass.ParseAuthoritativeResponseForTesting(
+            """{"complete":true,"giftDecision":{"isGiftReply":true,"timing":"mail","itemId":"(O)20","itemLabel":"韭葱"}}""",
+            "谢谢你。",
+            "我明天把韭葱寄给你。");
+
+        Assert.True(result.Success);
+        Assert.Empty(result.Analysis.Actions);
+    }
+
+    [Fact]
+    public void SparseAcceptedTravelKeepsTheExistingConsentAndDepartureRules()
+    {
+        var result = LivingNpcMetadataExtractionPass.ParseAuthoritativeResponseForTesting(
+            """{"complete":true,"travelDecision":{"isTravelReply":true,"consent":"accepted_now","targetLocation":"Beach","delayMinutes":10,"durationMinutes":60,"reason":"一起去海边"}}""",
+            "我们一起去海边吧。",
+            "好啊，等我拿上外套，我们就一起去海边。");
+
+        Assert.True(result.Success);
+        var action = Assert.Single(result.Analysis.Actions);
+        Assert.Equal("companion_outing", action.Type);
+        Assert.Equal("Beach", action.TargetLocation);
+        Assert.Equal("accepted_now", action.TravelConsent);
+        Assert.Equal(0, action.DelayMinutes);
+    }
+
+    [Fact]
+    public void SparseTravelStillRejectsAPastExperienceQuestion()
+    {
+        var result = LivingNpcMetadataExtractionPass.ParseAuthoritativeResponseForTesting(
+            """{"complete":true,"travelDecision":{"isTravelReply":true,"consent":"accepted_now","targetLocation":"Farm","durationMinutes":60}}""",
+            "你以前去过我的农场吗？",
+            "去过一次。那里的泥很多。");
+
+        Assert.True(result.Success);
+        Assert.Empty(result.Analysis.Actions);
+    }
+
+    [Fact]
+    public void SparseHelpRequestPreservesEveryOrderedItemStep()
+    {
+        var result = LivingNpcMetadataExtractionPass.ParseAuthoritativeResponseForTesting(
+            """
+            {"complete":true,"helpRequests":[{"type":"item_request","summary":"带一朵甜豌豆和糖","requiresAcceptance":true,"steps":[{"type":"item_request","summary":"先带甜豌豆","requestedItemId":"(O)402","requestedItemLabel":"甜豌豆"},{"type":"item_request","summary":"再带糖","requestedItemId":"(O)245","requestedItemLabel":"糖"}],"dueInDays":1,"reason":"明确请求两种物品"}]}
+            """,
+            "需要我帮忙吗？",
+            "请带一朵甜豌豆；如果还能带糖就更完美。");
+
+        Assert.True(result.Success);
+        var request = Assert.Single(result.Analysis.HelpRequests);
+        Assert.True(request.RequiresAcceptance);
+        Assert.Equal(1, request.DueInDays);
+        Assert.Collection(request.Steps,
+            step => Assert.Equal("(O)402", step.RequestedItemId),
+            step => Assert.Equal("(O)245", step.RequestedItemId));
+    }
+
+    [Fact]
+    public void SparseEmotionalEffectsStillPassThroughInterpersonalEvidenceGuards()
+    {
+        var result = LivingNpcMetadataExtractionPass.ParseAuthoritativeResponseForTesting(
+            """{"complete":true,"emotionImpact":{"emotion":"angry","intensityDelta":15,"reason":"flustered by a sincere compliment"},"conflicts":[{"causeKind":"boundary","summary":"mild teasing","severity":20}]}""",
+            "你其实很为别人考虑嘛。",
+            "谁、谁为别人考虑了啊！别乱说。");
+
+        Assert.True(result.Success);
+        Assert.Equal("Uneasy", result.Analysis.EmotionImpact.Emotion);
+        Assert.Empty(result.Analysis.Conflicts);
+    }
+
+    [Fact]
     public void InvalidResponseFailsSoCallerCanRetainPreviousAnalysis()
     {
         var result = LivingNpcMetadataExtractionPass.ParseAuthoritativeResponseForTesting(
@@ -387,6 +583,11 @@ public sealed class LivingNpcMetadataExtractionPassTests
         Assert.Contains("One ordinary polite question about family", prompt);
         Assert.Contains("does not prove visibility, adjacency, distance, or a route", prompt);
         Assert.Contains("Do not store first meeting", prompt);
+        Assert.Contains("Evaluate every metadata category", prompt);
+        Assert.Contains("only top-level fields with non-default effects", prompt);
+        Assert.Contains("Omitted fields mean no change, not skipped analysis", prompt);
+        Assert.Contains("!LIVINGNPCS_META {\"complete\":true}", prompt);
+        Assert.DoesNotContain("include every top-level field", prompt);
     }
 
     [Fact]

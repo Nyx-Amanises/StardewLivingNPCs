@@ -569,7 +569,7 @@
   "log.dialogue.actionDecisionPass": "LivingNPCs action decision pass for {{npc}}: outcome={{outcome}}, success={{success}}, merged={{merged}}, detail={{detail}}, error={{error}}",
   "log.dialogue.actionDecisionFailed": "Action decision pass failed for {{npc}}: {{error}}",
   "log.dialogue.exportFailed": "Failed to export dialogue generation logs: {{error}}",
-  "log.dialogue.generated": "Generated dialogue for {{npc}}: total {{totalMs}}ms, routing {{routingOutcome}} {{routingMs}}ms, attempts {{attempts}}, prompt {{promptChars}} chars, response {{responseChars}} chars, lines {{lines}}. Sections: {{sections}}",
+  "log.dialogue.generated": "Generated dialogue for {{npc}}: total {{totalMs}}ms, routing {{routingOutcome}} {{routingMs}}ms, main {{mainMs}}ms, metadata {{metadataOutcome}} {{metadataMs}}ms, action recovery {{actionOutcome}} {{actionMs}}ms, attempts {{attempts}}, prompt {{promptChars}} chars, response {{responseChars}} chars, lines {{lines}}. Sections: {{sections}}",
   "log.dialogue.staleUiCleared": "LivingNPCs cleared a stale temporary dialogue UI before Stardew could draw an empty NPC dialogue stack.",
   "log.dialogue.playerControlReleased": "LivingNPCs released player control after closing a temporary dialogue UI.",
   "log.routing.forcedThinking": "Semantic context routing skipped for {{npc}}: model {{model}} forces thinking; using full context.",

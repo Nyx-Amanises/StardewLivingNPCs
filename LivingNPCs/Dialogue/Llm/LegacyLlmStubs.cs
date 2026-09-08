@@ -106,6 +106,7 @@ internal sealed class LegacyLlmBridge : LegacyLlm
         return new LlmResponse
         {
             IsSuccess = reply.IsSuccess,
+            Retryable = reply.Retryable,
             Text = reply.Text,
             ErrorMessage = reply.ErrorMessage,
             Usage = reply.Usage
@@ -116,6 +117,7 @@ internal sealed class LegacyLlmBridge : LegacyLlm
 internal sealed class LlmResponse
 {
     public bool IsSuccess { get; init; }
+    public bool Retryable { get; init; } = true;
     public string Text { get; init; } = string.Empty;
     public string ErrorMessage { get; init; } = string.Empty;
     public TokenUsage Usage { get; init; } = new();

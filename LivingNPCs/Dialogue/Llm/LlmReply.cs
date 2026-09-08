@@ -7,6 +7,9 @@ internal sealed class LlmReply
 {
     public bool IsSuccess { get; init; }
 
+    /// <summary>False when regenerating the same request cannot repair a completed but unusable answer.</summary>
+    public bool Retryable { get; init; } = true;
+
     public string Text { get; init; } = string.Empty;
 
     public string ErrorMessage { get; init; } = string.Empty;
@@ -27,13 +30,15 @@ internal sealed class LlmReply
         };
     }
 
-    public static LlmReply Failure(string errorMessage, int httpStatus)
+    public static LlmReply Failure(string errorMessage, int httpStatus, bool retryable = true, TokenUsage? usage = null)
     {
         return new LlmReply
         {
             IsSuccess = false,
+            Retryable = retryable,
             ErrorMessage = errorMessage,
-            HttpStatus = httpStatus <= 0 ? 500 : httpStatus
+            HttpStatus = httpStatus <= 0 ? 500 : httpStatus,
+            Usage = usage ?? new TokenUsage()
         };
     }
 }
