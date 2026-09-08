@@ -39,7 +39,8 @@ internal enum MemoryBookIcon
     Clock,
     ArrowUp,
     ArrowDown,
-    Promise
+    Promise,
+    SealedNote
 }
 
 /// <summary>
@@ -69,10 +70,10 @@ internal sealed class MemoryBookAssets
         try
         {
             Texture2D texture = helper.ModContent.Load<Texture2D>(AssetPath);
-            if (texture.Width != 256 || texture.Height != 128)
+            if (texture.Width != 256 || texture.Height != 192)
             {
                 throw new InvalidOperationException(
-                    $"Expected a 256x128 atlas, but the loaded texture is {texture.Width}x{texture.Height}.");
+                    $"Expected a 256x192 atlas, but the loaded texture is {texture.Width}x{texture.Height}.");
             }
 
             return new MemoryBookAssets(texture);
@@ -119,6 +120,11 @@ internal sealed class MemoryBookAssets
             return new Rectangle(64, 80, 16, 16);
         }
 
+        if (icon == MemoryBookIcon.SealedNote)
+        {
+            return new Rectangle(80, 80, 16, 16);
+        }
+
         int index = (int)icon;
         if (highlighted && index <= (int)MemoryBookIcon.Moments && index >= (int)MemoryBookIcon.Relationship)
         {
@@ -129,6 +135,14 @@ internal sealed class MemoryBookAssets
     }
 
     internal static Rectangle TitleBannerSource => new(0, 24, 96, 20);
+
+    internal static Rectangle TitleChineseSource => new(0, 104, 72, 20);
+
+    internal static Rectangle TitleEnglishSource => new(80, 104, 92, 20);
+
+    internal static Rectangle VineCornerSource => new(0, 128, 40, 40);
+
+    internal static Rectangle ButterflySource => new(48, 128, 24, 20);
 
     internal static Rectangle SpineSource => new(100, 24, 8, 16);
 

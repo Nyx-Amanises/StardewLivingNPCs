@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using LivingNPCs.Behavior.Multiplayer;
 using LivingNPCs.Dialogue;
 using LivingNPCs.Dialogue.Persistence;
+using StardewValley;
 
 namespace LivingNPCs.Behavior.Ui;
 
@@ -103,6 +104,8 @@ internal static class MemoryBookData
     internal delegate string Translate(string key, object? tokens = null);
 
     private static readonly string[] MemoryKindOrder = ["fact", "preference", "promise", "boundary", "relationship"];
+    private const int DaysPerSeason = 28;
+    private const int DaysPerYear = DaysPerSeason * 4;
 
     // ---- 联机只读快照 ----
 
@@ -497,13 +500,13 @@ internal static class MemoryBookData
         var lines = new List<MemoryBookLine>();
         var conversations = history.ConversationHistory
             .Where(entry => entry.Item2?.ConversationElements is { Count: > 0 })
-            .OrderByDescending(entry => entry.Item1)
-            .Take(maxConversations)
+            .OrderBy(entry => entry.Item1)
+            .TakeLast(maxConversations)
             .ToList();
 
+        (int Year, Season Season, int Day)? previousDate = null;
         foreach ((StardewTime time, ConversationHistory conversation) in conversations)
         {
-            lines.Add(new(MemoryBookLineKind.DateSeparator, FormatStardewDate(time, translate)));
             foreach (ConversationElement element in conversation.ConversationElements)
             {
                 string cleaned = SanitizeDialogueText(element.Text);
@@ -515,6 +518,13 @@ internal static class MemoryBookData
                 if (string.IsNullOrWhiteSpace(cleaned))
                 {
                     continue;
+                }
+
+                var date = (time.year, time.season, time.dayOfMonth);
+                if (date != previousDate)
+                {
+                    lines.Add(new(MemoryBookLineKind.DateSeparator, FormatStardewDate(time, translate)));
+                    previousDate = date;
                 }
 
                 lines.Add(element.IsPlayerLine
@@ -551,9 +561,8 @@ internal static class MemoryBookData
             lines.Add(new(MemoryBookLineKind.SectionHeader, translate("book.moments.sharedHeader")));
             foreach (SharedExperienceFact experience in experiences)
             {
-                string when = FormatDaysAgo(
+                string when = FormatTotalDaysDate(
                     experience.LastUpdatedTotalDays >= 0 ? experience.LastUpdatedTotalDays : experience.CreatedTotalDays,
-                    nowTotalDays,
                     translate);
                 (string summary, string location) = text.FormatExperience(experience, state.HelpRequests);
                 string suffix = string.IsNullOrWhiteSpace(location)
@@ -593,7 +602,7 @@ internal static class MemoryBookData
             lines.Add(new(MemoryBookLineKind.Body, translate("book.moments.lastGift", new
             {
                 gift = text.FormatItem(state.LastGiftItemId, state.LastGiftName),
-                ago = FormatDaysAgo(state.LastGiftTotalDays, nowTotalDays, translate)
+                ago = FormatTotalDaysDate(state.LastGiftTotalDays, translate)
             })));
         }
 
@@ -695,8 +704,30 @@ internal static class MemoryBookData
         };
     }
 
+    /// <summary>Game1.Date.TotalDays 从第 1 年春 1 日的 0 起算；与转录归档水位的绝对日数不同。</summary>
+    internal static string FormatTotalDaysDate(int totalDays, Translate translate)
+    {
+        if (totalDays < 0)
+        {
+            return translate("book.time.dateUnknown");
+        }
+
+        return FormatStardewDate(new StardewTime(
+            totalDays / DaysPerYear + 1,
+            (Season)((totalDays / DaysPerSeason) % 4),
+            totalDays % DaysPerSeason + 1,
+            0), translate);
+    }
+
     internal static string FormatStardewDate(StardewTime time, Translate translate)
     {
+        if (time.year < 1
+            || time.dayOfMonth is < 1 or > DaysPerSeason
+            || time.season is not (Season.Spring or Season.Summer or Season.Fall or Season.Winter))
+        {
+            return translate("book.time.dateUnknown");
+        }
+
         return translate("book.time.date", new
         {
             year = time.year,

@@ -8,6 +8,7 @@ other mods' distributed assets.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from PIL import Image, ImageDraw
@@ -38,6 +39,8 @@ MOMENT_ORANGE = (138, 75, 31, 255)
 SKY_PAPER = (207, 226, 221, 255)
 ROSE_PAPER = (238, 205, 184, 255)
 WHITE = (255, 249, 223, 255)
+PETAL = (244, 195, 147, 255)
+PETAL_LIGHT = (255, 224, 172, 255)
 
 
 def inset_polygon(x: int, y: int, size: int, inset: int, cut: int = 2) -> list[tuple[int, int]]:
@@ -356,8 +359,211 @@ GLYPHS: dict[str, tuple[str, ...]] = {
 }
 
 
+TITLE_CHINESE_GLYPHS: dict[str, tuple[str, ...]] = {
+    # Hand-drawn 16px title lettering. Keep the stroke grid rather than rasterizing
+    # an installed font, so every build has the same crisp Chinese letterforms.
+    "记": (
+        "................",
+        "..1.............",
+        "...1...1111111..",
+        "...1........1...",
+        "............1...",
+        ".111........1...",
+        "...1...1111111..",
+        "...1...1........",
+        "...1...1........",
+        "...1...1........",
+        "...1...1........",
+        "...1.1.1......1.",
+        "...11..1......1.",
+        "...1....111111..",
+        "................",
+        "................",
+    ),
+    "忆": (
+        "................",
+        "...1............",
+        "...1..11111111..",
+        "...1........1...",
+        "...11......1....",
+        ".1.1.1....1.....",
+        ".1.1.....1......",
+        ".1.1....1.......",
+        "1..1....1.......",
+        "...1...1........",
+        "...1...1........",
+        "...1..1.......1.",
+        "...1..1.......1.",
+        "...1...1111111..",
+        "...1............",
+        "................",
+    ),
+    "手": (
+        "................",
+        "..........111...",
+        "..11111111......",
+        ".......1........",
+        ".......1........",
+        "..11111111111...",
+        ".......1........",
+        ".......1........",
+        ".......1........",
+        ".11111111111111.",
+        ".......1........",
+        ".......1........",
+        ".......1........",
+        ".....1.1........",
+        "......11........",
+        "................",
+    ),
+    "册": (
+        "................",
+        "..11111..11111..",
+        "..1...1..1...1..",
+        "..1...1..1...1..",
+        "..1...1..1...1..",
+        "..1...1..1...1..",
+        "..1...1..1...1..",
+        "111111111111111.",
+        "..1...1..1...1..",
+        "..1...1..1...1..",
+        "..1...1..1...1..",
+        "..1...1..1...1..",
+        "..1...1.1....1..",
+        ".1..111.1..111..",
+        "1......1........",
+        "................",
+    ),
+}
+
+TITLE_ENGLISH_GLYPHS: dict[str, tuple[str, ...]] = {
+    "M": (
+        "1.....1", "11...11", "1.1.1.1", "1..1..1", "1..1..1", "1.....1",
+        "1.....1", "1.....1", "1.....1", "1.....1", "1.....1",
+    ),
+    "E": (
+        "1111111", "1......", "1......", "1......", "1......", "111111.",
+        "1......", "1......", "1......", "1......", "1111111",
+    ),
+    "O": (
+        ".11111.", "1.....1", "1.....1", "1.....1", "1.....1", "1.....1",
+        "1.....1", "1.....1", "1.....1", "1.....1", ".11111.",
+    ),
+    "R": (
+        "111111.", "1.....1", "1.....1", "1.....1", "1.....1", "111111.",
+        "1.1....", "1..1...", "1...1..", "1....1.", "1.....1",
+    ),
+    "Y": (
+        "1.....1", "1.....1", ".1...1.", ".1...1.", "..1.1..", "...1...",
+        "...1...", "...1...", "...1...", "...1...", "...1...",
+    ),
+    "B": (
+        "111111.", "1.....1", "1.....1", "1.....1", "1.....1", "111111.",
+        "1.....1", "1.....1", "1.....1", "1.....1", "111111.",
+    ),
+    "K": (
+        "1.....1", "1....1.", "1...1..", "1..1...", "1.1....", "11.....",
+        "1.1....", "1..1...", "1...1..", "1....1.", "1.....1",
+    ),
+}
+
+BUTTERFLY = tuple(
+    half + half[::-1]
+    for half in (
+        "..........",
+        "......1...",
+        "..111..1..",
+        ".12231..1.",
+        ".123341..1",
+        ".123334111",
+        "..12334311",
+        "...1233411",
+        "....113311",
+        "...1223311",
+        "...1234311",
+        "....123111",
+        ".....11..1",
+        ".........1",
+        "..........",
+        "..........",
+    )
+)
+
+
+def paint_reviewed_icon(image: Image.Image, x: int, y: int, name: str) -> None:
+    """Reuse the approved source pixels, including their exact original palette."""
+    source = ROOT / "docs" / "design" / "memory-book-promise-icon" / f"{name}.json"
+    spec = json.loads(source.read_text(encoding="utf-8-sig"))
+    rows = tuple(spec["rows"])
+    if (spec["width"], spec["height"]) != (16, 16) or len(rows) != 16 or any(len(row) != 16 for row in rows):
+        raise ValueError(f"{source}: expected a 16x16 reviewed icon")
+    palette = {symbol: tuple(color) for symbol, color in spec["palette"].items()}
+    paint_map(image, x, y, rows, palette)
+
+
+def paint_title(image: Image.Image, x: int, y: int, text: str, *, chinese: bool) -> None:
+    glyphs = TITLE_CHINESE_GLYPHS if chinese else TITLE_ENGLISH_GLYPHS
+    advance = 18 if chinese else 8
+    for letter in text:
+        if letter == " ":
+            x += 4
+            continue
+        rows = glyphs[letter]
+        expected_size = (16, 16) if chinese else (7, 11)
+        if len(rows) != expected_size[1] or any(len(row) != expected_size[0] for row in rows):
+            raise ValueError(f"Invalid title glyph: {letter}")
+        # One native pixel of warm relief; never add a solid plate behind the text.
+        paint_map(image, x + 1, y + 1, rows, {"1": LEATHER_LIGHT})
+        paint_map(image, x, y, rows, {"1": INK})
+        x += advance
+
+
+def draw_vine_corner(image: Image.Image, x: int, y: int) -> None:
+    """40x40 transparent L-shaped trim; leave the page-facing 30x30 area clear."""
+    draw = ImageDraw.Draw(image)
+
+    def path(points: list[tuple[int, int]], color: tuple[int, int, int, int]) -> None:
+        draw.line([(x + px, y + py) for px, py in points], fill=color)
+
+    # Tendrils follow the narrow leather rim, rather than crossing the paper.
+    paths = [
+        [(3, 38), (3, 29), (4, 28), (4, 19), (5, 18), (5, 12), (7, 10), (7, 7), (10, 5), (18, 5), (19, 4), (28, 4), (29, 3), (38, 3)],
+        [(3, 31), (5, 29), (7, 29), (8, 30), (8, 32), (7, 33), (6, 33)],
+        [(30, 4), (29, 6), (30, 8), (32, 8), (33, 7), (33, 6)],
+    ]
+    for points in paths:
+        path([(px + 1, py + 1) for px, py in points], INK)
+        path(points, MEMORY_GREEN)
+
+    leaf = (
+        ".111..",
+        "12331.",
+        ".23331",
+        "..1231",
+        "...11.",
+    )
+    leaf_image = Image.new("RGBA", (6, 5), TRANSPARENT)
+    paint_map(leaf_image, 0, 0, leaf, icon_palette(MEMORY_GREEN, MEMORY_LIGHT))
+    for px, py, flip in ((0, 18, False), (0, 33, False), (2, 8, False), (19, 0, True), (33, 0, True)):
+        sprite = leaf_image.transpose(Image.Transpose.FLIP_LEFT_RIGHT) if flip else leaf_image
+        image.alpha_composite(sprite, (x + px, y + py))
+    # A pale apricot blossom and a tiny honey-coloured bud tie the green into the
+    # existing leather-and-gold palette. Neither extends into the page interior.
+    blossom = (
+        "..11...",
+        ".1231..",
+        "123331.",
+        ".13431.",
+        ".133321",
+        "..1231.",
+        "...11..",
+    )
+    paint_map(image, x + 8, y, blossom, {"1": INK, "2": PETAL, "3": PETAL_LIGHT, "4": GOLD})
+    paint_map(image, x + 1, y + 24, (".1.", "131", ".1."), {"1": INK, "3": GOLD_LIGHT})
+
+
 def main() -> None:
-    image = Image.new("RGBA", (256, 128), TRANSPARENT)
+    image = Image.new("RGBA", (256, 192), TRANSPARENT)
     draw = ImageDraw.Draw(image)
 
     panels = [
@@ -386,17 +592,14 @@ def main() -> None:
             shade=shade,
         )
 
-    # Cloth title plate with stitched edges and ribbon tails.
+    # Honey-gold ribbon; the former white cloth plate and its dot stitches are gone.
     title = [(0, 8), (6, 2), (14, 2), (14, 0), (81, 0), (81, 2), (89, 2), (95, 8), (89, 18), (81, 18), (81, 19), (14, 19), (14, 18), (6, 18)]
     draw.polygon([(x, y + 24) for x, y in title], fill=INK)
     inner = [(2, 8), (7, 4), (16, 4), (16, 2), (79, 2), (79, 4), (88, 4), (93, 8), (88, 16), (79, 16), (79, 17), (16, 17), (16, 16), (7, 16)]
     draw.polygon([(x, y + 24) for x, y in inner], fill=GOLD)
-    draw.rectangle((16, 27, 79, 40), fill=PAPER_BRIGHT)
-    draw.line((17, 27, 78, 27), fill=WHITE)
-    draw.line((17, 40, 78, 40), fill=PAPER_SHADOW)
-    for stitch_x in range(20, 78, 7):
-        draw.point((stitch_x, 29), fill=MUTED)
-        draw.point((stitch_x, 38), fill=MUTED)
+    draw.rectangle((16, 27, 79, 40), fill=GOLD_LIGHT)
+    draw.line((17, 27, 78, 27), fill=PAPER)
+    draw.line((17, 40, 78, 40), fill=LEATHER_LIGHT)
 
     # Repeating leather spine, paper speckle tile, and small decorations.
     draw.rectangle((100, 24, 107, 39), fill=SHADOW)
@@ -461,6 +664,23 @@ def main() -> None:
         80,
         GLYPHS["promise"],
         {"1": INK, "2": RELATION_RED, "3": LEATHER_LIGHT, "4": GOLD_LIGHT},
+    )
+
+    # The sealed note now identifies the relationship memories; the promise knot
+    # keeps both its existing source pixels and tile coordinates.
+    paint_reviewed_icon(image, 80, 80, "sealed-note")
+
+    # New artwork occupies previously unused tiles or rows below the old atlas.
+    # Preserve the old frame/icon coordinates for all callers and fallback skins.
+    paint_title(image, 1, 105, "记忆手册", chinese=True)
+    paint_title(image, 84, 107, "MEMORY BOOK", chinese=False)
+    draw_vine_corner(image, 0, 128)
+    paint_map(
+        image,
+        50,
+        130,
+        BUTTERFLY,
+        {"1": INK, "2": TALK_BLUE, "3": TALK_LIGHT, "4": GOLD_LIGHT},
     )
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)

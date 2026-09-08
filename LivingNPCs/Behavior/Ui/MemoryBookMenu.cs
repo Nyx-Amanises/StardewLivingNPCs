@@ -28,6 +28,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
     private const int RosterRowHeight = 88;
     private const int TabButtonHeight = 76;
     private const int ContentPadding = 28;
+    private const int ContentClipInset = 12;
     private const int FooterHeight = 28;
 
     /// <summary>内容区裁剪用（复用实例，避免每帧分配）。</summary>
@@ -37,6 +38,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
     private readonly Func<string, StardewEventHistory> getHistory;
     private readonly Func<string> getFarmerName;
     private readonly MemoryBookAssets assets;
+    private readonly MemoryBookTypography typography = new();
     private readonly bool uiInitialized;
     private readonly Dictionary<string, LivingNpcState> statesByName;
     private readonly List<MemoryBookNpcSummary> roster;
@@ -58,6 +60,9 @@ internal sealed class MemoryBookMenu : IClickableMenu
     private int rosterScrollIndex;
     private float contentScroll;
     private float contentHeight;
+    private int measuredContentViewportWidth;
+    private int measuredContentViewportHeight;
+    private bool scrollToLatestOnLayout;
     private int selectedRosterIndex;
     private MemoryBookTab activeTab = MemoryBookTab.Relationship;
     private string hoverText = string.Empty;
@@ -309,7 +314,9 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
         this.wrappedForWidth = -1;
         this.draggingContentScrollbar = false;
-        this.ClampScrolls();
+        // Keep the previous content metrics until text has reflowed. Clamping here
+        // could lose a chat's bottom anchor when the viewport becomes taller.
+        this.ClampRosterScroll();
     }
 
     private int VisibleRosterRows => Math.Max(1, this.rosterBounds.Height / RosterRowHeight);
@@ -403,7 +410,8 @@ internal sealed class MemoryBookMenu : IClickableMenu
                 this.SafeHistory(npcName),
                 displayName,
                 this.SafeFarmerName(),
-                this.translate);
+                this.translate,
+                maxConversations: StardewEventHistory.MaxConversationEntries);
         }
         else if (!this.statesByName.TryGetValue(npcName, out LivingNpcState? state))
         {
@@ -513,8 +521,10 @@ internal sealed class MemoryBookMenu : IClickableMenu
         this.wrappedForWidth = -1;
         this.wrappedForPage = null;
         this.rosterScrollIndex = 0;
-        this.contentScroll = 0f;
+        this.ResetContentScroll();
         this.contentHeight = 0f;
+        this.measuredContentViewportWidth = 0;
+        this.measuredContentViewportHeight = 0;
         this.hoverText = string.Empty;
         this.hoveredRosterIndex = -1;
         this.hoveredTab = null;
@@ -565,24 +575,104 @@ internal sealed class MemoryBookMenu : IClickableMenu
             return;
         }
 
-        this.wrappedLines.Clear();
+        var layout = new List<(MemoryBookLine Line, string Wrapped, float Height)>();
         foreach (MemoryBookLine line in this.GetPageLines(page.NpcName, this.activeTab))
         {
             SpriteFont font = this.FontFor(line.Kind);
             string wrapped = Game1.parseText(line.Text, font, this.ContentTextWidthFor(line.Kind));
             float height = font.MeasureString(wrapped).Y + this.SpacingFor(line.Kind);
-            this.wrappedLines.Add((line, wrapped, height));
+            layout.Add((line, wrapped, height));
         }
 
-        this.contentHeight = this.wrappedLines.Sum(entry => entry.Height) + ContentPadding * 2;
+        this.ApplyWrappedLayout(layout, preserveReadingPosition: this.wrappedForPage == page);
         this.wrappedForWidth = layoutWidth;
         this.wrappedForPage = page;
+    }
+
+    /// <summary>Keep the same visible message when a wider or narrower page reflows a conversation.</summary>
+    internal void ApplyWrappedLayout(
+        IReadOnlyList<(MemoryBookLine Line, string Wrapped, float Height)> layout,
+        bool preserveReadingPosition)
+    {
+        int anchorIndex = -1;
+        float anchorFraction = 0f;
+        if (preserveReadingPosition
+            && this.activeTab == MemoryBookTab.Conversations
+            && !this.scrollToLatestOnLayout
+            && !this.IsAtLatest
+            && this.measuredContentViewportWidth > 0
+            && this.measuredContentViewportWidth != this.contentBounds.Width)
+        {
+            // The first visible pixel lies below the content frame's clipped top edge.
+            float withinLine = this.contentScroll + ContentClipInset - ContentPadding;
+            for (int index = 0; index < this.wrappedLines.Count && withinLine >= 0f; index++)
+            {
+                float height = this.wrappedLines[index].Height;
+                if (withinLine < height)
+                {
+                    anchorIndex = index;
+                    anchorFraction = withinLine / height;
+                    break;
+                }
+
+                withinLine -= height;
+            }
+        }
+
+        this.wrappedLines.Clear();
+        this.wrappedLines.AddRange(layout);
+        float? readingScroll = null;
+        if (anchorIndex >= 0 && anchorIndex < layout.Count)
+        {
+            float anchorTop = ContentPadding - ContentClipInset;
+            for (int index = 0; index < anchorIndex; index++)
+            {
+                anchorTop += layout[index].Height;
+            }
+
+            readingScroll = anchorTop + layout[anchorIndex].Height * anchorFraction;
+        }
+
+        this.UpdateContentMetrics(this.wrappedLines.Sum(entry => entry.Height) + ContentPadding * 2, readingScroll);
+    }
+
+    private bool IsAtLatest => this.measuredContentViewportHeight > 0
+        && this.contentScroll >= Math.Max(0f, this.contentHeight - this.measuredContentViewportHeight) - 1f;
+
+    /// <summary>Apply the completed layout before choosing a chat's initial scroll position.</summary>
+    internal void UpdateContentMetrics(float height, float? readingScroll = null)
+    {
+        bool wasAtLatest = this.activeTab == MemoryBookTab.Conversations && this.IsAtLatest;
+        this.contentHeight = Math.Max(0f, height);
+        this.measuredContentViewportWidth = this.contentBounds.Width;
+        this.measuredContentViewportHeight = this.VisibleContentHeight;
+        if (this.activeTab == MemoryBookTab.Conversations && (this.scrollToLatestOnLayout || wasAtLatest))
+        {
+            this.contentScroll = Math.Max(0f, this.contentHeight - this.VisibleContentHeight);
+        }
+        else if (readingScroll.HasValue)
+        {
+            this.contentScroll = readingScroll.Value;
+        }
+
+        this.scrollToLatestOnLayout = false;
         this.ClampScrolls();
+    }
+
+    private void ResetContentScroll()
+    {
+        this.contentScroll = 0f;
+        this.scrollToLatestOnLayout = this.activeTab == MemoryBookTab.Conversations;
+        this.wrappedForWidth = -1;
     }
 
     private SpriteFont FontFor(MemoryBookLineKind kind)
     {
-        return kind == MemoryBookLineKind.SectionHeader ? Game1.dialogueFont : Game1.smallFont;
+        return kind == MemoryBookLineKind.SectionHeader
+            ? Game1.dialogueFont
+            : this.typography.BodyFont(
+                Game1.smallFont,
+                LocalizedContentManager.CurrentLanguageCode == LocalizedContentManager.LanguageCode.zh);
     }
 
     private int ContentTextWidthFor(MemoryBookLineKind kind)
@@ -630,9 +720,14 @@ internal sealed class MemoryBookMenu : IClickableMenu
         };
     }
 
-    private void ClampScrolls()
+    private void ClampRosterScroll()
     {
         this.rosterScrollIndex = Math.Clamp(this.rosterScrollIndex, 0, Math.Max(0, this.roster.Count - this.VisibleRosterRows));
+    }
+
+    private void ClampScrolls()
+    {
+        this.ClampRosterScroll();
         float maxScroll = Math.Max(0f, this.contentHeight - this.VisibleContentHeight);
         this.contentScroll = Math.Clamp(this.contentScroll, 0f, maxScroll);
     }
@@ -651,7 +746,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
         }
 
         this.selectedRosterIndex = index;
-        this.contentScroll = 0f;
+        this.ResetContentScroll();
         this.draggingContentScrollbar = false;
         if (index < this.rosterScrollIndex)
         {
@@ -668,7 +763,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
         }
     }
 
-    private void SelectTab(MemoryBookTab tab, bool playSound = true)
+    internal void SelectTab(MemoryBookTab tab, bool playSound = true)
     {
         if (tab == this.activeTab)
         {
@@ -676,7 +771,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
         }
 
         this.activeTab = tab;
-        this.contentScroll = 0f;
+        this.ResetContentScroll();
         this.draggingContentScrollbar = false;
         if (playSound && this.uiInitialized)
         {
@@ -808,13 +903,19 @@ internal sealed class MemoryBookMenu : IClickableMenu
         }
     }
 
-    private void ScrollContent(float delta)
+    internal void ScrollContent(float delta)
     {
         if (!this.HasBrowsableContent)
         {
             return;
         }
 
+        if (this.uiInitialized)
+        {
+            this.EnsureWrapped();
+        }
+
+        this.scrollToLatestOnLayout = false;
         this.contentScroll += delta;
         this.ClampScrolls();
     }
@@ -1043,23 +1144,23 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
         b.Draw(
             texture,
-            new Rectangle(this.bookBounds.X + 10, this.bookBounds.Y + 6, 72, 72),
-            MemoryBookAssets.SprigSource,
+            new Rectangle(this.bookBounds.X + 4, this.bookBounds.Y + 4, 80, 80),
+            MemoryBookAssets.VineCornerSource,
             Color.White);
         b.Draw(
             texture,
-            new Rectangle(this.bookBounds.Right - 82, this.bookBounds.Bottom - 82, 72, 72),
-            MemoryBookAssets.FlowerSource,
+            new Rectangle(this.bookBounds.Right - 84, this.bookBounds.Bottom - 84, 80, 80),
+            MemoryBookAssets.VineCornerSource,
+            Color.White,
+            0f,
+            Vector2.Zero,
+            SpriteEffects.FlipHorizontally | SpriteEffects.FlipVertically,
+            0f);
+        b.Draw(
+            texture,
+            new Rectangle(this.bookBounds.Right - 158, this.bookBounds.Y + 10, 48, 40),
+            MemoryBookAssets.ButterflySource,
             Color.White);
-
-        this.DrawIcon(
-            b,
-            MemoryBookIcon.Sparkle,
-            new Rectangle(this.bookBounds.Right - 150, this.bookBounds.Y + 12, 32, 32));
-        this.DrawIcon(
-            b,
-            MemoryBookIcon.Sparkle,
-            new Rectangle(this.bookBounds.Right - 112, this.bookBounds.Y + 28, 16, 16));
     }
 
     private void DrawTitle(SpriteBatch b)
@@ -1083,6 +1184,26 @@ internal sealed class MemoryBookMenu : IClickableMenu
         }
 
         string title = this.translate("book.title");
+        Rectangle? titleSource = title switch
+        {
+            "记忆手册" => MemoryBookAssets.TitleChineseSource,
+            "Memory Book" => MemoryBookAssets.TitleEnglishSource,
+            _ => null
+        };
+        if (this.assets.Texture != null && titleSource is Rectangle source)
+        {
+            int titleScale = Math.Max(1, Math.Min(3, Math.Min(
+                (banner.Width - 40) / source.Width,
+                (banner.Height - 12) / source.Height)));
+            Rectangle wordmark = new(
+                banner.X + (banner.Width - source.Width * titleScale) / 2,
+                banner.Y + (banner.Height - source.Height * titleScale) / 2 - 2,
+                source.Width * titleScale,
+                source.Height * titleScale);
+            b.Draw(this.assets.Texture, wordmark, source, Color.White);
+            return;
+        }
+
         SpriteFont titleFont = Game1.dialogueFont;
         Vector2 size = titleFont.MeasureString(title);
         if (size.X > banner.Width - 48)
@@ -1451,9 +1572,9 @@ internal sealed class MemoryBookMenu : IClickableMenu
 
         Rectangle clip = new(
             this.contentBounds.X + 12,
-            this.contentBounds.Y + 12,
+            this.contentBounds.Y + ContentClipInset,
             Math.Max(1, this.contentBounds.Width - 48),
-            Math.Max(1, this.contentBounds.Height - 24));
+            Math.Max(1, this.contentBounds.Height - ContentClipInset * 2));
 
         b.End();
         Rectangle previousScissor = b.GraphicsDevice.ScissorRectangle;
@@ -1497,7 +1618,12 @@ internal sealed class MemoryBookMenu : IClickableMenu
             {
                 Rectangle header = new(x, y + 2, usableWidth, Math.Max(38, (int)Math.Ceiling(textSize.Y) + 12));
                 this.DrawFrame(b, MemoryBookFrame.Header, header, Color.White, 2f, drawShadow: false);
-                MemoryBookIcon icon = line.MemoryKind == "promise" ? MemoryBookIcon.Promise : IconFor(this.activeTab);
+                MemoryBookIcon icon = line.MemoryKind switch
+                {
+                    "promise" => MemoryBookIcon.Promise,
+                    "relationship" => MemoryBookIcon.SealedNote,
+                    _ => IconFor(this.activeTab)
+                };
                 // Localized fonts can make the header taller than the 32px icon.
                 Rectangle iconBounds = new(header.X + 8, header.Y + (header.Height - 32) / 2, 32, 32);
                 this.DrawIcon(b, icon, iconBounds);

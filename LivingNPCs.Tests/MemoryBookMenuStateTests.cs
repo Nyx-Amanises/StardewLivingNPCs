@@ -4,7 +4,10 @@ using System.Collections.Generic;
 using System.Reflection;
 using LivingNPCs.Behavior;
 using LivingNPCs.Behavior.Ui;
+using LivingNPCs.Dialogue;
 using LivingNPCs.Dialogue.Persistence;
+using Microsoft.Xna.Framework;
+using StardewValley;
 
 namespace LivingNPCs.Tests;
 
@@ -107,6 +110,119 @@ public sealed class MemoryBookMenuStateTests
         List<MemoryBookLine> memories = menu.GetPageLines("Abigail", MemoryBookTab.Memories);
         Assert.Equal(1, historyReads);
         Assert.Equal("book.memories.empty", Assert.Single(memories).Text);
+    }
+
+    [Fact]
+    public void ConversationsPageShowsTheFullRetainedSessionLimit()
+    {
+        var history = new StardewEventHistory { NpcName = "Penny" };
+        for (int i = 0; i < StardewEventHistory.MaxConversationEntries; i++)
+        {
+            history.Add(
+                new StardewTime(1, Season.Spring, 24, 600 + i * 10),
+                new ConversationHistory([new ConversationElement($"message {i}", false)]));
+        }
+
+        MemoryBookMenu menu = MemoryBookMenu.CreateRemoteLoading(_ => history, () => "Yuki", Echo);
+        menu.ApplySnapshot(Source(new[] { "Penny" }));
+
+        List<MemoryBookLine> lines = menu.GetPageLines("Penny", MemoryBookTab.Conversations);
+
+        Assert.Equal(StardewEventHistory.MaxConversationEntries, lines.Count(line => line.Kind == MemoryBookLineKind.NpcLine));
+        Assert.Equal("Penny: message 0", lines[1].Text);
+        Assert.Equal($"Penny: message {StardewEventHistory.MaxConversationEntries - 1}", lines[^1].Text);
+    }
+
+    [Fact]
+    public void ConversationsStartAtLatestAndLeaveTheReadersScrollPositionAlone()
+    {
+        MemoryBookMenu menu = CreateLoadingMenu();
+        menu.ApplySnapshot(Source(new[] { "Penny", "Leah" }));
+        SetField(menu, "contentBounds", new Rectangle(0, 0, 700, 400));
+        menu.SelectTab(MemoryBookTab.Conversations, playSound: false);
+
+        menu.UpdateContentMetrics(1400f);
+        Assert.Equal(1000f, GetField<float>(menu, "contentScroll"));
+
+        menu.ScrollContent(-84f);
+        menu.UpdateContentMetrics(1400f);
+        Assert.Equal(916f, GetField<float>(menu, "contentScroll"));
+
+        // A resize can reflow history, but must not yank a reader back to the last message.
+        SetField(menu, "contentBounds", new Rectangle(0, 0, 620, 320));
+        menu.UpdateContentMetrics(1580f);
+        Assert.Equal(916f, GetField<float>(menu, "contentScroll"));
+
+        menu.SelectRoster(1, playSound: false);
+        menu.UpdateContentMetrics(980f);
+        Assert.Equal(660f, GetField<float>(menu, "contentScroll"));
+
+        menu.SelectTab(MemoryBookTab.Moments, playSound: false);
+        menu.UpdateContentMetrics(1100f);
+        Assert.Equal(0f, GetField<float>(menu, "contentScroll"));
+
+        menu.SelectTab(MemoryBookTab.Conversations, playSound: false);
+        menu.UpdateContentMetrics(980f);
+        Assert.Equal(660f, GetField<float>(menu, "contentScroll"));
+    }
+
+    [Fact]
+    public void ConversationsKeepTheLastMessageVisibleWhenTheViewportChanges()
+    {
+        MemoryBookMenu menu = CreateLoadingMenu();
+        menu.ApplySnapshot(Source(new[] { "Penny" }));
+        SetField(menu, "contentBounds", new Rectangle(0, 0, 700, 400));
+        menu.SelectTab(MemoryBookTab.Conversations, playSound: false);
+        menu.UpdateContentMetrics(900f);
+
+        SetField(menu, "contentBounds", new Rectangle(0, 0, 640, 320));
+        menu.UpdateContentMetrics(1000f);
+        Assert.Equal(680f, GetField<float>(menu, "contentScroll"));
+
+        SetField(menu, "contentBounds", new Rectangle(0, 0, 780, 500));
+        menu.UpdateContentMetrics(920f);
+        Assert.Equal(420f, GetField<float>(menu, "contentScroll"));
+
+        // A short or empty history has no scroll range.
+        menu.UpdateContentMetrics(200f);
+        Assert.Equal(0f, GetField<float>(menu, "contentScroll"));
+    }
+
+    [Fact]
+    public void ConversationsKeepTheirVisibleMessageWhenAWiderPageShortensHistory()
+    {
+        MemoryBookMenu menu = CreateLoadingMenu();
+        menu.ApplySnapshot(Source(new[] { "Penny" }));
+        SetField(menu, "contentBounds", new Rectangle(0, 0, 480, 300));
+        menu.SelectTab(MemoryBookTab.Conversations, playSound: false);
+        MemoryBookLine[] messages =
+        [
+            new(MemoryBookLineKind.DateSeparator, "Spring 24"),
+            new(MemoryBookLineKind.PlayerLine, "Yuki: Earlier question"),
+            new(MemoryBookLineKind.NpcLine, "Penny: The message being read"),
+            new(MemoryBookLineKind.PlayerLine, "Yuki: Later question"),
+            new(MemoryBookLineKind.NpcLine, "Penny: Latest reply")
+        ];
+        menu.ApplyWrappedLayout(Layout([50f, 500f, 600f, 500f, 450f]), preserveReadingPosition: false);
+        Assert.Equal(1856f, GetField<float>(menu, "contentScroll"));
+
+        // Read halfway through the third message, with newer exchanges still below it.
+        menu.ScrollContent(-990f);
+        Assert.Equal(866f, GetField<float>(menu, "contentScroll"));
+        SetField(menu, "contentBounds", new Rectangle(0, 0, 880, 300));
+        var widerLayout = Layout([50f, 180f, 240f, 180f, 160f]);
+        menu.ApplyWrappedLayout(widerLayout, preserveReadingPosition: true);
+
+        // Keeping 866 pixels would clamp to the new bottom at 566. Instead, the
+        // clipped viewport still begins halfway through the same third message.
+        Assert.Equal(366f, GetField<float>(menu, "contentScroll"));
+
+        SetField(menu, "contentBounds", new Rectangle(0, 0, 880, 360));
+        menu.ApplyWrappedLayout(widerLayout, preserveReadingPosition: true);
+        Assert.Equal(366f, GetField<float>(menu, "contentScroll"));
+
+        List<(MemoryBookLine Line, string Wrapped, float Height)> Layout(float[] heights)
+            => messages.Select((line, index) => (line, line.Text, heights[index])).ToList();
     }
 
     private static MemoryBookMenu CreateLoadingMenu()

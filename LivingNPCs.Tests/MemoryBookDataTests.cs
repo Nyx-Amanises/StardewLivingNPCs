@@ -122,7 +122,7 @@ public sealed class MemoryBookDataTests
     }
 
     [Fact]
-    public void Conversations_Are_Newest_First_With_Speaker_Prefixes_And_Clean_Text()
+    public void Conversations_Are_Oldest_First_With_Speaker_Prefixes_And_Clean_Text()
     {
         var history = new StardewEventHistory { NpcName = "Abigail" };
         history.Add(
@@ -144,13 +144,68 @@ public sealed class MemoryBookDataTests
 
         int summerIndex = lines.FindIndex(line => line.Kind == MemoryBookLineKind.DateSeparator && line.Text.Contains("book.season.summer"));
         int springIndex = lines.FindIndex(line => line.Kind == MemoryBookLineKind.DateSeparator && line.Text.Contains("book.season.spring"));
-        Assert.True(summerIndex >= 0 && springIndex > summerIndex);
+        Assert.True(springIndex >= 0 && summerIndex > springIndex);
 
         Assert.Contains(lines, line => line.Kind == MemoryBookLineKind.PlayerLine && line.Text == "Yuki: 矿洞怎么样？");
         // 原始台词里的 skip#、页界与肖像标记全部被清洗。
         Assert.Contains(lines, line => line.Kind == MemoryBookLineKind.NpcLine && line.Text == "阿比盖尔: 还行。　下次带你一起去。");
         Assert.Contains(lines, line => line.Kind == MemoryBookLineKind.NpcLine && line.Text == "阿比盖尔: 早上好！");
         Assert.DoesNotContain(lines, line => line.Text.Contains("#$b#") || line.Text.Contains("$0") || line.Text.Contains("skip#"));
+    }
+
+    [Fact]
+    public void Conversations_Show_The_Latest_Sessions_In_Time_Order_With_One_Separator_Per_Day()
+    {
+        var history = new StardewEventHistory { NpcName = "Penny" };
+        AddSession(new StardewTime(2, Season.Spring, 1, 600), "new year");
+        AddSession(new StardewTime(1, Season.Winter, 28, 1900), "evening");
+        AddSession(new StardewTime(1, Season.Winter, 27, 1200), "older session");
+        AddSession(new StardewTime(1, Season.Winter, 28, 900), "morning");
+        string saved = JsonConvert.SerializeObject(history);
+
+        var lines = MemoryBookData.BuildConversationLines(history, "Penny", "Farmer", Echo, maxConversations: 3);
+
+        Assert.Equal(
+            ["Farmer: morning", "Penny: morning reply", "Farmer: evening", "Penny: evening reply", "Farmer: new year", "Penny: new year reply"],
+            lines.Where(line => line.Kind is MemoryBookLineKind.PlayerLine or MemoryBookLineKind.NpcLine).Select(line => line.Text));
+        Assert.Equal(2, lines.Count(line => line.Kind == MemoryBookLineKind.DateSeparator));
+        Assert.Equal(MemoryBookLineKind.DateSeparator, lines[0].Kind);
+        Assert.Equal(MemoryBookLineKind.DateSeparator, lines[5].Kind);
+        Assert.DoesNotContain(lines, line => line.Text.Contains("older session"));
+        Assert.Equal(saved, JsonConvert.SerializeObject(history));
+
+        void AddSession(StardewTime time, string text)
+        {
+            history.Add(time, new ConversationHistory([new(text, true), new(text + " reply", false)]));
+        }
+    }
+
+    [Fact]
+    public void Conversations_In_The_Same_Game_Minute_Keep_Recorded_Order_And_Limit_From_The_End()
+    {
+        var history = new StardewEventHistory { NpcName = "Penny" };
+        var time = new StardewTime(1, Season.Spring, 24, 900);
+        history.Add(time, new ConversationHistory([new("first", false)]));
+        history.Add(time, new ConversationHistory([new("second", false)]));
+        history.Add(time, new ConversationHistory([new("third", false)]));
+
+        var lines = MemoryBookData.BuildConversationLines(history, "Penny", "Farmer", Echo, maxConversations: 2);
+
+        Assert.Equal(["Penny: second", "Penny: third"], lines.Where(line => line.Kind == MemoryBookLineKind.NpcLine).Select(line => line.Text));
+        Assert.Single(lines, line => line.Kind == MemoryBookLineKind.DateSeparator);
+    }
+
+    [Fact]
+    public void Conversations_Without_Readable_Dialogue_Show_The_Empty_Placeholder()
+    {
+        var history = new StardewEventHistory { NpcName = "Penny" };
+        history.Add(new StardewTime(1, Season.Spring, 24, 900), new ConversationHistory([new("skip#$h", false), new(" ", true)]));
+
+        var lines = MemoryBookData.BuildConversationLines(history, "Penny", "Farmer", Echo);
+
+        MemoryBookLine line = Assert.Single(lines);
+        Assert.Equal(MemoryBookLineKind.Empty, line.Kind);
+        Assert.Equal("book.conversations.empty", line.Text);
     }
 
     [Theory]

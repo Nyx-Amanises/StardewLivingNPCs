@@ -1,8 +1,10 @@
 using LivingNPCs.Behavior;
 using LivingNPCs.Behavior.Multiplayer;
 using LivingNPCs.Behavior.Ui;
+using LivingNPCs.Dialogue;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using StardewValley;
 
 namespace LivingNPCs.Tests;
 
@@ -407,6 +409,84 @@ public sealed class MemoryBookMomentLocalizationTests
         Assert.Contains(lines, line => line.Kind == MemoryBookLineKind.Body && line.Text == summary);
         Assert.Contains(ClassroomRequest, Assert.Single(lines, line => line.Kind == MemoryBookLineKind.MemoryFact).Text);
         Assert.Contains(lines, line => line.Kind == MemoryBookLineKind.Body && line.Text.Contains("海参"));
+    }
+
+    [Theory]
+    [InlineData(-1, "日期不详", "Date unknown")]
+    [InlineData(0, "第1年春1日", "Year 1 · Spring 1")]
+    [InlineData(23, "第1年春24日", "Year 1 · Spring 24")]
+    [InlineData(27, "第1年春28日", "Year 1 · Spring 28")]
+    [InlineData(28, "第1年夏1日", "Year 1 · Summer 1")]
+    [InlineData(55, "第1年夏28日", "Year 1 · Summer 28")]
+    [InlineData(56, "第1年秋1日", "Year 1 · Fall 1")]
+    [InlineData(83, "第1年秋28日", "Year 1 · Fall 28")]
+    [InlineData(84, "第1年冬1日", "Year 1 · Winter 1")]
+    [InlineData(111, "第1年冬28日", "Year 1 · Winter 28")]
+    [InlineData(112, "第2年春1日", "Year 2 · Spring 1")]
+    public void TotalDaysDatesUseTheZeroBasedGameCalendarInBothLanguages(int totalDays, string chinese, string english)
+    {
+        Assert.Equal(chinese, MemoryBookData.FormatTotalDaysDate(totalDays, Translation("zh")));
+        Assert.Equal(english, MemoryBookData.FormatTotalDaysDate(totalDays, Translation("en")));
+    }
+
+    [Theory]
+    [InlineData(0, Season.Spring, 1)]
+    [InlineData(1, Season.Spring, 0)]
+    [InlineData(1, Season.Spring, 29)]
+    [InlineData(1, (Season)99, 1)]
+    public void InvalidConversationDatesUseALocalizedPlaceholder(int year, Season season, int day)
+    {
+        var time = new StardewTime(year, season, day, 900);
+
+        Assert.Equal("日期不详", MemoryBookData.FormatStardewDate(time, Translation("zh")));
+        Assert.Equal("Date unknown", MemoryBookData.FormatStardewDate(time, Translation("en")));
+    }
+
+    [Fact]
+    public void ExperienceAndGiftDatesStayFixedWhileRosterContactStillUsesRelativeTime()
+    {
+        var state = StateWithExperience(new SharedExperienceFact
+        {
+            Summary = LegacyOuting,
+            LocationName = "Beach",
+            CreatedTotalDays = 23,
+            LastUpdatedTotalDays = 23
+        });
+        state.LastGiftName = "海参";
+        state.LastGiftTotalDays = 41;
+        string saved = JsonConvert.SerializeObject(state);
+
+        var chinese = Render(state, "zh");
+        var english = Render(state, "en", (_, _) => "Sea Cucumber");
+        var laterChinese = MemoryBookData.BuildMomentLines(state, 100, Translation("zh"), "潘妮", "zh");
+        var roster = MemoryBookData.BuildRoster([state], _ => "潘妮", _ => 0, 42, Translation("zh"));
+
+        Assert.StartsWith("第1年春24日 · ", Assert.Single(chinese, line => line.Kind == MemoryBookLineKind.Muted).Text);
+        Assert.Contains(chinese, line => line.Text == "最近一次礼物：海参（第1年夏14日）");
+        Assert.StartsWith("Year 1 · Spring 24 · ", Assert.Single(english, line => line.Kind == MemoryBookLineKind.Muted).Text);
+        Assert.Contains(english, line => line.Text == "Last gift: Sea Cucumber (Year 1 · Summer 14)");
+        Assert.Equal(chinese.ToArray(), laterChinese.ToArray());
+        Assert.Equal("最近接触：昨天", Assert.Single(roster).SubtitleText);
+        Assert.Equal(saved, JsonConvert.SerializeObject(state));
+    }
+
+    [Theory]
+    [InlineData(23, 40, "第1年夏13日")]
+    [InlineData(23, -1, "第1年春24日")]
+    [InlineData(-1, -1, "日期不详")]
+    public void ExperienceDatesPreferTheLastOccurrenceAndFallBackForLegacyRecords(int createdDay, int updatedDay, string expectedDate)
+    {
+        var state = StateWithExperience(new SharedExperienceFact
+        {
+            Summary = LegacyOuting,
+            LocationName = "Beach",
+            CreatedTotalDays = createdDay,
+            LastUpdatedTotalDays = updatedDay
+        });
+
+        var lines = Render(state, "zh");
+
+        Assert.StartsWith(expectedDate + " · ", Assert.Single(lines, line => line.Kind == MemoryBookLineKind.Muted).Text);
     }
 
     private static LivingNpcState StateWithExperience(SharedExperienceFact experience) => new()
