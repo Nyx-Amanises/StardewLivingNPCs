@@ -41,6 +41,13 @@ ROSE_PAPER = (238, 205, 184, 255)
 WHITE = (255, 249, 223, 255)
 PETAL = (244, 195, 147, 255)
 PETAL_LIGHT = (255, 224, 172, 255)
+LEAF_DARK = (43, 75, 50, 255)
+LEAF_MID = (65, 108, 64, 255)
+LEAF_LIGHT = (107, 148, 77, 255)
+LEAF_GLOW = (151, 177, 103, 255)
+ROSE_COLORS = ((139, 65, 83, 255), (198, 105, 127, 255), (237, 157, 165, 255), (255, 204, 190, 255))
+APRICOT_COLORS = ((169, 105, 58, 255), (225, 157, 80, 255), (250, 204, 127, 255), (255, 235, 188, 255))
+LILAC_COLORS = ((121, 87, 133, 255), (168, 132, 177, 255), (210, 177, 209, 255), (243, 216, 230, 255))
 
 
 def inset_polygon(x: int, y: int, size: int, inset: int, cut: int = 2) -> list[tuple[int, int]]:
@@ -493,11 +500,21 @@ BUTTERFLY = tuple(
 def paint_reviewed_icon(image: Image.Image, x: int, y: int, name: str) -> None:
     """Reuse the approved source pixels, including their exact original palette."""
     source = ROOT / "docs" / "design" / "memory-book-promise-icon" / f"{name}.json"
+    paint_reviewed_art(image, x, y, source, (16, 16))
+
+
+def paint_reviewed_art(image: Image.Image, x: int, y: int, source: Path, expected_size: tuple[int, int]) -> None:
+    """Import reviewable native pixel maps without fonts or image resampling."""
     spec = json.loads(source.read_text(encoding="utf-8-sig"))
     rows = tuple(spec["rows"])
-    if (spec["width"], spec["height"]) != (16, 16) or len(rows) != 16 or any(len(row) != 16 for row in rows):
-        raise ValueError(f"{source}: expected a 16x16 reviewed icon")
+    width, height = expected_size
+    if (spec["width"], spec["height"]) != expected_size or len(rows) != height or any(len(row) != width for row in rows):
+        raise ValueError(f"{source}: expected a {width}x{height} pixel map")
     palette = {symbol: tuple(color) for symbol, color in spec["palette"].items()}
+    if any(len(color) != 4 or color[3] not in (0, 255) for color in palette.values()):
+        raise ValueError(f"{source}: use opaque or transparent RGBA pixels")
+    if any(symbol not in palette for row in rows for symbol in row):
+        raise ValueError(f"{source}: pixel map references an unknown palette symbol")
     paint_map(image, x, y, rows, palette)
 
 
@@ -562,8 +579,251 @@ def draw_vine_corner(image: Image.Image, x: int, y: int) -> None:
     paint_map(image, x + 1, y + 24, (".1.", "131", ".1."), {"1": INK, "3": GOLD_LIGHT})
 
 
+def botanical_leaf() -> Image.Image:
+    """A newly drawn 19x13 broad leaf with a stepped edge and branching veins."""
+    leaf = Image.new("RGBA", (19, 13), TRANSPARENT)
+    draw = ImageDraw.Draw(leaf)
+    draw.polygon([(0, 12), (1, 8), (5, 3), (10, 1), (18, 0), (17, 5), (12, 11), (6, 12)], fill=LEAF_MID, outline=INK)
+    draw.polygon([(2, 10), (8, 6), (16, 2), (16, 6), (11, 10), (5, 11)], fill=LEAF_DARK)
+    draw.polygon([(2, 8), (6, 4), (11, 2), (15, 2), (9, 6), (4, 9)], fill=LEAF_LIGHT)
+    draw.line((2, 10, 15, 2), fill=LEAF_GLOW)
+    draw.line((6, 8, 7, 5), fill=LEAF_GLOW)
+    draw.line((10, 5, 10, 3), fill=LEAF_GLOW)
+    draw.line((8, 7, 12, 7), fill=LEAF_MID)
+    return leaf
+
+
+def rose_bloom(colors=ROSE_COLORS) -> Image.Image:
+    """A 23x23 rose with individual folded petals and a small central spiral."""
+    shade, mid, light, glow = colors
+    bloom = Image.new("RGBA", (23, 23), TRANSPARENT)
+    draw = ImageDraw.Draw(bloom)
+    outline = [(8, 0), (14, 0), (14, 1), (18, 1), (18, 3), (21, 3), (21, 6), (22, 6), (22, 15), (20, 15), (20, 19), (17, 19), (17, 21), (13, 22), (6, 21), (6, 20), (3, 20), (3, 17), (1, 17), (0, 12), (1, 7), (2, 7), (2, 4), (5, 4), (5, 2), (8, 2)]
+    draw.polygon(outline, fill=shade, outline=INK)
+    draw.polygon([(7, 3), (9, 1), (14, 1), (17, 3), (17, 7), (14, 10), (8, 8), (5, 5)], fill=light)
+    draw.line([(8, 3), (10, 2), (14, 2), (16, 4)], fill=glow)
+    draw.polygon([(2, 8), (4, 5), (8, 6), (11, 11), (8, 16), (3, 15), (1, 12)], fill=mid)
+    draw.line([(3, 8), (4, 7), (6, 7), (8, 9)], fill=light)
+    draw.polygon([(15, 5), (18, 5), (21, 8), (21, 14), (17, 17), (13, 11)], fill=mid)
+    draw.polygon([(17, 6), (19, 7), (20, 9), (20, 12), (17, 13), (15, 9)], fill=light)
+    draw.point((19, 8), fill=glow)
+    draw.polygon([(8, 12), (14, 12), (18, 17), (16, 20), (13, 21), (8, 20), (4, 17)], fill=light)
+    draw.polygon([(6, 17), (10, 18), (14, 17), (17, 17), (15, 20), (10, 20)], fill=mid)
+    draw.line([(8, 14), (7, 16), (9, 17)], fill=glow)
+    draw.polygon([(8, 7), (13, 6), (17, 9), (16, 14), (12, 17), (7, 14), (5, 10)], fill=shade)
+    draw.polygon([(9, 8), (13, 7), (15, 9), (15, 12), (12, 15), (8, 13), (7, 10)], fill=mid)
+    draw.line([(8, 10), (10, 8), (13, 8), (14, 10)], fill=glow)
+    draw.line([(8, 11), (9, 13), (12, 14), (14, 12)], fill=light)
+    draw.polygon([(10, 10), (13, 10), (13, 12), (11, 13), (9, 11)], fill=shade)
+    draw.line((10, 10, 12, 10), fill=light)
+    draw.point((12, 11), fill=glow)
+    return bloom
+
+
+def daisy_bloom(colors=APRICOT_COLORS) -> Image.Image:
+    """Eight distinct 22px petals around a textured honey-gold centre."""
+    shade, mid, light, glow = colors
+    bloom = Image.new("RGBA", (22, 22), TRANSPARENT)
+    draw = ImageDraw.Draw(bloom)
+    petals = [
+        [(8, 0), (12, 0), (14, 4), (12, 9), (9, 9), (7, 4)],
+        [(15, 2), (18, 2), (20, 5), (18, 9), (13, 11), (11, 8)],
+        [(17, 7), (20, 8), (21, 11), (19, 14), (14, 14), (11, 11)],
+        [(17, 13), (20, 16), (19, 19), (16, 20), (12, 17), (11, 12)],
+        [(8, 13), (12, 12), (15, 17), (13, 21), (9, 21), (7, 18)],
+        [(6, 12), (10, 14), (9, 18), (5, 20), (2, 17), (3, 14)],
+        [(5, 7), (10, 10), (8, 13), (3, 14), (0, 11), (1, 8)],
+        [(4, 2), (7, 2), (11, 7), (8, 11), (4, 9), (1, 6)],
+    ]
+    for index, points in enumerate(petals):
+        draw.polygon(points, fill=light if index < 3 or index == 7 else mid, outline=INK)
+    for points in (
+        [(9, 2), (11, 2), (12, 5), (11, 8), (9, 6)],
+        [(16, 4), (18, 4), (18, 6), (15, 8), (14, 7)],
+        [(18, 9), (19, 10), (18, 12), (15, 12), (14, 10)],
+        [(5, 4), (7, 4), (9, 7), (7, 8), (4, 6)],
+        [(2, 9), (4, 9), (7, 11), (5, 12), (2, 11)],
+    ):
+        draw.polygon(points, fill=glow)
+    draw.line((16, 15, 18, 17), fill=light)
+    draw.line((10, 17, 11, 19), fill=light)
+    draw.line((5, 16, 4, 17), fill=light)
+    draw.polygon([(8, 7), (12, 7), (15, 10), (14, 13), (11, 15), (8, 14), (6, 11)], fill=shade, outline=INK)
+    draw.polygon([(9, 8), (12, 8), (14, 10), (12, 13), (9, 13), (7, 11)], fill=GOLD)
+    draw.rectangle((9, 9, 11, 10), fill=GOLD_LIGHT)
+    draw.point((9, 9), fill=PAPER_BRIGHT)
+    draw.point((12, 11), fill=LEATHER_LIGHT)
+    return bloom
+
+
+def little_flower(colors=LILAC_COLORS) -> Image.Image:
+    shade, mid, light, glow = colors
+    sprite = Image.new("RGBA", (13, 13), TRANSPARENT)
+    draw = ImageDraw.Draw(sprite)
+    draw.polygon([(4, 0), (7, 0), (8, 3), (11, 2), (12, 5), (10, 7), (11, 10), (8, 12), (6, 10), (3, 12), (1, 9), (3, 7), (0, 5), (1, 2), (4, 3)], fill=mid, outline=INK)
+    draw.polygon([(5, 1), (6, 1), (7, 4), (5, 5), (4, 3)], fill=glow)
+    draw.polygon([(9, 3), (10, 3), (11, 5), (8, 6), (7, 5)], fill=light)
+    draw.polygon([(2, 3), (3, 4), (5, 5), (4, 7), (1, 5)], fill=light)
+    draw.polygon([(4, 8), (6, 7), (8, 9), (7, 10), (5, 9), (3, 10)], fill=shade)
+    draw.rectangle((5, 5, 7, 7), fill=GOLD)
+    draw.point((5, 5), fill=PAPER_BRIGHT)
+    return sprite
+
+
+def rose_bud(colors=ROSE_COLORS) -> Image.Image:
+    shade, mid, light, glow = colors
+    sprite = Image.new("RGBA", (9, 13), TRANSPARENT)
+    draw = ImageDraw.Draw(sprite)
+    draw.polygon([(3, 0), (6, 0), (8, 3), (7, 7), (5, 10), (2, 9), (0, 5), (1, 2)], fill=shade, outline=INK)
+    draw.polygon([(3, 1), (5, 1), (6, 4), (5, 7), (3, 8), (1, 5)], fill=mid)
+    draw.line([(3, 2), (4, 2), (5, 4), (4, 6)], fill=light)
+    draw.point((3, 2), fill=glow)
+    draw.polygon([(1, 6), (4, 9), (7, 6), (6, 10), (4, 11), (4, 12), (3, 12), (3, 10)], fill=LEAF_MID, outline=INK)
+    draw.point((4, 10), fill=LEAF_GLOW)
+    return sprite
+
+
+def stem_paths(sprite: Image.Image, paths: list[list[tuple[int, int]]]) -> None:
+    draw = ImageDraw.Draw(sprite)
+    for points in paths:
+        draw.line(points, fill=INK, width=3)
+        draw.line(points, fill=LEAF_DARK, width=2)
+        draw.line([(x - 1, y) for x, y in points], fill=LEAF_LIGHT, width=1)
+
+
+def place_leaf(sprite: Image.Image, x: int, y: int, *, flip: bool = False, turn: bool = False, small: bool = False) -> None:
+    leaf = botanical_leaf()
+    if small:
+        leaf = leaf.resize((13, 9), Image.Resampling.NEAREST)
+    if flip:
+        leaf = leaf.transpose(Image.Transpose.FLIP_LEFT_RIGHT)
+    if turn:
+        leaf = leaf.transpose(Image.Transpose.ROTATE_90)
+    sprite.alpha_composite(leaf, (x, y))
+
+
+def floral_corner() -> Image.Image:
+    """96px floral corner: a focal rose, secondary daisies, buds and layered leaves."""
+    sprite = Image.new("RGBA", (96, 96), TRANSPARENT)
+    stem_paths(sprite, [
+        [(12, 94), (15, 83), (12, 70), (16, 55), (14, 44), (19, 32), (28, 23), (42, 17), (60, 17), (74, 13), (92, 11)],
+        [(22, 30), (13, 20), (11, 9), (4, 5)],
+        [(27, 25), (39, 31), (52, 29), (58, 25)],
+        [(17, 45), (28, 48), (32, 43), (30, 39)],
+        [(16, 60), (25, 63), (29, 70)],
+        [(14, 78), (6, 81), (5, 87), (8, 90)],
+        [(65, 16), (70, 6), (77, 4)],
+        [(80, 13), (87, 21), (91, 24)],
+    ])
+    for x, y, flip, turn in (
+        (1, 12, False, False), (19, 1, False, False), (28, 26, True, False),
+        (1, 29, True, True), (18, 33, False, False), (1, 53, True, False),
+        (17, 52, False, True), (0, 71, True, True), (14, 76, False, False),
+        (43, 0, False, False), (50, 22, True, False), (65, 0, False, False),
+        (74, 21, True, False), (77, 0, False, False),
+    ):
+        place_leaf(sprite, x, y, flip=flip, turn=turn)
+    place_leaf(sprite, 4, 84, flip=True, small=True)
+    place_leaf(sprite, 24, 69, small=True)
+    sprite.alpha_composite(rose_bloom(), (12, 10))
+    sprite.alpha_composite(daisy_bloom(), (35, 5))
+    sprite.alpha_composite(little_flower(), (59, 10))
+    sprite.alpha_composite(little_flower(APRICOT_COLORS), (80, 3))
+    sprite.alpha_composite(rose_bud(), (84, 19))
+    sprite.alpha_composite(rose_bud(LILAC_COLORS), (3, 1))
+    sprite.alpha_composite(daisy_bloom(LILAC_COLORS), (2, 36))
+    sprite.alpha_composite(little_flower(APRICOT_COLORS), (21, 61))
+    sprite.alpha_composite(rose_bloom(APRICOT_COLORS).resize((17, 17), Image.Resampling.NEAREST), (1, 70))
+    sprite.alpha_composite(rose_bud(), (10, 83))
+    return sprite
+
+
+def hanging_vine() -> Image.Image:
+    sprite = Image.new("RGBA", (40, 112), TRANSPARENT)
+    stem_paths(sprite, [
+        [(19, 0), (21, 15), (17, 29), (22, 44), (17, 61), (23, 75), (18, 91), (21, 105), (17, 111)],
+        [(19, 18), (8, 21), (4, 28)],
+        [(19, 33), (31, 32), (35, 39)],
+        [(20, 53), (9, 56), (4, 65)],
+        [(19, 66), (31, 67), (35, 73)],
+        [(20, 84), (9, 87), (7, 94), (10, 98), (13, 96)],
+    ])
+    for x, y, flip, turn in (
+        (0, 3, True, False), (19, 10, False, False), (0, 27, True, False),
+        (19, 36, False, False), (1, 50, True, False), (20, 62, False, False),
+        (1, 73, True, False), (20, 86, False, False),
+    ):
+        place_leaf(sprite, x, y, flip=flip, turn=turn)
+    place_leaf(sprite, 9, 96, flip=True, small=True)
+    sprite.alpha_composite(little_flower(APRICOT_COLORS), (13, 17))
+    sprite.alpha_composite(rose_bud(), (27, 37))
+    sprite.alpha_composite(little_flower(), (7, 54))
+    sprite.alpha_composite(rose_bud(APRICOT_COLORS), (20, 77))
+    return sprite
+
+
+def flower_spray() -> Image.Image:
+    sprite = Image.new("RGBA", (64, 48), TRANSPARENT)
+    stem_paths(sprite, [
+        [(4, 43), (17, 32), (28, 25), (42, 23), (59, 9)],
+        [(18, 32), (13, 18), (5, 11)],
+        [(29, 25), (30, 12), (38, 3)],
+        [(37, 24), (46, 36), (60, 39)],
+    ])
+    for x, y, flip, turn in (
+        (2, 15, True, False), (10, 28, True, False), (23, 1, False, False),
+        (35, 29, True, False), (43, 3, False, False), (44, 24, False, False),
+    ):
+        place_leaf(sprite, x, y, flip=flip, turn=turn)
+    place_leaf(sprite, 2, 34, small=True)
+    sprite.alpha_composite(rose_bloom(), (16, 12))
+    sprite.alpha_composite(daisy_bloom(), (34, 5))
+    sprite.alpha_composite(little_flower(), (5, 24))
+    sprite.alpha_composite(little_flower(APRICOT_COLORS), (45, 31))
+    sprite.alpha_composite(rose_bud(LILAC_COLORS), (4, 6))
+    return sprite
+
+
+def large_butterfly(*, warm: bool = False) -> Image.Image:
+    """New 40x32 wing silhouettes with veins, scallops and contrasting gold marks."""
+    if warm:
+        shade, mid, light, glow = ROSE_COLORS
+    else:
+        shade, mid, light, glow = (38, 73, 104, 255), (66, 124, 158, 255), (123, 183, 194, 255), (190, 220, 209, 255)
+    left = Image.new("RGBA", (40, 32), TRANSPARENT)
+    draw = ImageDraw.Draw(left)
+    draw.polygon([(18, 14), (15, 6), (9, 2), (5, 2), (2, 5), (2, 10), (5, 15), (9, 18), (16, 20)], fill=shade, outline=INK)
+    draw.polygon([(17, 17), (9, 16), (5, 20), (6, 25), (10, 28), (14, 27), (18, 22)], fill=shade, outline=INK)
+    draw.polygon([(4, 5), (6, 3), (10, 4), (14, 7), (16, 12), (17, 16), (11, 15), (7, 12), (4, 9)], fill=mid)
+    draw.polygon([(5, 4), (8, 4), (11, 6), (13, 9), (9, 10), (6, 8)], fill=light)
+    draw.line([(6, 4), (8, 4), (10, 6)], fill=glow)
+    draw.polygon([(12, 9), (14, 11), (16, 16), (14, 16), (11, 13), (10, 11)], fill=GOLD)
+    draw.line([(11, 11), (13, 12), (15, 15)], fill=GOLD_LIGHT)
+    draw.line([(17, 17), (11, 14), (7, 8)], fill=shade)
+    draw.line([(11, 14), (5, 11)], fill=shade)
+    draw.polygon([(8, 18), (13, 18), (16, 20), (14, 24), (11, 26), (8, 24)], fill=mid)
+    draw.polygon([(8, 19), (11, 18), (13, 20), (11, 23), (8, 23)], fill=light)
+    draw.rectangle((10, 21, 12, 23), fill=GOLD_LIGHT)
+    draw.point((10, 21), fill=PAPER_BRIGHT)
+    for px, py in ((3, 6), (4, 10), (6, 14), (7, 23), (10, 27)):
+        draw.point((px, py), fill=glow)
+    sprite = left.copy()
+    sprite.alpha_composite(left.transpose(Image.Transpose.FLIP_LEFT_RIGHT))
+    draw = ImageDraw.Draw(sprite)
+    draw.line([(18, 10), (17, 7), (15, 5), (13, 4)], fill=INK)
+    draw.line([(21, 10), (22, 7), (24, 5), (26, 4)], fill=INK)
+    draw.point((13, 3), fill=GOLD_LIGHT)
+    draw.point((26, 3), fill=GOLD_LIGHT)
+    draw.rectangle((19, 10, 20, 25), fill=INK)
+    draw.rectangle((18, 9, 21, 12), fill=INK)
+    draw.point((19, 10), fill=GOLD_LIGHT)
+    draw.line((19, 14, 19, 21), fill=LEATHER_LIGHT)
+    draw.point((19, 17), fill=GOLD)
+    return sprite
+
+
 def main() -> None:
-    image = Image.new("RGBA", (256, 192), TRANSPARENT)
+    image = Image.new("RGBA", (256, 512), TRANSPARENT)
     draw = ImageDraw.Draw(image)
 
     panels = [
@@ -682,6 +942,20 @@ def main() -> None:
         BUTTERFLY,
         {"1": INK, "2": TALK_BLUE, "3": TALK_LIGHT, "4": GOLD_LIGHT},
     )
+
+    # The new wordmarks are separate, transparent sprites. The menu does not draw
+    # the legacy ribbon behind them; its source tile stays intact for compatibility.
+    title_source = ROOT / "docs" / "design" / "memory-book-floral-refresh"
+    paint_reviewed_art(image, 0, 192, title_source / "title-zh.json", (104, 28))
+    paint_reviewed_art(image, 0, 224, title_source / "title-en.json", (176, 28))
+
+    # Generous floral assets use new native detail rather than enlarging the former
+    # 40px corner. Each source rectangle remains independently composable.
+    image.alpha_composite(floral_corner(), (0, 256))
+    image.alpha_composite(hanging_vine(), (96, 256))
+    image.alpha_composite(flower_spray(), (144, 256))
+    image.alpha_composite(large_butterfly(), (208, 256))
+    image.alpha_composite(large_butterfly(warm=True), (208, 288))
 
     OUTPUT.parent.mkdir(parents=True, exist_ok=True)
     image.save(OUTPUT, format="PNG", optimize=False)

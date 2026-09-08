@@ -70,10 +70,10 @@ internal sealed class MemoryBookAssets
         try
         {
             Texture2D texture = helper.ModContent.Load<Texture2D>(AssetPath);
-            if (texture.Width != 256 || texture.Height != 192)
+            if (texture.Width != 256 || texture.Height != 512)
             {
                 throw new InvalidOperationException(
-                    $"Expected a 256x192 atlas, but the loaded texture is {texture.Width}x{texture.Height}.");
+                    $"Expected a 256x512 atlas, but the loaded texture is {texture.Width}x{texture.Height}.");
             }
 
             return new MemoryBookAssets(texture);
@@ -136,13 +136,23 @@ internal sealed class MemoryBookAssets
 
     internal static Rectangle TitleBannerSource => new(0, 24, 96, 20);
 
-    internal static Rectangle TitleChineseSource => new(0, 104, 72, 20);
+    internal static Rectangle TitleChineseSource => new(0, 192, 104, 28);
 
-    internal static Rectangle TitleEnglishSource => new(80, 104, 92, 20);
+    internal static Rectangle TitleEnglishSource => new(0, 224, 176, 28);
 
     internal static Rectangle VineCornerSource => new(0, 128, 40, 40);
 
     internal static Rectangle ButterflySource => new(48, 128, 24, 20);
+
+    internal static Rectangle FloralCornerSource => new(0, 256, 96, 96);
+
+    internal static Rectangle HangingVineSource => new(96, 256, 40, 112);
+
+    internal static Rectangle FlowerSpraySource => new(144, 256, 64, 48);
+
+    internal static Rectangle ButterflyLargeSource => new(208, 256, 40, 32);
+
+    internal static Rectangle ButterflyWarmSource => new(208, 288, 40, 32);
 
     internal static Rectangle SpineSource => new(100, 24, 8, 16);
 

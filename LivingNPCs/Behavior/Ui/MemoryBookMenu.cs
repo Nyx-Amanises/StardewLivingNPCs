@@ -214,8 +214,8 @@ internal sealed class MemoryBookMenu : IClickableMenu
     {
         int viewportWidth = Game1.uiViewport.Width;
         int viewportHeight = Game1.uiViewport.Height;
-        int desiredWidth = Math.Clamp(viewportWidth - 64, 720, 1400);
-        int desiredHeight = Math.Clamp(viewportHeight - 64, 500, 820);
+        int desiredWidth = Math.Clamp(viewportWidth - 96, 720, 1400);
+        int desiredHeight = Math.Clamp(viewportHeight - 80, 500, 820);
         this.width = Math.Min(desiredWidth, Math.Max(320, viewportWidth - 16));
         this.height = Math.Min(desiredHeight, Math.Max(360, viewportHeight - 16));
         this.xPositionOnScreen = (Game1.uiViewport.Width - this.width) / 2;
@@ -1110,6 +1110,7 @@ internal sealed class MemoryBookMenu : IClickableMenu
     private void DrawBookShell(SpriteBatch b)
     {
         this.DrawFrame(b, MemoryBookFrame.Cover, this.bookBounds, Color.White, 4f, drawShadow: true);
+        this.DrawFloralBorder(b);
         this.DrawFrame(b, MemoryBookFrame.Page, this.leftPageBounds, Color.White, 3f, drawShadow: false);
         this.DrawFrame(b, MemoryBookFrame.Page, this.rightPageBounds, Color.White, 3f, drawShadow: false);
 
@@ -1142,81 +1143,160 @@ internal sealed class MemoryBookMenu : IClickableMenu
                 Color.White);
         }
 
-        b.Draw(
-            texture,
-            new Rectangle(this.bookBounds.X + 4, this.bookBounds.Y + 4, 80, 80),
-            MemoryBookAssets.VineCornerSource,
-            Color.White);
-        b.Draw(
-            texture,
-            new Rectangle(this.bookBounds.Right - 84, this.bookBounds.Bottom - 84, 80, 80),
-            MemoryBookAssets.VineCornerSource,
-            Color.White,
-            0f,
-            Vector2.Zero,
-            SpriteEffects.FlipHorizontally | SpriteEffects.FlipVertically,
-            0f);
-        b.Draw(
-            texture,
-            new Rectangle(this.bookBounds.Right - 158, this.bookBounds.Y + 10, 48, 40),
-            MemoryBookAssets.ButterflySource,
-            Color.White);
+        this.DrawButterflies(b);
+    }
+
+    /// <summary>Flowers grow past the cover; the paper pages sit above the inward foliage.</summary>
+    private void DrawFloralBorder(SpriteBatch b)
+    {
+        if (this.assets.Texture == null)
+        {
+            return;
+        }
+
+        int scale = this.bookBounds.Width >= 900 && this.bookBounds.Height >= 580 ? 2 : 1;
+        int outsideX = Math.Clamp(this.bookBounds.X - 8, 0, 24 * scale);
+        int outsideTop = Math.Clamp(this.bookBounds.Y - 8, 0, 22 * scale);
+        int outsideBottom = Math.Clamp(Game1.uiViewport.Height - this.bookBounds.Bottom - 8, 0, 20 * scale);
+        Rectangle corner = MemoryBookAssets.FloralCornerSource;
+        Rectangle vine = MemoryBookAssets.HangingVineSource;
+        Rectangle spray = MemoryBookAssets.FlowerSpraySource;
+
+        // Stagger the two hanging sides so the frame reads as growing plants.
+        int vineStep = (vine.Height - 16) * scale;
+        int index = 0;
+        for (int y = this.bookBounds.Y + 64 * scale; y + vine.Height * scale < this.bookBounds.Bottom - 20; y += vineStep)
+        {
+            this.DrawArtwork(b, vine, this.bookBounds.X - outsideX, y, scale,
+                index % 2 == 0 ? SpriteEffects.None : SpriteEffects.FlipVertically);
+            index++;
+        }
+
+        index = 0;
+        for (int y = this.bookBounds.Y + 44 * scale; y + vine.Height * scale < this.bookBounds.Bottom - 20; y += vineStep)
+        {
+            this.DrawArtwork(b, vine, this.bookBounds.Right - vine.Width * scale + outsideX, y, scale,
+                SpriteEffects.FlipHorizontally | (index % 2 == 0 ? SpriteEffects.None : SpriteEffects.FlipVertically));
+            index++;
+        }
+
+        this.DrawArtwork(b, corner, this.bookBounds.X - outsideX, this.bookBounds.Y - outsideTop, scale);
+        this.DrawArtwork(b, corner,
+            this.bookBounds.Right - corner.Width * scale + outsideX,
+            this.bookBounds.Bottom - corner.Height * scale + outsideBottom,
+            scale, SpriteEffects.FlipHorizontally | SpriteEffects.FlipVertically);
+        this.DrawArtwork(b, spray, this.bookBounds.X + 24 * scale,
+            this.bookBounds.Bottom - 36 * scale, scale, SpriteEffects.FlipVertically);
+
+        if (this.bookBounds.Width >= 1100)
+        {
+            this.DrawArtwork(b, spray, this.bookBounds.X + 82 * scale,
+                this.bookBounds.Y - outsideTop, scale);
+            this.DrawArtwork(b, spray, this.bookBounds.Right - 144 * scale,
+                this.bookBounds.Y - outsideTop, scale, SpriteEffects.FlipHorizontally);
+        }
+    }
+
+    private void DrawButterflies(SpriteBatch b)
+    {
+        int outsideX = Math.Clamp(this.bookBounds.X - 8, 0, 48);
+        int scale = this.bookBounds.Width >= 1100 && outsideX >= 36 ? 2 : 1;
+        int sideScale = outsideX >= 44 ? scale : 1;
+        Rectangle blue = MemoryBookAssets.ButterflyLargeSource;
+        Rectangle warm = MemoryBookAssets.ButterflyWarmSource;
+        Rectangle title = this.PixelTitleBounds(this.PixelTitleSource ?? MemoryBookAssets.TitleChineseSource);
+
+        this.DrawArtwork(b, blue, title.Left - blue.Width * scale - 16,
+            this.bookBounds.Y + 20 - blue.Height * scale / 2, scale, avoidCloseButton: true);
+        this.DrawArtwork(b, warm, title.Right + 20,
+            this.bookBounds.Y + 16 - warm.Height * scale / 2, scale,
+            SpriteEffects.FlipHorizontally, avoidCloseButton: true);
+        this.DrawArtwork(b, blue, this.bookBounds.Right - blue.Width * sideScale + outsideX,
+            this.bookBounds.Y + this.bookBounds.Height * 2 / 5, sideScale,
+            SpriteEffects.FlipHorizontally, avoidCloseButton: true);
+
+        if (this.bookBounds.Height >= 580)
+        {
+            this.DrawArtwork(b, warm, this.bookBounds.X - outsideX,
+                this.bookBounds.Y + this.bookBounds.Height * 7 / 10, sideScale);
+        }
+
+        if (this.bookBounds.Width >= 1100)
+        {
+            this.DrawArtwork(b, blue, this.bookBounds.Right - 320,
+                this.bookBounds.Bottom - 16, 1);
+        }
+    }
+
+    private void DrawArtwork(SpriteBatch b, Rectangle source, int x, int y, int scale,
+        SpriteEffects effects = SpriteEffects.None, bool avoidCloseButton = false)
+    {
+        if (this.assets.Texture == null)
+        {
+            return;
+        }
+
+        int width = source.Width * scale;
+        int height = source.Height * scale;
+        Rectangle destination = new(
+            Math.Clamp(x, 8, Math.Max(8, Game1.uiViewport.Width - width - 8)),
+            Math.Clamp(y, 8, Math.Max(8, Game1.uiViewport.Height - height - 8)),
+            width,
+            height);
+        Rectangle closeArea = new(this.bookBounds.Right - 80, this.bookBounds.Y - 4, 88, 80);
+        if (avoidCloseButton && destination.Intersects(closeArea))
+        {
+            return;
+        }
+
+        b.Draw(this.assets.Texture, destination, source, Color.White, 0f, Vector2.Zero, effects, 0f);
+    }
+
+    private Rectangle? PixelTitleSource => this.translate("book.title") switch
+    {
+        "记忆手册" => MemoryBookAssets.TitleChineseSource,
+        "Memory Book" => MemoryBookAssets.TitleEnglishSource,
+        _ => null
+    };
+
+    private Rectangle PixelTitleBounds(Rectangle source)
+    {
+        int maximumScale = source == MemoryBookAssets.TitleEnglishSource ? 3 : 4;
+        int availableWidth = Math.Max(source.Width, this.bookBounds.Width - 224);
+        int availableHeight = Math.Max(source.Height, this.bookBounds.Y + 48);
+        int scale = Math.Clamp(Math.Min(availableWidth / source.Width, availableHeight / source.Height), 1, maximumScale);
+        return new Rectangle(
+            this.bookBounds.Center.X - source.Width * scale / 2,
+            Math.Max(8, this.bookBounds.Y + 56 - source.Height * scale),
+            source.Width * scale,
+            source.Height * scale);
     }
 
     private void DrawTitle(SpriteBatch b)
     {
-        int bannerScale = Math.Clamp((this.bookBounds.Width - 80) / MemoryBookAssets.TitleBannerSource.Width, 2, 4);
-        int bannerWidth = MemoryBookAssets.TitleBannerSource.Width * bannerScale;
-        int bannerHeight = MemoryBookAssets.TitleBannerSource.Height * bannerScale;
-        Rectangle banner = new(
-            this.bookBounds.X + (this.bookBounds.Width - bannerWidth) / 2,
-            this.bookBounds.Y - 4,
-            bannerWidth,
-            bannerHeight);
-
-        if (this.assets.Texture != null)
-        {
-            b.Draw(this.assets.Texture, banner, MemoryBookAssets.TitleBannerSource, Color.White);
-        }
-        else
-        {
-            this.DrawFrame(b, MemoryBookFrame.Header, banner, Color.White, 3f, drawShadow: true);
-        }
-
         string title = this.translate("book.title");
-        Rectangle? titleSource = title switch
+        Rectangle? titleSource = this.PixelTitleSource;
+        if (this.assets.Texture != null && titleSource is Rectangle source
+            && source.Width <= Math.Max(104, this.bookBounds.Width - 192))
         {
-            "记忆手册" => MemoryBookAssets.TitleChineseSource,
-            "Memory Book" => MemoryBookAssets.TitleEnglishSource,
-            _ => null
-        };
-        if (this.assets.Texture != null && titleSource is Rectangle source)
-        {
-            int titleScale = Math.Max(1, Math.Min(3, Math.Min(
-                (banner.Width - 40) / source.Width,
-                (banner.Height - 12) / source.Height)));
-            Rectangle wordmark = new(
-                banner.X + (banner.Width - source.Width * titleScale) / 2,
-                banner.Y + (banner.Height - source.Height * titleScale) / 2 - 2,
-                source.Width * titleScale,
-                source.Height * titleScale);
-            b.Draw(this.assets.Texture, wordmark, source, Color.White);
+            b.Draw(this.assets.Texture, this.PixelTitleBounds(source), source, Color.White);
             return;
         }
 
+        int availableWidth = Math.Max(64, this.bookBounds.Width - 192);
         SpriteFont titleFont = Game1.dialogueFont;
-        Vector2 size = titleFont.MeasureString(title);
-        if (size.X > banner.Width - 48)
+        if (titleFont.MeasureString(title).X > availableWidth)
         {
             titleFont = Game1.smallFont;
-            size = titleFont.MeasureString(title);
         }
 
+        title = FitSingleLine(titleFont, title, availableWidth);
+        Vector2 size = titleFont.MeasureString(title);
         var position = new Vector2(
-            banner.X + (banner.Width - size.X) / 2f,
-            banner.Y + (banner.Height - size.Y) / 2f - 2f);
-        b.DrawString(titleFont, title, position + new Vector2(2f, 3f), MemoryBookPalette.Shadow * 0.38f);
-        b.DrawString(titleFont, title, position, MemoryBookPalette.Ink);
+            (int)(this.bookBounds.Center.X - size.X / 2f),
+            this.bookBounds.Y + (int)((58 - size.Y) / 2f));
+        b.DrawString(titleFont, title, position + new Vector2(2f, 3f), MemoryBookPalette.Shadow * 0.85f);
+        b.DrawString(titleFont, title, position, this.assets.HasCustomArt ? MemoryBookPalette.PaperBright : MemoryBookPalette.Ink);
     }
 
     private void DrawStatusPlaceholder(SpriteBatch b)
