@@ -34,6 +34,9 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
     /// <summary>OpenAI/DeepSeek 流式请求带 stream_options.include_usage 换真实 usage 回传。</summary>
     protected virtual bool SendStreamUsageOptions => false;
 
+    /// <summary>Buffered transports can require a provider completion marker before accepting the reply.</summary>
+    protected virtual bool RequireStreamCompletionMarker => false;
+
     /// <summary>仅兼容端点：标准形态耗尽后追加 instructions 回退形态（部分网关不认 system 角色）。</summary>
     protected virtual bool SupportsInstructionsFallback => false;
 
@@ -89,7 +92,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
 
     protected override bool CanChangeRequestShapeAfter(Exception exception)
     {
-        if (ExtractHttpStatus(exception) is 401 or 403 or 429)
+        if (ExtractHttpStatus(exception) is 401 or 403 or 429 or 502 or 503 or 504)
         {
             return false;
         }
@@ -109,6 +112,8 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
 
     public override async IAsyncEnumerable<LlmStreamEvent> StreamAsync(LlmRequest request, [EnumeratorCancellation] CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
+        bool requireCompletionMarker = RequireStreamCompletionMarker;
         try
         {
             NetworkAvailability.ThrowIfUnavailable();
@@ -131,6 +136,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         string json = body.ToString();
         int budget = request.AllowRetry ? 3 : 1;
         bool gotAnyDelta = false;
+        bool sawCompletionMarker = false;
         bool midStreamFailure = false;
         bool allowFormatFallback = true;
         string lastRaw = string.Empty;
@@ -150,7 +156,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
             allowFormatFallback = true;
             bool attemptFailed = false;
             bool abortStreamRetries = false;
-            IAsyncEnumerator<string> deltas = ReadSseDeltasAsync(json, context, ct).GetAsyncEnumerator(ct);
+            IAsyncEnumerator<string> deltas = ReadSseDeltasAsync(json, context, request.TimeoutOverride, ct).GetAsyncEnumerator(ct);
             try
             {
                 while (true)
@@ -171,6 +177,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
                     }
                     catch (Exception ex)
                     {
+                        streamUsage = context.Usage ?? streamUsage;
                         lastError = ex.Message;
                         lastStatus = ExtractHttpStatus(ex);
                         attemptFailed = true;
@@ -178,7 +185,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
                         allowFormatFallback = CanChangeRequestShapeAfter(ex);
                         if (!IsExceptionRetryable(ex))
                         {
-                            throw new LlmStreamException(lastError, lastStatus, retryable: false);
+                            throw new LlmStreamException(lastError, lastStatus, retryable: false, usage: streamUsage);
                         }
                         // 已向消费方交付过增量后才异常 = 中途断连；尚无增量的失败仍走整轮重试。
                         midStreamFailure = gotAnyDelta;
@@ -202,6 +209,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
 
             lastRaw = context.RawText.ToString();
             streamUsage = context.Usage ?? streamUsage;
+            sawCompletionMarker = context.HasCompletionMarker;
 
             if (!gotAnyDelta && !attemptFailed)
             {
@@ -234,6 +242,8 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
             }
         }
 
+        ct.ThrowIfCancellationRequested();
+
         // 中途断连（增量已交付后传输异常）：已 yield 的文本无法撤回，本层也不能重试
         // （重试会把新一轮增量拼在旧残句后面）。记 Warn 日志并以流式异常上抛，
         // 让调用方丢弃半截文本按失败路径处理；熔断装饰器经异常路径记失败而非成功。
@@ -242,31 +252,48 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
             DialogueServices.Monitor?.Log(
                 $"[{ProviderId}] Streaming connection lost mid-reply after {fullText.Length} chars were already delivered; the partial text is discarded and the caller retries. Error: {lastError}",
                 LogLevel.Warn);
-            throw new LlmStreamException($"Streaming connection lost mid-reply: {lastError}", lastStatus);
+            throw new LlmStreamException($"Streaming connection lost mid-reply: {lastError}", lastStatus, usage: streamUsage);
         }
 
         // 流自然收尾（读到 [DONE] 或干净 EOF）且拿到过增量 → 成功；usage 优先流内真实值，否则 CJK 感知估算。
         if (gotAnyDelta)
         {
+            string completedText = fullText.ToString();
             TokenUsage usage = streamUsage ?? TokenUsage.Estimate(
                 request.SystemPrompt + request.ConcatenatedUserContent(),
-                fullText.ToString(),
+                completedText,
                 "stream estimate");
+            if (requireCompletionMarker && !sawCompletionMarker)
+            {
+                throw new LlmStreamException(
+                    "Streaming response ended before a completion marker; partial reply discarded", 500,
+                    retryable: true, usage: usage);
+            }
+
+            if (string.IsNullOrWhiteSpace(completedText))
+            {
+                ResponseDiagnostics diagnostics = InspectResponse(lastRaw);
+                throw new LlmStreamException(diagnostics.DescribeEmptyResponse(request.MaxTokens), 200,
+                    retryable: !diagnostics.IsTerminal, usage: usage);
+            }
+
             yield return LlmStreamEvent.ForUsage(usage);
             yield return LlmStreamEvent.Done();
             yield break;
         }
 
-        // Changing stream/message formats cannot fix authentication, rate limiting, or a lost
-        // connection. The caller may still retry a transient failure within its overall budget.
+        // Changing stream/message formats cannot fix authentication, rate limiting, an unavailable
+        // gateway, or a lost connection. Transient failures retain only the same-format retry budget.
         if (!allowFormatFallback)
         {
-            throw new LlmStreamException(lastError, lastStatus);
+            throw new LlmStreamException(lastError, lastStatus, usage: streamUsage);
         }
 
         // 降级 ②：非流式通道兜底（禁止重试，外层已有预算）。
+        // Call the non-streaming implementation directly: a compatible CompleteAsync override
+        // may itself buffer this stream, so a virtual call here would recurse into another stream.
         ct.ThrowIfCancellationRequested();
-        LlmReply fallback = await CompleteAsync(request.CloneWithoutRetry(), ct).ConfigureAwait(false);
+        LlmReply fallback = await base.CompleteAsync(request.CloneWithoutRetry(), ct).ConfigureAwait(false);
         if (fallback.IsSuccess)
         {
             yield return LlmStreamEvent.Delta(fallback.Text);
@@ -562,7 +589,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         TokenUsage? usage = null;
         foreach (string rawLine in body.Split('\n'))
         {
-            (string? delta, TokenUsage? chunkUsage) = ParseSseLine(rawLine);
+            var (delta, chunkUsage, _) = ParseSseLine(rawLine);
             if (delta != null)
             {
                 text.Append(delta);
@@ -574,19 +601,25 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         return (text.ToString(), usage);
     }
 
-    /// <summary>单行 SSE 解析：data: 前缀（大小写不敏感）后为 JSON 载荷；无前缀按裸 JSON 试；[DONE] 与非 JSON 行忽略。</summary>
-    private static (string? Delta, TokenUsage? Usage) ParseSseLine(string rawLine)
+    /// <summary>单行 SSE 解析：data: 前缀后为 JSON；真实 [DONE] 或非空 finish_reason 标记完成，不把推理内容当成结束。</summary>
+    private static (string? Delta, TokenUsage? Usage, bool HasCompletionMarker) ParseSseLine(string rawLine)
     {
         string line = rawLine.Trim();
         if (line.Length == 0)
         {
-            return (null, null);
+            return (null, null, false);
         }
 
-        string payload = line.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ? line[5..].Trim() : line;
-        if (payload.Length == 0 || payload == "[DONE]" || payload[0] != '{')
+        bool hasDataPrefix = line.StartsWith("data:", StringComparison.OrdinalIgnoreCase);
+        string payload = hasDataPrefix ? line[5..].Trim() : line;
+        if (payload == "[DONE]")
         {
-            return (null, null);
+            return (null, null, hasDataPrefix);
+        }
+
+        if (payload.Length == 0 || payload[0] != '{')
+        {
+            return (null, null, false);
         }
 
         try
@@ -596,19 +629,26 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
                 ? TokenUsage.FromOpenAiUsage(usageJson)
                 : null;
             // choices[0] / delta 为字面量 null 时不得对 JValue 取子值（会抛非 JsonException 的异常打断流）。
-            var deltaObject = ((chunk["choices"] as JArray)?.FirstOrDefault() as JObject)?["delta"] as JObject;
+            var choice = (chunk["choices"] as JArray)?.FirstOrDefault() as JObject;
+            var deltaObject = choice?["delta"] as JObject;
             string? delta = deltaObject?["content"]?.ToString();
-            return (string.IsNullOrEmpty(delta) ? null : delta, usage);
+            bool hasCompletionMarker = choice?["finish_reason"] is JValue { Type: JTokenType.String } finishReason
+                && !string.IsNullOrWhiteSpace(finishReason.Value<string>());
+            return (string.IsNullOrEmpty(delta) ? null : delta, usage, hasCompletionMarker);
         }
         catch (JsonException)
         {
-            return (null, null);
+            return (null, null, false);
         }
     }
 
-    private async IAsyncEnumerable<string> ReadSseDeltasAsync(string json, SseAttemptContext context, [EnumeratorCancellation] CancellationToken ct = default)
+    private async IAsyncEnumerable<string> ReadSseDeltasAsync(
+        string json,
+        SseAttemptContext context,
+        TimeSpan? headerTimeout,
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
-        using HttpResponseMessage response = await LlmHttp.SendForStreamAsync(ChatEndpoint, json, AuthTokenOrNull, null, null, ct).ConfigureAwait(false);
+        using HttpResponseMessage response = await LlmHttp.SendForStreamAsync(ChatEndpoint, json, AuthTokenOrNull, null, headerTimeout, ct).ConfigureAwait(false);
         using Stream stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         using var reader = new StreamReader(stream);
         // net6 的 ReadLineAsync 不收令牌：取消时直接掐断响应，把随之而来的 IO 异常翻译回取消。
@@ -619,7 +659,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
             string? line;
             try
             {
-                line = await reader.ReadLineAsync().ConfigureAwait(false);
+                line = await reader.ReadLineAsync().WaitAsync(ct).ConfigureAwait(false);
             }
             catch (Exception) when (ct.IsCancellationRequested)
             {
@@ -632,7 +672,8 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
             }
 
             context.RawText.AppendLine(line);
-            (string? delta, TokenUsage? usage) = ParseSseLine(line);
+            var (delta, usage, hasCompletionMarker) = ParseSseLine(line);
+            context.HasCompletionMarker |= hasCompletionMarker;
             if (usage != null)
             {
                 context.Usage = usage;
@@ -656,5 +697,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         public StringBuilder RawText { get; } = new();
 
         public TokenUsage? Usage { get; set; }
+
+        public bool HasCompletionMarker { get; set; }
     }
 }

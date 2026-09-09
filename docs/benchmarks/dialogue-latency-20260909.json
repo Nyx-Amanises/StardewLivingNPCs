@@ -1,0 +1,635 @@
+{
+  "date": "2026-09-09",
+  "configured_model": "gpt-5.6-luna",
+  "base_revision": "a56994b",
+  "scope": "Synthetic dialogue only, using the user-configured OpenAI-compatible service. No save files were changed.",
+  "limitations": [
+    "Small sequential samples during substantial provider latency and availability changes; no statistically reliable global speedup.",
+    "Full fixtures use shipped world, biography, prompt assembler, and synthetic runtime context; they are not live in-game recordings.",
+    "Non-streaming first_content_ms is full-body receipt, not token-level latency.",
+    "Two-pass metadata fixtures were filled from the immediately preceding actual NPC reply.",
+    "The final isolated protocol test verifies memory semantics with reduced context; its time is not an in-game latency claim.",
+    "Unreported usage on failed requests is unknown, so these sums are not a billing total.",
+    "Python read timeouts can be exceeded by connection/stream scheduling; elapsed_ms records actual observed duration. Production buffered transport has a cancellation deadline covering headers and body."
+  ],
+  "summary": {
+    "request_attempts": 29,
+    "nonempty_successes": 18,
+    "failed_or_empty": 11,
+    "reported_prompt_tokens": 168838,
+    "reported_completion_tokens": 3802,
+    "reported_reasoning_tokens": 1501
+  },
+  "results": [
+    {
+      "batch": "screening",
+      "name": "short-dialogue",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 598,
+      "prompt_sha256": "7f2897bc0e213dac80a1f1c660683b508d14c3a98873b79e9951536750876551",
+      "started_utc": "2026-09-09T13:20:58.695194+00:00",
+      "usage": {
+        "prompt_tokens": 4593,
+        "completion_tokens": 65,
+        "total_tokens": 4658
+      },
+      "first_content_ms": 3977,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 3977,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 6952
+    },
+    {
+      "batch": "screening",
+      "name": "short-dialogue",
+      "effort": "none",
+      "stream": true,
+      "prompt_chars": 598,
+      "prompt_sha256": "7f2897bc0e213dac80a1f1c660683b508d14c3a98873b79e9951536750876551",
+      "started_utc": "2026-09-09T13:21:05.648992+00:00",
+      "usage": {
+        "prompt_tokens": 4593,
+        "completion_tokens": 178,
+        "total_tokens": 4771,
+        "completion_tokens_details": {
+          "reasoning_tokens": 108
+        }
+      },
+      "first_content_ms": 70484,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 30630,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 73143
+    },
+    {
+      "batch": "screening",
+      "name": "short-dialogue",
+      "effort": "none",
+      "stream": true,
+      "prompt_chars": 598,
+      "prompt_sha256": "7f2897bc0e213dac80a1f1c660683b508d14c3a98873b79e9951536750876551",
+      "started_utc": "2026-09-09T13:22:18.793323+00:00",
+      "usage": {
+        "prompt_tokens": 4593,
+        "completion_tokens": 64,
+        "total_tokens": 4657,
+        "prompt_tokens_details": {
+          "cached_tokens": 3840
+        }
+      },
+      "first_content_ms": 7725,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 7724,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 10944
+    },
+    {
+      "batch": "screening",
+      "name": "short-dialogue",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 598,
+      "prompt_sha256": "7f2897bc0e213dac80a1f1c660683b508d14c3a98873b79e9951536750876551",
+      "started_utc": "2026-09-09T13:22:29.737446+00:00",
+      "usage": {
+        "prompt_tokens": 4593,
+        "completion_tokens": 69,
+        "total_tokens": 4662
+      },
+      "first_content_ms": 6131,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 6131,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 10538
+    },
+    {
+      "batch": "full-inline-pilot",
+      "name": "photography/inline/low",
+      "effort": "low",
+      "stream": false,
+      "prompt_chars": 27379,
+      "prompt_sha256": "021ef6745f9e91f43ccd212bc6b331e584c0c910d53c7912e3f35279a9b9877d",
+      "started_utc": "2026-09-09T15:05:32.518753+00:00",
+      "usage": {
+        "prompt_tokens": 12122,
+        "completion_tokens": 118,
+        "total_tokens": 12240,
+        "completion_tokens_details": {
+          "reasoning_tokens": 74
+        }
+      },
+      "first_content_ms": 11387,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 11387,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 11387
+    },
+    {
+      "batch": "full-inline-pilot",
+      "name": "preference-memory/inline/low",
+      "effort": "low",
+      "stream": false,
+      "prompt_chars": 27264,
+      "prompt_sha256": "72335ab59c94df262c9e790b66289f4aebb7efc89dce08d96cedebdb9dfcb9d7",
+      "started_utc": "2026-09-09T15:05:43.906708+00:00",
+      "usage": {
+        "prompt_tokens": 7802,
+        "completion_tokens": 416,
+        "total_tokens": 8218
+      },
+      "first_content_ms": 30756,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 30756,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 30756
+    },
+    {
+      "batch": "full-inline-pilot",
+      "name": "gift-now/inline/low",
+      "effort": "low",
+      "stream": false,
+      "prompt_chars": 27544,
+      "prompt_sha256": "96f4b38c6ecce38e13a2100e6790afa63d2cf247518e9f67533c97afc065f23a",
+      "started_utc": "2026-09-09T15:06:14.662330+00:00",
+      "usage": {
+        "prompt_tokens": 12130,
+        "completion_tokens": 289,
+        "total_tokens": 12419,
+        "completion_tokens_details": {
+          "reasoning_tokens": 173
+        }
+      },
+      "first_content_ms": 25005,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 25005,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 25005
+    },
+    {
+      "batch": "full-inline-pilot",
+      "name": "gift-later/inline/low",
+      "effort": "low",
+      "stream": false,
+      "prompt_chars": 27259,
+      "prompt_sha256": "6aade816b0af88e4988fe40af9d0a601d83ecd013263e5bfb53c34361dc4b107",
+      "started_utc": "2026-09-09T15:06:39.667671+00:00",
+      "usage": {
+        "prompt_tokens": 11954,
+        "completion_tokens": 205,
+        "total_tokens": 12159,
+        "completion_tokens_details": {
+          "reasoning_tokens": 110
+        }
+      },
+      "first_content_ms": 12098,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 12098,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 12098
+    },
+    {
+      "batch": "full-inline-pilot",
+      "name": "multi-item-help/inline/low",
+      "effort": "low",
+      "stream": false,
+      "prompt_chars": 27707,
+      "prompt_sha256": "9481385fcea1a6ce18f28523f1172f62cb61466e72b7eb4aa01f9e7b0c7da210",
+      "started_utc": "2026-09-09T15:06:51.766195+00:00",
+      "usage": {},
+      "first_content_ms": null,
+      "finish_reason": "stop",
+      "status": "error",
+      "http_status": 200,
+      "headers_ms": 31341,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 31341
+    },
+    {
+      "batch": "full-inline-pilot",
+      "name": "outing-now/inline/low",
+      "effort": "low",
+      "stream": false,
+      "prompt_chars": 27251,
+      "prompt_sha256": "2192f0aa5a34d5987cda05bc117b8419caf8c358527634c3de680ba0de4be830",
+      "started_utc": "2026-09-09T15:07:23.109131+00:00",
+      "usage": {
+        "prompt_tokens": 12039,
+        "completion_tokens": 240,
+        "total_tokens": 12279,
+        "completion_tokens_details": {
+          "reasoning_tokens": 90
+        }
+      },
+      "first_content_ms": 20373,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 20373,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 20373
+    },
+    {
+      "batch": "full-inline-pilot",
+      "name": "explicit-boundary/inline/low",
+      "effort": "low",
+      "stream": false,
+      "prompt_chars": 27381,
+      "prompt_sha256": "c84e957ae1f8dd279469e261e0949a1301ea5f5fa8224f0e860b8bc09577e011",
+      "started_utc": "2026-09-09T15:07:43.481765+00:00",
+      "usage": {},
+      "first_content_ms": null,
+      "finish_reason": "stop",
+      "status": "error",
+      "http_status": 200,
+      "headers_ms": 34301,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 34301
+    },
+    {
+      "batch": "full-inline-pilot",
+      "name": "outing-refusal/inline/low",
+      "effort": "low",
+      "stream": false,
+      "prompt_chars": 27276,
+      "prompt_sha256": "04e6543383ef356044fa25c0ac74f7851414b3de1ec89930457eeb46e530535c",
+      "started_utc": "2026-09-09T15:08:17.783924+00:00",
+      "usage": {
+        "prompt_tokens": 12049,
+        "completion_tokens": 217,
+        "total_tokens": 12266,
+        "completion_tokens_details": {
+          "reasoning_tokens": 109
+        }
+      },
+      "first_content_ms": 6162,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 6162,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 6162
+    },
+    {
+      "batch": "stream-availability",
+      "name": "multi-item-help/inline/low/stream-check",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 27707,
+      "prompt_sha256": "9481385fcea1a6ce18f28523f1172f62cb61466e72b7eb4aa01f9e7b0c7da210",
+      "started_utc": "2026-09-09T15:12:41.102679+00:00",
+      "usage": {},
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "http_status": 503,
+      "headers_ms": 439,
+      "error_type": "http-error",
+      "elapsed_ms": 439
+    },
+    {
+      "batch": "stream-availability",
+      "name": "explicit-boundary/inline/low/stream-check",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 27381,
+      "prompt_sha256": "c84e957ae1f8dd279469e261e0949a1301ea5f5fa8224f0e860b8bc09577e011",
+      "started_utc": "2026-09-09T15:12:41.542603+00:00",
+      "usage": {},
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "http_status": 503,
+      "headers_ms": 602,
+      "error_type": "http-error",
+      "elapsed_ms": 603
+    },
+    {
+      "batch": "stream-availability",
+      "name": "photography/inline/low/stream-check",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 27379,
+      "prompt_sha256": "021ef6745f9e91f43ccd212bc6b331e584c0c910d53c7912e3f35279a9b9877d",
+      "started_utc": "2026-09-09T15:12:42.145916+00:00",
+      "usage": {},
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "http_status": 503,
+      "headers_ms": 485,
+      "error_type": "http-error",
+      "elapsed_ms": 485
+    },
+    {
+      "batch": "paired-availability",
+      "name": "photography/router/low",
+      "effort": "low",
+      "stream": false,
+      "prompt_chars": 2682,
+      "prompt_sha256": "b916d8d01482acf86f4eecff1c0609dcbb242cf49b23d5bf62ee735aeedf9aa3",
+      "started_utc": "2026-09-09T15:17:50.168750+00:00",
+      "usage": {},
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "http_status": 503,
+      "headers_ms": 318,
+      "error_type": "http-error",
+      "error_message": "Service temporarily unavailable",
+      "elapsed_ms": 319
+    },
+    {
+      "batch": "paired",
+      "name": "photography/router/low",
+      "effort": "low",
+      "stream": false,
+      "prompt_chars": 2682,
+      "prompt_sha256": "b916d8d01482acf86f4eecff1c0609dcbb242cf49b23d5bf62ee735aeedf9aa3",
+      "started_utc": "2026-09-09T15:26:01.981713+00:00",
+      "usage": {},
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "error_type": "ReadTimeout",
+      "elapsed_ms": 12224
+    },
+    {
+      "batch": "paired",
+      "name": "photography/dialogue-only/low",
+      "effort": "low",
+      "stream": false,
+      "prompt_chars": 19870,
+      "prompt_sha256": "2d9ff1b7fcb9343a405c54ffcef98e014251277edb4805506caf685aced5b443",
+      "started_utc": "2026-09-09T15:26:14.206584+00:00",
+      "usage": {
+        "prompt_tokens": 10521,
+        "completion_tokens": 69,
+        "total_tokens": 10590
+      },
+      "first_content_ms": 37906,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 37906,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 37906
+    },
+    {
+      "batch": "paired",
+      "name": "photography/classifier/low",
+      "effort": "low",
+      "stream": false,
+      "prompt_chars": 7856,
+      "prompt_sha256": "8f3710939463adae56c9e96dc5a70832f38581d454223777bb49344e52adbbfc",
+      "started_utc": "2026-09-09T15:26:52.115784+00:00",
+      "usage": {},
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "error_type": "ReadTimeout",
+      "elapsed_ms": 12007,
+      "parent_case": "photography/dialogue-only/low",
+      "pipeline_ms": 49913
+    },
+    {
+      "batch": "paired",
+      "name": "photography/inline/low/stream-paired",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 27379,
+      "prompt_sha256": "021ef6745f9e91f43ccd212bc6b331e584c0c910d53c7912e3f35279a9b9877d",
+      "started_utc": "2026-09-09T15:27:04.123618+00:00",
+      "usage": {
+        "prompt_tokens": 12122,
+        "completion_tokens": 158,
+        "total_tokens": 12280,
+        "prompt_tokens_details": {
+          "cached_tokens": 11008
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 112
+        }
+      },
+      "first_content_ms": 16650,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 7241,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 18680
+    },
+    {
+      "batch": "paired",
+      "name": "multi-item-help/dialogue-only/low",
+      "effort": "low",
+      "stream": false,
+      "prompt_chars": 20198,
+      "prompt_sha256": "2cab049ca00f1c444836cd5f5932f75e6614cd76d999b93106b741c3c40e36e4",
+      "started_utc": "2026-09-09T15:27:22.804500+00:00",
+      "usage": {
+        "prompt_tokens": 10713,
+        "completion_tokens": 134,
+        "total_tokens": 10847,
+        "completion_tokens_details": {
+          "reasoning_tokens": 101
+        }
+      },
+      "first_content_ms": 7511,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 7511,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 7511
+    },
+    {
+      "batch": "paired",
+      "name": "multi-item-help/classifier/low",
+      "effort": "low",
+      "stream": false,
+      "prompt_chars": 8255,
+      "prompt_sha256": "896921e43ffd4303c890ac39c3578a655f9d971aa904ead29b50dba2195c3603",
+      "started_utc": "2026-09-09T15:27:30.316881+00:00",
+      "usage": {
+        "prompt_tokens": 6321,
+        "completion_tokens": 183,
+        "total_tokens": 6504,
+        "completion_tokens_details": {
+          "reasoning_tokens": 68
+        }
+      },
+      "first_content_ms": 5536,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 5536,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 5536,
+      "parent_case": "multi-item-help/dialogue-only/low",
+      "pipeline_ms": 13047
+    },
+    {
+      "batch": "paired",
+      "name": "multi-item-help/inline/low/stream-paired",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 27707,
+      "prompt_sha256": "9481385fcea1a6ce18f28523f1172f62cb61466e72b7eb4aa01f9e7b0c7da210",
+      "started_utc": "2026-09-09T15:27:35.853594+00:00",
+      "usage": {
+        "prompt_tokens": 12144,
+        "completion_tokens": 480,
+        "total_tokens": 12624,
+        "prompt_tokens_details": {
+          "cached_tokens": 3840
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 255
+        }
+      },
+      "first_content_ms": 28667,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 15352,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 35385
+    },
+    {
+      "batch": "paired",
+      "name": "explicit-boundary/inline/low/stream-recovery",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 27381,
+      "prompt_sha256": "c84e957ae1f8dd279469e261e0949a1301ea5f5fa8224f0e860b8bc09577e011",
+      "started_utc": "2026-09-09T15:28:11.239625+00:00",
+      "usage": {
+        "prompt_tokens": 12093,
+        "completion_tokens": 206,
+        "total_tokens": 12299,
+        "completion_tokens_details": {
+          "reasoning_tokens": 43
+        }
+      },
+      "first_content_ms": 7089,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 4624,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 13015
+    },
+    {
+      "batch": "full-final-contract",
+      "name": "preference-memory/inline/low",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 28116,
+      "prompt_sha256": "79bd76c6209919cdd3d69348d0cc29e7ec103d2ff613dbbdd98a5cc2ef6cac49",
+      "started_utc": "2026-09-09T15:33:08.147185+00:00",
+      "usage": {},
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "error_type": "ReadTimeout",
+      "elapsed_ms": 85210
+    },
+    {
+      "batch": "full-final-contract",
+      "name": "preference-memory/inline/none",
+      "effort": "none",
+      "stream": true,
+      "prompt_chars": 28116,
+      "prompt_sha256": "79bd76c6209919cdd3d69348d0cc29e7ec103d2ff613dbbdd98a5cc2ef6cac49",
+      "started_utc": "2026-09-09T15:34:33.358213+00:00",
+      "usage": {},
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "error_type": "ReadTimeout",
+      "elapsed_ms": 85265
+    },
+    {
+      "batch": "full-final-contract",
+      "name": "multi-item-help/inline/low",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 28559,
+      "prompt_sha256": "42885977e336af05997918678dc9ace3e961a3e819fa6f50b29ec5ab02ce8eee",
+      "started_utc": "2026-09-09T15:35:58.624126+00:00",
+      "usage": {
+        "prompt_tokens": 12151,
+        "completion_tokens": 392,
+        "total_tokens": 12543,
+        "completion_tokens_details": {
+          "reasoning_tokens": 149
+        }
+      },
+      "first_content_ms": 70336,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 69982,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 73743
+    },
+    {
+      "batch": "full-final-contract",
+      "name": "explicit-boundary/inline/low",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 28233,
+      "prompt_sha256": "ff425e536b8416ab51a55247258aaaefcd09873c8b055694e3f2c18bb121f6ed",
+      "started_utc": "2026-09-09T15:37:12.367303+00:00",
+      "usage": {},
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "http_status": 200,
+      "headers_ms": 71133,
+      "error_type": "total-timeout",
+      "elapsed_ms": 101135
+    },
+    {
+      "batch": "isolated-final-contract",
+      "name": "preference-memory/protocol-isolation/low",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 9001,
+      "prompt_sha256": "1737b3b11e5af9f45a15e2549a528c2235c864b09fdf1465100deaefc3516649",
+      "started_utc": "2026-09-09T15:42:47.190462+00:00",
+      "usage": {
+        "prompt_tokens": 6305,
+        "completion_tokens": 319,
+        "total_tokens": 6624,
+        "completion_tokens_details": {
+          "reasoning_tokens": 109
+        }
+      },
+      "first_content_ms": 23000,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 16306,
+      "resolved_model": "gpt-5.6-luna",
+      "elapsed_ms": 30568
+    }
+  ]
+}

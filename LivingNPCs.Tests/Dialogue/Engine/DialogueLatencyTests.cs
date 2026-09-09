@@ -66,8 +66,76 @@ public sealed class DialogueLatencyTests : IDisposable
         Assert.False(result.IsFallback);
     }
 
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task CompleteInlineMetadataUsesOnlyTheMainRequestAndDefersCommit(bool gift)
+    {
+        var client = new ScriptedClient(LlmReply.Success(
+            "- Hello! The weather is pleasant today.$h\n%It is.\n!LIVINGNPCS_META {\"complete\":true,\"rapportDelta\":1}", null));
+        var (engine, store) = RetryFixEngineHarness.Create(client);
+        DialogueServices.Config.EnableLivingNpcActionDecisionPass = true;
+        var auxiliary = new AuxiliaryClient();
+        LegacyLlm.Instance = auxiliary;
+        int recordedExchanges = 0;
+        DialogueEngine.RecordExchangeCallback = (_, _, _, _) => recordedExchanges++;
+        try
+        {
+            GenerationResult result = await engine.GenerateAsync(
+                Request(gift ? GenerationTrigger.Gift : GenerationTrigger.Conversation), CancellationToken.None);
+
+            Assert.False(result.IsFallback);
+            Assert.Equal(1, client.Calls);
+            Assert.Equal(0, auxiliary.Calls);
+            Assert.NotNull(client.LastRequest);
+            Assert.False(client.LastRequest!.DisableThinking);
+            Assert.Contains("!LIVINGNPCS_META", client.LastRequest.Tail);
+            Assert.DoesNotContain("[instructionsDialogueOnly]", client.LastRequest.Tail);
+            Assert.Equal(new[] { "Hello! The weather is pleasant today.$h", "It is." }, result.ParsedLines);
+            Assert.DoesNotContain("!LIVINGNPCS_META", result.FormattedLine);
+            Assert.DoesNotContain("\"complete\"", result.AnalysisJson);
+            Assert.Equal(1, ConversationAnalysis.Parse("!LIVINGNPCS_META " + result.AnalysisJson).RapportDelta);
+            Assert.NotNull(result.Commit);
+            Assert.Equal(0, recordedExchanges);
+            Assert.Empty(store.GetHistory("Haley").ConversationHistory);
+
+            Assert.True(engine.CommitResult(result));
+            Assert.False(engine.CommitResult(result));
+            Assert.Equal(1, recordedExchanges);
+        }
+        finally
+        {
+            DialogueEngine.RecordExchangeCallback = null;
+        }
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task NonInteractiveTurnsKeepDialogueOnlyInstructions(bool opening)
+    {
+        var client = new ScriptedClient();
+        var (engine, _) = RetryFixEngineHarness.Create(client);
+        var auxiliary = new AuxiliaryClient();
+        LegacyLlm.Instance = auxiliary;
+
+        GenerationResult result = await engine.GenerateAsync(new GenerationRequest
+        {
+            NpcName = "Haley",
+            Trigger = opening ? GenerationTrigger.ConversationOpening : GenerationTrigger.Scheduled,
+            Snapshot = new GameStateSnapshot { FarmerName = "Yuki", LocationName = "Town" }
+        }, CancellationToken.None);
+
+        Assert.False(result.IsFallback);
+        Assert.Equal(1, client.Calls);
+        Assert.Equal(0, auxiliary.Calls);
+        Assert.NotNull(client.LastRequest);
+        Assert.Contains("[instructionsDialogueOnly]", client.LastRequest!.Tail);
+        Assert.DoesNotContain("!LIVINGNPCS_META", client.LastRequest.Tail);
+    }
+
     [Fact]
-    public async Task OrdinaryGreetingUsesOnlyMainAndMetadataRequests()
+    public async Task MissingInlineMetadataFallsBackToOneClassifierRequest()
     {
         var client = new ScriptedClient();
         var (engine, store) = RetryFixEngineHarness.Create(client);
@@ -83,6 +151,110 @@ public sealed class DialogueLatencyTests : IDisposable
         Assert.Equal(1, auxiliary.Calls);
         Assert.Contains("metadata classifier", auxiliary.SystemPrompt);
         Assert.Equal(1, ConversationAnalysis.Parse("!LIVINGNPCS_META " + result.AnalysisJson).RapportDelta);
+        Assert.Empty(store.GetHistory("Haley").ConversationHistory);
+        Assert.NotNull(result.Commit);
+    }
+
+    [Theory]
+    [InlineData("!LIVINGNPCS_META {\"rapportDelta\":9}")]
+    [InlineData("!LIVINGNPCS_META {\"complete\":false,\"rapportDelta\":9}")]
+    [InlineData("!LIVINGNPCS_META {\"complete\":true,\"rapportDelta\":9,\"rapportDelta\":12}")]
+    [InlineData("!LIVINGNPCS_META {\"complete\":true,\"rapportDelta\":\"nine\"}")]
+    [InlineData("!LIVINGNPCS_META {\"complete\":true,\"rapportDelta\":9")]
+    [InlineData("!LIVINGNPCS_META {\"complete\":true,\"rapportDelta\":9}\nAdditional explanation")]
+    [InlineData("!LIVINGNPCS_META {\"complete\":true,\"rapportDelta\":9}\n!LIVINGNPCS_META {\"complete\":true}")]
+    public async Task InvalidInlineEnvelopeCannotBypassTheClassifier(string metadata)
+    {
+        var client = new ScriptedClient(LlmReply.Success("- Hello!$h\n%Hi!\n" + metadata, null));
+        var (engine, store) = RetryFixEngineHarness.Create(client);
+        var auxiliary = new AuxiliaryClient { ResponseText = "!LIVINGNPCS_META {\"complete\":true,\"rapportDelta\":1}" };
+        LegacyLlm.Instance = auxiliary;
+
+        GenerationResult result = await engine.GenerateAsync(Request(), CancellationToken.None);
+
+        Assert.False(result.IsFallback);
+        Assert.Equal(1, client.Calls);
+        Assert.Equal(1, auxiliary.Calls);
+        Assert.Contains("metadata classifier", auxiliary.SystemPrompt);
+        Assert.Equal(1, ConversationAnalysis.Parse("!LIVINGNPCS_META " + result.AnalysisJson).RapportDelta);
+        Assert.DoesNotContain("!LIVINGNPCS_META", result.FormattedLine);
+        Assert.Empty(store.GetHistory("Haley").ConversationHistory);
+    }
+
+    [Fact]
+    public async Task PreferenceBelowPersistenceThresholdFallsBackWithoutSilentlyLosingTheMemory()
+    {
+        var client = new ScriptedClient(LlmReply.Success(
+            "- I'll remember that you like sunflowers.\n!LIVINGNPCS_META {\"complete\":true,\"memories\":[{\"kind\":\"preference\",\"summary\":\"The farmer likes sunflowers.\",\"importance\":3,\"playerPreference\":true,\"playerPreferenceKind\":\"liked_item_category\",\"subject\":\"sunflowers\"}]}", null));
+        var (engine, store) = RetryFixEngineHarness.Create(client);
+        var auxiliary = new AuxiliaryClient
+        {
+            ResponseText = "!LIVINGNPCS_META {\"complete\":true,\"memories\":[{\"kind\":\"preference\",\"summary\":\"The farmer likes sunflowers.\",\"importance\":65,\"playerPreference\":true,\"playerPreferenceKind\":\"liked_item_category\",\"subject\":\"sunflowers\"}]}"
+        };
+        LegacyLlm.Instance = auxiliary;
+
+        GenerationResult result = await engine.GenerateAsync(
+            Request(playerText: "Sunflowers are my favorite flowers."), CancellationToken.None);
+
+        Assert.False(result.IsFallback);
+        Assert.Equal(1, client.Calls);
+        Assert.Equal(1, auxiliary.Calls);
+        ConversationMemoryCandidate memory = Assert.Single(ConversationAnalysis.Parse("!LIVINGNPCS_META " + result.AnalysisJson).Memories);
+        Assert.True(memory.PlayerPreference);
+        Assert.Equal(65, memory.Importance);
+        Assert.Equal("sunflowers", memory.Subject);
+        Assert.Empty(store.GetHistory("Haley").ConversationHistory);
+    }
+
+    [Fact]
+    public async Task MissingPromisedGiftFallsBackToClassifierBeforeTheReplyCanBeCommitted()
+    {
+        var client = new ScriptedClient(LlmReply.Success(
+            "- Take this leek.\n!LIVINGNPCS_META {\"complete\":true}", null));
+        var (engine, store) = RetryFixEngineHarness.Create(client);
+        var auxiliary = new AuxiliaryClient
+        {
+            ResponseText = "!LIVINGNPCS_META {\"complete\":true,\"giftDecision\":{\"isGiftReply\":true,\"timing\":\"now\",\"tier\":\"small\",\"itemId\":\"(O)20\",\"itemLabel\":\"leek\"}}"
+        };
+        LegacyLlm.Instance = auxiliary;
+
+        GenerationResult result = await engine.GenerateAsync(Request(), CancellationToken.None);
+
+        Assert.False(result.IsFallback);
+        Assert.Equal(1, client.Calls);
+        Assert.Equal(1, auxiliary.Calls);
+        ConversationWorldActionRequest action = Assert.Single(ConversationAnalysis.Parse("!LIVINGNPCS_META " + result.AnalysisJson).Actions);
+        Assert.Equal("give_small_gift", action.Type);
+        Assert.Equal("(O)20", action.ItemId);
+        Assert.Empty(store.GetHistory("Haley").ConversationHistory);
+        Assert.NotNull(result.Commit);
+    }
+
+    [Fact]
+    public async Task FailedClassifierStillRecoversAnExplicitTravelCommitment()
+    {
+        var client = new ScriptedClient(LlmReply.Success("- Yes, let's go to the beach now.$h\n%Let's go!", null));
+        var (engine, store) = RetryFixEngineHarness.Create(client);
+        DialogueServices.Config.EnableLivingNpcActionDecisionPass = true;
+        var auxiliary = new AuxiliaryClient
+        {
+            ResponseForCall = call => call == 1
+                ? string.Empty
+                : "!LIVINGNPCS_META {\"actions\":[{\"type\":\"companion_outing\",\"targetLocation\":\"Beach\",\"travelConsent\":\"accepted_now\",\"durationMinutes\":60}]}"
+        };
+        LegacyLlm.Instance = auxiliary;
+
+        GenerationResult result = await engine.GenerateAsync(
+            Request(playerText: "Let's go to the beach together now."), CancellationToken.None);
+
+        Assert.False(result.IsFallback);
+        Assert.Equal(1, client.Calls);
+        Assert.Equal(2, auxiliary.Calls);
+        Assert.Contains("action metadata", auxiliary.SystemPrompt);
+        var analysis = ConversationAnalysis.Parse("!LIVINGNPCS_META " + result.AnalysisJson);
+        Assert.Equal("Beach", Assert.Single(analysis.Actions).TargetLocation);
+        Assert.True(result.EndConversation);
+        Assert.Single(result.ParsedLines);
         Assert.Empty(store.GetHistory("Haley").ConversationHistory);
         Assert.NotNull(result.Commit);
     }
@@ -120,12 +292,16 @@ public sealed class DialogueLatencyTests : IDisposable
         Assert.Empty(store.GetHistory("Haley").ConversationHistory);
     }
 
-    private static GenerationRequest Request() => new()
+    private static GenerationRequest Request(
+        GenerationTrigger trigger = GenerationTrigger.Conversation,
+        string playerText = "Hello, Haley!") => new()
     {
         NpcName = "Haley",
         NpcDisplayName = "Haley",
-        Trigger = GenerationTrigger.Conversation,
-        Conversation = new List<ConversationTurn> { new("Hello, Haley!", true, Guid.NewGuid().ToString()) },
+        Trigger = trigger,
+        GiftItemId = trigger == GenerationTrigger.Gift ? "72" : string.Empty,
+        GiftTaste = 0,
+        Conversation = new List<ConversationTurn> { new(playerText, true, Guid.NewGuid().ToString()) },
         BehaviorContext = "[LivingNPCs]\nGift Opportunity: No gift authorized.\nHelp-request lifecycle: only act when accepted.\nSupported schema: companion_outing, helpRequests, give_small_gift.",
         Snapshot = new GameStateSnapshot { FarmerName = "Yuki", LocationName = "Town" }
     };
@@ -138,11 +314,13 @@ public sealed class DialogueLatencyTests : IDisposable
 
         public string ProviderId => "scripted";
         public int Calls { get; private set; }
+        public LlmRequest? LastRequest { get; private set; }
 
         public Task<LlmReply> CompleteAsync(LlmRequest request, CancellationToken ct)
         {
             ct.ThrowIfCancellationRequested();
             this.Calls++;
+            this.LastRequest = request;
             return Task.FromResult(this.Calls == 1 && this.firstReply != null
                 ? this.firstReply
                 : LlmReply.Success("- Hello! The weather is pleasant today.$h\n%It is.", null));
@@ -166,6 +344,7 @@ public sealed class DialogueLatencyTests : IDisposable
     private sealed class AuxiliaryClient : LegacyLlm
     {
         public string ResponseText { get; init; } = string.Empty;
+        public Func<int, string>? ResponseForCall { get; init; }
         public string SystemPrompt { get; private set; } = string.Empty;
         public int Calls { get; private set; }
         public Action? OnRequest { get; init; }
@@ -179,11 +358,12 @@ public sealed class DialogueLatencyTests : IDisposable
             this.SystemPrompt = systemPromptString;
             this.OnRequest?.Invoke();
             ct.ThrowIfCancellationRequested();
+            string responseText = this.ResponseForCall?.Invoke(this.Calls) ?? this.ResponseText;
             return Task.FromResult(new LlmResponse
             {
-                IsSuccess = this.ResponseText.Length > 0,
-                Text = this.ResponseText,
-                ErrorMessage = this.ResponseText.Length == 0 ? "Auxiliary request failed" : string.Empty
+                IsSuccess = responseText.Length > 0,
+                Text = responseText,
+                ErrorMessage = responseText.Length == 0 ? "Auxiliary request failed" : string.Empty
             });
         }
     }

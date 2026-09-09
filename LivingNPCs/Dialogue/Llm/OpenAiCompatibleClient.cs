@@ -1,3 +1,6 @@
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using StardewModdingAPI;
 
 namespace LivingNPCs.Dialogue.Llm;
@@ -46,5 +49,46 @@ internal sealed class OpenAiCompatibleClient : OpenAiChatClientBase
 
     protected override bool SupportsInstructionsFallback => true;
 
+    protected override bool SendStreamUsageOptions => true;
+
+    protected override bool RequireStreamCompletionMarker => DialogueServices.Config?.UseStreamingDialogueTransport == true;
+
     protected override bool RequireApiKeyForModelList => false;
+
+    public override async Task<LlmReply> CompleteAsync(LlmRequest request, CancellationToken ct)
+    {
+        if (DialogueServices.Config?.UseStreamingDialogueTransport != true || request.DisableThinking)
+        {
+            return await base.CompleteAsync(request, ct).ConfigureAwait(false);
+        }
+
+        // Some gateways reliably deliver long dialogue requests only through SSE. Keep this a
+        // transport choice: callers still receive one complete reply, never a partial preview.
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        cts.CancelAfter(request.TimeoutOverride ?? LlmHttp.DefaultTimeout);
+        var text = new StringBuilder();
+        TokenUsage? usage = null;
+        try
+        {
+            await foreach (LlmStreamEvent item in base.StreamAsync(request, cts.Token).ConfigureAwait(false))
+            {
+                if (item.Kind == LlmStreamEventKind.TextDelta)
+                {
+                    text.Append(item.Text);
+                }
+                else if (item.Kind == LlmStreamEventKind.Usage)
+                {
+                    usage = item.Usage;
+                }
+            }
+
+            cts.Token.ThrowIfCancellationRequested();
+            return LlmReply.Success(text.ToString(), usage);
+        }
+        catch (LlmStreamException ex)
+        {
+            cts.Token.ThrowIfCancellationRequested();
+            return LlmReply.Failure(ex.Message, ex.HttpStatus, ex.Retryable, ex.Usage);
+        }
+    }
 }

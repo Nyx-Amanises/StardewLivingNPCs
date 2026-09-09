@@ -1025,7 +1025,14 @@ internal sealed class PromptAssembler
         AppendLine(builder, this.Text("instructionsBreaks"));
         AppendLine(builder, this.Text("instructionsSingleLine"));
         AppendLine(builder, this.Text("instructionsResponses"));
-        AppendLine(builder, this.Text("instructionsDialogueOnly"));
+        if (this.input.Request.Trigger is GenerationTrigger.Conversation or GenerationTrigger.Gift)
+        {
+            AppendLine(builder, LivingNpcMetadataExtractionPass.BuildInlineInstructions());
+        }
+        else
+        {
+            AppendLine(builder, this.Text("instructionsDialogueOnly"));
+        }
 
         // 情绪肖像指示：传记 ExtraPortraits 不含键 "!" 时输出（§4.6.5）。
         // Runtime matches are derived from the final portrait texture, so a third-party pack can

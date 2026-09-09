@@ -529,14 +529,46 @@ public class PromptAssemblerTests
         Assert.Contains(requested, pair => pair.Key == "giftMustIncludeReaction");
     }
 
-    [Fact]
-    public void Main_Prompt_Uses_Dialogue_Only_Instructions()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Scheduled_And_Opening_Prompts_Use_Dialogue_Only_Instructions(bool opening)
     {
         var requested = new List<(string Key, bool Optimized)>();
-        new PromptAssembler(Input(requested: requested, useOptimized: true)).Assemble();
+        var request = new GenerationRequest
+        {
+            NpcName = "Abigail",
+            Trigger = opening ? GenerationTrigger.ConversationOpening : GenerationTrigger.Scheduled,
+            Snapshot = new GameStateSnapshot()
+        };
+        AssembledPrompt prompt = new PromptAssembler(Input(request: request, requested: requested, useOptimized: true)).Assemble();
 
         Assert.Contains(requested, pair => pair.Key == "instructionsDialogueOnly" && !pair.Optimized);
+        Assert.DoesNotContain("!LIVINGNPCS_META", prompt.Instructions);
         Assert.DoesNotContain(requested, pair => pair.Key.StartsWith("instructionsLivingNpc", StringComparison.Ordinal));
+        Assert.Contains(requested, pair => pair.Key == "systemPrompt" && !pair.Optimized);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void Conversation_And_Gift_Prompts_Request_Complete_Inline_Metadata(bool gift)
+    {
+        var requested = new List<(string Key, bool Optimized)>();
+        var request = new GenerationRequest
+        {
+            NpcName = "Abigail",
+            Trigger = gift ? GenerationTrigger.Gift : GenerationTrigger.Conversation,
+            GiftItemId = gift ? "72" : string.Empty,
+            Snapshot = new GameStateSnapshot()
+        };
+
+        AssembledPrompt prompt = new PromptAssembler(Input(request: request, requested: requested, useOptimized: true)).Assemble();
+
+        Assert.Contains("!LIVINGNPCS_META", prompt.Instructions);
+        Assert.Contains("\"complete\":true", prompt.Instructions);
+        Assert.DoesNotContain(requested, pair => pair.Key == "instructionsDialogueOnly");
+        Assert.Contains(requested, pair => pair.Key == "instructionsResponses");
         Assert.Contains(requested, pair => pair.Key == "systemPrompt" && !pair.Optimized);
     }
 

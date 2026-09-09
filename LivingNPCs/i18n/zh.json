@@ -1025,6 +1025,8 @@
   "dialogue.config.routingThinking.tooltip": "路由/分类等小请求的思考力度。",
   "dialogue.config.chatThinking.name": "对话思考档位",
   "dialogue.config.chatThinking.tooltip": "正式对话回复的思考力度。",
+  "dialogue.config.streamingTransport.name": "流式接收对话",
+  "dialogue.config.streamingTransport.tooltip": "在后台逐步接收 OpenAI 兼容接口的回复，有助于缓解部分转发接口长时间卡住或返回空正文的问题。收齐后仍使用正常对话框显示。",
   "dialogue.config.thinking.auto": "自动",
   "dialogue.config.thinking.off": "关闭",
   "dialogue.config.thinking.minimal": "最少",

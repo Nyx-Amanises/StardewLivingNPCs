@@ -152,6 +152,136 @@ internal static class LivingNpcMetadataExtractionPass
         return ParseAuthoritativeResponse(response.Text, playerText, visibleNpcReply, context, prompt);
     }
 
+    internal static string BuildInlineInstructions()
+    {
+        var prompt = new StringBuilder();
+        prompt.AppendLine("Write the visible villager dialogue first as one line beginning with - . If appropriate, follow it with farmer response options, each beginning with % .");
+        prompt.AppendLine("After the visible dialogue and all options, append exactly one final hidden line beginning with !LIVINGNPCS_META followed by a single compact JSON object. The marker must start its own line; write nothing after its JSON object.");
+        prompt.AppendLine("The visible dialogue and options must use the requested game language. Metadata keys and enum values use the exact schema below. Never mention the hidden line or its fields in the visible dialogue.");
+        prompt.AppendLine(PromptDataBoundary.InstructionReminder);
+        prompt.AppendLine("Mention a gift or specific item request only when the supplied context explicitly allows that opportunity and item. A one-step item favor may explicitly request only one item. If the reply genuinely requests multiple items, state every required item in a clear order so one helpRequests entry can encode all of them as matching ordered steps. Never append an optional or bonus item with wording like 'if you can also bring', 'while you're at it', 'another would be better', or 'that would make it perfect'. When accepting travel now, make the present consent and destination clear; a brief wait before that departure still counts as now, while a genuinely separate later plan, another day, or mail must not sound immediate. Never invent an item, destination, reward, task, or world action.");
+        prompt.AppendLine("Classify only the current player message and the visible reply you just wrote. Earlier context can constrain or de-duplicate consequences; it is not a new event. Farmer response options are hypothetical, never accepted choices or completed actions.");
+        AppendMetadataContract(prompt);
+        prompt.AppendLine("Do not add markdown, analysis, or explanation. The complete:true metadata line is required even when the reply has no effects.");
+        return prompt.ToString();
+    }
+
+    /// <summary>
+    /// Accepts a complete metadata tail from a dialogue response without spending an auxiliary
+    /// request. Envelope validation is deliberately stricter than legacy metadata recovery:
+    /// quoted examples, embedded markers, partial objects and trailing content cannot certify a
+    /// complete classification. Failure leaves the caller free to use the existing classifier.
+    /// </summary>
+    internal static LivingNpcMetadataExtractionResult ParseInlineResponse(
+        string responseText,
+        string playerText,
+        string visibleNpcReply,
+        DialogueContext context)
+    {
+        if (context == null || string.IsNullOrWhiteSpace(responseText) || string.IsNullOrWhiteSpace(visibleNpcReply))
+        {
+            return LivingNpcMetadataExtractionResult.Failed("missing inline response, context, or visible NPC reply");
+        }
+
+        if (RsvAiPolicy.ContainsBlockedReference(visibleNpcReply))
+        {
+            return LivingNpcMetadataExtractionResult.Failed("blocked third-party context");
+        }
+
+        const string marker = "!LIVINGNPCS_META";
+        int markerIndex = responseText.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        if (markerIndex < 0)
+        {
+            return LivingNpcMetadataExtractionResult.Failed("missing inline metadata marker", rawResponse: responseText);
+        }
+
+        int lineStart = responseText.LastIndexOf('\n', markerIndex) + 1;
+        string markerPrefix = responseText[lineStart..markerIndex];
+        int jsonStart = markerIndex + marker.Length;
+        if (!responseText.AsSpan(markerIndex, marker.Length).SequenceEqual(marker.AsSpan())
+            || markerPrefix.Any(character => character is not (' ' or '\t' or '\r'))
+            || string.IsNullOrWhiteSpace(responseText[..lineStart])
+            || jsonStart >= responseText.Length
+            || responseText[jsonStart] is not (' ' or '\t' or '\r' or '\n' or '{'))
+        {
+            return LivingNpcMetadataExtractionResult.Failed("inline metadata marker must be on its own final line after dialogue", rawResponse: responseText);
+        }
+
+        string json = responseText[jsonStart..].Trim();
+        try
+        {
+            // Require standard JSON and consume the whole suffix. Json.NET's legacy reader
+            // intentionally tolerates more syntax; that tolerance must not certify an inline
+            // response containing comments, trailing commas, or an extra object as complete.
+            using var document = System.Text.Json.JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != System.Text.Json.JsonValueKind.Object)
+            {
+                return LivingNpcMetadataExtractionResult.Failed("inline metadata must be one complete final JSON object", rawResponse: responseText);
+            }
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return LivingNpcMetadataExtractionResult.Failed("inline metadata must be one complete final JSON object", rawResponse: responseText);
+        }
+
+        LivingNpcMetadataExtractionResult parsed = ParseAuthoritativeResponse(
+            json, playerText, visibleNpcReply, context, string.Empty, requireComplete: true);
+        if (parsed.Success
+            && parsed.Analysis.Memories.Any(memory => memory.PlayerPreference && memory.Importance < 40))
+        {
+            // ExchangeApplicationService only stores memories with importance >=40. A declared
+            // preference below that gate would silently disappear even though this envelope says
+            // complete; let the classifier resolve the scale instead of promoting or dropping it.
+            return LivingNpcMetadataExtractionResult.Failed(
+                "inline metadata player preference is below the durable memory storage threshold (importance < 40)",
+                rawResponse: responseText);
+        }
+
+        if (parsed.Success
+            && !parsed.Analysis.Actions.Any(action => action.Type is "give_small_gift" or "give_meaningful_gift")
+            && HasExplicitImmediateGiftOffer(visibleNpcReply))
+        {
+            // An omitted action cannot certify a visibly promised hand-off. Let the complete
+            // classifier resolve it; a text cue alone must never create or authorize an item.
+            return LivingNpcMetadataExtractionResult.Failed(
+                "inline metadata omitted the visible immediate gift action", rawResponse: responseText);
+        }
+
+        return parsed.Success
+            ? LivingNpcMetadataExtractionResult.Succeeded(parsed.Analysis, string.Empty, responseText)
+            : LivingNpcMetadataExtractionResult.Failed(parsed.FailureReason, rawResponse: responseText);
+    }
+
+    private static bool HasExplicitImmediateGiftOffer(string visibleNpcReply)
+    {
+        if (!Behavior.ConversationActionCueRules.VisibleDialogueOffersImmediateGift(visibleNpcReply))
+        {
+            return false;
+        }
+
+        // The shared opportunity cue also recognizes gift-topic nouns. Require an actual
+        // hand-off here, and leave deferred/mail promises to their complete classification.
+        // Bare hand-off verbs must begin an imperative clause: "I'll take this" and
+        // "我就收下了" accept the farmer's gift instead of giving one back.
+        bool hasHandoffInstruction = visibleNpcReply
+            .Replace("#$b#", "\n").Replace("#$e#", "\n")
+            .Split(new[] { '.', ',', ';', '!', '?', '。', '，', '；', '！', '？', '\r', '\n' },
+                StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(clause => clause.StartsWith("拿着", StringComparison.Ordinal)
+                || clause.StartsWith("收下", StringComparison.Ordinal)
+                || clause.StartsWith("take this", StringComparison.OrdinalIgnoreCase));
+
+        return !ContainsAny(visibleNpcReply,
+                "明天", "明日", "下次", "改天", "以后再", "晚点", "稍后", "等会",
+                "邮寄", "寄给", "给你寄", "寄到", "mail", "tomorrow", "later", "next time", "another day",
+                "不会送", "不想送", "不打算送", "别收下", "不要收下", "不用收下", "don't take", "do not take")
+            && (hasHandoffInstruction || ContainsAny(visibleNpcReply,
+                "这个给你", "这些给你", "这份给你", "这是给你的", "送给你", "送你一个", "送你一份",
+                "分给你", "你拿着", "请拿着", "你收下", "请收下", "this is for you", "this one's for you", "here's something for you",
+                "here is something for you", "i have something for you", "please take this", "you can take this", "you can have this",
+                "i brought you", "i saved this for you"));
+    }
+
     internal static LivingNpcMetadataExtractionResult ParseAuthoritativeResponseForTesting(
         string responseText,
         string playerText,
@@ -176,7 +306,8 @@ internal static class LivingNpcMetadataExtractionPass
         string playerText,
         string visibleNpcReply,
         DialogueContext context,
-        string prompt)
+        string prompt,
+        bool requireComplete = false)
     {
         string json = ExtractFirstJsonObject(responseText);
         if (string.IsNullOrWhiteSpace(json))
@@ -199,6 +330,11 @@ internal static class LivingNpcMetadataExtractionPass
         }
 
         JProperty? completion = root.Property("complete", StringComparison.Ordinal);
+        if (requireComplete && completion == null)
+        {
+            return LivingNpcMetadataExtractionResult.Failed("inline metadata requires complete:true", prompt, responseText);
+        }
+
         if (completion != null)
         {
             if (completion.Value.Type != JTokenType.Boolean || !completion.Value.Value<bool>())
@@ -409,6 +545,13 @@ internal static class LivingNpcMetadataExtractionPass
         prompt.AppendLine(PromptDataBoundary.Wrap("metadata_farmer_options", options));
         prompt.AppendLine();
         prompt.AppendLine("Return exactly one line beginning with !LIVINGNPCS_META followed by compact valid JSON.");
+        AppendMetadataContract(prompt);
+        prompt.AppendLine("- Output no markdown, explanation, or dialogue.");
+        return prompt.ToString();
+    }
+
+    private static void AppendMetadataContract(StringBuilder prompt)
+    {
         prompt.AppendLine("Evaluate every metadata category below, then set complete:true to certify that the classification is complete. This flag is a JSON boolean, never a string.");
         prompt.AppendLine("Use sparse JSON: include complete:true and only top-level fields with non-default effects in this turn. Omitted fields mean no change, not skipped analysis.");
         prompt.AppendLine("Omitted defaults: rapportDelta=0; endConversation=false; empty ambientFollowUp and emotionImpact (emotion=none); all arrays=[]; no travel or gift decision.");
@@ -420,6 +563,9 @@ internal static class LivingNpcMetadataExtractionPass
         prompt.AppendLine("- rapportDelta measures new relationship value in this turn: routine pleasant small talk 0-2; genuine new understanding 3-7; clear warmth 8-15; major earned relationship moments 16-24; 25-30 only exceptionally.");
         prompt.AppendLine("- Set endConversation from the NPC's visible reply alone. If the NPC clearly closes the exchange, use true even if the dialogue writer mistakenly supplied farmer options; the game will discard those options.");
         prompt.AppendLine("- Create memories, conflicts, help updates, emotion changes, and behavior influences only from this turn's player input and NPC reply. Context may constrain or de-duplicate them, but never creates a new event by itself.");
+        prompt.AppendLine("- Memory importance uses a 0-100 scale, not 0-5 or 0-10. The game only stores memories with importance >=40. A newly disclosed durable preference or useful fact normally deserves 60-80; a meaningful promise or explicit lasting boundary 70-90. Omit trivia instead of emitting low-importance placeholder memories.");
+        prompt.AppendLine("- For player preferences, set kind=preference and playerPreference=true; subject names the specific item, category, habit, value, or goal, never just 'the farmer'. Keep distinct preferences as separate records (at most two), with short useful tags.");
+        prompt.AppendLine("- Keep included objects compact: omit empty strings, empty arrays, and irrelevant optional zero/false fields. Preserve every actual effect, item identifier, required help step, consent, and useful memory; write each effect once rather than duplicating it in actions and decision objects.");
         prompt.AppendLine("- Flustered, embarrassed, shy, playful-defensive, or mildly teased is uneasy, not angry. Do not create offended/give_space/conflict/boundary memory from it unless the NPC clearly asks the player to stop or leave, prior pressure is visible, or clear harmful conduct occurred.");
         prompt.AppendLine("- One ordinary polite question about family, a partner, or personal life is not by itself a boundary violation. Preserve an explicit refusal or request to stop. Durable harm also includes an explicit insult, threat, humiliation, disclosure of private information, malicious provocation, broken promise, or repeated pressure.");
         prompt.AppendLine("- A location name does not prove visibility, adjacency, distance, or a route. Never create spatial facts or consequences from an inferred map relationship.");
@@ -430,8 +576,6 @@ internal static class LivingNpcMetadataExtractionPass
         prompt.AppendLine("- Never ignore a second requested item as decorative flavor. Wording such as 'if you can also bring', 'while you're at it', 'another would be better', or 'that would make it perfect' is still an item request and must not remain unencoded; do not create an incomplete one-step request from such a reply.");
         prompt.AppendLine("- companion_outing requires an invitation to leave and visible accepted_now consent to a supported destination. A short same-departure wait such as '等会/等会儿再去' is accepted_now, not accepted_later. Staying together at the current spot is not travel. Always keep delayMinutes at 0; departure starts when the dialogue closes.");
         prompt.AppendLine("- giftDecision is immediate only when the NPC visibly offers an item now; mail, later, and promises create no gift action.");
-        prompt.AppendLine("- Output no markdown, explanation, or dialogue.");
-        return prompt.ToString();
     }
 
     internal static void ApplyConservativeInterpersonalEvidenceRules(

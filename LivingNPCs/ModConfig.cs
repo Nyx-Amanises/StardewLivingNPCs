@@ -125,6 +125,8 @@ internal sealed class ModConfig
     public int SemanticContextRoutingTimeoutSeconds { get; set; } = 8;
     public string RoutingThinkingLevel { get; set; } = "Off";
     public string ChatThinkingLevel { get; set; } = "Auto";
+    /// <summary>在 OpenAI 兼容端点后台流式接收主回复，收齐后仍交给原生对话框。</summary>
+    public bool UseStreamingDialogueTransport { get; set; } = false;
     public bool SuppressConnectionCheck { get; set; } = false;
 
     /// <summary>旧 config.json 是否已迁移（WP14 裁决 5）。不进 GMCM。</summary>
@@ -385,6 +387,7 @@ internal sealed class ModConfig
         this.SemanticContextRoutingTimeoutSeconds = defaults.SemanticContextRoutingTimeoutSeconds;
         this.RoutingThinkingLevel = defaults.RoutingThinkingLevel;
         this.ChatThinkingLevel = defaults.ChatThinkingLevel;
+        this.UseStreamingDialogueTransport = defaults.UseStreamingDialogueTransport;
         this.SuppressConnectionCheck = defaults.SuppressConnectionCheck;
         this.DisableCharacters = defaults.DisableCharacters;
     }

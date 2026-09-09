@@ -1025,6 +1025,8 @@
   "dialogue.config.routingThinking.tooltip": "Thinking effort for small routing/classification requests.",
   "dialogue.config.chatThinking.name": "Chat thinking level",
   "dialogue.config.chatThinking.tooltip": "Thinking effort for the actual dialogue replies.",
+  "dialogue.config.streamingTransport.name": "Stream dialogue transfer",
+  "dialogue.config.streamingTransport.tooltip": "Receive OpenAI-compatible replies progressively in the background. This can help gateways which stall or return empty replies during long requests. The normal dialogue box opens after the full reply is ready.",
   "dialogue.config.thinking.auto": "Auto",
   "dialogue.config.thinking.off": "Off",
   "dialogue.config.thinking.minimal": "Minimal",

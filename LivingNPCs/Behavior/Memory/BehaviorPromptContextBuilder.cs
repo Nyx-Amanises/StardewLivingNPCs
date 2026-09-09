@@ -586,7 +586,10 @@ internal static class BehaviorPromptContextBuilder
                 world.StateInfluence.Inclination);
         }
 
-        yield return PromptFragments.Context.WorldStageCue(world.ProgressionKnowledge.ReplyGuidance);
+        if (state == null)
+        {
+            yield return PromptFragments.Context.WorldStageCue(world.ProgressionKnowledge.ReplyGuidance);
+        }
 
         if (world.NearbyNpcNames.Count > 0)
         {

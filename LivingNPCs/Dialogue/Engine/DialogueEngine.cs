@@ -826,19 +826,30 @@ internal sealed class DialogueEngine : IDialogueEngine
             {
                 LivingNpcMetadataExtractionResult extracted;
                 var metadataWatch = Stopwatch.StartNew();
-                prepared.MetadataOutcome = "failed";
+                prepared.MetadataOutcome = "inline-failed";
                 try
                 {
-                    extracted = await LivingNpcMetadataExtractionPass
-                        .TryExtractAsync(prepared.Character, prepared.Context, playerText, parsed.DialogueLine, parsed.Options, ct)
-                        .ConfigureAwait(false);
+                    extracted = LivingNpcMetadataExtractionPass.ParseInlineResponse(
+                        response.Text, playerText, parsed.DialogueLine, prepared.Context);
+                    if (extracted.Success)
+                    {
+                        prepared.MetadataOutcome = "inline";
+                    }
+                    else
+                    {
+                        // A missing or incomplete envelope must still use the authoritative classifier.
+                        prepared.MetadataOutcome = "fallback-failed";
+                        extracted = await LivingNpcMetadataExtractionPass
+                            .TryExtractAsync(prepared.Character, prepared.Context, playerText, parsed.DialogueLine, parsed.Options, ct)
+                            .ConfigureAwait(false);
+                        prepared.MetadataOutcome = extracted.Success ? "fallback-success" : "fallback-failed";
+                    }
                 }
                 finally
                 {
                     prepared.MetadataMilliseconds = metadataWatch.ElapsedMilliseconds;
                 }
 
-                prepared.MetadataOutcome = extracted.Success ? "success" : "failed";
                 if (extracted.Success)
                 {
                     analysis = extracted.Analysis;
