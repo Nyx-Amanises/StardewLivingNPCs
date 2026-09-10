@@ -61,14 +61,35 @@ internal sealed class AssembledPrompt
     public string ResponseStart { get; init; } = string.Empty;
     public IReadOnlyDictionary<string, int> SectionLengths { get; init; } = new Dictionary<string, int>();
 
-    public string Tail => this.CorePrompt + this.Instructions + this.Command;
+    // Instructions are rendered from this request's NPC, portraits, locale and provider. Keep
+    // them ahead of the changing scene/history so equal text can share a provider cache prefix;
+    // never cache the rendered text locally across requests with different inputs.
+    public string CacheableNpcContext => this.NpcConstantContext + this.Instructions;
+    public string Tail => this.CorePrompt + this.Command;
     public int TotalCharacters => this.System.Length + this.GameConstantContext.Length
-        + this.NpcConstantContext.Length + this.Tail.Length;
+        + this.CacheableNpcContext.Length + this.Tail.Length;
+
+    internal LlmRequest CreateLlmRequest(
+        string? commandOverride = null,
+        Action<LlmTransportTiming>? transportTimingObserver = null)
+    {
+        return new LlmRequest
+        {
+            SystemPrompt = this.System,
+            StableContext = this.GameConstantContext,
+            NpcContext = this.CacheableNpcContext,
+            Tail = this.CorePrompt + (commandOverride ?? this.Command),
+            ResponseStart = this.ResponseStart,
+            AllowRetry = false,
+            MaxTokens = 2048,
+            TransportTimingObserver = transportTimingObserver
+        };
+    }
 }
 
 /// <summary>
 /// 提示词装配器（WP10 §4.6）：六段（System / GameConstantContext / NpcConstantContext /
-/// CorePrompt / Instructions / Command），前三段为稳定段（WP11 Prompt Caching 断点）。
+/// CorePrompt / Instructions / Command）；传输时 Instructions 前移至 NPC 段末尾以复用前缀。
 /// 构造时统一调用计划的 ApplyDependencies（§4.5：全部到达提示词的计划在此收敛依赖）。
 /// 所有文案 = WP20 键；键缺失时该行静默缺席，小节结构不变。
 /// </summary>
@@ -1014,7 +1035,6 @@ internal sealed class PromptAssembler
         var builder = new StringBuilder();
         AppendLine(builder, this.Text("instructionsHeading"));
         AppendLine(builder, this.Text("instructionsIntro", new { npcName = this.input.NpcDisplayName }));
-        AppendLine(builder, this.Text("instructionsUntrustedData") ?? PromptDataBoundary.InstructionReminder);
         AppendLine(builder, this.Text("instructionsGrounding"));
         if (this.input.Samples.Count > 0)
         {
@@ -1117,6 +1137,9 @@ internal sealed class PromptAssembler
             AppendLine(builder, this.Text("instructionsTranslate", new { language = this.input.Locale }));
         }
 
+        // Repeat the trust boundary after all changing data, including a schedule override.
+        // The longer output/schema instructions live in the reusable prefix exactly once.
+        AppendLine(builder, this.Text("instructionsUntrustedData") ?? PromptDataBoundary.InstructionReminder);
         return builder.ToString();
     }
 

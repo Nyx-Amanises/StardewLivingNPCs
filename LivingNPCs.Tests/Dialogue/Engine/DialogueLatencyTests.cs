@@ -89,8 +89,8 @@ public sealed class DialogueLatencyTests : IDisposable
             Assert.Equal(0, auxiliary.Calls);
             Assert.NotNull(client.LastRequest);
             Assert.False(client.LastRequest!.DisableThinking);
-            Assert.Contains("!LIVINGNPCS_META", client.LastRequest.Tail);
-            Assert.DoesNotContain("[instructionsDialogueOnly]", client.LastRequest.Tail);
+            Assert.Contains("!LIVINGNPCS_META", client.LastRequest.ConcatenatedUserContent());
+            Assert.DoesNotContain("[instructionsDialogueOnly]", client.LastRequest.ConcatenatedUserContent());
             Assert.Equal(new[] { "Hello! The weather is pleasant today.$h", "It is." }, result.ParsedLines);
             Assert.DoesNotContain("!LIVINGNPCS_META", result.FormattedLine);
             Assert.DoesNotContain("\"complete\"", result.AnalysisJson);
@@ -130,8 +130,8 @@ public sealed class DialogueLatencyTests : IDisposable
         Assert.Equal(1, client.Calls);
         Assert.Equal(0, auxiliary.Calls);
         Assert.NotNull(client.LastRequest);
-        Assert.Contains("[instructionsDialogueOnly]", client.LastRequest!.Tail);
-        Assert.DoesNotContain("!LIVINGNPCS_META", client.LastRequest.Tail);
+        Assert.Contains("[instructionsDialogueOnly]", client.LastRequest!.ConcatenatedUserContent());
+        Assert.DoesNotContain("!LIVINGNPCS_META", client.LastRequest.ConcatenatedUserContent());
     }
 
     [Fact]

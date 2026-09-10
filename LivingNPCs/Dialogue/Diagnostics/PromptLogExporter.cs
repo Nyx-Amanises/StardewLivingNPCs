@@ -85,9 +85,9 @@ internal static class PromptLogExporter
         string outcome,
         DateTimeOffset recordedAt)
     {
-        string generatedPrompt = string.Concat(corePrompt, instructions, command);
-        string userPrompt = string.Concat(gameConstantContext, npcConstantContext, generatedPrompt);
-        string combinedPrompt = string.Concat(systemPrompt, gameConstantContext, npcConstantContext, generatedPrompt, responseStart);
+        string generatedPrompt = string.Concat(corePrompt, command);
+        string userPrompt = string.Concat(gameConstantContext, npcConstantContext, instructions, generatedPrompt);
+        string combinedPrompt = string.Concat(systemPrompt, userPrompt, responseStart);
         var builder = new StringBuilder();
         var time = Game1.Date;
 
@@ -107,8 +107,8 @@ internal static class PromptLogExporter
         AppendPromptSection(builder, "System Prompt", systemPrompt);
         AppendPromptSection(builder, "Game Constant Context", gameConstantContext);
         AppendPromptSection(builder, "NPC Constant Context", npcConstantContext);
-        AppendPromptSection(builder, "Core Prompt", corePrompt);
         AppendPromptSection(builder, "Instructions", instructions);
+        AppendPromptSection(builder, "Core Prompt", corePrompt);
         AppendPromptSection(builder, "Command", command);
         AppendPromptSection(builder, "Response Start", responseStart);
 

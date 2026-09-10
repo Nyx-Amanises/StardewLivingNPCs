@@ -15,10 +15,16 @@ internal sealed class TokenUsage
     /// <summary>Prompt tokens served from the provider's prompt cache (billed at the discounted cache-read rate).</summary>
     public int CachedPromptTokens { get; init; }
 
+    /// <summary>Whether the provider explicitly reported cached prompt tokens, including a real zero.</summary>
+    public bool CachedPromptTokensReported { get; init; }
+
     /// <summary>Prompt tokens written into the provider's prompt cache this request (Claude bills these at a premium; other providers report 0).</summary>
     public int CacheWritePromptTokens { get; init; }
 
     public int ReasoningTokens { get; init; }
+
+    /// <summary>Whether the provider explicitly reported reasoning tokens, including a real zero.</summary>
+    public bool ReasoningTokensReported { get; init; }
 
     public bool IsEstimated { get; init; }
 
@@ -55,18 +61,19 @@ internal sealed class TokenUsage
         // 部分兼容端点（旧版 vLLM 等自建服务）把 details 字段序列化为字面量 null：此时索引结果是
         // 非空的 JValue(Null)，`?.` 不短路，继续取子值会抛 InvalidOperationException
         // （"Cannot access child value on JValue"），把成功响应整体误判为失败——必须先判型 JObject。
-        int cachedPromptTokens = (usage["prompt_tokens_details"] as JObject)?.Value<int?>("cached_tokens")
-            ?? usage.Value<int?>("prompt_cache_hit_tokens")
-            ?? 0;
-        int reasoningTokens = (usage["completion_tokens_details"] as JObject)?.Value<int?>("reasoning_tokens") ?? 0;
+        int? cachedPromptTokens = (usage["prompt_tokens_details"] as JObject)?.Value<int?>("cached_tokens")
+            ?? usage.Value<int?>("prompt_cache_hit_tokens");
+        int? reasoningTokens = (usage["completion_tokens_details"] as JObject)?.Value<int?>("reasoning_tokens");
 
         return new TokenUsage
         {
             PromptTokens = promptTokens,
             CompletionTokens = completionTokens,
             TotalTokens = totalTokens,
-            CachedPromptTokens = cachedPromptTokens,
-            ReasoningTokens = reasoningTokens,
+            CachedPromptTokens = cachedPromptTokens ?? 0,
+            CachedPromptTokensReported = cachedPromptTokens.HasValue,
+            ReasoningTokens = reasoningTokens ?? 0,
+            ReasoningTokensReported = reasoningTokens.HasValue,
             Source = "provider usage"
         };
     }
@@ -81,17 +88,18 @@ internal sealed class TokenUsage
         int inputTokens = usage.Value<int?>("input_tokens") ?? 0;
         int outputTokens = usage.Value<int?>("output_tokens") ?? 0;
         int cacheCreationTokens = usage.Value<int?>("cache_creation_input_tokens") ?? 0;
-        int cacheReadTokens = usage.Value<int?>("cache_read_input_tokens") ?? 0;
+        int? cacheReadTokens = usage.Value<int?>("cache_read_input_tokens");
 
         // Claude 的 input_tokens 只含未走缓存的余量；真实 prompt 规模 = 未缓存 + 缓存写入 + 缓存命中。
-        int promptTokens = inputTokens + cacheCreationTokens + cacheReadTokens;
+        int promptTokens = inputTokens + cacheCreationTokens + (cacheReadTokens ?? 0);
 
         return new TokenUsage
         {
             PromptTokens = promptTokens,
             CompletionTokens = outputTokens,
             TotalTokens = promptTokens + outputTokens,
-            CachedPromptTokens = cacheReadTokens,
+            CachedPromptTokens = cacheReadTokens ?? 0,
+            CachedPromptTokensReported = cacheReadTokens.HasValue,
             CacheWritePromptTokens = cacheCreationTokens,
             Source = "provider usage"
         };
@@ -107,17 +115,19 @@ internal sealed class TokenUsage
         int promptTokens = usage.Value<int?>("promptTokenCount") ?? 0;
         int completionTokens = usage.Value<int?>("candidatesTokenCount") ?? 0;
         int totalTokens = usage.Value<int?>("totalTokenCount") ?? promptTokens + completionTokens;
-        int reasoningTokens = usage.Value<int?>("thoughtsTokenCount") ?? 0;
+        int? reasoningTokens = usage.Value<int?>("thoughtsTokenCount");
         // Gemini 2.5 系隐式缓存命中时报告 cachedContentTokenCount（已含在 promptTokenCount 内）。
-        int cachedPromptTokens = usage.Value<int?>("cachedContentTokenCount") ?? 0;
+        int? cachedPromptTokens = usage.Value<int?>("cachedContentTokenCount");
 
         return new TokenUsage
         {
             PromptTokens = promptTokens,
             CompletionTokens = completionTokens,
             TotalTokens = totalTokens,
-            ReasoningTokens = reasoningTokens,
-            CachedPromptTokens = cachedPromptTokens,
+            ReasoningTokens = reasoningTokens ?? 0,
+            ReasoningTokensReported = reasoningTokens.HasValue,
+            CachedPromptTokens = cachedPromptTokens ?? 0,
+            CachedPromptTokensReported = cachedPromptTokens.HasValue,
             Source = "provider usage"
         };
     }

@@ -241,6 +241,48 @@ public sealed class BufferedDialogueTransportTests : LlmTestBase
     }
 
     [Theory]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    public async Task DoneOnlyEmptyStreamIsTerminalWithoutFinishReasonOrReasoning(bool whitespaceDelta, bool allowRetry)
+    {
+        Config.UseStreamingDialogueTransport = true;
+        var client = CreateClient();
+        string sse = (whitespaceDelta
+                ? "data: {\"choices\":[{\"delta\":{\"content\":\" \\n\"}}]}\n"
+                : "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n")
+            + "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":17,\"completion_tokens\":0,\"total_tokens\":17}}\n"
+            + "data: [DONE]\n";
+        Http.DefaultResponder = _ => FakeHttpHandler.Text(sse);
+
+        LlmReply reply = await client.CompleteAsync(Request(allowRetry: allowRetry), CancellationToken.None);
+
+        Assert.False(reply.IsSuccess);
+        Assert.False(reply.Retryable);
+        Assert.Empty(reply.Text);
+        Assert.Equal(200, reply.HttpStatus);
+        Assert.Equal(17, reply.Usage.PromptTokens);
+        Assert.Equal(0, reply.Usage.ReasoningTokens);
+        Assert.Single(Http.Requests);
+    }
+
+    [Fact]
+    public async Task NonStreamingRequestReceivingDoneOnlySseDoesNotRegenerate()
+    {
+        Config.UseStreamingDialogueTransport = false;
+        var client = CreateClient();
+        Http.DefaultResponder = _ => FakeHttpHandler.Text("data: [DONE]\n");
+
+        LlmReply reply = await client.CompleteAsync(Request(), CancellationToken.None);
+
+        Assert.False(reply.IsSuccess);
+        Assert.False(reply.Retryable);
+        Assert.Empty(reply.Text);
+        Assert.Single(Http.Requests);
+    }
+
+    [Theory]
     [InlineData(HttpStatusCode.BadGateway, false, 1)]
     [InlineData(HttpStatusCode.BadGateway, true, 3)]
     [InlineData(HttpStatusCode.ServiceUnavailable, false, 1)]

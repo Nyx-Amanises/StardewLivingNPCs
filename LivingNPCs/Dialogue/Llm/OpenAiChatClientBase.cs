@@ -64,6 +64,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
 
     protected override async Task<AttemptOutcome> ExecuteCandidateAsync(RequestCandidate candidate, LlmRequest request, CancellationToken ct)
     {
+        using var timing = new LlmTransportTimingScope(request.TransportTimingObserver, streaming: false);
         string body = await LlmHttp.SendAsync(candidate.Url, candidate.Json, AuthTokenOrNull, null, request.TimeoutOverride, ct).ConfigureAwait(false);
         (string? text, TokenUsage? usage) = ExtractTextAndUsage(body);
         if (string.IsNullOrWhiteSpace(text))
@@ -152,7 +153,8 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
                 await Task.Delay(RetryDelay, ct).ConfigureAwait(false);
             }
 
-            var context = new SseAttemptContext();
+            using var timing = new LlmTransportTimingScope(request.TransportTimingObserver, streaming: true);
+            var context = new SseAttemptContext(timing);
             allowFormatFallback = true;
             bool attemptFailed = false;
             bool abortStreamRetries = false;
@@ -219,6 +221,8 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
                 (string? recoveredText, TokenUsage? recoveredUsage) = TryExtractTextAndUsage(lastRaw);
                 if (!string.IsNullOrWhiteSpace(recoveredText))
                 {
+                    // A gateway which ignores stream exposes its first content only after its JSON body is complete.
+                    timing.ContentReceived();
                     yield return LlmStreamEvent.Delta(recoveredText);
                     yield return LlmStreamEvent.ForUsage(recoveredUsage ?? TokenUsage.Estimate(
                         request.SystemPrompt + request.ConcatenatedUserContent(),
@@ -393,6 +397,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         try
         {
             var json = JObject.Parse(body);
+            ThrowIfProviderErrorEnvelope(json);
             // choices[0] / message 可能被兼容端点写成字面量 null（JValue）：对非容器节点再取子值会抛
             // InvalidOperationException（与 TokenUsage 的 details 字段同型缺陷），一律先判型 JObject。
             var firstChoice = (json["choices"] as JArray)?.FirstOrDefault() as JObject;
@@ -505,6 +510,42 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         }
     }
 
+    private static void ThrowIfProviderErrorEnvelope(JObject response)
+    {
+        JToken? error = response["error"];
+        if (error == null || error.Type is JTokenType.Null or JTokenType.Undefined)
+        {
+            return;
+        }
+
+        // Compatible gateways can hide service failures inside HTTP 200. A non-null top-level
+        // error invalidates any accompanying content. Treat it as a service failure so the
+        // existing retry budget stays on the same request shape; changing stream/system formats
+        // cannot repair it. Real HTTP 400/422 rejections retain their separate compatibility path.
+        // Never copy arbitrary provider messages here: they can echo credentials, URLs, or reasoning.
+        throw new HttpRequestException(
+            "The provider returned an error envelope (service failure).",
+            null,
+            System.Net.HttpStatusCode.ServiceUnavailable);
+    }
+
+    private static void ThrowIfCompleteJsonHasProviderError(string body)
+    {
+        if (!body.TrimStart().StartsWith("{", StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        try
+        {
+            ThrowIfProviderErrorEnvelope(JObject.Parse(body));
+        }
+        catch (JsonException)
+        {
+            // SSE chunks and incomplete JSON retain their existing stream/parser handling.
+        }
+    }
+
     private static ResponseDiagnostics InspectResponse(string body)
     {
         var diagnostics = new ResponseDiagnostics();
@@ -523,6 +564,14 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
             {
                 string line = rawLine.Trim();
                 string payload = line.StartsWith("data:", StringComparison.OrdinalIgnoreCase) ? line[5..].Trim() : line;
+                if (line.StartsWith("data:", StringComparison.OrdinalIgnoreCase) && payload == "[DONE]")
+                {
+                    // An empty but explicitly completed SSE generation is terminal even when the
+                    // gateway omitted finish_reason, reasoning fields, and usage. Do not regenerate it.
+                    diagnostics.MarkStreamCompleted();
+                    continue;
+                }
+
                 if (!payload.StartsWith("{", StringComparison.Ordinal))
                 {
                     continue;
@@ -546,12 +595,15 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         private string? _finishReason;
         private bool _hasReasoning;
         private bool _hasRefusal;
+        private bool _streamCompleted;
         private TokenUsage? _usage;
 
         public TokenUsage? Usage => _usage;
 
         public bool IsTerminal => !string.IsNullOrWhiteSpace(_finishReason)
-            || _hasReasoning || _hasRefusal || (_usage?.ReasoningTokens ?? 0) > 0;
+            || _streamCompleted || _hasReasoning || _hasRefusal || (_usage?.ReasoningTokens ?? 0) > 0;
+
+        public void MarkStreamCompleted() => _streamCompleted = true;
 
         public void Read(JObject json)
         {
@@ -625,6 +677,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         try
         {
             var chunk = JObject.Parse(payload);
+            ThrowIfProviderErrorEnvelope(chunk);
             TokenUsage? usage = chunk["usage"] is JObject usageJson && usageJson.HasValues
                 ? TokenUsage.FromOpenAiUsage(usageJson)
                 : null;
@@ -649,6 +702,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
         [EnumeratorCancellation] CancellationToken ct = default)
     {
         using HttpResponseMessage response = await LlmHttp.SendForStreamAsync(ChatEndpoint, json, AuthTokenOrNull, null, headerTimeout, ct).ConfigureAwait(false);
+        context.Timing.HeadersReceived();
         using Stream stream = await response.Content.ReadAsStreamAsync(ct).ConfigureAwait(false);
         using var reader = new StreamReader(stream);
         // net6 的 ReadLineAsync 不收令牌：取消时直接掐断响应，把随之而来的 IO 异常翻译回取消。
@@ -668,6 +722,10 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
 
             if (line == null)
             {
+                // A gateway may ignore stream and return an indented JSON error. Its individual
+                // lines are not SSE events; recognize the complete envelope before leaving this
+                // attempt, while the same-format streaming retry/error guards still own it.
+                ThrowIfCompleteJsonHasProviderError(context.RawText.ToString());
                 yield break;
             }
 
@@ -687,6 +745,11 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
 
             if (delta != null)
             {
+                if (!string.IsNullOrWhiteSpace(delta))
+                {
+                    context.Timing.ContentReceived();
+                }
+
                 yield return delta;
             }
         }
@@ -694,6 +757,13 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
 
     private sealed class SseAttemptContext
     {
+        public SseAttemptContext(LlmTransportTimingScope timing)
+        {
+            Timing = timing;
+        }
+
+        public LlmTransportTimingScope Timing { get; }
+
         public StringBuilder RawText { get; } = new();
 
         public TokenUsage? Usage { get; set; }

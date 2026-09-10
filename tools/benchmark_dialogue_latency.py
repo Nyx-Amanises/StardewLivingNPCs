@@ -78,32 +78,90 @@ def call(session: requests.Session, endpoint: str, model: str,
             (case["system"] + "\n" + case["user"]).encode("utf-8")).hexdigest(),
         "started_utc": datetime.now(timezone.utc).isoformat(),
         "usage": {}, "content": "", "first_content_ms": None,
-        "finish_reason": None, "status": "error",
+        "finish_reason": None, "status": "error", "received_done": False,
+        "event_count": 0, "response_keys": [],
     }
     started = time.perf_counter()
 
-    def consume(data: dict, streamed: bool) -> None:
-        if data.get("usage"):
+    def redact(value: str) -> str:
+        auth = session.headers.get("Authorization", "").removeprefix("Bearer ")
+        if auth:
+            value = value.replace(auth, "[credential]")
+        value = value.replace(endpoint, "[endpoint]")
+        value = re.sub(r'https?://[^\s"<>]+', "[endpoint]", value, flags=re.I)
+        return re.sub(r'\bsk-[A-Za-z0-9_-]+', "[credential]", value, flags=re.I)
+
+    def safe_keys(value: dict) -> list[str]:
+        return sorted({redact(str(key))[:80] for key in value})[:25]
+
+    def sanitize(value: object) -> object:
+        # Apply the same protection to echoed model names, usage, content and keys.
+        if isinstance(value, str):
+            return redact(value)
+        if isinstance(value, dict):
+            return {redact(str(key))[:80]: sanitize(item) for key, item in value.items()}
+        if isinstance(value, list):
+            return [sanitize(item) for item in value]
+        return value
+
+    def record_error(error: object) -> None:
+        # Some compatible gateways return an error envelope inside HTTP 200 or SSE.
+        # Record only a bounded, redacted explanation, never the whole response.
+        result["error_type"] = "provider-error"
+        message = str(error.get("message", "")) if isinstance(error, dict) else str(error)
+        result["error_message"] = redact(message)[:400]
+
+    def invalid_response() -> None:
+        # Preserve an earlier provider error if malformed chunks follow it.
+        result.setdefault("error_type", "invalid-response")
+
+    def consume(data: object, streamed: bool) -> None:
+        result["event_count"] += 1
+        if not isinstance(data, dict):
+            invalid_response()
+            return
+        result["response_keys"] = sorted(set(result["response_keys"]) | set(safe_keys(data)))[:25]
+        if data.get("error") is not None and data["error"] is not False:
+            record_error(data["error"])
+            return
+        if isinstance(data.get("usage"), dict) and data["usage"]:
             result["usage"] = data["usage"]
-        if data.get("model"):
+        if isinstance(data.get("model"), str) and data["model"]:
             result["resolved_model"] = data["model"]
-        choices = data.get("choices") or []
+        choices = data.get("choices")
+        if choices is None:
+            return
+        if not isinstance(choices, list):
+            invalid_response()
+            return
         if not choices:
             return
         choice = choices[0]
-        message = choice.get("delta" if streamed else "message") or {}
+        if not isinstance(choice, dict):
+            invalid_response()
+            return
+        message = choice.get("delta" if streamed else "message")
+        if message is None:
+            message = {}
+        if not isinstance(message, dict):
+            invalid_response()
+            return
         content = message.get("content") or choice.get("text") or ""
+        if not isinstance(content, str):
+            invalid_response()
+            return
         if isinstance(content, str) and content:
-            if result["first_content_ms"] is None:
+            if result["first_content_ms"] is None and content.strip():
                 result["first_content_ms"] = round((time.perf_counter() - started) * 1000)
             result["content"] += content
         elif not streamed:
             result["empty_content_shape"] = {
-                "response_keys": list(data)[:20], "choice_keys": list(choice)[:20],
-                "message_keys": list(message)[:20],
-                "hidden_reasoning_chars": len(message.get("reasoning_content") or ""),
+                "response_keys": safe_keys(data), "choice_keys": safe_keys(choice),
+                "message_keys": safe_keys(message),
+                "hidden_reasoning_chars": len(message["reasoning_content"])
+                if isinstance(message.get("reasoning_content"), str) else 0,
             }
-        if choice.get("finish_reason"):
+        if isinstance(choice.get("finish_reason"), str) and choice["finish_reason"]:
             result["finish_reason"] = choice["finish_reason"]
 
     try:
@@ -111,19 +169,14 @@ def call(session: requests.Session, endpoint: str, model: str,
                           timeout=(min(15, timeout), timeout)) as response:
             result["http_status"] = response.status_code
             result["headers_ms"] = round((time.perf_counter() - started) * 1000)
+            result["content_type"] = response.headers.get("Content-Type", "").split(";")[0]
             if response.status_code != 200:
                 # Do not persist arbitrary gateway errors which may echo secrets.
                 result["error_type"] = "http-error"
                 try:
                     error = response.json().get("error", {})
-                    message = str(error.get("message", "")) if isinstance(error, dict) else ""
-                    auth = session.headers.get("Authorization", "").removeprefix("Bearer ")
-                    if auth:
-                        message = message.replace(auth, "[credential]")
-                    message = message.replace(endpoint, "[endpoint]")
-                    message = re.sub(r'https?://[^\s"<>]+', "[endpoint]", message)
-                    message = re.sub(r'\bsk-[A-Za-z0-9_-]+', "[credential]", message)
-                    result["error_message"] = message[:400]
+                    record_error(error)
+                    result["error_type"] = "http-error"
                 except (ValueError, AttributeError):
                     pass
             elif stream and "text/event-stream" in response.headers.get("Content-Type", ""):
@@ -135,9 +188,12 @@ def call(session: requests.Session, endpoint: str, model: str,
                         continue
                     payload = raw[5:].strip()
                     if payload == b"[DONE]":
+                        result["received_done"] = True
                         break
                     if payload:
                         consume(json.loads(payload), True)
+                        if result.get("error_type") in ("provider-error", "invalid-response"):
+                            break
             else:
                 consume(response.json(), False)
                 if stream:
@@ -146,11 +202,13 @@ def call(session: requests.Session, endpoint: str, model: str,
         result["error_type"] = type(error).__name__
 
     result["elapsed_ms"] = round((time.perf_counter() - started) * 1000)
+    completed = result["finish_reason"] == "stop" or (
+        stream and result["received_done"] and result["finish_reason"] is None)
     result["status"] = "ok" if (
-        result.get("http_status") == 200 and result["content"]
-        and result["finish_reason"] == "stop" and "error_type" not in result
+        result.get("http_status") == 200 and result["content"].strip()
+        and completed and "error_type" not in result
     ) else "error"
-    return result
+    return sanitize(result)
 
 
 def metadata_followup(template: dict, raw: str) -> dict:
@@ -227,7 +285,8 @@ def main() -> None:
         for case in cases:
             result = call(session, endpoint, model, case, case.get("timeout_seconds", args.timeout))
             record(result)
-            if result.get("http_status") in (401, 403, 429, 502, 503, 504):
+            if (result.get("http_status") in (401, 403, 429, 502, 503, 504)
+                    or result.get("error_type") in ("provider-error", "invalid-response")):
                 print("Stopping on provider availability/authentication error; no automatic retries.", flush=True)
                 break
             if "metadata_followup" in case and result["status"] == "ok":
@@ -236,7 +295,8 @@ def main() -> None:
                 extra["parent_case"] = case["name"]
                 extra["pipeline_ms"] = result["elapsed_ms"] + extra["elapsed_ms"]
                 record(extra)
-                if extra.get("http_status") in (401, 403, 429, 502, 503, 504):
+                if (extra.get("http_status") in (401, 403, 429, 502, 503, 504)
+                        or extra.get("error_type") in ("provider-error", "invalid-response")):
                     print("Stopping on provider availability/authentication error; no automatic retries.", flush=True)
                     break
 

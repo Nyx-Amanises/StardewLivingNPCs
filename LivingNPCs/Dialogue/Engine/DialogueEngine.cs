@@ -364,6 +364,7 @@ internal sealed class DialogueEngine : IDialogueEngine
         public long ActionMilliseconds { get; set; }
         public string MetadataOutcome { get; set; } = "not-requested";
         public string ActionOutcome { get; set; } = "not-requested";
+        public List<LlmTransportTiming> TransportTimings { get; } = new();
     }
 
     private async Task<PreparedGeneration> PrepareAsync(GenerationRequest request, CancellationToken ct)
@@ -691,16 +692,7 @@ internal sealed class DialogueEngine : IDialogueEngine
             command += ConversationTextPostProcessor.GetLanguageRetryInstruction();
         }
 
-        return new LlmRequest
-        {
-            SystemPrompt = prompt.System,
-            StableContext = prompt.GameConstantContext,
-            NpcContext = prompt.NpcConstantContext,
-            Tail = prompt.CorePrompt + prompt.Instructions + command,
-            ResponseStart = prompt.ResponseStart,
-            AllowRetry = false,
-            MaxTokens = 2048
-        };
+        return prompt.CreateLlmRequest(command, prepared.TransportTimings.Add);
     }
 
     private async Task<LlmResponse> RunAttemptAsync(PreparedGeneration prepared, bool languageRetry, CancellationToken ct)
@@ -794,6 +786,7 @@ internal sealed class DialogueEngine : IDialogueEngine
             }
 
             this.ExportAttempt(prepared, response, ConversationAnalysis.Empty, Array.Empty<string>(), attempts, !string.IsNullOrWhiteSpace(error) ? "error" : "unparseable");
+            this.LogTransportDiagnostics(prepared, response?.Usage);
             ct.ThrowIfCancellationRequested();
             return new GenerationResult
             {
@@ -1296,6 +1289,35 @@ internal sealed class DialogueEngine : IDialogueEngine
                     lines = lineCount,
                     sections
                 }) + Environment.NewLine,
+            StardewModdingAPI.LogLevel.Debug);
+
+        this.LogTransportDiagnostics(prepared, response.Usage);
+    }
+
+    private void LogTransportDiagnostics(PreparedGeneration prepared, TokenUsage? usage)
+    {
+        if (DialogueServices.Config?.Debug != true || prepared.TransportTimings.Count == 0)
+        {
+            return;
+        }
+
+        string timings = string.Join("; ", prepared.TransportTimings.Select((timing, index) =>
+            $"#{index + 1} {(timing.Streaming ? "stream" : "json")}: "
+            + $"headers={timing.HeadersMilliseconds?.ToString() ?? "n/a"}ms, "
+            + $"first-content={timing.FirstContentMilliseconds?.ToString() ?? "n/a"}ms, "
+            + $"complete={timing.CompleteMilliseconds}ms"));
+        bool hasUsage = usage != null && usage.Source != "unknown";
+        DialogueServices.Monitor?.Log(
+            I18n.Get("log.dialogue.transport", new
+            {
+                npc = prepared.Request.NpcName,
+                timings,
+                inputTokens = hasUsage ? usage!.PromptTokens.ToString() : "n/a",
+                cachedTokens = usage?.CachedPromptTokensReported == true ? usage.CachedPromptTokens.ToString() : "n/a",
+                outputTokens = hasUsage ? usage!.CompletionTokens.ToString() : "n/a",
+                reasoningTokens = usage?.ReasoningTokensReported == true ? usage.ReasoningTokens.ToString() : "n/a",
+                source = usage?.Source ?? "unknown"
+            }),
             StardewModdingAPI.LogLevel.Debug);
     }
 

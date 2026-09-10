@@ -1,4 +1,5 @@
 using System;
+using LivingNPCs.Dialogue.Llm;
 
 namespace LivingNPCs.Dialogue;
 
@@ -33,6 +34,9 @@ internal sealed class LlmRequest
     /// <summary>一次性调用（连接自检等）显式覆盖单请求超时；空则用配置 QueryTimeout。</summary>
     public TimeSpan? TimeoutOverride { get; init; }
 
+    /// <summary>Optional safe timing callback, once per OpenAI-compatible HTTP attempt, including failures.</summary>
+    public Action<LlmTransportTiming>? TransportTimingObserver { get; init; }
+
     /// <summary>后三段按序拼接（无额外分隔符，段内换行由调用方自带）。</summary>
     public string ConcatenatedUserContent()
     {
@@ -51,7 +55,8 @@ internal sealed class LlmRequest
             MaxTokens = MaxTokens,
             DisableThinking = DisableThinking,
             AllowRetry = false,
-            TimeoutOverride = TimeoutOverride
+            TimeoutOverride = TimeoutOverride,
+            TransportTimingObserver = TransportTimingObserver
         };
     }
 }

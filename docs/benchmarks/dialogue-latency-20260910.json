@@ -1,0 +1,838 @@
+{
+  "date": "2026-09-10",
+  "configured_model": "gpt-5.6-sol",
+  "base_revision": "8adbacab476c6dad33d2fbf5b775a3323b9045e7",
+  "scope": "Ten sequential requests containing synthetic dialogue only, using the user-configured OpenAI-compatible service. Measurements include uncommitted prompt changes. No save files were changed.",
+  "configuration": {
+    "provider": "OpenAiCompatible",
+    "chat_thinking_level": "Low",
+    "enable_semantic_context_routing": false,
+    "measurement_stream": true,
+    "measurement_output_budget_parameter": "max_completion_tokens"
+  },
+  "limitations": [
+    "Measured snapshots precede final fact wording and HTTP-200 provider-error handling corrections. Their prompt lengths and assembly hashes describe the measured inputs, not the final build.",
+    "All four dense ABBA attempts returned no visible text. A later single compact success is not a successful before/after latency comparison and supports no stable speedup percentage.",
+    "The two screening prompts differ substantially and use abbreviated synthetic behavior context; their latencies are not a compression experiment or a production-dense comparison.",
+    "The router Off attempt changes both reasoning effort to none and JSON mode to true. It is not an isolated reasoning-effort comparison.",
+    "Six empty responses lack captured provider error details and usage. A later explicit overload envelope establishes only that later request's cause; it cannot explain the earlier empties retroactively.",
+    "Input character reductions are not token, latency, or billing reductions. Reported token usage is retained as received, without inferring undocumented gateway behavior.",
+    "Usage sums include only explicitly reported fields. Unreported usage and cache counts remain unknown; sums are not a full billing total.",
+    "Cached input was reported only in the two baseline screening requests. The successful compact dense request omitted cached_tokens, so prefix cache support and hits for the new layout are unverified.",
+    "Headers, first-content and complete times are client-observed elapsed milliseconds. They do not separate service queueing, upstream computation or internal gateway processing.",
+    "Earlier result files did not capture SSE event count, DONE receipt or error envelope fields; absent diagnostics are unknown rather than false.",
+    "Dense prompts use the actual production behavior builder and prompt assembler with full context and UseOptimizedPrompts=false. They are synthetic exports, not live saved-game captures.",
+    "SVE and standalone behavior-builder comparisons below are offline exports only. Exporter source-file inventories are preserved as recorded and may include available but unused resources.",
+    "Only one compact dense online reply received the production parser check. Further sol preference, gift, help and other semantic online coverage was not completed after an explicit overload response stopped paid requests.",
+    "The eight semantic online scenarios documented on 2026-09-09 used gpt-5.6-luna and are not sol coverage.",
+    "Original local prompts, model reply text, endpoints, credentials and absolute machine paths are intentionally excluded. Prompt hashes use UTF-8(system + newline + user); prompt_chars excludes that hash-only separator.",
+    "started_utc values are preserved from the source records with their explicit +00:00 offsets.",
+    "Router probes used SSE although the production fast router uses non-streaming transport; these are availability probes, not exact reproductions of the production router timeout."
+  ],
+  "summary": {
+    "request_attempts": 10,
+    "nonempty_successes": 3,
+    "empty_without_provider_diagnosis": 6,
+    "provider_errors": 1,
+    "failed_or_empty": 7,
+    "reported_prompt_tokens": 30585,
+    "reported_completion_tokens": 612,
+    "reported_reasoning_tokens": 359,
+    "reported_cached_tokens": 8064,
+    "requests_reporting_prompt_tokens": 3,
+    "requests_reporting_completion_tokens": 3,
+    "requests_reporting_reasoning_tokens": 2,
+    "requests_reporting_cached_tokens": 2
+  },
+  "input_comparison": {
+    "unit": "characters",
+    "dense": {
+      "scope": "Full photography scene using actual production builders on equivalent synthetic runtime state.",
+      "baseline": {
+        "generated_at": "2026-09-10T13:23:20.4564391+00:00",
+        "manifest_sha256": "d0cade709d144316628b8518a2656c502a3bf6441b38a15ac764c3f86fa4f96d",
+        "mod_assembly_sha256": "eba356f285e2a8ef058d69be8dc21de995b6caa0c53c6dcac0e18bea15021e1c",
+        "synthetic": true,
+        "plan": "full",
+        "use_optimized_prompts": false,
+        "case": "photography-dense",
+        "main_inline_prompt_chars": 45498,
+        "main_inline_prompt_sha256": "7aaf53cc40cbaa7ac0207c0f2f9ea1a8ff1c2cebd74c5a488f62e44f1bd9f1de",
+        "section_chars": {
+          "GameState": 285,
+          "SampleDialogue": 0,
+          "EventHistory": 0,
+          "CoreHeader": 69,
+          "DateAndTime": 143,
+          "Weather": 0,
+          "OtherNpcs": 0,
+          "Location": 399,
+          "Trinkets": 0,
+          "RecentEvents": 0,
+          "ThirdPartyContext": 0,
+          "SpecialDatesAndBirthday": 0,
+          "Gift": 0,
+          "LivingNpcExtraPrompt": 17727,
+          "SpouseAction": 0,
+          "NonSpouseFriendshipLevel": 36,
+          "Spouse": 0,
+          "SpecialRelationshipStatus": 0,
+          "coreGenderReferences": 211,
+          "Preoccupation": 0,
+          "CurrentConversation": 387,
+          "System": 595,
+          "GameConstantContext": 14658,
+          "NpcConstantContext": 876,
+          "Instructions": 10032,
+          "Command": 80
+        },
+        "recorded_source_files": [
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/prompts/default.json",
+            "sha256": "d6536e23c478f2bbf5dd51e054e779a6599a03eb501a76ce04fcfa3074000dce"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/prompts/zh.json",
+            "sha256": "b26d7e6f3b94711c468d3b8eac16502d9a8a18e26bb0ff637d00d77c7458a1f4"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/world/GameSummary.json",
+            "sha256": "70e944e3dec058323e0c5fd3c0791d7cf7f117a7fd4f1df88c1cd8e10776db78"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/world/GameSummaryOptimized.json",
+            "sha256": "b35adfb069f4e09708822226b83556ec4c00bc5578b82927a82bc084bc1f51b4"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/bios-zh/Haley.json",
+            "sha256": "bf53ffff586d46914263680f380feede485ea6791921e8b42e4c52170729a6e3"
+          },
+          {
+            "kind": "synthetic_fixture",
+            "resource": "dense-baseline-scenario.json",
+            "sha256": "efdd376b0f5e5d7d2582fa7651dce065742aca7791dde0cae75ff29f42fc5d24"
+          }
+        ]
+      },
+      "compact_measured_snapshot": {
+        "generated_at": "2026-09-10T13:24:51.5357486+00:00",
+        "manifest_sha256": "8bf88a969653d8ca9de10e0a9fedfcd0cbd092850bfbffd33ecc45cbf1da43d2",
+        "mod_assembly_sha256": "d2f6327312480a30b472ec9461ae4159add01449ec9f05e7c13669e6a0ec583c",
+        "synthetic": true,
+        "plan": "full",
+        "use_optimized_prompts": false,
+        "case": "photography-dense",
+        "main_inline_prompt_chars": 37202,
+        "main_inline_prompt_sha256": "31f60b6326972f9833b835f198813ef2f7082374d6cb87d13ad408b792209324",
+        "section_chars": {
+          "GameState": 285,
+          "SampleDialogue": 0,
+          "EventHistory": 0,
+          "CoreHeader": 69,
+          "DateAndTime": 143,
+          "Weather": 0,
+          "OtherNpcs": 0,
+          "Location": 399,
+          "Trinkets": 0,
+          "RecentEvents": 0,
+          "ThirdPartyContext": 0,
+          "SpecialDatesAndBirthday": 0,
+          "Gift": 0,
+          "LivingNpcExtraPrompt": 14753,
+          "SpouseAction": 0,
+          "NonSpouseFriendshipLevel": 36,
+          "Spouse": 0,
+          "SpecialRelationshipStatus": 0,
+          "coreGenderReferences": 211,
+          "Preoccupation": 0,
+          "CurrentConversation": 387,
+          "System": 595,
+          "GameConstantContext": 11902,
+          "NpcConstantContext": 876,
+          "Instructions": 7413,
+          "Command": 133
+        },
+        "recorded_source_files": [
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/prompts/default.json",
+            "sha256": "d6536e23c478f2bbf5dd51e054e779a6599a03eb501a76ce04fcfa3074000dce"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/prompts/zh.json",
+            "sha256": "b26d7e6f3b94711c468d3b8eac16502d9a8a18e26bb0ff637d00d77c7458a1f4"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/world/GameSummary.json",
+            "sha256": "f3cdae74b0035b77155c18ed5f8c240375ed8960a55b8a55c587b0c903f45203"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/world/GameSummaryOptimized.json",
+            "sha256": "b35adfb069f4e09708822226b83556ec4c00bc5578b82927a82bc084bc1f51b4"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/bios-zh/Haley.json",
+            "sha256": "bf53ffff586d46914263680f380feede485ea6791921e8b42e4c52170729a6e3"
+          },
+          {
+            "kind": "synthetic_fixture",
+            "resource": "dense-compact-scenario.json",
+            "sha256": "7e7a221b8e49b9aac25a97bb183e7c59a52d54b1b204be5757275564767c5bb9"
+          }
+        ]
+      },
+      "reduction_chars": 8296,
+      "reduction_percent": 18.2,
+      "changed_sections": [
+        {
+          "section": "LivingNpcExtraPrompt",
+          "baseline_chars": 17727,
+          "compact_chars": 14753,
+          "reduction_chars": 2974
+        },
+        {
+          "section": "GameConstantContext",
+          "baseline_chars": 14658,
+          "compact_chars": 11902,
+          "reduction_chars": 2756
+        },
+        {
+          "section": "Instructions",
+          "baseline_chars": 10032,
+          "compact_chars": 7413,
+          "reduction_chars": 2619
+        },
+        {
+          "section": "Command",
+          "baseline_chars": 80,
+          "compact_chars": 133,
+          "reduction_chars": -53
+        }
+      ]
+    },
+    "inline_metadata_instructions": {
+      "scope": "Direct inline instruction method output; differs from the outer assembler Instructions section.",
+      "baseline_chars": 8656,
+      "compact_chars": 6090,
+      "reduction_percent": 29.6,
+      "shared_contract_baseline_chars": 6707,
+      "shared_contract_compact_chars": 5017,
+      "unchanged_full_json_schema_chars": 1828
+    },
+    "behavior_builder_offline": {
+      "network_calls": 0,
+      "scope": "Production BehaviorPromptContextBuilder and HelpRequestAdvisor run against identical synthetic input hashes. behavior_chars includes the no-gift/opportunity wrapper and must not be equated with the assembler LivingNpcExtraPrompt section.",
+      "baseline": {
+        "mod_assembly_sha256": "EBA356F285E2A8EF058D69BE8DC21DE995B6CAA0C53C6DCAC0E18BEA15021E1C",
+        "cases": [
+          {
+            "name": "blocked",
+            "builder_chars": 17484,
+            "behavior_chars": 17737,
+            "synthetic_input_sha256": "efd717362da7bf1353588da1e11c301b46c10e682888a11ea5b0b1539588d240",
+            "builder_output_sha256": "1e79eaa57f69b9cab09f36936216081778ab7c44b15c2b1cd9feec6c7d385161"
+          },
+          {
+            "name": "allowed",
+            "builder_chars": 17534,
+            "behavior_chars": 18810,
+            "synthetic_input_sha256": "7294502bd2ab5ed13715348ed78ad292c69af2cf9e62e2a18acae31208d2afa6",
+            "builder_output_sha256": "e571ad9c15ce039cccc2aab6fb6ef88381062f101689bb8c63fa722a7003a630"
+          }
+        ]
+      },
+      "current": {
+        "mod_assembly_sha256": "D2F6327312480A30B472EC9461AE4159ADD01449EC9F05E7C13669E6A0EC583C",
+        "cases": [
+          {
+            "name": "blocked",
+            "builder_chars": 14503,
+            "behavior_chars": 14756,
+            "synthetic_input_sha256": "efd717362da7bf1353588da1e11c301b46c10e682888a11ea5b0b1539588d240",
+            "builder_output_sha256": "990860751a4e31e442784f9fb2fd1408d2f8a60b888a34de5be98fd653bb8330"
+          },
+          {
+            "name": "allowed",
+            "builder_chars": 16233,
+            "behavior_chars": 17236,
+            "synthetic_input_sha256": "7294502bd2ab5ed13715348ed78ad292c69af2cf9e62e2a18acae31208d2afa6",
+            "builder_output_sha256": "ea8e1055610c7150d12d4ea2049d45b916da9f9b4c56e3d70be85041b57e9fb0"
+          }
+        ]
+      }
+    },
+    "sve_offline": {
+      "network_calls": 0,
+      "scope": "Photography fixture with shorter synthetic behavior context; not the dense fixture. No online SVE latency or feature result.",
+      "baseline": {
+        "generated_at": "2026-09-10T13:13:53.4087522+00:00",
+        "manifest_sha256": "9ac3684913d16f04c6ae8f1a59d6b5b3d31778ab013a84c80b48ff94c196bcae",
+        "mod_assembly_sha256": "eba356f285e2a8ef058d69be8dc21de995b6caa0c53c6dcac0e18bea15021e1c",
+        "synthetic": true,
+        "plan": "full",
+        "use_optimized_prompts": false,
+        "case": "photography",
+        "main_inline_prompt_chars": 33667,
+        "main_inline_prompt_sha256": "b2d289a8eabbb48a81d6e768ff1c95a20337ff8f4acf82dbb8db63cedeac8250",
+        "section_chars": {
+          "GameConstantContext": 20055,
+          "Instructions": 10032,
+          "LivingNpcExtraPrompt": 455,
+          "Command": 80
+        },
+        "recorded_source_files": [
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/prompts/default.json",
+            "sha256": "d6536e23c478f2bbf5dd51e054e779a6599a03eb501a76ce04fcfa3074000dce"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/prompts/zh.json",
+            "sha256": "b26d7e6f3b94711c468d3b8eac16502d9a8a18e26bb0ff637d00d77c7458a1f4"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/world/GameSummary.json",
+            "sha256": "70e944e3dec058323e0c5fd3c0791d7cf7f117a7fd4f1df88c1cd8e10776db78"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/world/GameSummaryOptimized.json",
+            "sha256": "b35adfb069f4e09708822226b83556ec4c00bc5578b82927a82bc084bc1f51b4"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/bios-zh/Haley.json",
+            "sha256": "bf53ffff586d46914263680f380feede485ea6791921e8b42e4c52170729a6e3"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/bios-zh/George.json",
+            "sha256": "0e5a76d5b230a9044c838778222726bfa3927a3b2f846ac5e58c2aeb871cb5ea"
+          },
+          {
+            "kind": "synthetic_fixture",
+            "resource": "scenarios.json",
+            "sha256": "8f009a6dc55cfbcd32b5e61b380ae82353991523be324e90a28f9e6a64fdb836"
+          }
+        ]
+      },
+      "compact_measured_snapshot": {
+        "generated_at": "2026-09-10T13:14:32.2679321+00:00",
+        "manifest_sha256": "3f4d5b04e8e5000b09b499cf22d817f6b7cdc5f546fe10d9d3c669f6f16b0121",
+        "mod_assembly_sha256": "d2f6327312480a30b472ec9461ae4159add01449ec9f05e7c13669e6a0ec583c",
+        "synthetic": true,
+        "plan": "full",
+        "use_optimized_prompts": false,
+        "case": "photography",
+        "main_inline_prompt_chars": 27207,
+        "main_inline_prompt_sha256": "5cb978da3a1dc5825b244d964667dba4540ec17d629fbf2ead8db2695f750bd2",
+        "section_chars": {
+          "GameConstantContext": 16161,
+          "Instructions": 7413,
+          "LivingNpcExtraPrompt": 455,
+          "Command": 133
+        },
+        "recorded_source_files": [
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/prompts/default.json",
+            "sha256": "d6536e23c478f2bbf5dd51e054e779a6599a03eb501a76ce04fcfa3074000dce"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/prompts/zh.json",
+            "sha256": "b26d7e6f3b94711c468d3b8eac16502d9a8a18e26bb0ff637d00d77c7458a1f4"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/world/GameSummary.json",
+            "sha256": "f3cdae74b0035b77155c18ed5f8c240375ed8960a55b8a55c587b0c903f45203"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/world/GameSummaryOptimized.json",
+            "sha256": "b35adfb069f4e09708822226b83556ec4c00bc5578b82927a82bc084bc1f51b4"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/bios-zh/Haley.json",
+            "sha256": "bf53ffff586d46914263680f380feede485ea6791921e8b42e4c52170729a6e3"
+          },
+          {
+            "kind": "mod_resource",
+            "resource": "assets/dialogue/bios-zh/George.json",
+            "sha256": "0e5a76d5b230a9044c838778222726bfa3927a3b2f846ac5e58c2aeb871cb5ea"
+          },
+          {
+            "kind": "synthetic_fixture",
+            "resource": "scenarios.json",
+            "sha256": "8f009a6dc55cfbcd32b5e61b380ae82353991523be324e90a28f9e6a64fdb836"
+          }
+        ]
+      }
+    }
+  },
+  "online_reply_parser_validation": {
+    "scope": "Offline production parser and cleanup applied to the one successful compact dense online reply. This case verifies routine photography dialogue and the sparse complete metadata marker; it does not validate gift, preference, help, travel or conflict generation online.",
+    "source_batch": "diagnostic-compact",
+    "source_result_sha256": "fa13c4f5b3413f6e965d93786d621a16dbbc4e2752815786b2692f21c223c4cb",
+    "synthetic_scenario_sha256": "7e7a221b8e49b9aac25a97bb183e7c59a52d54b1b204be5757275564767c5bb9",
+    "checked_at": "2026-09-10T13:48:01.5043303+00:00",
+    "loaded_mod_assembly_sha256": "99f2b885865071ad46f7409a79112fd427832f7bf83efd597b6a74fa19f4fa53",
+    "network_calls": 0,
+    "checked_count": 1,
+    "empty_count": 0,
+    "strict_success_count": 1,
+    "all_checks_passed": true,
+    "cases": [
+      {
+        "name": "photography-dense/inline/low",
+        "checks": [
+          {
+            "name": "visible_response_parses",
+            "passed": true
+          },
+          {
+            "name": "strict_inline_metadata",
+            "passed": true
+          },
+          {
+            "name": "metadata_does_not_leak_into_visible_text",
+            "passed": true
+          }
+        ],
+        "strict_inline_success": true,
+        "requires_classifier_fallback": false,
+        "all_checks_passed": true
+      }
+    ],
+    "final_release_recheck": {
+      "offline": true,
+      "network_calls": 0,
+      "loaded_mod_sha256": "d4cd427fa9cafe1c5b044cda9ff6cd5469275e503c6bad0103d7776e92f9cf05",
+      "input_sha256": "fa13c4f5b3413f6e965d93786d621a16dbbc4e2752815786b2692f21c223c4cb",
+      "scenarios_sha256": "7e7a221b8e49b9aac25a97bb183e7c59a52d54b1b204be5757275564767c5bb9",
+      "verification_report_sha256": "ccaf96a0b0077370daf49e5b7334813ba93e45a1cc33e2d523166ec48c644753",
+      "checked_count": 1,
+      "strict_success_count": 1,
+      "all_checks_passed": true,
+      "note": "The same single online reply was rechecked; this is not another online or independent semantic case."
+    }
+  },
+  "results": [
+    {
+      "sequence": 1,
+      "batch": "screening",
+      "batch_sequence": 1,
+      "name": "baseline-full-photography-low",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 28231,
+      "prompt_sha256": "ef320114127dc8c59e408f6bd5029a4912bb095ef5b307d29be6ec99bd164337",
+      "started_utc": "2026-09-10T12:45:27.584777+00:00",
+      "first_content_ms": 5449,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 5142,
+      "resolved_model": "gpt-5.6-sol",
+      "elapsed_ms": 8240,
+      "max_tokens": 2048,
+      "json_mode": false,
+      "usage": {
+        "prompt_tokens": 12131,
+        "completion_tokens": 103,
+        "total_tokens": 12234,
+        "prompt_tokens_details": {
+          "cached_tokens": 4224
+        }
+      },
+      "content_chars": 150,
+      "outcome": "nonempty_success"
+    },
+    {
+      "sequence": 2,
+      "batch": "screening",
+      "batch_sequence": 2,
+      "name": "short-latency-floor-low",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 517,
+      "prompt_sha256": "0bbd4929c4c8bf4e194c03162dce607860f88cd8cded61f2f5a6175e59d6fc48",
+      "started_utc": "2026-09-10T12:45:35.825107+00:00",
+      "first_content_ms": 11336,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 9842,
+      "resolved_model": "gpt-5.6-sol",
+      "elapsed_ms": 13824,
+      "max_tokens": 2048,
+      "json_mode": false,
+      "usage": {
+        "prompt_tokens": 4524,
+        "completion_tokens": 110,
+        "total_tokens": 4634,
+        "prompt_tokens_details": {
+          "cached_tokens": 3840
+        },
+        "completion_tokens_details": {
+          "reasoning_tokens": 49
+        }
+      },
+      "content_chars": 64,
+      "outcome": "nonempty_success"
+    },
+    {
+      "sequence": 3,
+      "batch": "router-screening",
+      "batch_sequence": 1,
+      "name": "router-photography-low",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 2682,
+      "prompt_sha256": "b916d8d01482acf86f4eecff1c0609dcbb242cf49b23d5bf62ee735aeedf9aa3",
+      "started_utc": "2026-09-10T12:53:47.319486+00:00",
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "http_status": 200,
+      "headers_ms": 1897,
+      "resolved_model": "gpt-5.6-sol",
+      "elapsed_ms": 3741,
+      "max_tokens": 384,
+      "json_mode": false,
+      "usage": {},
+      "content_chars": 0,
+      "outcome": "empty_without_provider_diagnosis"
+    },
+    {
+      "sequence": 4,
+      "batch": "router-screening",
+      "batch_sequence": 2,
+      "name": "router-photography-off",
+      "effort": "none",
+      "stream": true,
+      "prompt_chars": 2682,
+      "prompt_sha256": "b916d8d01482acf86f4eecff1c0609dcbb242cf49b23d5bf62ee735aeedf9aa3",
+      "started_utc": "2026-09-10T12:53:51.061335+00:00",
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "http_status": 200,
+      "headers_ms": 1972,
+      "resolved_model": "gpt-5.6-sol",
+      "elapsed_ms": 68612,
+      "max_tokens": 384,
+      "json_mode": true,
+      "usage": {},
+      "content_chars": 0,
+      "outcome": "empty_without_provider_diagnosis"
+    },
+    {
+      "sequence": 5,
+      "batch": "dense-abba",
+      "batch_sequence": 1,
+      "name": "dense-baseline-low",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 45498,
+      "prompt_sha256": "7aaf53cc40cbaa7ac0207c0f2f9ea1a8ff1c2cebd74c5a488f62e44f1bd9f1de",
+      "started_utc": "2026-09-10T13:24:52.031793+00:00",
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "http_status": 200,
+      "headers_ms": 3077,
+      "resolved_model": "gpt-5.6-sol",
+      "elapsed_ms": 3392,
+      "max_tokens": 2048,
+      "json_mode": false,
+      "usage": {},
+      "content_chars": 0,
+      "outcome": "empty_without_provider_diagnosis"
+    },
+    {
+      "sequence": 6,
+      "batch": "dense-abba",
+      "batch_sequence": 2,
+      "name": "dense-compact-low",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 37202,
+      "prompt_sha256": "31f60b6326972f9833b835f198813ef2f7082374d6cb87d13ad408b792209324",
+      "started_utc": "2026-09-10T13:24:55.424284+00:00",
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "http_status": 200,
+      "headers_ms": 3472,
+      "resolved_model": "gpt-5.6-sol",
+      "elapsed_ms": 3820,
+      "max_tokens": 2048,
+      "json_mode": false,
+      "usage": {},
+      "content_chars": 0,
+      "outcome": "empty_without_provider_diagnosis"
+    },
+    {
+      "sequence": 7,
+      "batch": "dense-abba",
+      "batch_sequence": 3,
+      "name": "dense-compact-low",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 37202,
+      "prompt_sha256": "31f60b6326972f9833b835f198813ef2f7082374d6cb87d13ad408b792209324",
+      "started_utc": "2026-09-10T13:24:59.244670+00:00",
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "http_status": 200,
+      "headers_ms": 2757,
+      "resolved_model": "gpt-5.6-sol",
+      "elapsed_ms": 3680,
+      "max_tokens": 2048,
+      "json_mode": false,
+      "usage": {},
+      "content_chars": 0,
+      "outcome": "empty_without_provider_diagnosis"
+    },
+    {
+      "sequence": 8,
+      "batch": "dense-abba",
+      "batch_sequence": 4,
+      "name": "dense-baseline-low",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 45498,
+      "prompt_sha256": "7aaf53cc40cbaa7ac0207c0f2f9ea1a8ff1c2cebd74c5a488f62e44f1bd9f1de",
+      "started_utc": "2026-09-10T13:25:02.925633+00:00",
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "http_status": 200,
+      "headers_ms": 3472,
+      "resolved_model": "gpt-5.6-sol",
+      "elapsed_ms": 3992,
+      "max_tokens": 2048,
+      "json_mode": false,
+      "usage": {},
+      "content_chars": 0,
+      "outcome": "empty_without_provider_diagnosis"
+    },
+    {
+      "sequence": 9,
+      "batch": "diagnostic-compact",
+      "batch_sequence": 1,
+      "name": "photography-dense/inline/low",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 37202,
+      "prompt_sha256": "31f60b6326972f9833b835f198813ef2f7082374d6cb87d13ad408b792209324",
+      "started_utc": "2026-09-10T13:41:56.439068+00:00",
+      "first_content_ms": 22677,
+      "finish_reason": "stop",
+      "status": "ok",
+      "http_status": 200,
+      "headers_ms": 10904,
+      "resolved_model": "gpt-5.6-sol",
+      "elapsed_ms": 30275,
+      "max_tokens": 2048,
+      "json_mode": false,
+      "usage": {
+        "prompt_tokens": 13930,
+        "completion_tokens": 399,
+        "total_tokens": 14329,
+        "completion_tokens_details": {
+          "reasoning_tokens": 310
+        }
+      },
+      "content_chars": 131,
+      "outcome": "nonempty_success",
+      "received_done": true,
+      "event_count": 86,
+      "response_keys": [
+        "choices",
+        "created",
+        "id",
+        "model",
+        "object",
+        "service_tier",
+        "usage"
+      ],
+      "content_type": "text/event-stream"
+    },
+    {
+      "sequence": 10,
+      "batch": "quality-preference",
+      "batch_sequence": 1,
+      "name": "preference-memory/inline/low",
+      "effort": "low",
+      "stream": true,
+      "prompt_chars": 27092,
+      "prompt_sha256": "5e57d66bcc8ef46ad8966393c1ca095ffe2089cea0d59d109b49e0ff8ddb65b4",
+      "started_utc": "2026-09-10T13:47:59.186506+00:00",
+      "first_content_ms": null,
+      "finish_reason": null,
+      "status": "error",
+      "http_status": 200,
+      "headers_ms": 8522,
+      "resolved_model": "gpt-5.6-sol",
+      "elapsed_ms": 8968,
+      "max_tokens": 2048,
+      "json_mode": false,
+      "usage": {},
+      "content_chars": 0,
+      "outcome": "provider_error",
+      "error_type": "provider-error",
+      "error_message": "Our servers are currently overloaded. Please try again later.",
+      "received_done": false,
+      "event_count": 2,
+      "response_keys": [
+        "choices",
+        "created",
+        "error",
+        "id",
+        "model",
+        "object",
+        "service_tier"
+      ],
+      "content_type": "text/event-stream"
+    }
+  ],
+  "final_offline_validation": {
+    "scope": "Final source after fact wording, HTTP-200 provider errors and diagnostic corrections; no further online requests.",
+    "dotnet_tests": {
+      "passed": 2102,
+      "failed": 0,
+      "pre_existing_skipped": 1,
+      "report_sha256": "a46ddd44223c40bb3a73924bb534105b90bf527d41a12ee8f67eab95ae39f341"
+    },
+    "python_offline_tests": {
+      "passed": 7,
+      "failed": 0
+    },
+    "offline_diagnostics": {
+      "passed": 8,
+      "total": 8
+    },
+    "release_build": {
+      "success": true,
+      "warnings": 81,
+      "errors": 0,
+      "assembly_sha256": "d4cd427fa9cafe1c5b044cda9ff6cd5469275e503c6bad0103d7776e92f9cf05"
+    },
+    "dense": {
+      "synthetic": true,
+      "network_calls": 0,
+      "generated_at": "2026-09-10T14:48:09.5373217+00:00",
+      "mod_assembly_sha256": "d4cd427fa9cafe1c5b044cda9ff6cd5469275e503c6bad0103d7776e92f9cf05",
+      "manifest_sha256": "14e9d65061d172791258f521d6464cbb5cfd0573e7d4fc980d3e9395309b16c2",
+      "case": "photography-dense",
+      "main_inline_prompt_chars": 37219,
+      "main_inline_prompt_sha256": "abe9ce57309c14b9a2a8b902e1dbb8afe3fc90d4f81c2e1cac0adcffd67f6c03",
+      "section_chars": {
+        "GameState": 285,
+        "SampleDialogue": 0,
+        "EventHistory": 0,
+        "CoreHeader": 69,
+        "DateAndTime": 143,
+        "Weather": 0,
+        "OtherNpcs": 0,
+        "Location": 399,
+        "Trinkets": 0,
+        "RecentEvents": 0,
+        "ThirdPartyContext": 0,
+        "SpecialDatesAndBirthday": 0,
+        "Gift": 0,
+        "LivingNpcExtraPrompt": 14753,
+        "SpouseAction": 0,
+        "NonSpouseFriendshipLevel": 36,
+        "Spouse": 0,
+        "SpecialRelationshipStatus": 0,
+        "coreGenderReferences": 211,
+        "Preoccupation": 0,
+        "CurrentConversation": 387,
+        "System": 595,
+        "GameConstantContext": 11919,
+        "NpcConstantContext": 876,
+        "Instructions": 7413,
+        "Command": 133
+      }
+    },
+    "sve_photography": {
+      "synthetic": true,
+      "network_calls": 0,
+      "generated_at": "2026-09-10T14:48:10.4355522+00:00",
+      "mod_assembly_sha256": "d4cd427fa9cafe1c5b044cda9ff6cd5469275e503c6bad0103d7776e92f9cf05",
+      "manifest_sha256": "3cbba83b3570ddd98cf005a5189b2862e63815606566e93b7a35396eb32df5ce",
+      "case": "photography",
+      "main_inline_prompt_chars": 27236,
+      "main_inline_prompt_sha256": "73ea82ccc96ac7255273dbcf981268268fe4d99f4df33e042f49bba7876072f0",
+      "section_chars": {
+        "GameState": 285,
+        "SampleDialogue": 0,
+        "EventHistory": 0,
+        "CoreHeader": 69,
+        "DateAndTime": 143,
+        "Weather": 0,
+        "OtherNpcs": 0,
+        "Location": 399,
+        "Trinkets": 0,
+        "RecentEvents": 0,
+        "ThirdPartyContext": 0,
+        "SpecialDatesAndBirthday": 0,
+        "Gift": 0,
+        "LivingNpcExtraPrompt": 455,
+        "SpouseAction": 0,
+        "NonSpouseFriendshipLevel": 41,
+        "Spouse": 0,
+        "SpecialRelationshipStatus": 0,
+        "coreGenderReferences": 211,
+        "Preoccupation": 0,
+        "CurrentConversation": 387,
+        "System": 595,
+        "GameConstantContext": 16190,
+        "NpcConstantContext": 915,
+        "Instructions": 7413,
+        "Command": 133
+      }
+    },
+    "world_prose": {
+      "resources": [
+        {
+          "resource": "world",
+          "fields": 74,
+          "before_prose_chars": 12302,
+          "after_prose_chars": 9563
+        },
+        {
+          "resource": "world-sve",
+          "fields": 31,
+          "before_prose_chars": 5401,
+          "after_prose_chars": 4183
+        }
+      ],
+      "before_prose_chars": 17703,
+      "after_prose_chars": 13746,
+      "nonprose_values_lists_and_order_identical": true
+    },
+    "world_resource_sha256": {
+      "world": "a6f882848683dea97a1974a150c0920ef69043fa60ab39fe3bf993f8b8000829",
+      "world-sve": "920e120aafdb0db14b14601bbc6b9c9c6f77a55951f14a4c022c5a77abd74986"
+    },
+    "configuration_changed": false
+  }
+}

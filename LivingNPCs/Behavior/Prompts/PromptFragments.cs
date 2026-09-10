@@ -315,10 +315,8 @@ internal static class PromptFragments
         public const string RulesHeading = "Rules:";
         public static readonly string[] Rules =
         {
-            "- Treat this as current body language, relationship memory, and scene pressure, not text to quote.",
-            "- Stay in character; do not mention LivingNPCs, mods, prompts, AI, JSON, or context notes.",
-            "- Use at most one or two relevant details naturally. If none fit, let this only shape tone and pacing.",
-            "- The next reply should be a normal Stardew Valley NPC line, not a status report."
+            "- Use this current body language, relationship memory and scene pressure for at most one or two natural details, or only tone/pacing.",
+            "- Stay a normal Stardew Valley NPC: no status report, quoting these notes, or mentioning LivingNPCs/mods/prompts/AI/JSON/context notes."
         };
         public const string ConciseRules = "Rules: hidden body language and memory for the next in-character reply; do not quote it or mention LivingNPCs/AI/JSON; use at most one or two details naturally.";
 
@@ -443,15 +441,15 @@ internal static class PromptFragments
         public static string SocialCirclesLine(IReadOnlyCollection<string> circleLabels) =>
             $"- Stable community circles this NPC belongs to: {(circleLabels.Count == 0 ? "no stable small-circle affiliation is currently tracked" : string.Join(", ", circleLabels))}.";
 
-        public const string HelpRequestLifecycleLine = "- Help-request lifecycle: Offered means the NPC has asked but the farmer has not accepted; Pending means accepted and active; only Pending requests should be treated like tasks.";
-        public const string HelpRequestLifecycleLineConcise = "- Help-request lifecycle: Offered = asked but not accepted; Pending = accepted/active; only Pending is a task.";
+        public const string HelpRequestLifecycleLine = "- Help-request lifecycle: Offered = asked but not accepted; Pending = accepted/active; only Pending is a task.";
+        public const string HelpRequestLifecycleLineConcise = HelpRequestLifecycleLine;
         public static string HelpRequestReadinessLine(string readiness) => $"- Help-request readiness: {readiness}.";
 
         public static string HelpRequestReadinessAllowed(string reason) =>
-            $"may naturally ask for one modest favor now; {reason}; if you do ask, ask once and clearly, then let the farmer reply — do not also withdraw it or answer for them in the same message";
+            $"may naturally ask for one modest favor now; {reason}; ask once, clearly, then await the farmer's reply; do not withdraw it or answer for them";
 
         public static string HelpRequestReadinessBlocked(string reason) =>
-            $"should not open a new help request now ({reason}); even if the farmer offers to help, gently decline or deflect rather than naming a task, accepting the favor, or committing to one";
+            $"should not open a new help request now ({reason}); even if the farmer offers to help, gently decline/deflect; never name, accept or commit to a new favor";
 
         public static string HelpRequestFitLine(string fitLabel) => $"- Help-request fit: {fitLabel}";
         public static string ConflictMemoryLine(string conflicts) => $"- Conflict memory: {conflicts}.";
@@ -717,10 +715,10 @@ internal static class PromptFragments
                 "\n",
                 "## LivingNPCs Help Request Opportunity",
                 $"- Today {npcDisplayName} is inclined to ask the farmer for one small favor during this conversation.",
-                "- If the visible reply allows, naturally bring up one concrete item favor from the help-request fit list, and include exactly one hidden helpRequests entry for the whole favor — do not leave the favor only in spoken text.",
-                "- For a one-step favor, the visible reply may request only the one item encoded by requestedItemId/requestedItemLabel. If it genuinely requests multiple items, encode every named item as ordered steps in that same helpRequests entry, matching the exact spoken order.",
-                "- Never add an unencoded optional or bonus item with wording like 'if you can also bring', 'while you're at it', 'another would be better', or 'that would make it perfect'. Either make every requested item an encoded required step or do not mention it as part of the favor.",
-                "- Keep it brief and in character; if the moment genuinely does not fit, it is fine to wait for another day rather than forcing it."
+                "- If natural for this reply, ask one concrete item favor from the help-request fit list and emit exactly one hidden helpRequests entry for the whole favor; never spoken-only.",
+                "- One-step favors request only their requestedItemId/requestedItemLabel. Multiple items require ordered steps in the same helpRequests entry, matching the exact spoken order.",
+                "- No unencoded optional or bonus item ('if you can also bring', 'while you're at it', 'another would be better', 'that would make it perfect'): encode each as a required step or omit it.",
+                "- Keep it brief and in character; if the moment does not fit, wait for another day."
             );
         }
     }

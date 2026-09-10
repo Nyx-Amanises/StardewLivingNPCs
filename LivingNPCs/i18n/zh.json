@@ -570,6 +570,7 @@
   "log.dialogue.actionDecisionFailed": "{{npc}} 的动作决策阶段失败：{{error}}",
   "log.dialogue.exportFailed": "导出对话生成日志失败：{{error}}",
   "log.dialogue.generated": "已为 {{npc}} 生成对话：总耗时 {{totalMs}}ms，路由 {{routingOutcome}} {{routingMs}}ms，正文 {{mainMs}}ms，元数据 {{metadataOutcome}} {{metadataMs}}ms，动作补救 {{actionOutcome}} {{actionMs}}ms，尝试 {{attempts}} 次，提示词 {{promptChars}} 字符，回复 {{responseChars}} 字符，共 {{lines}} 行。各部分：{{sections}}",
+  "log.dialogue.transport": "{{npc}} 的正文传输计时（每次 HTTP 请求）：{{timings}}。最终响应的用量（{{source}}，n/a 表示未报告）：输入 {{inputTokens}}、缓存命中 {{cachedTokens}}、输出 {{outputTokens}}、推理 {{reasoningTokens}} token。",
   "log.dialogue.staleUiCleared": "LivingNPCs 已在原版绘制空 NPC 对白栈前清理残留的临时对白界面。",
   "log.dialogue.playerControlReleased": "LivingNPCs 已在关闭临时对白界面后恢复玩家控制。",
   "log.routing.forcedThinking": "已跳过 {{npc}} 的语义上下文路由：模型 {{model}} 强制启用思考，改用完整上下文。",

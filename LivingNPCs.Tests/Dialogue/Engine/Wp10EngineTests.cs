@@ -612,7 +612,7 @@ public class PromptAssemblerTests
         var prompt = new PromptAssembler(Input(conversation: conversation)).Assemble();
 
         Assert.Contains("[systemUntrustedData]", prompt.System);
-        Assert.Contains("[instructionsUntrustedData]", prompt.Instructions);
+        Assert.Contains("[instructionsUntrustedData]", prompt.Command);
         Assert.Contains("＜/untrusted_data＞", prompt.CorePrompt);
         Assert.Contains("[metadata marker removed]", prompt.CorePrompt);
         Assert.Equal(
@@ -998,9 +998,9 @@ public class DialogueEngineGenerateTests
             "A warm hello.$h#$b#That crossed a line.$a#$b#A private smile.$7",
             result.ParsedLines[0]);
         Assert.NotNull(client.LastRequest);
-        Assert.Contains("a reviewed warm smile", client.LastRequest!.Tail, StringComparison.Ordinal);
-        Assert.Contains("reviewed genuine anger", client.LastRequest.Tail, StringComparison.Ordinal);
-        Assert.Contains("a reviewed private smile", client.LastRequest.Tail, StringComparison.Ordinal);
+        Assert.Contains("a reviewed warm smile", client.LastRequest!.ConcatenatedUserContent(), StringComparison.Ordinal);
+        Assert.Contains("reviewed genuine anger", client.LastRequest.ConcatenatedUserContent(), StringComparison.Ordinal);
+        Assert.Contains("a reviewed private smile", client.LastRequest.ConcatenatedUserContent(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1103,8 +1103,8 @@ public class DialogueEngineGenerateTests
         }, CancellationToken.None);
 
         Assert.Equal("Warm.$0#$b#Studying the strange rain.$0", result.ParsedLines[0]);
-        Assert.DoesNotContain("forced green-rain concern", client.LastRequest!.Tail, StringComparison.Ordinal);
-        Assert.DoesNotContain("ordinary warm smile", client.LastRequest.Tail, StringComparison.Ordinal);
+        Assert.DoesNotContain("forced green-rain concern", client.LastRequest!.ConcatenatedUserContent(), StringComparison.Ordinal);
+        Assert.DoesNotContain("ordinary warm smile", client.LastRequest.ConcatenatedUserContent(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1166,8 +1166,8 @@ public class DialogueEngineGenerateTests
         }, CancellationToken.None);
 
         Assert.Equal("Awkward.$0#$b#Fine.$h", result.ParsedLines[0]);
-        Assert.DoesNotContain("unique island expression", client.LastRequest!.Tail, StringComparison.Ordinal);
-        Assert.Contains("ordinary warm smile", client.LastRequest.Tail, StringComparison.Ordinal);
+        Assert.DoesNotContain("unique island expression", client.LastRequest!.ConcatenatedUserContent(), StringComparison.Ordinal);
+        Assert.Contains("ordinary warm smile", client.LastRequest.ConcatenatedUserContent(), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -1280,8 +1280,8 @@ public class DialogueEngineGenerateTests
 
         Assert.Equal("Too far.$0#$b#Available.$7", result.ParsedLines[0]);
         Assert.NotNull(client.LastRequest);
-        Assert.Contains("portrait 7 = an explicitly described frame", client.LastRequest!.Tail, StringComparison.Ordinal);
-        Assert.DoesNotContain("portrait 11", client.LastRequest.Tail, StringComparison.Ordinal);
+        Assert.Contains("portrait 7 = an explicitly described frame", client.LastRequest!.ConcatenatedUserContent(), StringComparison.Ordinal);
+        Assert.DoesNotContain("portrait 11", client.LastRequest.ConcatenatedUserContent(), StringComparison.Ordinal);
     }
 
     [Fact]

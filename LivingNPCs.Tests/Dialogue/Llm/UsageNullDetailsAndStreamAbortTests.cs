@@ -44,6 +44,8 @@ public sealed class UsageNullDetailsAndStreamAbortTests : LlmTestBase
         Assert.Equal(7, parsed.TotalTokens);
         Assert.Equal(0, parsed.CachedPromptTokens);
         Assert.Equal(0, parsed.ReasoningTokens);
+        Assert.False(parsed.CachedPromptTokensReported);
+        Assert.False(parsed.ReasoningTokensReported);
     }
 
     [Fact]
@@ -55,11 +57,44 @@ public sealed class UsageNullDetailsAndStreamAbortTests : LlmTestBase
             + "\"completion_tokens_details\":{\"reasoning_tokens\":3}}"));
         Assert.Equal(6, withObjects.CachedPromptTokens);
         Assert.Equal(3, withObjects.ReasoningTokens);
+        Assert.True(withObjects.CachedPromptTokensReported);
+        Assert.True(withObjects.ReasoningTokensReported);
 
         // details 为 null 时仍能落到 DeepSeek 旧字段。
         var legacy = TokenUsage.FromOpenAiUsage(JObject.Parse(
             "{\"prompt_tokens\":10,\"prompt_tokens_details\":null,\"prompt_cache_hit_tokens\":3}"));
         Assert.Equal(3, legacy.CachedPromptTokens);
+        Assert.True(legacy.CachedPromptTokensReported);
+    }
+
+    [Theory]
+    [InlineData("OpenAI")]
+    [InlineData("DeepSeek")]
+    [InlineData("Claude")]
+    [InlineData("Gemini")]
+    public void ReportedZeroCacheIsDistinctFromMissingUsage(string provider)
+    {
+        TokenUsage Parse(JObject value) => provider switch
+        {
+            "Claude" => TokenUsage.FromClaudeUsage(value),
+            "Gemini" => TokenUsage.FromGeminiUsage(value),
+            _ => TokenUsage.FromOpenAiUsage(value)
+        };
+        var reported = Parse(JObject.Parse(provider switch
+        {
+            "DeepSeek" => "{\"prompt_cache_hit_tokens\":0,\"completion_tokens_details\":{\"reasoning_tokens\":0}}",
+            "Claude" => "{\"cache_read_input_tokens\":0}",
+            "Gemini" => "{\"cachedContentTokenCount\":0,\"thoughtsTokenCount\":0}",
+            _ => "{\"prompt_tokens_details\":{\"cached_tokens\":0},\"completion_tokens_details\":{\"reasoning_tokens\":0}}"
+        }));
+        var missing = Parse(new JObject());
+
+        Assert.Equal(0, reported.CachedPromptTokens);
+        Assert.True(reported.CachedPromptTokensReported);
+        Assert.Equal(provider != "Claude", reported.ReasoningTokensReported);
+        Assert.False(missing.CachedPromptTokensReported);
+        Assert.False(missing.ReasoningTokensReported);
+        Assert.False(TokenUsage.Estimate("prompt", "reply").CachedPromptTokensReported);
     }
 
     [Fact]

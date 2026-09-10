@@ -48,8 +48,8 @@ internal static class BehaviorPromptContextBuilder
 
         prompt.AppendLine();
         prompt.AppendLine(PromptFragments.Context.CurrentStateHeading);
-        prompt.AppendLine(PromptFragments.Context.ProfileSourceLine(disposition.SourceLabel));
-        prompt.AppendLine(PromptFragments.Context.DispositionLine(disposition.PromptLabel));
+        // Source, disposition and expression style are already present verbatim in the stance.
+        // Keep the separate background/dialogue cues and quantitative state facts below.
         if (disposition.HasProfileContext)
         {
             if (!string.IsNullOrWhiteSpace(disposition.BackgroundPrompt))
@@ -69,7 +69,6 @@ internal static class BehaviorPromptContextBuilder
         {
             prompt.AppendLine(PromptFragments.Context.MoodLine(state));
             prompt.AppendLine(PromptFragments.Context.EmotionLine(state));
-            prompt.AppendLine(PromptFragments.Context.ExpressionStyleLine(emotionalStyle.PromptLabel));
             prompt.AppendLine(PromptFragments.Context.FamiliarityLine(state));
             prompt.AppendLine(PromptFragments.Context.TrustLine(state));
             if (!string.IsNullOrWhiteSpace(state.RelationshipImpression))
@@ -88,10 +87,13 @@ internal static class BehaviorPromptContextBuilder
             }
 
             prompt.AppendLine(PromptFragments.Context.SocialCirclesLine(NpcSocialGraph.GetStableCircleLabels(npc.Name)));
-            prompt.AppendLine(PromptFragments.Context.HelpRequestLifecycleLine);
-            prompt.AppendLine(PromptFragments.Context.HelpRequestReadinessLine(
-                BuildHelpRequestReadinessLabel(state, world, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, currentTotalDays)));
-            prompt.AppendLine(PromptFragments.Context.HelpRequestFitLine(HelpRequestAdvisor.BuildPromptLabel(npc, world.Progression)));
+            var helpReadiness = HelpRequestReadinessRules.Evaluate(
+                state, world.FriendshipHearts, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, currentTotalDays);
+            foreach (string helpLine in BuildHelpRequestContextLines(
+                state, helpReadiness, () => HelpRequestAdvisor.BuildPromptLabel(npc, world.Progression)))
+            {
+                prompt.AppendLine(helpLine);
+            }
             prompt.AppendLine(PromptFragments.Context.SceneInfluenceLine(state.LastSceneInfluenceReason));
             prompt.AppendLine(PromptFragments.Context.LastInteractionLine(state.LastInteraction));
         }
@@ -175,21 +177,20 @@ internal static class BehaviorPromptContextBuilder
         AppendIfMeaningful(prompt, PromptFragments.Context.LabelConflict, PromptFragments.State.Conflicts(state));
         AppendIfMeaningful(prompt, PromptFragments.Context.LabelPersonalMemory, PromptFragments.State.FarmerNickname(state));
 
+        var helpReadiness = HelpRequestReadinessRules.Evaluate(
+            state, world.FriendshipHearts, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, currentTotalDays);
         bool helpRelevant = state.HelpRequests.Any(request => request.Status is "Offered" or "Pending")
             || state.DailyHelpRequestOpportunityTotalDays == currentTotalDays
-            || HelpRequestReadinessRules.Evaluate(
-                state,
-                world.FriendshipHearts,
-                maxPendingHelpRequestsPerNpc,
-                helpRequestCooldownDays,
-                currentTotalDays).Allowed;
+            || helpReadiness.Allowed;
         if (helpRelevant)
         {
             AppendIfMeaningful(prompt, PromptFragments.Context.LabelHelpRequests, PromptFragments.State.HelpRequests(state, currentTotalDays));
-            prompt.AppendLine(PromptFragments.Context.HelpRequestLifecycleLineConcise);
-            prompt.AppendLine(PromptFragments.Context.HelpRequestReadinessLine(
-                BuildHelpRequestReadinessLabel(state, world, maxPendingHelpRequestsPerNpc, helpRequestCooldownDays, currentTotalDays)));
-            prompt.AppendLine(PromptFragments.Context.HelpRequestFitLine(HelpRequestAdvisor.BuildPromptLabel(npc, world.Progression)));
+        }
+
+        foreach (string helpLine in BuildHelpRequestContextLines(
+            state, helpReadiness, () => HelpRequestAdvisor.BuildPromptLabel(npc, world.Progression), concise: true))
+        {
+            prompt.AppendLine(helpLine);
         }
 
         AppendIfMeaningful(prompt, PromptFragments.Context.LabelLastInteraction, state.LastInteraction);
@@ -742,23 +743,34 @@ internal static class BehaviorPromptContextBuilder
         }
     }
 
-    private static string BuildHelpRequestReadinessLabel(
+    /// <summary>
+    /// Keep the current permission and its reason even when no request can occur. Item selection
+    /// and lifecycle guidance are needed only for an active request or an allowed new favor.
+    /// The factory avoids both selecting and describing inapplicable item candidates.
+    /// </summary>
+    internal static IEnumerable<string> BuildHelpRequestContextLines(
         LivingNpcState state,
-        WorldContextSnapshot world,
-        int maxPendingHelpRequestsPerNpc,
-        int helpRequestCooldownDays,
-        int currentTotalDays)
+        HelpRequestReadinessResult readiness,
+        System.Func<string> buildFitLabel,
+        bool concise = false)
     {
-        var result = HelpRequestReadinessRules.Evaluate(
-            state,
-            world.FriendshipHearts,
-            maxPendingHelpRequestsPerNpc,
-            helpRequestCooldownDays,
-            currentTotalDays
-        );
-        return result.Allowed
-            ? PromptFragments.Context.HelpRequestReadinessAllowed(result.Reason)
-            : PromptFragments.Context.HelpRequestReadinessBlocked(result.Reason);
+        bool needsDetails = readiness.Allowed
+            || state.HelpRequests.Any(request => request.Status is "Offered" or "Pending");
+        if (needsDetails)
+        {
+            yield return concise
+                ? PromptFragments.Context.HelpRequestLifecycleLineConcise
+                : PromptFragments.Context.HelpRequestLifecycleLine;
+        }
+
+        yield return PromptFragments.Context.HelpRequestReadinessLine(readiness.Allowed
+            ? PromptFragments.Context.HelpRequestReadinessAllowed(readiness.Reason)
+            : PromptFragments.Context.HelpRequestReadinessBlocked(readiness.Reason));
+
+        if (needsDetails)
+        {
+            yield return PromptFragments.Context.HelpRequestFitLine(buildFitLabel());
+        }
     }
 
     private static int GetMemoryAge(int totalDays, int currentTotalDays)
