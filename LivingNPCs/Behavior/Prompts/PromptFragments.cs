@@ -325,72 +325,10 @@ internal static class PromptFragments
 
         public static string ConversationStance(
             NPC npc,
-            LivingNpcState? state,
             NpcDispositionProfile disposition,
-            WorldContextSnapshot world,
             EmotionalExpressionCue emotionalStyle)
         {
-            if (state == null)
-            {
-                return $"{npc.displayName} should sound {disposition.PromptLabel}, with emotional expression style: {emotionalStyle.PromptLabel}; shaped by {disposition.SourceLabel} profile context and the current scene: {world.PromptLabel}.";
-            }
-
-            string tone = ToneCue(state);
-            string rhythm = RhythmCue(state);
-            string scenePressure = world.StateInfluence.HasMood
-                ? $"scene pressure suggests {world.StateInfluence.Mood}/{world.StateInfluence.Inclination}"
-                : "scene pressure is mild";
-
-            return $"{npc.displayName} should sound {tone}; temperament is {disposition.PromptLabel}; emotional expression style is {emotionalStyle.PromptLabel}; profile source is {disposition.SourceLabel}; relationship is {State.Familiarity(state)}; {rhythm}; {scenePressure}.";
-        }
-
-        public static string ToneCue(LivingNpcState state)
-        {
-            string emotion = state.CurrentEmotion switch
-            {
-                "Happy" => "genuinely pleased",
-                "Jealous" => "a little jealous",
-                "Worried" => "worried",
-                "Grateful" => "grateful",
-                "Disappointed" => "disappointed",
-                "Uneasy" => "slightly uneasy",
-                "Upset" => "not entirely pleased",
-                "Angry" => "angry",
-                "Sad" => "sad",
-                _ => "calm"
-            };
-
-            string attention = state.Attention switch
-            {
-                >= 75 => "attentive",
-                >= 45 => "aware",
-                _ => "lightly distracted"
-            };
-
-            string openness = state.Openness switch
-            {
-                >= 75 => "open",
-                >= 45 => "measured",
-                _ => "reserved"
-            };
-
-            return $"{state.Mood.ToLowerInvariant()}, {emotion}, {attention}, and {openness}";
-        }
-
-        public static string RhythmCue(LivingNpcState state)
-        {
-            return state.InteractionRhythm switch
-            {
-                "CrowdedToday" => "the farmer's attention is starting to feel repetitive today",
-                "AtComfortLimit" => "the farmer is near today's comfortable conversation limit",
-                "ComfortableRepeat" => "repeated conversation still feels natural because the relationship is close",
-                "PoliteRepeat" => "repeated conversation should stay polite rather than overly warm",
-                "DailyRoutine" or "BuildingRoutine" => "the farmer checking in has become part of a familiar routine",
-                "LongQuietGap" or "AfterLongGap" => "there is a noticeable gap since the last recorded conversation",
-                "FreshToday" => "this is the first recorded conversation today",
-                "FirstConversation" => "this is the first recorded LivingNPCs conversation",
-                _ => State.InteractionRhythm(state)
-            };
+            return $"{npc.displayName}; temperament: {disposition.PromptLabel}; emotional expression style: {emotionalStyle.PromptLabel}; profile source: {disposition.SourceLabel}.";
         }
 
         // ---- "Current state:" section ----
@@ -402,19 +340,23 @@ internal static class PromptFragments
         public static string SceneLine(WorldContextSnapshot world) => $"- Scene: {world.PromptLabel}; location: {world.LocationDisplayName}; date: {world.Season} {world.DayOfMonth}; time: {world.TimeOfDay}.";
         public static string SceneLineConcise(WorldContextSnapshot world) => $"- Scene: {world.PromptLabel}; location: {world.LocationDisplayName}; {world.Season} {world.DayOfMonth}, {world.TimeOfDay}.";
         public static string WorldKnowledgeLine(string knowledgeLabel) => $"- World knowledge available to this NPC: {knowledgeLabel}.";
-        public static string MoodLine(LivingNpcState state) => $"- Mood: {state.Mood}; attention to farmer: {state.Attention}/100; response inclination: {state.CurrentInclination}.";
+        public static string MoodLine(LivingNpcState state) => $"- Mood: {state.Mood}; attention to farmer: {state.Attention}/100 ({AttentionCue(state.Attention)}); openness: {state.Openness}/100 ({OpennessCue(state.Openness)}); response inclination: {state.CurrentInclination}.";
         public static string MoodLineConcise(LivingNpcState state) => $"- Mood: {state.Mood}; emotion: {State.Emotion(state)}; inclination: {state.CurrentInclination}.";
         public static string EmotionLine(LivingNpcState state) => $"- Interpersonal emotion: {State.Emotion(state)}.";
         public static string ExpressionStyleLine(string styleLabel) => $"- Emotional expression style: {styleLabel}.";
-        public static string FamiliarityLine(LivingNpcState state) => $"- Long-term familiarity with the farmer: {state.Familiarity}/100 ({State.Familiarity(state)}).";
+        public static string FamiliarityLine(LivingNpcState state) => $"- Recorded interaction familiarity with the farmer: {state.Familiarity}/100 ("
+            + (state.Familiarity < 18
+                ? "limited familiarity recorded); current friendship and explicit relationship status take precedence."
+                : $"{State.Familiarity(state)}).");
         public static string TrustLine(LivingNpcState state) => $"- Relationship trust in the farmer: {State.RelationshipTrust(state)}.";
         public static string FamiliarityTrustRhythmLineConcise(LivingNpcState state) => $"- Familiarity {state.Familiarity}/100; trust: {State.RelationshipTrust(state)}; rhythm: {State.InteractionRhythm(state)}.";
+        public static string InteractionRhythmLine(LivingNpcState state) => $"- Last interaction rhythm: {State.InteractionRhythm(state)}; repeated conversation pressure: {state.RepeatedConversationPressure}/100.";
         public static string GiftContextLine(string lastGift) => $"- Recent gift context: {lastGift}.";
         public static string EventContextLine(string lastEvent) => $"- Recent event context: {lastEvent}.";
         public static string MemoryStoreLine(int longTermCount) => $"- Durable memory store: {longTermCount} long-term memories tracked; relevant ones, if any, appear under high-priority continuity.";
         public static string RelationshipImpressionLine(string impression) => $"- Long-term relationship impression (updated from important interactions and remembered history; use current facts and explicit statuses to resolve outdated details, and do not assume all events happened recently): {impression}";
         public static string KnownPreferencesLine(int preferenceCount) => $"- Farmer preference memories tracked: {preferenceCount}; relevant ones, if any, appear under high-priority continuity.";
-        public static string BehaviorTendenciesLine(string tendencies) => $"- Conversation-driven behavior tendencies: {tendencies}.";
+        public static string BehaviorTendenciesLine(string tendencies) => $"- Conversation-driven behavior tendencies (conversation stance): {tendencies}.";
         public static string SharedExperiencesLine(string sharedExperiences) => $"- Shared experiences with the farmer: {sharedExperiences}.";
         public static string HelpRequestsLine(string helpRequests) => $"- Help requests involving the farmer: {helpRequests}.";
         public static string CommunityImpressionsLine(int impressionCount) => $"- Community impressions about the farmer's ties with other NPCs: {impressionCount} tracked (background awareness, not a talking point; relevant ones, if any, appear under high-priority continuity).";
@@ -453,7 +395,17 @@ internal static class PromptFragments
 
         public static string HelpRequestFitLine(string fitLabel) => $"- Help-request fit: {fitLabel}";
         public static string ConflictMemoryLine(string conflicts) => $"- Conflict memory: {conflicts}.";
-        public static string SceneInfluenceLine(string reason) => $"- Scene influence on mood: {reason}.";
+        public static string SceneInfluenceLine(string reason) => $"- Last applied scene influence on mood: {reason}.";
+        public static string CurrentSceneInfluenceLine(WorldStateInfluence influence, LivingNpcState? state)
+        {
+            string mood = state != null && string.Equals(state.Mood, influence.Mood, System.StringComparison.OrdinalIgnoreCase)
+                ? string.Empty
+                : $"; suggested mood: {influence.Mood}";
+            string inclination = state != null && string.Equals(state.CurrentInclination, influence.Inclination, System.StringComparison.OrdinalIgnoreCase)
+                ? string.Empty
+                : $"; suggested response inclination: {influence.Inclination}";
+            return $"- Scene: {influence.Reason}{mood}{inclination}.";
+        }
         public static string LastInteractionLine(string lastInteraction) => $"- Last interaction: {lastInteraction}.";
         public const string NoStateLine = "- No persistent LivingNPCs state exists yet; use disposition and scene context conservatively.";
         public const string NoStateLineConcise = "- No persistent LivingNPCs state yet; use disposition and scene conservatively.";
@@ -474,8 +426,8 @@ internal static class PromptFragments
         // ---- "High-priority continuity:" section ----
         public const string PriorityHeading = "High-priority continuity:";
 
-        public static string GiftMemoryCue(string giftName, string freshness, string taste) =>
-            $"Gift memory: the farmer offered {giftName} {freshness}; taste was {taste}; let this affect warmth, surprise, or distance only if relevant.";
+        public static string GiftMemoryCue(string giftName, string freshness, string taste, int giftsToday) =>
+            $"Gift memory: the farmer offered {giftName} {freshness}; taste was {taste}; gifts recorded today: {giftsToday}; let this affect warmth, surprise, or distance only if relevant, with at most a brief natural acknowledgement.";
 
         public static string EventMemoryCue(string eventContext, string freshness) =>
             $"Event memory: {eventContext} ({freshness}); acknowledge only if the conversation naturally continues it.";
@@ -486,13 +438,13 @@ internal static class PromptFragments
             $"Relevant long-term memories for this reply: {recallText}; use at most one if it naturally matters now.";
 
         public static string PreferenceRecallCue(string recallText) =>
-            $"Relevant farmer preference memories for this reply: {recallText}; when a gift or topic naturally matches one, it is okay to acknowledge remembering it briefly.";
+            $"Relevant farmer preference memories for this reply: {recallText}; when a gift or topic naturally matches one, acknowledge it briefly and naturally rather than reciting a profile.";
 
         public static string CommunityImpressionCue(string recallText) =>
             $"Community impressions: {recallText}; use at most one as a brief passing remark, never the opening subject; keep indirect reports tentative, and do not reveal knowledge the NPC would not plausibly have.";
 
         public static string BehaviorTendencyCue(DialogueBehaviorInfluenceFact influence, int currentTotalDays) =>
-            $"Conversation-driven behavior tendency: {Facts.DialogueBehaviorInfluence(influence, currentTotalDays)}; this should shape body language and follow-through, not be quoted as dialogue.";
+            $"Conversation-driven behavior tendency: {Facts.DialogueBehaviorInfluence(influence, currentTotalDays)}; use this as a conversation stance cue for body language and follow-through, not quoted dialogue.";
 
         public static string ActiveHelpRequestCue(NpcHelpRequestFact request, int currentTotalDays)
         {
@@ -503,7 +455,7 @@ internal static class PromptFragments
         }
 
         public static string FulfilledHelpRequestCue(NpcHelpRequestFact request, int currentTotalDays) =>
-            $"Recently fulfilled help request: {Facts.HelpRequestFulfilled(request, currentTotalDays)}; if it fits, the NPC may briefly thank the farmer for following through.";
+            $"Recently fulfilled help request: {Facts.HelpRequest(request, currentTotalDays)}; fulfilled {MemoryAge(BehaviorMemory.GetMemoryAge(request.FulfilledTotalDays, currentTotalDays))}; follow-up potential: {request.FollowUpPotential}; if it fits, the NPC may briefly thank the farmer for following through.";
 
         public const string DefaultExpiredHelpRequestReaction = "the NPC noticed the request did not work out";
 
@@ -511,34 +463,16 @@ internal static class PromptFragments
             $"Unfinished help request: {Facts.HelpRequest(request, currentTotalDays)}; reaction: {reaction}; the next conversation may acknowledge this according to personality, without over-punishing if the farmer never accepted.";
 
         public static string SharedExperienceCue(SharedExperienceFact experience, int currentTotalDays) =>
-            $"Shared experience: {Facts.SharedExperience(experience, currentTotalDays)}; if it fits, the NPC may acknowledge the time they spent together without formally reciting the memory.";
-
-        public static string LowTrustCue(int trust) =>
-            $"Relationship trust is only {trust}/100; keep disclosures surface-level and avoid sudden emotional intimacy.";
-
-        public static string HighTrustCue(int trust) =>
-            $"Relationship trust is {trust}/100; deeper private honesty is allowed when the moment genuinely supports it.";
+            $"Shared experiences: {Facts.SharedExperience(experience, currentTotalDays)}; if it fits, briefly acknowledge this completed time together without formally reciting the memory or treating it as a future plan.";
 
         public static string UnresolvedConflictCue(NpcConflictFact conflict, string conflictStyle) =>
-            $"Unresolved conflict: {Facts.Conflict(conflict)}; while this remains unresolved, warmth should be reduced and the NPC may be brief, cool, or decline closeness; expression style: {conflictStyle}.";
+            $"Unresolved conflict: {Facts.Conflict(conflict)}; reduce warmth; a brief, cool reply or declining closeness may fit; if severe, a friendly invitation may be refused; expression style: {conflictStyle}.";
 
-        public static string ComplexRepairCue(string repairStage) =>
-            $"Complex repair chain: stage {repairStage}; serious hurt may need apology, a meaningful gesture, time, and a specific restorative conversation before it is fully repaired.";
+        public const string ComplexRepairCue =
+            "Complex conflict repair: a pleasant line alone cannot erase serious hurt; let apology, a meaningful gesture, time, and a specific restorative conversation accumulate before full repair.";
 
         public static string ResolvedConflictCue(NpcConflictFact conflict, string repairStyle, int currentTotalDays) =>
-            $"Recently resolved conflict: {Facts.ConflictResolved(conflict, currentTotalDays)}; if it fits naturally, the NPC may briefly make clear that the earlier issue is past now; recovery style: {repairStyle}.";
-
-        public static string RhythmReminderCue(LivingNpcState state) =>
-            $"Interaction rhythm: {State.InteractionRhythm(state)}; do not make every repeated talk sound equally eager.";
-
-        public static string BoundaryCue(int repeatedConversationPressure) =>
-            $"Boundary cue: repeated conversation pressure is {repeatedConversationPressure}/100; a short or gently bounded reply may fit.";
-
-        public static string RelationshipWarmthCue(int familiarity, int hearts) =>
-            $"Relationship cue: familiarity {familiarity}/100 and {hearts} hearts; match warmth to this instead of defaulting to stranger-level politeness.";
-
-        public static string SceneCue(string reason, string mood, string inclination) =>
-            $"Scene cue: {reason}; this can tint mood toward {mood} and reply style toward {inclination}.";
+            $"Recently resolved conflict: {Facts.Conflict(conflict)}; began {MemoryAge(BehaviorMemory.GetMemoryAge(conflict.CreatedTotalDays, currentTotalDays))}; if it fits naturally, the NPC may briefly make clear that the earlier issue is past now; recovery style: {repairStyle}.";
 
         public static string WorldStageCue(string replyGuidance) => $"World-stage continuity: {replyGuidance}";
 
@@ -569,11 +503,17 @@ internal static class PromptFragments
 
         // ---- "Next reply guidance:" section ----
         public const string GuidanceHeading = "Next reply guidance:";
-        public const string GuidanceNoStateModest = "Let the reply be scene-aware and modest because there is no persistent state yet.";
         public const string GuidanceNoStateSubtle = "Keep continuity subtle; do not invent strong feelings from weak context.";
         public static string GuidanceExpressionStyle(string replyGuidance) => $"Emotion expression style: {replyGuidance}.";
-        public static string GuidanceRelationshipPacing(LivingNpcState state) => $"Relationship pacing: {State.InteractionComfortTier(state)}.";
-        public static string GuidanceDisclosurePacing(LivingNpcState state) => $"Disclosure pacing: {State.SecretSharing(state)}.";
+        public static string GuidanceRelationshipPacing(LivingNpcState state) => $"Relationship pacing (last recorded interaction): {State.InteractionComfortTier(state)}."
+            + (state.Familiarity >= 18 || state.LastFriendshipHearts > 0
+                ? " Let current friendship and recorded familiarity guide warmth instead of defaulting to stranger-level politeness."
+                : string.Empty);
+        public static string GuidanceDisclosurePacing(LivingNpcState state) => $"Disclosure pacing: {State.SecretSharing(state)}."
+            + (state.RelationshipTrust < 35 ? " Avoid sudden emotional intimacy." : string.Empty);
+        public static string GuidanceInteractionRhythm(LivingNpcState state) => state.RepeatedConversationPressure >= 20
+            ? "Last interaction rhythm should shape pacing: a brief, amused, busy, or gently bounded reply may fit; do not make every repeated talk equally eager."
+            : "Let the last interaction rhythm shape pacing; do not make every repeated talk equally eager.";
         public static string GuidanceInvitationPolicy(LivingNpcState state) => $"Invitation policy: {TravelInvitationPolicy(state)}.";
 
         public static string TravelInvitationPolicy(LivingNpcState state)
@@ -592,22 +532,7 @@ internal static class PromptFragments
             return $"{relationshipPolicy}; ordinary daily schedule stops are soft constraints for LivingNPCs companion outings, so do not decline only because of a normal future destination; if the requested destination matches a current or upcoming ordinary schedule stop, treating it as going together or showing the farmer the way is especially natural; still refuse during events, sleep, severe conflict, unsafe scenes, or truly story-critical obligations";
         }
 
-        public const string GuidanceFreshGift = "If the gift is conversationally relevant, a brief natural acknowledgement is allowed; avoid turning the whole reply into gift analysis.";
-        public const string GuidancePreferenceMention = "If choosing to mention a remembered farmer preference, keep it short and human, not like reciting a profile.";
-        public const string GuidanceSharedExperience = "Completed shared experiences can deepen continuity; acknowledge them naturally without turning them into a formal recap or future plan.";
-
-        public static string GuidanceUnresolvedConflict(string conflictStyle) =>
-            $"An unresolved conflict is still shaping the relationship; do not answer with default warmth, and if the conflict is severe it is okay to keep the reply short or refuse a friendly invitation; express it through this NPC's style: {conflictStyle}.";
-
-        public const string GuidanceComplexRepair = "For a serious conflict, let repair feel gradual: a single pleasant line should not erase hurt before apology, gesture, time, and a real repair conversation have accumulated.";
-
-        public static string GuidanceResolvedConflict(string repairStyle) =>
-            $"If a recently resolved conflict is relevant, it is okay to say in a natural in-character way that the earlier matter is behind you now; recovery style: {repairStyle}.";
-
-        public const string GuidanceRepeatedPressure = "Because the farmer has been checking in repeatedly, it is okay to sound brief, amused, busy, or gently boundary-setting.";
-
-        public static string GuidanceSceneNudge(string reason) =>
-            $"Let the scene nudge tone through {reason}, without explicitly explaining the scene mechanics.";
+        public const string GuidanceSceneNudge = "Let the current scene pressure tint tone and pacing without explicitly explaining the scene mechanics.";
 
         public static string GuidanceWorldStage(string replyGuidance) =>
             $"Keep references to town progress, the farmer's household, and how long she has lived here consistent with what this NPC could plausibly know: {replyGuidance}";
@@ -615,6 +540,20 @@ internal static class PromptFragments
         public const string ConciseReplyGuidanceLine = "- Reply guidance: let the mood, emotion, and relationship pace above shape tone and word choice; surface at most one or two details, and keep references to town progress, the farmer's household, and shared history consistent with what this NPC plausibly knows.";
 
         // ---- shared helpers ----
+        private static string AttentionCue(int attention) => attention switch
+        {
+            >= 75 => "attentive",
+            >= 45 => "aware",
+            _ => "lightly distracted"
+        };
+
+        private static string OpennessCue(int openness) => openness switch
+        {
+            >= 75 => "open",
+            >= 45 => "measured",
+            _ => "reserved"
+        };
+
         public static string MemoryAge(int ageDays) => ageDays switch
         {
             0 => "today",

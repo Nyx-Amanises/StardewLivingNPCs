@@ -30,9 +30,21 @@ public sealed class LlmThinkingTests
     [InlineData("deepseek-v4-flash", LlmThinking.Low, "enabled", "low")]
     [InlineData("deepseek-v4-pro", LlmThinking.Low, "enabled", "low")]
     [InlineData("deepseek-ai/DeepSeek-V4-Flash", LlmThinking.Low, "enabled", "low")]
+    [InlineData("deepseek-flash", LlmThinking.Off, "disabled", "")]
+    [InlineData("deepseek-flash", LlmThinking.Minimal, "enabled", "low")]
+    [InlineData("deepseek-flash", LlmThinking.Low, "enabled", "low")]
+    [InlineData("proxy/deepseek-ai/DeepSeek_Flash", LlmThinking.Low, "enabled", "low")]
+    [InlineData("deepseek/deepseek-flash:free", LlmThinking.Minimal, "enabled", "low")]
+    [InlineData("deepseek-flash-20260912", LlmThinking.Low, "enabled", "low")]
+    [InlineData("deepseek-flash", LlmThinking.Medium, "enabled", "high")]
+    [InlineData("deepseek-flash", LlmThinking.High, "enabled", "high")]
+    [InlineData("deepseek-flash", LlmThinking.XHigh, "enabled", "max")]
     [InlineData("deepseek-v4-flash", LlmThinking.Medium, "enabled", "high")]
+    [InlineData("deepseek-reasoner", LlmThinking.Minimal, "enabled", "high")]
     [InlineData("deepseek-reasoner", LlmThinking.Low, "enabled", "high")]
     [InlineData("deepseek-r1", LlmThinking.Low, "enabled", "high")]
+    [InlineData("deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", LlmThinking.Minimal, "enabled", "high")]
+    [InlineData("deepseek/deepseek-r1:free", LlmThinking.Low, "enabled", "high")]
     [InlineData("deepseek-reasoner", LlmThinking.High, "enabled", "high")]
     [InlineData("deepseek-v4-pro", LlmThinking.XHigh, "enabled", "max")]
     public void DeepSeekThinkingModelsUseOfficialThinkingShape(string model, string level, string expectedType, string expectedEffort)
@@ -50,13 +62,40 @@ public sealed class LlmThinkingTests
     [InlineData("deepseek-v4", true)]
     [InlineData("DeepSeek-V4-Flash", true)]
     [InlineData("deepseek-ai/deepseek_v4_pro", true)]
+    [InlineData("deepseek-flash", true)]
+    [InlineData("gateway/DeepSeek.Flash", true)]
+    [InlineData("deepseek-flash-20260912", true)]
+    [InlineData("deepseek/deepseek-flash:free", true)]
     [InlineData("deepseek-v40-flash", false)]
+    [InlineData("deepseek-flashlight", false)]
+    [InlineData("not-deepseek-flash", false)]
+    [InlineData("not-deepseek-v4", false)]
+    [InlineData("deepseek-flash/other-model", false)]
     [InlineData("deepseek-v3.1", false)]
     [InlineData("deepseek-r1", false)]
     [InlineData("deepseek-reasoner", false)]
-    public void DeepSeekLowEffortCapabilityIsLimitedToV4(string model, bool expected)
+    public void DeepSeekLowEffortCapabilityUsesKnownModelFamilies(string model, bool expected)
     {
-        Assert.Equal(expected, LlmThinking.IsDeepSeekV4Model(model));
+        Assert.Equal(expected, LlmThinking.SupportsDeepSeekLowEffort(model));
+    }
+
+    [Theory]
+    [InlineData("other-flash")]
+    [InlineData("deepseek-flashlight")]
+    [InlineData("not-deepseek-flash")]
+    [InlineData("deepseek-flash/other-model")]
+    [InlineData("deepseek-v40-flash")]
+    [InlineData("not-deepseek-v4")]
+    [InlineData("deepseek-reasonerish")]
+    [InlineData("deepseek-r10")]
+    public void LookalikeNamesDoNotGetDeepSeekThinkingParameters(string model)
+    {
+        var body = new JObject();
+
+        LlmThinking.AddOpenAiCompatibleThinkingParameters(body, model, LlmThinking.Low);
+
+        Assert.Empty(body);
+        Assert.False(LlmThinking.IsDeepSeekThinkingModel(model));
     }
 
     [Theory]
@@ -117,12 +156,16 @@ public sealed class LlmThinkingTests
         Assert.Contains(LlmThinking.XHigh, LlmThinking.Options);
     }
 
-    [Fact]
-    public void AutoDoesNotAddOpenAiCompatibleThinkingParameters()
+    [Theory]
+    [InlineData("gpt-5.5")]
+    [InlineData("deepseek-flash")]
+    [InlineData("deepseek-v4-flash")]
+    [InlineData("deepseek-reasoner")]
+    public void AutoDoesNotAddOpenAiCompatibleThinkingParameters(string model)
     {
         var body = new JObject();
 
-        LlmThinking.AddOpenAiCompatibleThinkingParameters(body, "gpt-5.5", LlmThinking.Auto);
+        LlmThinking.AddOpenAiCompatibleThinkingParameters(body, model, LlmThinking.Auto);
 
         Assert.Empty(body);
     }

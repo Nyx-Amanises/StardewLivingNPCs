@@ -69,8 +69,8 @@ internal static class LlmThinking
     {
         return Normalize(level) switch
         {
-            // DeepSeek v4 supports low/high/max. Keep legacy reasoner/R1 compatibility unchanged.
-            Minimal or Low => IsDeepSeekV4Model(modelName) ? "low" : "high",
+            // V4 and the deepseek-flash alias support low/high/max; legacy reasoner/R1 keep high.
+            Minimal or Low => SupportsDeepSeekLowEffort(modelName) ? "low" : "high",
             Medium or High => "high",
             XHigh => "max",
             _ => null
@@ -225,21 +225,25 @@ internal static class LlmThinking
 
     public static bool IsDeepSeekThinkingModel(string modelName)
     {
-        string normalized = NormalizeModelName(modelName);
-        return normalized.Contains("deepseek", StringComparison.OrdinalIgnoreCase)
-            && (normalized.Contains("v4", StringComparison.OrdinalIgnoreCase)
-                || normalized.Contains("flash", StringComparison.OrdinalIgnoreCase)
-                || normalized.Contains("reasoner", StringComparison.OrdinalIgnoreCase)
-                || normalized.Contains("r1", StringComparison.OrdinalIgnoreCase));
+        return SupportsDeepSeekLowEffort(modelName)
+            || HasModelFamilyName(modelName, "deepseek-reasoner")
+            || HasModelFamilyName(modelName, "deepseek-r1");
     }
 
-    public static bool IsDeepSeekV4Model(string modelName)
+    public static bool SupportsDeepSeekLowEffort(string modelName)
+    {
+        return HasModelFamilyName(modelName, "deepseek-v4")
+            || HasModelFamilyName(modelName, "deepseek-flash");
+    }
+
+    private static bool HasModelFamilyName(string modelName, string familyName)
     {
         string normalized = NormalizeModelName(modelName);
-        const string name = "deepseek-v4";
-        int start = normalized.IndexOf(name, StringComparison.OrdinalIgnoreCase);
-        int end = start + name.Length;
-        return start >= 0 && (end == normalized.Length || normalized[end] == '-');
+        // Gate on the model after any provider namespace, never a matching namespace itself.
+        // Allow revision/variant suffixes, but not lookalikes such as v40 or flashlight.
+        string model = normalized[(normalized.LastIndexOf('/') + 1)..];
+        return model.StartsWith(familyName, StringComparison.OrdinalIgnoreCase)
+            && (model.Length == familyName.Length || model[familyName.Length] is '-' or ':');
     }
 
     public static void AddOpenAiCompatibleThinkingParameters(JObject body, string modelName, string level)

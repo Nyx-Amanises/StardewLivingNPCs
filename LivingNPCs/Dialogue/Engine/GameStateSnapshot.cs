@@ -26,6 +26,16 @@ internal enum SchedulePurposeKind
     Meditate
 }
 
+internal enum NpcRelationshipStatus
+{
+    None,
+    Roommate,
+    Married,
+    Engaged,
+    Dating,
+    Divorced
+}
+
 
 /// <summary>
 /// 生成请求发起时对游戏状态的一次性快照（WP10 §4.3）。纯数据、可直接构造（单测友好）；
@@ -76,6 +86,15 @@ internal sealed class GameStateSnapshot
     public int DaysUntilWedding { get; init; }
     public bool IsDivorced { get; init; }
 
+    // Explicit current commitments take precedence over weaker or historical flags. Hearts
+    // describe affinity; they never establish dating, engagement, marriage, or divorce.
+    public NpcRelationshipStatus RelationshipStatus => this.IsRoommate ? NpcRelationshipStatus.Roommate
+        : this.IsMarriedToFarmer ? NpcRelationshipStatus.Married
+        : this.IsEngaged ? NpcRelationshipStatus.Engaged
+        : this.IsDating ? NpcRelationshipStatus.Dating
+        : this.IsDivorced ? NpcRelationshipStatus.Divorced
+        : NpcRelationshipStatus.None;
+
     /// <summary>NPC 当前应使用姜岛服装；离婚时游戏会禁用该服装的 $u 帧。</summary>
     public bool NpcShouldWearIslandAttire { get; init; }
 
@@ -90,8 +109,6 @@ internal sealed class GameStateSnapshot
 
     public bool CurrentTravelPurposeConfirmed { get; init; }
     public bool ProposalRejected { get; init; }
-    /// <summary>性向词（约会文案参数，采集时按双方性别给出；可空）。</summary>
-    public string OrientationWord { get; init; } = string.Empty;
 
     /// <summary>NPC 是儿童（未婚分支分档用）。</summary>
     public bool NpcIsChild { get; init; }

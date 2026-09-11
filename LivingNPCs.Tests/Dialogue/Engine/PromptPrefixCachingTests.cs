@@ -85,7 +85,7 @@ public sealed class PromptPrefixCachingTests
         Assert.Equal(original.NpcContext, retry.NpcContext);
         Assert.EndsWith("Reply in Chinese.", retry.Tail);
         Assert.False(retry.AllowRetry);
-        Assert.Equal(2048, retry.MaxTokens);
+        Assert.Equal(16_000, retry.MaxTokens);
     }
 
     private static AssembledPrompt Assemble(

@@ -43,13 +43,11 @@ internal static class BehaviorPromptContextBuilder
         }
 
         prompt.AppendLine();
-        prompt.AppendLine(PromptFragments.Context.StanceHeading);
-        prompt.AppendLine($"- {PromptFragments.Context.ConversationStance(npc, state, disposition, world, emotionalStyle)}");
+        prompt.AppendLine($"{PromptFragments.Context.StanceHeading} {PromptFragments.Context.ConversationStance(npc, disposition, emotionalStyle)}");
 
         prompt.AppendLine();
         prompt.AppendLine(PromptFragments.Context.CurrentStateHeading);
-        // Source, disposition and expression style are already present verbatim in the stance.
-        // Keep the separate background/dialogue cues and quantitative state facts below.
+        // The stance carries stable personality; changing state and scene facts appear once below.
         if (disposition.HasProfileContext)
         {
             if (!string.IsNullOrWhiteSpace(disposition.BackgroundPrompt))
@@ -65,23 +63,26 @@ internal static class BehaviorPromptContextBuilder
 
         prompt.AppendLine(PromptFragments.Context.SceneLine(world));
         prompt.AppendLine(PromptFragments.Context.WorldKnowledgeLine(world.ProgressionKnowledge.PromptLabel));
+        if (world.StateInfluence.HasMood)
+        {
+            prompt.AppendLine(PromptFragments.Context.CurrentSceneInfluenceLine(world.StateInfluence, state));
+        }
+
         if (state != null)
         {
             prompt.AppendLine(PromptFragments.Context.MoodLine(state));
             prompt.AppendLine(PromptFragments.Context.EmotionLine(state));
             prompt.AppendLine(PromptFragments.Context.FamiliarityLine(state));
             prompt.AppendLine(PromptFragments.Context.TrustLine(state));
+            prompt.AppendLine(PromptFragments.Context.InteractionRhythmLine(state));
             if (!string.IsNullOrWhiteSpace(state.RelationshipImpression))
             {
                 prompt.AppendLine(PromptFragments.Context.RelationshipImpressionLine(state.RelationshipImpression));
             }
 
-            // Durable stores render one line each when populated; empty ones collapse into a single
-            // closing line. Recalled content itself appears exactly once, under high-priority
-            // continuity — the state section only says what exists. Secret-sharing depth and the
-            // comfort tier live in the guidance section; rhythm lives in the stance line and its
-            // priority cue; an accepted nickname is carried by its priority cue.
-            foreach (string storeLine in BuildDurableStoreLines(state, currentTotalDays))
+            // Priority cues carry selected facts in full. The durable summary keeps only the other
+            // selected store entries, while genuinely empty stores retain one absence marker.
+            foreach (string storeLine in BuildDurableStoreLines(state, currentTotalDays, priorityCuesProvided: true))
             {
                 prompt.AppendLine(storeLine);
             }
@@ -94,7 +95,14 @@ internal static class BehaviorPromptContextBuilder
             {
                 prompt.AppendLine(helpLine);
             }
-            prompt.AppendLine(PromptFragments.Context.SceneInfluenceLine(state.LastSceneInfluenceReason));
+            if (!string.IsNullOrWhiteSpace(state.LastSceneInfluenceReason)
+                && !PromptFragments.Context.IsEmptyStateValue(state.LastSceneInfluenceReason)
+                && (!world.StateInfluence.HasMood
+                    || !string.Equals(state.LastSceneInfluenceReason.Trim(), world.StateInfluence.Reason.Trim(), System.StringComparison.Ordinal)))
+            {
+                prompt.AppendLine(PromptFragments.Context.SceneInfluenceLine(state.LastSceneInfluenceReason));
+            }
+
             prompt.AppendLine(PromptFragments.Context.LastInteractionLine(state.LastInteraction));
         }
         else
@@ -125,7 +133,7 @@ internal static class BehaviorPromptContextBuilder
 
         prompt.AppendLine();
         prompt.AppendLine(PromptFragments.Context.GuidanceHeading);
-        foreach (string guidance in BuildReplyGuidance(state, world, emotionalStyle, currentTotalDays))
+        foreach (string guidance in BuildReplyGuidance(state, world, emotionalStyle))
         {
             prompt.AppendLine($"- {guidance}");
         }
@@ -213,11 +221,13 @@ internal static class BehaviorPromptContextBuilder
 
     /// <summary>
     /// The durable-store lines of the full context's state section. Populated stores render their
-    /// one-line summary (recalled content itself appears once, under high-priority continuity);
-    /// empty stores collapse into a single closing line so the "there is no such shared history"
-    /// anti-hallucination signal survives without spending a full line per store.
+    /// one-line summary. When priority cues are also emitted, their exact selected fact objects are
+    /// omitted here rather than repeating them. Other facts and genuinely empty-store markers stay.
     /// </summary>
-    internal static IReadOnlyList<string> BuildDurableStoreLines(LivingNpcState state, int currentTotalDays)
+    internal static IReadOnlyList<string> BuildDurableStoreLines(
+        LivingNpcState state,
+        int currentTotalDays,
+        bool priorityCuesProvided = false)
     {
         var lines = new List<string>();
         var emptyStores = new List<string>();
@@ -227,7 +237,7 @@ internal static class BehaviorPromptContextBuilder
         {
             emptyStores.Add(PromptFragments.Context.StoreLabelGifts);
         }
-        else
+        else if (!priorityCuesProvided || GetMemoryAge(state.LastGiftTotalDays, currentTotalDays) > 7)
         {
             lines.Add(PromptFragments.Context.GiftContextLine(lastGift));
         }
@@ -237,7 +247,7 @@ internal static class BehaviorPromptContextBuilder
         {
             emptyStores.Add(PromptFragments.Context.StoreLabelEvents);
         }
-        else
+        else if (!priorityCuesProvided || GetMemoryAge(state.LastEventTotalDays, currentTotalDays) > 3)
         {
             lines.Add(PromptFragments.Context.EventContextLine(lastEvent));
         }
@@ -260,34 +270,46 @@ internal static class BehaviorPromptContextBuilder
             lines.Add(PromptFragments.Context.KnownPreferencesLine(state.PlayerPreferenceMemories.Count));
         }
 
-        string tendencies = PromptFragments.State.DialogueBehaviorInfluences(state, currentTotalDays);
-        if (tendencies == PromptFragments.State.EmptyBehaviorInfluences)
+        var tendencies = state.GetActiveDialogueBehaviorInfluences(currentTotalDays).Take(4).ToList();
+        if (tendencies.Count == 0)
         {
             emptyStores.Add(PromptFragments.Context.StoreLabelBehaviorTendencies);
         }
         else
         {
-            lines.Add(PromptFragments.Context.BehaviorTendenciesLine(tendencies));
+            var remaining = priorityCuesProvided ? tendencies.Skip(1) : tendencies;
+            AppendStoreLine(lines, remaining.Select(influence => PromptFragments.Facts.DialogueBehaviorInfluence(influence, currentTotalDays)),
+                PromptFragments.Context.BehaviorTendenciesLine);
         }
 
-        string sharedExperiences = PromptFragments.State.SharedExperiences(state, currentTotalDays);
-        if (sharedExperiences == PromptFragments.State.EmptySharedExperiences)
+        var sharedExperiences = state.GetTopSharedExperiences(4).ToList();
+        if (sharedExperiences.Count == 0)
         {
             emptyStores.Add(PromptFragments.Context.StoreLabelSharedExperiences);
         }
         else
         {
-            lines.Add(PromptFragments.Context.SharedExperiencesLine(sharedExperiences));
+            var priorityExperience = priorityCuesProvided ? SelectSharedExperienceFollowUp(state, currentTotalDays) : null;
+            AppendStoreLine(lines, sharedExperiences.Where(experience => !ReferenceEquals(experience, priorityExperience))
+                    .Select(experience => PromptFragments.Facts.SharedExperience(experience, currentTotalDays)),
+                PromptFragments.Context.SharedExperiencesLine);
         }
 
-        string helpRequests = PromptFragments.State.HelpRequests(state, currentTotalDays);
-        if (helpRequests == PromptFragments.State.EmptyHelpRequests)
+        var helpRequests = state.GetTopHelpRequests(4).ToList();
+        if (helpRequests.Count == 0)
         {
             emptyStores.Add(PromptFragments.Context.StoreLabelHelpRequests);
         }
         else
         {
-            lines.Add(PromptFragments.Context.HelpRequestsLine(helpRequests));
+            var activeRequest = priorityCuesProvided ? SelectActiveHelpRequest(state) : null;
+            var fulfilledRequest = priorityCuesProvided ? SelectRecentlyFulfilledHelpRequestToMention(state, currentTotalDays) : null;
+            var expiredRequest = priorityCuesProvided ? SelectExpiredHelpRequestToMention(state, currentTotalDays) : null;
+            AppendStoreLine(lines, helpRequests.Where(request => !ReferenceEquals(request, activeRequest)
+                        && !ReferenceEquals(request, fulfilledRequest)
+                        && !ReferenceEquals(request, expiredRequest))
+                    .Select(request => PromptFragments.Facts.HelpRequest(request, currentTotalDays)),
+                PromptFragments.Context.HelpRequestsLine);
         }
 
         if (state.CommunityImpressions.Count == 0)
@@ -299,14 +321,19 @@ internal static class BehaviorPromptContextBuilder
             lines.Add(PromptFragments.Context.CommunityImpressionsLine(state.CommunityImpressions.Count));
         }
 
-        string conflicts = PromptFragments.State.Conflicts(state);
-        if (conflicts == PromptFragments.State.EmptyConflicts)
+        var conflicts = state.GetTopConflicts(4).ToList();
+        if (conflicts.Count == 0)
         {
             emptyStores.Add(PromptFragments.Context.StoreLabelConflicts);
         }
         else
         {
-            lines.Add(PromptFragments.Context.ConflictMemoryLine(conflicts));
+            var activeConflict = priorityCuesProvided ? SelectActiveConflict(state) : null;
+            var resolvedConflict = priorityCuesProvided ? SelectRecentlyResolvedConflictToMention(state, currentTotalDays) : null;
+            AppendStoreLine(lines, conflicts.Where(conflict => !ReferenceEquals(conflict, activeConflict)
+                        && !ReferenceEquals(conflict, resolvedConflict))
+                    .Select(PromptFragments.Facts.Conflict),
+                PromptFragments.Context.ConflictMemoryLine);
         }
 
         // A recorded nickname is carried once by its priority cue; only its absence needs a line.
@@ -321,6 +348,15 @@ internal static class BehaviorPromptContextBuilder
         }
 
         return lines;
+    }
+
+    private static void AppendStoreLine(List<string> lines, IEnumerable<string> facts, System.Func<string, string> formatLine)
+    {
+        string summary = string.Join("; ", facts);
+        if (summary.Length > 0)
+        {
+            lines.Add(formatLine(summary));
+        }
     }
 
     private static void AppendIfMeaningful(StringBuilder prompt, string label, string value)
@@ -449,7 +485,7 @@ internal static class BehaviorPromptContextBuilder
         return summary.ToString().TrimEnd();
     }
 
-    private static IEnumerable<string> BuildPriorityPromptContext(
+    internal static IEnumerable<string> BuildPriorityPromptContext(
         NPC npc,
         LivingNpcState? state,
         WorldContextSnapshot world,
@@ -466,7 +502,8 @@ internal static class BehaviorPromptContextBuilder
                 yield return PromptFragments.Context.GiftMemoryCue(
                     state.LastGiftName,
                     PromptFragments.Context.MemoryAge(giftAge),
-                    state.LastGiftTaste);
+                    state.LastGiftTaste,
+                    state.GiftsToday);
             }
 
             int eventAge = GetMemoryAge(state.LastEventTotalDays, currentTotalDays);
@@ -506,7 +543,7 @@ internal static class BehaviorPromptContextBuilder
                 yield return PromptFragments.Context.BehaviorTendencyCue(activeBehaviorInfluence, currentTotalDays);
             }
 
-            var activeHelpRequest = state.HelpRequests.FirstOrDefault(request => request.Status is "Offered" or "Pending");
+            var activeHelpRequest = SelectActiveHelpRequest(state);
             if (activeHelpRequest != null)
             {
                 yield return PromptFragments.Context.ActiveHelpRequestCue(activeHelpRequest, currentTotalDays);
@@ -533,27 +570,15 @@ internal static class BehaviorPromptContextBuilder
                 yield return PromptFragments.Context.SharedExperienceCue(sharedExperience, currentTotalDays);
             }
 
-            if (state.RelationshipTrust < 35)
-            {
-                yield return PromptFragments.Context.LowTrustCue(state.RelationshipTrust);
-            }
-            else if (state.RelationshipTrust >= 80)
-            {
-                yield return PromptFragments.Context.HighTrustCue(state.RelationshipTrust);
-            }
-
-            var activeConflict = state.Conflicts
-                .Where(conflict => conflict.Status is "Active" or "Recovering")
-                .OrderByDescending(conflict => conflict.Severity)
-                .ThenByDescending(conflict => conflict.LastUpdatedTotalDays)
-                .FirstOrDefault();
+            var activeConflict = SelectActiveConflict(state);
             if (activeConflict != null)
             {
                 yield return PromptFragments.Context.UnresolvedConflictCue(activeConflict, emotionalStyle.ConflictPromptLabel);
-                if (activeConflict.RequiresComplexRepair)
-                {
-                    yield return PromptFragments.Context.ComplexRepairCue(activeConflict.RepairStage);
-                }
+            }
+
+            if (state.Conflicts.Any(conflict => conflict.RequiresComplexRepair && conflict.Status is "Active" or "Recovering"))
+            {
+                yield return PromptFragments.Context.ComplexRepairCue;
             }
 
             var recoveredConflict = SelectRecentlyResolvedConflictToMention(state, currentTotalDays);
@@ -561,30 +586,6 @@ internal static class BehaviorPromptContextBuilder
             {
                 yield return PromptFragments.Context.ResolvedConflictCue(recoveredConflict, emotionalStyle.RepairPromptLabel, currentTotalDays);
             }
-
-            if (!string.IsNullOrWhiteSpace(state.InteractionRhythm)
-                && state.InteractionRhythm is not "New" and not "NoConversationToday")
-            {
-                yield return PromptFragments.Context.RhythmReminderCue(state);
-            }
-
-            if (state.RepeatedConversationPressure >= 20)
-            {
-                yield return PromptFragments.Context.BoundaryCue(state.RepeatedConversationPressure);
-            }
-
-            if (state.Familiarity >= 18 || state.LastFriendshipHearts > 0)
-            {
-                yield return PromptFragments.Context.RelationshipWarmthCue(state.Familiarity, state.LastFriendshipHearts);
-            }
-        }
-
-        if (world.StateInfluence.HasMood && world.StateInfluence.Priority >= 35)
-        {
-            yield return PromptFragments.Context.SceneCue(
-                world.StateInfluence.Reason,
-                world.StateInfluence.Mood,
-                world.StateInfluence.Inclination);
         }
 
         if (state == null)
@@ -601,14 +602,17 @@ internal static class BehaviorPromptContextBuilder
     private static IEnumerable<string> BuildReplyGuidance(
         LivingNpcState? state,
         WorldContextSnapshot world,
-        EmotionalExpressionCue emotionalStyle,
-        int currentTotalDays)
+        EmotionalExpressionCue emotionalStyle)
     {
         if (state == null)
         {
-            yield return PromptFragments.Context.GuidanceNoStateModest;
             yield return PromptFragments.Context.GuidanceNoStateSubtle;
             yield return PromptFragments.Context.GuidanceExpressionStyle(emotionalStyle.ReplyGuidance);
+            if (world.StateInfluence.HasMood)
+            {
+                yield return PromptFragments.Context.GuidanceSceneNudge;
+            }
+
             yield break;
         }
 
@@ -617,52 +621,38 @@ internal static class BehaviorPromptContextBuilder
         yield return PromptFragments.Context.GuidanceDisclosurePacing(state);
         yield return PromptFragments.Context.GuidanceInvitationPolicy(state);
 
-        if (!string.IsNullOrWhiteSpace(state.LastGiftName) && state.LastGiftTotalDays == currentTotalDays)
+        if (state.RepeatedConversationPressure >= 20
+            || (!string.IsNullOrWhiteSpace(state.InteractionRhythm)
+                && state.InteractionRhythm is not "New" and not "NoConversationToday"))
         {
-            yield return PromptFragments.Context.GuidanceFreshGift;
-        }
-
-        if (state.PlayerPreferenceMemories.Count > 0)
-        {
-            yield return PromptFragments.Context.GuidancePreferenceMention;
-        }
-
-        if (SelectSharedExperienceFollowUp(state, currentTotalDays) != null)
-        {
-            yield return PromptFragments.Context.GuidanceSharedExperience;
-        }
-
-        if (state.HasUnresolvedConflict)
-        {
-            yield return PromptFragments.Context.GuidanceUnresolvedConflict(emotionalStyle.ConflictPromptLabel);
-            if (state.Conflicts.Any(conflict => conflict.RequiresComplexRepair && conflict.Status is "Active" or "Recovering"))
-            {
-                yield return PromptFragments.Context.GuidanceComplexRepair;
-            }
-        }
-
-        if (SelectRecentlyResolvedConflictToMention(state, currentTotalDays) != null)
-        {
-            yield return PromptFragments.Context.GuidanceResolvedConflict(emotionalStyle.RepairPromptLabel);
-        }
-
-        if (state.RepeatedConversationPressure >= 20)
-        {
-            yield return PromptFragments.Context.GuidanceRepeatedPressure;
+            yield return PromptFragments.Context.GuidanceInteractionRhythm(state);
         }
 
         if (world.StateInfluence.HasMood)
         {
-            yield return PromptFragments.Context.GuidanceSceneNudge(world.StateInfluence.Reason);
+            yield return PromptFragments.Context.GuidanceSceneNudge;
         }
 
         yield return PromptFragments.Context.GuidanceWorldStage(world.ProgressionKnowledge.ReplyGuidance);
     }
 
+    private static NpcHelpRequestFact? SelectActiveHelpRequest(LivingNpcState state)
+    {
+        return state.HelpRequests.FirstOrDefault(request => request.Status is "Offered" or "Pending");
+    }
+
+    private static NpcConflictFact? SelectActiveConflict(LivingNpcState state)
+    {
+        return state.Conflicts
+            .Where(conflict => conflict.Status is "Active" or "Recovering")
+            .OrderByDescending(conflict => conflict.Severity)
+            .ThenByDescending(conflict => conflict.LastUpdatedTotalDays)
+            .FirstOrDefault();
+    }
+
     /// <summary>
     /// The single recently-resolved conflict the full context asks the NPC to acknowledge once.
-    /// Shared by the priority cue, the reply guidance, and the post-build mark so the three can
-    /// never disagree about which conflict was mentioned.
+    /// Shared by the durable-summary exclusion, priority cue and post-build mark.
     /// </summary>
     private static NpcConflictFact? SelectRecentlyResolvedConflictToMention(LivingNpcState state, int currentTotalDays)
     {
@@ -693,7 +683,7 @@ internal static class BehaviorPromptContextBuilder
     /// The single shared experience whose one-shot follow-up is due. Freshness uses
     /// LastUpdatedTotalDays (not CreatedTotalDays) so a repeated outing that re-arms its follow-up
     /// (FollowUpShownTotalDays reset to -1) still qualifies even when the fact itself is old, and a
-    /// FollowUpEligibleTotalDays of -1 means "no follow-up planned" like it does for help requests.
+    /// FollowUpEligibleTotalDays of -1 means "no follow-up planned".
     /// </summary>
     private static SharedExperienceFact? SelectSharedExperienceFollowUp(LivingNpcState state, int currentTotalDays)
     {
@@ -706,8 +696,8 @@ internal static class BehaviorPromptContextBuilder
 
     /// <summary>
     /// Consumes the one-shot follow-up cues the full context just carried, so the next build stops
-    /// repeating them. This must run after the whole prompt is assembled (the guidance section
-    /// reads the same gates), and only for the full context — the concise context never emits
+    /// repeating them. This must run after the whole prompt is assembled (the durable summary
+    /// excludes these same selected facts), and only for the full context — the concise context never emits
     /// these cues. Marking used to happen at conversation start instead, but SMAPI raises
     /// ButtonPressed before the click reaches NPC.checkAction and the dialogue generation that
     /// builds this prompt, so the cues were suppressed in the very prompt meant to deliver them.

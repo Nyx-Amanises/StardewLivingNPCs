@@ -15,20 +15,73 @@ public sealed class OpenAiResponseFailureTests : LlmTestBase
     private const string CompletionJson = "{\"choices\":[{\"message\":{\"content\":\"Hello\"},\"finish_reason\":\"stop\"}]}";
 
     [Theory]
-    [InlineData("DeepSeek")]
-    [InlineData("OpenAiCompatible")]
-    public async Task DeepSeekV4LowRequestsActualLowEffort(string provider)
+    [InlineData("DeepSeek", "deepseek-v4-flash", LlmThinking.Low, false, false)]
+    [InlineData("OpenAiCompatible", "deepseek-v4-flash", LlmThinking.Low, false, false)]
+    [InlineData("DeepSeek", "deepseek-flash", LlmThinking.Low, false, false)]
+    [InlineData("OpenAiCompatible", "deepseek-flash", LlmThinking.Low, false, false)]
+    [InlineData("DeepSeek", "deepseek-flash", LlmThinking.Minimal, false, false)]
+    [InlineData("OpenAiCompatible", "deepseek-flash", LlmThinking.Minimal, false, false)]
+    [InlineData("DeepSeek", "deepseek-flash", LlmThinking.Low, true, true)]
+    [InlineData("OpenAiCompatible", "proxy/deepseek-ai/DeepSeek_Flash", LlmThinking.Minimal, true, true)]
+    [InlineData("OpenAiCompatible", "deepseek-flash-20260912", LlmThinking.Low, false, true)]
+    [InlineData("OpenAiCompatible", "deepseek-flash", LlmThinking.Minimal, false, true)]
+    public async Task DeepSeekLowEffortRequestsHonorChatAndRoutingSettings(
+        string provider, string model, string level, bool fastPass, bool bufferedStream)
     {
-        Config.ChatThinkingLevel = LlmThinking.Low;
-        LlmClientBase client = LlmClientFactory.TryCreate(Settings(provider, modelName: "deepseek-v4-flash"))!;
+        Config.ChatThinkingLevel = fastPass ? LlmThinking.High : level;
+        Config.RoutingThinkingLevel = fastPass ? level : LlmThinking.High;
+        Config.UseStreamingDialogueTransport = bufferedStream;
+        LlmClientBase client = LlmClientFactory.TryCreate(Settings(provider, modelName: model))!;
+        Http.EnqueueJson(CompletionJson);
+
+        LlmReply reply = await client.CompleteAsync(Request(disableThinking: fastPass), CancellationToken.None);
+
+        Assert.True(reply.IsSuccess);
+        var body = JObject.Parse(Http.Requests.Single().Body!);
+        Assert.Equal(model, body.Value<string>("model"));
+        Assert.Equal("enabled", body["thinking"]!.Value<string>("type"));
+        Assert.Equal("low", body.Value<string>("reasoning_effort"));
+        Assert.Equal(bufferedStream && !fastPass, body.Value<bool?>("stream") == true);
+    }
+
+    [Theory]
+    [InlineData("DeepSeek", "deepseek-reasoner", LlmThinking.Low)]
+    [InlineData("DeepSeek", "deepseek-r1", LlmThinking.Minimal)]
+    [InlineData("OpenAiCompatible", "deepseek-reasoner", LlmThinking.Minimal)]
+    [InlineData("OpenAiCompatible", "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", LlmThinking.Low)]
+    public async Task LegacyDeepSeekRequestsKeepCompatibleReasoningEffort(string provider, string model, string level)
+    {
+        Config.ChatThinkingLevel = level;
+        LlmClientBase client = LlmClientFactory.TryCreate(Settings(provider, modelName: model))!;
         Http.EnqueueJson(CompletionJson);
 
         LlmReply reply = await client.CompleteAsync(Request(), CancellationToken.None);
 
         Assert.True(reply.IsSuccess);
         var body = JObject.Parse(Http.Requests.Single().Body!);
+        Assert.Equal(model, body.Value<string>("model"));
         Assert.Equal("enabled", body["thinking"]!.Value<string>("type"));
-        Assert.Equal("low", body.Value<string>("reasoning_effort"));
+        Assert.Equal("high", body.Value<string>("reasoning_effort"));
+    }
+
+    [Theory]
+    [InlineData("other-flash")]
+    [InlineData("not-deepseek-flash")]
+    [InlineData("deepseek/deepseek-flashlight")]
+    [InlineData("deepseek-flash/other-model")]
+    public async Task CompatibleEndpointDoesNotAddDeepSeekControlsToLookalikeModels(string model)
+    {
+        Config.ChatThinkingLevel = LlmThinking.Low;
+        var client = new OpenAiCompatibleClient(Settings("OpenAiCompatible", modelName: model));
+        Http.EnqueueJson(CompletionJson);
+
+        LlmReply reply = await client.CompleteAsync(Request(), CancellationToken.None);
+
+        Assert.True(reply.IsSuccess);
+        var body = JObject.Parse(Http.Requests.Single().Body!);
+        Assert.Equal(model, body.Value<string>("model"));
+        Assert.Null(body["thinking"]);
+        Assert.Null(body["reasoning_effort"]);
     }
 
     [Theory]
@@ -103,12 +156,14 @@ public sealed class OpenAiResponseFailureTests : LlmTestBase
     }
 
     [Theory]
-    [InlineData("DeepSeek")]
-    [InlineData("OpenAiCompatible")]
-    public async Task RejectedDeepSeekOffNeverFallsBackToEnabledDefaults(string provider)
+    [InlineData("DeepSeek", "deepseek-v4-flash")]
+    [InlineData("OpenAiCompatible", "deepseek-v4-flash")]
+    [InlineData("DeepSeek", "deepseek-flash")]
+    [InlineData("OpenAiCompatible", "deepseek-flash")]
+    public async Task RejectedDeepSeekOffNeverFallsBackToEnabledDefaults(string provider, string model)
     {
         Config.ChatThinkingLevel = LlmThinking.Off;
-        LlmClientBase client = LlmClientFactory.TryCreate(Settings(provider, modelName: "deepseek-v4-flash"))!;
+        LlmClientBase client = LlmClientFactory.TryCreate(Settings(provider, modelName: model))!;
         Http.DefaultResponder = _ => FakeHttpHandler.Json("{\"error\":{\"message\":\"Unsupported thinking\"}}", HttpStatusCode.BadRequest);
 
         LlmReply reply = await client.CompleteAsync(Request(), CancellationToken.None);

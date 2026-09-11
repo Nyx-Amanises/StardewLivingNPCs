@@ -598,7 +598,7 @@ public sealed class ContentAssetValidationTests
     /// <summary>与 .Text(/.Lookup( 同行出现、但并非提示词键的字面量。</summary>
     private static readonly HashSet<string> ExemptFromPromptAudit = new(StringComparer.Ordinal)
     {
-        "default", "skip", "coexistenceHud",
+        "default", "skip", "coexistenceHud", "partner",
         "uiThinking", "uiStartConversation", "uiTypeYourResponse", "uiYourResponse",
         "transcriptGiftPlayerLine", "outputRespond", "outputStaySilent"
     };

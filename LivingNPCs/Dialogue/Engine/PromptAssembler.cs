@@ -81,7 +81,8 @@ internal sealed class AssembledPrompt
             Tail = this.CorePrompt + (commandOverride ?? this.Command),
             ResponseStart = this.ResponseStart,
             AllowRetry = false,
-            MaxTokens = 2048,
+            // Reasoning and visible dialogue share the provider's output budget.
+            MaxTokens = 16_000,
             TransportTimingObserver = transportTimingObserver
         };
     }
@@ -286,9 +287,10 @@ internal sealed class PromptAssembler
         this.Section(builder, "OtherNpcs", ContextModule.NearbyNpcs, this.BuildOtherNpcs);
 
         var s = this.input.S;
-        if (s.FriendshipExists && (s.IsMarriedToFarmer || s.IsRoommate))
+        bool sharesHome = s.RelationshipStatus is NpcRelationshipStatus.Married or NpcRelationshipStatus.Roommate;
+        if (sharesHome)
         {
-            if (s.IsRoommate)
+            if (s.RelationshipStatus == NpcRelationshipStatus.Roommate)
             {
                 this.Section(builder, "coreRoommates", ContextModule.Relationship,
                     b => AppendLine(b, this.Text("coreRoommates")));
@@ -314,15 +316,15 @@ internal sealed class PromptAssembler
         this.Section(builder, "LivingNpcExtraPrompt", ContextModule.LivingNpc, this.BuildLivingNpcExtraPrompt);
         this.Section(builder, "SpouseAction", ContextModule.SpouseAction, this.BuildSpouseAction);
 
-        if (!s.FriendshipExists || (!s.IsMarriedToFarmer && !s.IsRoommate))
+        if (!sharesHome)
         {
             this.Section(builder, "NonSpouseFriendshipLevel", ContextModule.Relationship, this.BuildNonSpouseFriendshipLevel);
             this.Section(builder, "Spouse", null, this.BuildSpouse);
             this.Section(builder, "SpecialRelationshipStatus", ContextModule.Relationship, this.BuildSpecialRelationshipStatus);
         }
 
-        this.Section(builder, "coreGenderReferences", null,
-            b => AppendLine(b, this.Text("coreGenderReferences")), overridable: false);
+        // CoreHeader already states the farmer's gender once. Do not repeat it as a second
+        // set of clothing, address, and relationship suggestions later in the same prompt.
         this.Section(builder, "Preoccupation", ContextModule.Preoccupation, this.BuildPreoccupation);
         this.Section(builder, "CurrentConversation", ContextModule.CurrentConversation, this.BuildCurrentConversation);
 
@@ -539,6 +541,13 @@ internal sealed class PromptAssembler
 
     private void BuildMarriageFeelings(StringBuilder builder)
     {
+        if (!this.input.S.FriendshipExists)
+        {
+            // A known shared home still applies when affinity data is absent; absence is
+            // not evidence that the marriage or roommate relationship feels unhappy.
+            return;
+        }
+
         int hearts = this.input.S.Hearts;
         string key = hearts > 12 ? "marriageSentimentGood" : hearts < 10 ? "marriageSentimentBad" : "marriageSentimentNeutral";
         string marriageOrRoommate = this.Text(this.input.S.IsRoommate ? "generalBeingRoommates" : "generalTheMarriage") ?? string.Empty;
@@ -905,6 +914,13 @@ internal sealed class PromptAssembler
     private void BuildNonSpouseFriendshipLevel(StringBuilder builder)
     {
         var s = this.input.S;
+        if (s.RelationshipStatus != NpcRelationshipStatus.None)
+        {
+            // Current dating/engagement/divorce has its own guidance below. A hearts-only
+            // friendship tier can contradict that explicit status (e.g. "not dating yet").
+            return;
+        }
+
         int hearts = s.Hearts;
         string key;
         if (s.NpcIsDatable || hearts <= 6 || !s.FriendshipExists)
@@ -939,28 +955,25 @@ internal sealed class PromptAssembler
     private void BuildSpecialRelationshipStatus(StringBuilder builder)
     {
         var s = this.input.S;
-        if (s.IsDating)
+        switch (s.RelationshipStatus)
         {
-            string relationshipPublic = this.Text(
-                s.DatingPublicly ? "specialRelationshipDatingPublic" : "specialRelationshipDatingDiscrete") ?? string.Empty;
-            AppendLine(builder, this.Text("specialRelationshipDating", new
-            {
-                relationshipPublic,
-                relationshipWord = s.OrientationWord
-            }));
+            case NpcRelationshipStatus.Dating:
+                string relationshipPublic = this.Text(
+                    s.DatingPublicly ? "specialRelationshipDatingPublic" : "specialRelationshipDatingDiscrete") ?? string.Empty;
+                // Older content-pack templates may still use this token. Supply a neutral,
+                // localized relationship term instead of an uncollected orientation value.
+                string relationshipWord = this.Text("specialRelationshipPartnerLabel") ?? "partner";
+                AppendLine(builder, this.Text("specialRelationshipDating", new { relationshipPublic, relationshipWord }));
+                break;
+            case NpcRelationshipStatus.Engaged:
+                AppendLine(builder, this.Text("specialRelationshipEngaged", new { daysToWedding = s.DaysUntilWedding }));
+                break;
+            case NpcRelationshipStatus.Divorced:
+                AppendLine(builder, this.Text("specialRelationshipDivorced"));
+                break;
         }
 
-        if (s.IsEngaged)
-        {
-            AppendLine(builder, this.Text("specialRelationshipEngaged", new { daysToWedding = s.DaysUntilWedding }));
-        }
-
-        if (s.IsDivorced)
-        {
-            AppendLine(builder, this.Text("specialRelationshipDivorced"));
-        }
-
-        if (s.ProposalRejected)
+        if (s.ProposalRejected && s.RelationshipStatus is NpcRelationshipStatus.None or NpcRelationshipStatus.Dating)
         {
             AppendLine(builder, this.Text("specialRelationshipProposalRejected"));
         }
