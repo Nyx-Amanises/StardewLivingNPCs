@@ -26,6 +26,9 @@ internal sealed class DialogueEngineServices
     /// <summary>世界摘要文本（optimized → 精简版）。</summary>
     public Func<bool, string> GetWorldSummaryText { get; init; } = _ => string.Empty;
 
+    /// <summary>Optional pure-data retriever for callers outside the runtime capture path.</summary>
+    public Func<bool, WorldRetrievalQuery, WorldRetrievalResult>? RetrieveWorldContext { get; init; }
+
     /// <summary>台词样本（WP15 DialogueSampleLoader；键 → 台词）。</summary>
     public Func<string, NpcBio, IReadOnlyDictionary<string, string>> GetSamples { get; init; }
         = (_, _) => new Dictionary<string, string>();
@@ -344,6 +347,39 @@ internal sealed class DialogueEngine : IDialogueEngine
 
     // ---- 装配 ----
 
+    private WorldRetrievalResult? RetrieveWorldContext(
+        GenerationRequest request, ContextRoutingPlan plan,
+        IReadOnlyList<ConversationTurn> conversation, string displayName)
+    {
+        if (!plan.Include(ContextModule.World))
+        {
+            return null;
+        }
+
+        var retrieve = request.WorldContextRetriever
+            ?? (request.UsesCapturedWorldContext ? null : this.services.RetrieveWorldContext);
+        if (retrieve == null)
+        {
+            return null;
+        }
+
+        try
+        {
+            bool optimized = DialogueServices.Config?.UseOptimizedPrompts == true || !plan.IsFull(ContextModule.World);
+            return retrieve(optimized, WorldRetrievalQueryFactory.Create(request, conversation, displayName));
+        }
+        catch (Exception ex)
+        {
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "select local world references", error = ex.Message },
+                    $"Failed to select local world references: {ex.Message}"),
+                StardewModdingAPI.LogLevel.Trace);
+            return null;
+        }
+    }
+
     private sealed class PreparedGeneration
     {
         public GenerationRequest Request { get; init; } = new();
@@ -495,6 +531,13 @@ internal sealed class DialogueEngine : IDialogueEngine
             request.ContentSnapshot?.ResolvedPortraitFrames ?? Array.Empty<PortraitFrameSemantics.Match>();
         int portraitFrameCount = request.ContentSnapshot?.PortraitFrameCount ?? 0;
         portraitFrames = ApplyGamePortraitOverrides(request, portraitFrames, ref portraitFrameCount);
+        // Event/history dependencies may restore World even when the raw router omitted it.
+        // Resolve the same closure as the assembler before selecting its reference data.
+        ContextRoutingPlan worldPlan = plan.Clone();
+        worldPlan.ApplyDependencies();
+        WorldRetrievalResult? worldContext = this.RetrieveWorldContext(request, worldPlan, promptConversation, displayName);
+        bool useLegacyWorldText = worldPlan.Include(ContextModule.World)
+            && worldContext == null && !request.UsesCapturedWorldContext;
         var input = new PromptAssemblyInput
         {
             Request = request,
@@ -510,8 +553,11 @@ internal sealed class DialogueEngine : IDialogueEngine
             HistoryLines = historyLines,
             Conversation = promptConversation,
             JustSpoke = justSpoke,
-            WorldSummaryFull = this.services.GetWorldSummaryText(config.UseOptimizedPrompts),
-            WorldSummaryBrief = this.services.GetWorldSummaryText(true),
+            WorldSummaryFull = worldContext?.CoreText
+                ?? (useLegacyWorldText ? this.services.GetWorldSummaryText(config.UseOptimizedPrompts) : string.Empty),
+            WorldSummaryBrief = worldContext?.CoreText
+                ?? (useLegacyWorldText ? this.services.GetWorldSummaryText(true) : string.Empty),
+            RetrievedWorldContext = worldContext?.RetrievedText ?? string.Empty,
             PreoccupationTopic = this.PickPreoccupation(request.NpcName, bio, promptConversation.Count),
             GiftDisplayName = request.Trigger == GenerationTrigger.Gift
                 && !RsvAiPolicy.IsBlockedContentId(request.GiftItemId)
@@ -1443,6 +1489,7 @@ internal static class DialogueEngineHost
                 contentSnapshots.Clear();
             }
         };
+        GameHooks.GenerationRequests.WorldContextProvider = content.CaptureWorldContext;
         GameHooks.GenerationRequests.ContentSnapshotProvider = npc =>
         {
             NpcBio bio = content.GetBio(npc.Name);

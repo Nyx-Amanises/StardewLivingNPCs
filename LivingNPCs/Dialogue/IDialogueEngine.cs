@@ -63,7 +63,14 @@ internal sealed class GenerationRequest
     public string DialogueKey { get; init; } = string.Empty;
     public string OriginalLine { get; init; } = string.Empty;
     public IReadOnlyList<ConversationTurn> Conversation { get; init; } = new List<ConversationTurn>();
+    /// <summary>The input that triggered this request, never inferred from merged or saved history.</summary>
+    public string CurrentPlayerText { get; init; } = string.Empty;
     public string GiftItemId { get; init; } = string.Empty;
+
+    /// <summary>Immutable world reference captured on the game thread; selection itself is local and pure.</summary>
+    public System.Func<bool, WorldRetrievalQuery, WorldRetrievalResult>? WorldContextRetriever { get; init; }
+    /// <summary>A failed runtime capture must not retry game content access from a generation worker.</summary>
+    public bool UsesCapturedWorldContext { get; init; }
 
     /// <summary>
     /// Whether this request originated from the game-thread capture path and must therefore use

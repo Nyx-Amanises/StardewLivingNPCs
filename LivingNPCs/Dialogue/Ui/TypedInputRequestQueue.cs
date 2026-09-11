@@ -151,7 +151,7 @@ internal static class TypedInputRequestQueue
             new(text, true, Guid.NewGuid().ToString("N"))
         };
 
-        var generationRequest = GenerationRequests.BuildConversation(request.Npc, request.DialogueKey, turns);
+        var generationRequest = GenerationRequests.BuildConversation(request.Npc, request.DialogueKey, turns, text);
         var enqueue = EnqueueForTests ?? GenerationRequests.Enqueue;
         if (!enqueue(request.Npc, generationRequest))
         {

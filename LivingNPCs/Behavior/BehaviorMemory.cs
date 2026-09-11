@@ -541,7 +541,8 @@ internal sealed class BehaviorMemory
         bool includeState,
         int maxPendingHelpRequestsPerNpc,
         int helpRequestCooldownDays,
-        bool markRecalled = true)
+        bool markRecalled = true,
+        string? currentPlayerText = null)
     {
         this.entriesByNpc.TryGetValue(npc.Name, out var entries);
         var disposition = NpcDisposition.For(npc);
@@ -559,10 +560,10 @@ internal sealed class BehaviorMemory
 
         MemoryRecallPlan recallPlan = state == null
             ? MemoryRecallPlan.Empty
-            : this.BuildMemoryRecallPlan(state, world, recentEntries, longTermCount: 3, preferenceCount: 4);
+            : this.BuildMemoryRecallPlan(state, world, recentEntries, longTermCount: 3, preferenceCount: 4, currentPlayerText: currentPlayerText);
         IReadOnlyList<CommunityImpressionSelection> communityImpressions = state == null
             ? System.Array.Empty<CommunityImpressionSelection>()
-            : this.BuildCommunityImpressionRecallPlan(state, maxCount: 2);
+            : this.BuildCommunityImpressionRecallPlan(state, maxCount: 2, currentPlayerText: currentPlayerText);
 
         string prompt = BehaviorPromptContextBuilder.BuildPromptContext(
             npc,
@@ -604,7 +605,8 @@ internal sealed class BehaviorMemory
         WorldContextSnapshot world,
         IReadOnlyList<BehaviorMemoryEntry> recentEntries,
         int longTermCount,
-        int preferenceCount)
+        int preferenceCount,
+        string? currentPlayerText = null)
     {
         this.RefreshMemoryStores(state);
         return MemoryRecallService.BuildPlan(
@@ -613,7 +615,8 @@ internal sealed class BehaviorMemory
             recentEntries,
             longTermCount,
             preferenceCount,
-            Game1.Date.TotalDays
+            Game1.Date.TotalDays,
+            currentPlayerText
         );
     }
 
@@ -623,7 +626,8 @@ internal sealed class BehaviorMemory
         IReadOnlyList<BehaviorMemoryEntry> recentEntries,
         int longTermCount,
         int preferenceCount,
-        int currentTotalDays)
+        int currentTotalDays,
+        string? currentPlayerText = null)
     {
         return MemoryRecallService.BuildPlan(
             state,
@@ -631,16 +635,18 @@ internal sealed class BehaviorMemory
             recentEntries,
             longTermCount,
             preferenceCount,
-            currentTotalDays
+            currentTotalDays,
+            currentPlayerText
         );
     }
 
     private IReadOnlyList<CommunityImpressionSelection> BuildCommunityImpressionRecallPlan(
         LivingNpcState state,
-        int maxCount)
+        int maxCount,
+        string? currentPlayerText = null)
     {
         this.RefreshMemoryStores(state);
-        return MemoryRecallService.BuildCommunityImpressionPlan(state, maxCount, Game1.Date.TotalDays);
+        return MemoryRecallService.BuildCommunityImpressionPlan(state, maxCount, Game1.Date.TotalDays, currentPlayerText);
     }
 
     private void MarkMemoriesRecalled(MemoryRecallPlan recallPlan)

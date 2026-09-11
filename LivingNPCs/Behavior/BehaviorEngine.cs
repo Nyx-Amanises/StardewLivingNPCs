@@ -1274,7 +1274,7 @@ internal sealed class BehaviorEngine
         };
     }
 
-    public string GetConversationContext(string npcName, string npcDisplayName)
+    public string GetConversationContext(string npcName, string npcDisplayName, string? currentPlayerText = null)
     {
         if (!this.config.EnableConversationMemory || string.IsNullOrWhiteSpace(npcName))
         {
@@ -1286,7 +1286,7 @@ internal sealed class BehaviorEngine
             return string.Empty;
         }
 
-        return this.contextService.BuildPromptContext(npc);
+        return this.contextService.BuildPromptContext(npc, currentPlayerText);
     }
 
     public string GetGiftResponseContext(string npcName, string npcDisplayName, string giftItemId, string giftName, int taste)

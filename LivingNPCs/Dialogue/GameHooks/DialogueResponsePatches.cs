@@ -79,7 +79,7 @@ internal static class Dialogue_ChooseResponse_Patch
 
             // 普通文本选项：以聊天历史 + 选项文本（玩家台词）发起会话生成。
             var playerTurn = new ConversationTurn(response.responseText ?? string.Empty, true, NewTurnId());
-            var request = GenerationRequests.BuildConversation(speaker, dialogueKey, new[] { playerTurn });
+            var request = GenerationRequests.BuildConversation(speaker, dialogueKey, new[] { playerTurn }, playerTurn.Text);
             GenerationRequests.Enqueue(speaker, request);
             __result = true;
             return false;

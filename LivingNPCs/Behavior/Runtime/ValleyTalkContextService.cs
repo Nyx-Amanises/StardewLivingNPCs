@@ -84,7 +84,7 @@ internal sealed class ValleyTalkContextService
         this.immediateContexts.Clear();
     }
 
-    public string BuildPromptContext(NPC npc)
+    public string BuildPromptContext(NPC npc, string? currentPlayerText = null)
     {
         if (npc == null || RsvAiPolicy.IsBlockedNpc(npc))
         {
@@ -95,7 +95,7 @@ internal sealed class ValleyTalkContextService
             this.UseHostRelationshipViews,
             npc.Name,
             this.relationshipViews,
-            () => this.BuildRelationshipSummary(npc, markRecalled: true),
+            () => this.BuildRelationshipSummary(npc, markRecalled: true, currentPlayerText),
             out bool hasAuthoritativeContext);
         if (this.UseHostRelationshipViews && !hasAuthoritativeContext)
         {
@@ -158,7 +158,7 @@ internal sealed class ValleyTalkContextService
         return this.BuildRelationshipSummary(npc, markRecalled: false);
     }
 
-    private string BuildRelationshipSummary(NPC npc, bool markRecalled)
+    private string BuildRelationshipSummary(NPC npc, bool markRecalled, string? currentPlayerText = null)
     {
         return this.memory.BuildPromptContext(
             npc,
@@ -166,7 +166,8 @@ internal sealed class ValleyTalkContextService
             this.config.EnableNpcState,
             this.config.EnableHelpRequests ? this.config.MaxPendingHelpRequestsPerNpc : 0,
             this.config.HelpRequestCooldownDays,
-            markRecalled
+            markRecalled,
+            currentPlayerText
         );
     }
 

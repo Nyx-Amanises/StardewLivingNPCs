@@ -22,6 +22,8 @@ internal sealed class DialogueContentService : IDialogueContent
     private readonly Dictionary<string, CachedBio> bioCache = new(StringComparer.OrdinalIgnoreCase);
     private readonly WorldSummary?[] mergedSummaries = new WorldSummary?[4];
     private readonly string?[] renderedSummaries = new string?[4];
+    private readonly WorldEntryIndex?[] worldIndexes = new WorldEntryIndex?[4];
+    private int worldRevision;
 
     /// <summary>游戏侧全局实例；由 DialogueContentSetup 装配。测试各自构造。</summary>
     public static DialogueContentService? Instance { get; internal set; }
@@ -105,22 +107,63 @@ internal sealed class DialogueContentService : IDialogueContent
     /// <summary>渲染成字符串的世界摘要，四个变体（完整/精简 × 含 SVE/纯净）各自缓存（§4.4）。</summary>
     public string GetWorldSummaryText(bool optimized)
     {
-        int slot = this.SummarySlot(optimized);
+        bool sveActive = this.SveActive;
+        int slot = SummarySlot(optimized, sveActive);
+        int revision;
         lock (this.gate)
         {
             if (this.renderedSummaries[slot] != null)
             {
                 return this.renderedSummaries[slot]!;
             }
+            revision = this.worldRevision;
         }
 
-        string text = this.renderer.Render(this.GetMergedSummary(optimized));
+        string text = this.renderer.Render(this.GetMergedSummary(optimized, sveActive));
         lock (this.gate)
         {
-            this.renderedSummaries[slot] = text;
+            if (revision == this.worldRevision)
+                this.renderedSummaries[slot] = text;
         }
 
         return text;
+    }
+
+    /// <summary>Direct game-thread access. Background requests should capture a retriever first.</summary>
+    public WorldRetrievalResult GetWorldContext(bool optimized, WorldRetrievalQuery query)
+        => this.GetWorldIndex(optimized, this.SveActive).Retrieve(query);
+
+    /// <summary>
+    /// Call while on the game thread. Both variants, their localized rendering and the SVE state
+    /// are captured now; the returned delegate never loads assets, reads game state or consults
+    /// mutable caches, even after content invalidation.
+    /// </summary>
+    public Func<bool, WorldRetrievalQuery, WorldRetrievalResult> CaptureWorldContext()
+    {
+        bool sveActive = this.SveActive;
+        WorldEntryIndex full = this.GetWorldIndex(optimized: false, sveActive);
+        WorldEntryIndex optimized = this.GetWorldIndex(optimized: true, sveActive);
+        return (useOptimized, query) => (useOptimized ? optimized : full).Retrieve(query);
+    }
+
+    private WorldEntryIndex GetWorldIndex(bool optimized, bool sveActive)
+    {
+        int slot = SummarySlot(optimized, sveActive);
+        int revision;
+        lock (this.gate)
+        {
+            if (this.worldIndexes[slot] is { } cached)
+                return cached;
+            revision = this.worldRevision;
+        }
+
+        var index = new WorldEntryIndex(this.GetMergedSummary(optimized, sveActive), this.renderer);
+        lock (this.gate)
+        {
+            if (revision == this.worldRevision)
+                this.worldIndexes[slot] = index;
+        }
+        return index;
     }
 
     /// <summary>性别名词（generalMale/generalFemale 的本地化值）；None 返回空串。</summary>
@@ -166,6 +209,8 @@ internal sealed class DialogueContentService : IDialogueContent
         {
             Array.Clear(this.mergedSummaries);
             Array.Clear(this.renderedSummaries);
+            Array.Clear(this.worldIndexes);
+            this.worldRevision++;
         }
     }
 
@@ -192,30 +237,36 @@ internal sealed class DialogueContentService : IDialogueContent
 
     private bool SveActive => this.pipeline.IsSveLoaded && (DialogueServices.Config?.EnableSveCompatibility ?? true);
 
-    private int SummarySlot(bool optimized)
+    private static int SummarySlot(bool optimized, bool sveActive)
     {
-        return (optimized ? 1 : 0) | (this.SveActive ? 2 : 0);
+        return (optimized ? 1 : 0) | (sveActive ? 2 : 0);
     }
 
     private WorldSummary GetMergedSummary(bool optimized)
+        => this.GetMergedSummary(optimized, this.SveActive);
+
+    private WorldSummary GetMergedSummary(bool optimized, bool sveActive)
     {
-        int slot = this.SummarySlot(optimized);
+        int slot = SummarySlot(optimized, sveActive);
+        int revision;
         lock (this.gate)
         {
             if (this.mergedSummaries[slot] != null)
             {
                 return this.mergedSummaries[slot]!;
             }
+            revision = this.worldRevision;
         }
 
         WorldSummary baseSummary = this.pipeline.LoadWorldSummaryAsset(optimized) ?? new WorldSummary();
-        WorldSummary merged = this.SveActive
+        WorldSummary merged = sveActive
             ? SveContentRules.MergeWorldDelta(baseSummary, this.pipeline.LoadSveWorldDelta(optimized))
             : baseSummary;
 
         lock (this.gate)
         {
-            this.mergedSummaries[slot] = merged;
+            if (revision == this.worldRevision)
+                this.mergedSummaries[slot] = merged;
         }
 
         return merged;

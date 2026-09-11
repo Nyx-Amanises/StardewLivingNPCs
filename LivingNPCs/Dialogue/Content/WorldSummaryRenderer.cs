@@ -107,12 +107,48 @@ internal sealed class WorldSummaryRenderer
         }
     }
 
-    private string RenderEntry(WorldSummaryEntry entry)
+    internal string RenderEntry(WorldSummaryEntry entry)
     {
         var line = new StringBuilder($"- **{entry.Name}** - {entry.Description}");
         this.AppendNamedList(line, "seasonCrops", entry.Crops);
         this.AppendNamedList(line, "seasonForage", entry.Forage);
         return line.ToString();
+    }
+
+    /// <summary>Capture this localized constant while content access is still on the game thread.</summary>
+    internal string GetTranslations() => this.getPrompt("gameSummaryTranslations");
+
+    /// <summary>Render already captured entry strings without consulting the content pipeline.</summary>
+    internal static string RenderCapturedSection(
+        string name,
+        bool showHeading,
+        string text,
+        IReadOnlyList<(string Region, string Text)> entries)
+    {
+        var builder = new StringBuilder();
+        if (showHeading)
+            builder.AppendLine($"### {name} :");
+        if (!string.IsNullOrWhiteSpace(text))
+            builder.AppendLine(text);
+
+        if (string.Equals(name, "Locations", StringComparison.Ordinal))
+        {
+            foreach (var group in entries.GroupBy(entry => entry.Region))
+            {
+                if (!string.IsNullOrWhiteSpace(group.Key))
+                    builder.AppendLine($"**{group.Key}**");
+                foreach (var entry in group)
+                    builder.AppendLine(entry.Text);
+            }
+        }
+        else
+        {
+            foreach (var entry in entries)
+                builder.AppendLine(entry.Text);
+        }
+
+        builder.AppendLine();
+        return builder.ToString();
     }
 
     /// <summary>季节条目的作物/采集列表："{引导文案} A, B {and} C."。</summary>

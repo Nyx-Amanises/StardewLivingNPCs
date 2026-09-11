@@ -94,7 +94,7 @@ internal static class SveContentRules
     {
         var merged = new WorldSummary
         {
-            SectionOrder = new Dictionary<string, bool>(baseSummary.SectionOrder),
+            SectionOrder = baseSummary.SectionOrder == null ? new() : new Dictionary<string, bool>(baseSummary.SectionOrder),
             Intro = CloneSection(baseSummary.Intro),
             FarmerBackground = CloneSection(baseSummary.FarmerBackground),
             Seasons = CloneSection(baseSummary.Seasons),
@@ -135,7 +135,7 @@ internal static class SveContentRules
 
     private static void MergeSection(WorldSummarySection? target, WorldSummarySection? delta)
     {
-        if (target == null || delta == null)
+        if (target == null || delta?.Entries == null)
         {
             return;
         }
@@ -156,7 +156,7 @@ internal static class SveContentRules
         return new WorldSummarySection
         {
             Text = section.Text,
-            Entries = new Dictionary<string, WorldSummaryEntry>(section.Entries)
+            Entries = section.Entries == null ? new() : new Dictionary<string, WorldSummaryEntry>(section.Entries)
         };
     }
 }

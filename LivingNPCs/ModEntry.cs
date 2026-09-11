@@ -55,8 +55,8 @@ public sealed class ModEntry : Mod
             Monitor,
             this.config,
             this.ModManifest.UniqueID,
-            npc => this.config.EnableBehaviorContextInDialogue
-                ? this.engine?.GetConversationContext(npc.Name, npc.displayName) ?? string.Empty
+            (npc, currentPlayerText) => this.config.EnableBehaviorContextInDialogue
+                ? this.engine?.GetConversationContext(npc.Name, npc.displayName, currentPlayerText) ?? string.Empty
                 : string.Empty,
             (npc, itemId, itemName, taste) => this.config.EnableBehaviorContextInDialogue
                 ? this.engine?.GetGiftResponseContext(npc.Name, npc.displayName, itemId, itemName, taste) ?? string.Empty

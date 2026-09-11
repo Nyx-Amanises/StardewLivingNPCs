@@ -62,6 +62,9 @@ internal sealed class WorldSummaryEntry
 
     public string Description { get; set; } = string.Empty;
 
+    /// <summary>Optional search-only aliases supplied by content packs (localized names, IDs or phrases).</summary>
+    public List<string>? Aliases { get; set; }
+
     public List<string>? Crops { get; set; }
 
     public List<string>? Forage { get; set; }

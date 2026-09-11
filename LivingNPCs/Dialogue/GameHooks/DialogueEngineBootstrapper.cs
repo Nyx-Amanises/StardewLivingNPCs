@@ -36,7 +36,7 @@ internal static class DialogueEngineBootstrapper
         IMonitor monitor,
         ModConfig config,
         string modUniqueId,
-        Func<NPC, string>? conversationContextProvider = null,
+        Func<NPC, string, string>? conversationContextProvider = null,
         Func<NPC, string, string, int, string>? giftContextProvider = null)
     {
         if (attached)

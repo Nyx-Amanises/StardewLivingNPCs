@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using StardewValley;
 
 using LivingNPCs.Dialogue.Engine;
+using LivingNPCs.Dialogue.Content;
 
 namespace LivingNPCs.Dialogue.GameHooks;
 
@@ -44,13 +45,16 @@ internal static class GenerationRequests
         return false;
     }
     /// <summary>行为上下文注入点（对话触发）：WP16/ModEntry 装配；null = 无行为系统。</summary>
-    public static Func<NPC, string>? ConversationContextProvider { get; set; }
+    public static Func<NPC, string, string>? ConversationContextProvider { get; set; }
 
     /// <summary>行为上下文注入点（送礼触发）：(npc, itemId, displayName, taste) → 上下文。</summary>
     public static Func<NPC, string, string, int, string>? GiftContextProvider { get; set; }
 
     /// <summary>主线程内容快照注入点；由默认引擎装配。</summary>
     public static Func<NPC, GenerationContentSnapshot?>? ContentSnapshotProvider { get; set; }
+
+    /// <summary>Captures world references independently of portraits, before generation leaves the game thread.</summary>
+    public static Func<Func<bool, WorldRetrievalQuery, WorldRetrievalResult>>? WorldContextProvider { get; set; }
 
     /// <summary>单飞行判定（P3/P4/P14 的"已有生成在途"检查）。</summary>
     public static bool SchedulerBusy => AsyncBuilder.Instance.Scheduler?.IsBusy == true;
@@ -75,15 +79,18 @@ internal static class GenerationRequests
                 : GenerationTrigger.Scheduled,
             DialogueKey = dialogueKey ?? string.Empty,
             OriginalLine = originalLine ?? string.Empty,
-            BehaviorContext = SafeConversationContext(npc),
+            BehaviorContext = SafeConversationContext(npc, string.Empty),
             Snapshot = snapshot,
             ContentSnapshot = contentSnapshot,
+            WorldContextRetriever = SafeWorldContext(),
+            UsesCapturedWorldContext = true,
             UsesRuntimePortraitWhitelist = true
         };
     }
 
     /// <summary>玩家会话生成（输入框提交 / P9 文本选项）。</summary>
-    public static GenerationRequest BuildConversation(NPC npc, string dialogueKey, IReadOnlyList<ConversationTurn> conversation)
+    public static GenerationRequest BuildConversation(
+        NPC npc, string dialogueKey, IReadOnlyList<ConversationTurn> conversation, string currentPlayerText)
     {
         GameStateSnapshot snapshot = GameStateSnapshotCollector.Collect(npc);
         GenerationContentSnapshot? contentSnapshot = SafeContentSnapshot(npc);
@@ -94,9 +101,12 @@ internal static class GenerationRequests
             Trigger = GenerationTrigger.Conversation,
             DialogueKey = dialogueKey ?? string.Empty,
             Conversation = conversation,
-            BehaviorContext = SafeConversationContext(npc),
+            CurrentPlayerText = currentPlayerText ?? string.Empty,
+            BehaviorContext = SafeConversationContext(npc, currentPlayerText),
             Snapshot = snapshot,
             ContentSnapshot = contentSnapshot,
+            WorldContextRetriever = SafeWorldContext(),
+            UsesCapturedWorldContext = true,
             UsesRuntimePortraitWhitelist = true
         };
     }
@@ -118,6 +128,8 @@ internal static class GenerationRequests
             BehaviorContext = SafeGiftContext(npc, itemId, displayName, taste),
             Snapshot = snapshot,
             ContentSnapshot = contentSnapshot,
+            WorldContextRetriever = SafeWorldContext(),
+            UsesCapturedWorldContext = true,
             UsesRuntimePortraitWhitelist = true
         };
     }
@@ -140,11 +152,33 @@ internal static class GenerationRequests
         }
     }
 
-    private static string SafeConversationContext(NPC npc)
+    private static Func<bool, WorldRetrievalQuery, WorldRetrievalResult>? SafeWorldContext()
     {
         try
         {
-            return ConversationContextProvider?.Invoke(npc) ?? string.Empty;
+            return WorldContextProvider?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            DialogueServices.Monitor?.Log(
+                Util.GetConsoleString(
+                    "dialogue.log.stepFailed",
+                    new { step = "capture world reference", error = ex.Message },
+                    $"Failed to capture world reference: {ex.Message}"),
+                StardewModdingAPI.LogLevel.Trace);
+            return null;
+        }
+    }
+
+    private static string SafeConversationContext(NPC npc, string? currentPlayerText)
+    {
+        try
+        {
+            string query = RsvAiPolicy.ContainsBlockedReference(currentPlayerText)
+                || RsvAiPolicy.IsWithheldPlayerMessage(currentPlayerText ?? string.Empty)
+                ? string.Empty
+                : currentPlayerText ?? string.Empty;
+            return ConversationContextProvider?.Invoke(npc, query) ?? string.Empty;
         }
         catch (Exception ex)
         {

@@ -32,6 +32,7 @@ internal sealed class PromptAssemblyInput
     public bool JustSpoke { get; init; }
     public string WorldSummaryFull { get; init; } = string.Empty;
     public string WorldSummaryBrief { get; init; } = string.Empty;
+    public string RetrievedWorldContext { get; init; } = string.Empty;
     public string PreoccupationTopic { get; init; } = string.Empty;
     public string GiftDisplayName { get; init; } = string.Empty;
     public string GivingGiftDisplayName { get; init; } = string.Empty;
@@ -278,6 +279,14 @@ internal sealed class PromptAssembler
     private string BuildCorePrompt()
     {
         var builder = new StringBuilder();
+        this.Section(builder, "WorldRetrievedContext", ContextModule.World,
+            b =>
+            {
+                if (!string.IsNullOrWhiteSpace(this.input.RetrievedWorldContext))
+                {
+                    AppendLine(b, PromptDataBoundary.Wrap("world_retrieval", this.input.RetrievedWorldContext));
+                }
+            }, overridable: false);
         this.Section(builder, "GameState", ContextModule.GameState, this.BuildGameState);
         this.Section(builder, "SampleDialogue", ContextModule.SampleDialogue, this.BuildSampleDialogue);
         this.Section(builder, "EventHistory", ContextModule.EventHistory, this.BuildEventHistory);
