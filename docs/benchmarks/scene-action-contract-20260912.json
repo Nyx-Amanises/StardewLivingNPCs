@@ -1,0 +1,1451 @@
+{
+  "SchemaVersion": 1,
+  "Date": "2026-09-12",
+  "BaselineCommit": "955a2f8",
+  "CurrentCode": "Isolated staged snapshot on top of 955a2f8; see CurrentAssembly hash.",
+  "Unit": "UTF-16 code units (.NET String.Length), including Windows CR/LF; not tokens",
+  "Build": "Debug assembly targeting net6.0; hosted by PowerShell 7.6.5 / .NET 10.0.11.",
+  "Script": "tools/measure_scene_action_contract.ps1",
+  "ScriptSha256": "3CCF7DCE38943832162B740251F32D7C29826034BAA266CFE1B6442907C1E6D8",
+  "BaselineAssembly": {
+    "Path": "LivingNPCs/bin/Debug/net6.0/LivingNPCs.dll (isolated snapshot of 955a2f8)",
+    "Sha256": "4007EDA62327DA2CD05C30EF12443CF88BDEC15D8D9FEC8032AEEA7900302B3A",
+    "Mvid": "7f399e28-b832-4a5f-8b67-dab0bc73fc27",
+    "Runtime": ".NET 10.0.11"
+  },
+  "CurrentAssembly": {
+    "Path": "LivingNPCs/bin/Debug/net6.0/LivingNPCs.dll (isolated staged snapshot for this change)",
+    "Sha256": "A1BF749F9722C5D2B02564C1860705ADE09FB4419E7B067309AA19FB307B17FB",
+    "Mvid": "f4c9b07d-ae79-4f35-beba-b24690a59ac0",
+    "Runtime": ".NET 10.0.11"
+  },
+  "FixtureSha256": "CD01C18DAF50684133A73B944F01F777AEF9E53CB0B977C228867117E9E7CD2B",
+  "AssetSources": [
+    {
+      "Path": "LivingNPCs/assets/dialogue/prompts/default.json",
+      "Sha256": "2EEC938039E4AA8A9D24E9EA5FC4D1C41A7FA9C1A00358D85C9EFB1E182DDD57",
+      "Characters": 102144
+    },
+    {
+      "Path": "LivingNPCs/assets/dialogue/prompts/zh.json",
+      "Sha256": "E1431ABC4FA56285D819B5512BEA7CB5A34561242F91A3181ED27C5277A1D998",
+      "Characters": 33694
+    },
+    {
+      "Path": "LivingNPCs/assets/dialogue/bios/Penny.json",
+      "Sha256": "5883416645E2976ADC996A13382F63791AE9E78048BFFB7DF53B88983FB56505",
+      "Characters": 3308
+    },
+    {
+      "Path": "LivingNPCs/assets/dialogue/bios-zh/Penny.json",
+      "Sha256": "4F4A559348E05D43F57453AE087E47D32B108419639A169F9CB43125CFEE9C10",
+      "Characters": 1723
+    },
+    {
+      "Path": "LivingNPCs/assets/dialogue/world/GameSummary.json",
+      "Sha256": "2AE929FABF20687146949AAC833F9A4A21915120D34F0FEDBDE0514D1D197ED6",
+      "Characters": 20428
+    }
+  ],
+  "Scope": [
+    "Both production versions consume exactly the same fixture.json bytes; each runs in an isolated PowerShell process.",
+    "Real assets: repository default/zh prompt dictionaries, English/Chinese Penny bios, and the vanilla GameSummary rendered once by the current production WorldSummaryRenderer.",
+    "Actual production PromptAssembler runs with Full context routing in both versions. World retrieval and semantic routing are not run or compared here.",
+    "Synthetic inputs: year 2, spring 15, 13:30, Town, 4 hearts, farmer Xiao Gang; controlled current dialogue/history and runtime PromptFragments capability sections.",
+    "Help item-fit and pending-request values are synthetic, with Wood then Milk; they are not an actual captured save state.",
+    "Repository prompt lookup uses FemaleNpc variants and production PromptTable.ReplaceTokens; game string preprocessing, content-pack patches, runtime portrait matching and saved histories are not invoked.",
+    "Penny biography and world content are full; sample dialogue and saved event history are empty. This fixture is a controlled comparison, not a prediction of every live request size.",
+    "No model calls, network, game initialization, user configuration, API keys or save files are used. No time-to-first-token or model latency is measured.",
+    "NonContractDelta is a length comparison only. Zero does not prove byte or content equality of non-contract prompt text.",
+    "The multi-family and unknown-context fallback cases grow; neither uniform input savings nor model latency improvement is claimed."
+  ],
+  "Reproduction": "Run tools/measure_scene_action_contract.ps1 with explicit BaselineRepositoryRoot and CurrentRepositoryRoot containing built production DLLs and test-output dependencies. The script generates fixture.json, raw per-version prompts, comparisons and all 64 family combinations in a temporary output directory.",
+  "SyntheticScenarioInputs": [
+    {
+      "Key": "en/greeting",
+      "Locale": "en",
+      "Id": "greeting",
+      "PlayerText": "Good morning, Penny.",
+      "NpcDisplayName": "Penny",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "Good morning, Penny."
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: Penny\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: should not open a new help request now (no new favor is appropriate now); even if the farmer offers to help, gently decline/deflect; never name, accept or commit to a new favor.\n- Nothing recorded yet for: help requests; do not invent such shared history.\n## LivingNPCs Gift Restriction: no NPC gift is authorized for this reply — do not offer or give the farmer any item, include no give_small_gift or give_meaningful_gift action, and do not claim any earlier unsupported gift offer was received or kept.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "en/preference",
+      "Locale": "en",
+      "Id": "preference",
+      "PlayerText": "I love poppies and want to read more books.",
+      "NpcDisplayName": "Penny",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "I love poppies and want to read more books."
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: Penny\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: should not open a new help request now (no new favor is appropriate now); even if the farmer offers to help, gently decline/deflect; never name, accept or commit to a new favor.\n- Nothing recorded yet for: help requests; do not invent such shared history.\n## LivingNPCs Gift Restriction: no NPC gift is authorized for this reply — do not offer or give the farmer any item, include no give_small_gift or give_meaningful_gift action, and do not claim any earlier unsupported gift offer was received or kept.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "en/current-gift",
+      "Locale": "en",
+      "Id": "current-gift",
+      "PlayerText": "It is a lovely afternoon.",
+      "NpcDisplayName": "Penny",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "It is a lovely afternoon."
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: Penny\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: should not open a new help request now (no new favor is appropriate now); even if the farmer offers to help, gently decline/deflect; never name, accept or commit to a new favor.\n- Nothing recorded yet for: help requests; do not invent such shared history.\n## LivingNPCs Gift Opportunity\n- Gift cue: The relationship is warm enough that the NPC may offer a small everyday gift today..\n- This authorization applies to this one reply only. It is an opportunity, not an obligation: offer at most one small in-game gift and include exactly one hidden action with type give_small_gift only if the visible reply gives it now. Do not upgrade it to give_meaningful_gift unless another explicit LivingNPCs context authorizes that tier.\n- If you include give_small_gift, the visible dialogue must explicitly offer the gift before the hidden metadata, using natural wording such as 'I brought you a small thing' or 'this is for you'. If the visible reply does not offer a gift, do not include the hidden action.\n- Shared small gift IDs: (O)20 Leek; (O)18 Daffodil.\n- Penny's personalized small gift IDs: (O)591 Tulip.\n- If naming a specific gift, copy both itemId and its matching itemLabel from the two lists above. If you cannot make that exact match, use only generic wording such as 'a small thing' and leave both fields empty.\n- Never invent jewelry, clothing, keepsakes, notes, handmade props, or any other object outside those lists, even if it would sound in character.\n- If the moment feels emotionally wrong, crowded, or abrupt, skip the gift rather than forcing it.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "en/new-help",
+      "Locale": "en",
+      "Id": "new-help",
+      "PlayerText": "Do you need anything today?",
+      "NpcDisplayName": "Penny",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "Do you need anything today?"
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: Penny\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: may naturally ask for one modest favor now; a modest favor fits today; ask once, clearly, then await the farmer's reply; do not withdraw it or answer for them.\n- Help-request lifecycle: Offered = asked but not accepted; Pending = accepted/active; only Pending is a task.\n- Help-request fit: theme practical; currently reasonable item requests: Wood (O)388; Milk (O)184; item_request only.\n- Nothing recorded yet for: help requests; do not invent such shared history.\n## LivingNPCs Gift Restriction: no NPC gift is authorized for this reply — do not offer or give the farmer any item, include no give_small_gift or give_meaningful_gift action, and do not claim any earlier unsupported gift offer was received or kept.\n## LivingNPCs Help Request Opportunity\n- Today Penny is inclined to ask the farmer for one small favor during this conversation.\n- If natural for this reply, ask one concrete item favor from the help-request fit list and emit exactly one hidden helpRequests entry for the whole favor; never spoken-only.\n- One-step favors request only their requestedItemId/requestedItemLabel. Multiple items require ordered steps in the same helpRequests entry, matching the exact spoken order.\n- No unencoded optional or bonus item ('if you can also bring', 'while you're at it', 'another would be better', 'that would make it perfect'): encode each as a required step or omit it.\n- Keep it brief and in character; if the moment does not fit, wait for another day.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "en/existing-help-reminder",
+      "Locale": "en",
+      "Id": "existing-help-reminder",
+      "PlayerText": "What were the items you asked me for?",
+      "NpcDisplayName": "Penny",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "What were the items you asked me for?"
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: Penny\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: should not open a new help request now (no new favor is appropriate now); even if the farmer offers to help, gently decline/deflect; never name, accept or commit to a new favor.\n- Help-request lifecycle: Offered = asked but not accepted; Pending = accepted/active; only Pending is a task.\n- Help-request fit: theme practical; currently reasonable item requests: Wood (O)388; Milk (O)184; item_request only.\n- Help requests involving the farmer: item_request, due tomorrow, status Pending, step 1/2; current step: Wood (O)388; summary: first Wood, then Milk.\n## LivingNPCs Gift Restriction: no NPC gift is authorized for this reply — do not offer or give the farmer any item, include no give_small_gift or give_meaningful_gift action, and do not claim any earlier unsupported gift offer was received or kept.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "en/invitation",
+      "Locale": "en",
+      "Id": "invitation",
+      "PlayerText": "Let's go to the Beach together now.",
+      "NpcDisplayName": "Penny",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "Let's go to the Beach together now."
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: Penny\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: should not open a new help request now (no new favor is appropriate now); even if the farmer offers to help, gently decline/deflect; never name, accept or commit to a new favor.\n- Nothing recorded yet for: help requests; do not invent such shared history.\n## LivingNPCs Gift Restriction: no NPC gift is authorized for this reply — do not offer or give the farmer any item, include no give_small_gift or give_meaningful_gift action, and do not claim any earlier unsupported gift offer was received or kept.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "en/short-continuation",
+      "Locale": "en",
+      "Id": "short-continuation",
+      "PlayerText": "Sounds good.",
+      "NpcDisplayName": "Penny",
+      "Conversation": [
+        {
+          "Id": "prior-player",
+          "IsPlayer": true,
+          "Text": "Let's go to the Beach together."
+        },
+        {
+          "Id": "prior-npc",
+          "IsPlayer": false,
+          "Text": "Let me put my books away and get my coat."
+        },
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "Sounds good."
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: Penny\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: should not open a new help request now (no new favor is appropriate now); even if the farmer offers to help, gently decline/deflect; never name, accept or commit to a new favor.\n- Nothing recorded yet for: help requests; do not invent such shared history.\n## LivingNPCs Gift Restriction: no NPC gift is authorized for this reply — do not offer or give the farmer any item, include no give_small_gift or give_meaningful_gift action, and do not claim any earlier unsupported gift offer was received or kept.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "en/multiple-families",
+      "Locale": "en",
+      "Id": "multiple-families",
+      "PlayerText": "Let's go to the Beach. Could you give me a flower and lend me 50 gold?",
+      "NpcDisplayName": "Penny",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "Let's go to the Beach. Could you give me a flower and lend me 50 gold?"
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: Penny\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: may naturally ask for one modest favor now; a modest favor fits today; ask once, clearly, then await the farmer's reply; do not withdraw it or answer for them.\n- Help-request lifecycle: Offered = asked but not accepted; Pending = accepted/active; only Pending is a task.\n- Help-request fit: theme practical; currently reasonable item requests: Wood (O)388; Milk (O)184; item_request only.\n- Nothing recorded yet for: help requests; do not invent such shared history.\n## LivingNPCs Gift Opportunity\n- Gift cue: The relationship is warm enough that the NPC may offer a small everyday gift today..\n- This authorization applies to this one reply only. It is an opportunity, not an obligation: offer at most one small in-game gift and include exactly one hidden action with type give_small_gift only if the visible reply gives it now. Do not upgrade it to give_meaningful_gift unless another explicit LivingNPCs context authorizes that tier.\n- If you include give_small_gift, the visible dialogue must explicitly offer the gift before the hidden metadata, using natural wording such as 'I brought you a small thing' or 'this is for you'. If the visible reply does not offer a gift, do not include the hidden action.\n- Shared small gift IDs: (O)20 Leek; (O)18 Daffodil.\n- Penny's personalized small gift IDs: (O)591 Tulip.\n- If naming a specific gift, copy both itemId and its matching itemLabel from the two lists above. If you cannot make that exact match, use only generic wording such as 'a small thing' and leave both fields empty.\n- Never invent jewelry, clothing, keepsakes, notes, handmade props, or any other object outside those lists, even if it would sound in character.\n- If the moment feels emotionally wrong, crowded, or abrupt, skip the gift rather than forcing it.\n## LivingNPCs Help Request Opportunity\n- Today Penny is inclined to ask the farmer for one small favor during this conversation.\n- If natural for this reply, ask one concrete item favor from the help-request fit list and emit exactly one hidden helpRequests entry for the whole favor; never spoken-only.\n- One-step favors request only their requestedItemId/requestedItemLabel. Multiple items require ordered steps in the same helpRequests entry, matching the exact spoken order.\n- No unencoded optional or bonus item ('if you can also bring', 'while you're at it', 'another would be better', 'that would make it perfect'): encode each as a required step or omit it.\n- Keep it brief and in character; if the moment does not fit, wait for another day.",
+      "IsEventActive": true
+    },
+    {
+      "Key": "en/unknown-context-fallback",
+      "Locale": "en",
+      "Id": "unknown-context-fallback",
+      "PlayerText": "Hi, Penny.",
+      "NpcDisplayName": "Penny",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "Hi, Penny."
+        }
+      ],
+      "BehaviorContext": "External behavior context has no recognized capability fields.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "zh/greeting",
+      "Locale": "zh",
+      "Id": "greeting",
+      "PlayerText": "早上好，潘妮。",
+      "NpcDisplayName": "潘妮",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "早上好，潘妮。"
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: 潘妮\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: should not open a new help request now (no new favor is appropriate now); even if the farmer offers to help, gently decline/deflect; never name, accept or commit to a new favor.\n- Nothing recorded yet for: help requests; do not invent such shared history.\n## LivingNPCs Gift Restriction: no NPC gift is authorized for this reply — do not offer or give the farmer any item, include no give_small_gift or give_meaningful_gift action, and do not claim any earlier unsupported gift offer was received or kept.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "zh/preference",
+      "Locale": "zh",
+      "Id": "preference",
+      "PlayerText": "我喜欢虞美人，也想多读一点书。",
+      "NpcDisplayName": "潘妮",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "我喜欢虞美人，也想多读一点书。"
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: 潘妮\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: should not open a new help request now (no new favor is appropriate now); even if the farmer offers to help, gently decline/deflect; never name, accept or commit to a new favor.\n- Nothing recorded yet for: help requests; do not invent such shared history.\n## LivingNPCs Gift Restriction: no NPC gift is authorized for this reply — do not offer or give the farmer any item, include no give_small_gift or give_meaningful_gift action, and do not claim any earlier unsupported gift offer was received or kept.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "zh/current-gift",
+      "Locale": "zh",
+      "Id": "current-gift",
+      "PlayerText": "今天天气真好。",
+      "NpcDisplayName": "潘妮",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "今天天气真好。"
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: 潘妮\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: should not open a new help request now (no new favor is appropriate now); even if the farmer offers to help, gently decline/deflect; never name, accept or commit to a new favor.\n- Nothing recorded yet for: help requests; do not invent such shared history.\n## LivingNPCs Gift Opportunity\n- Gift cue: The relationship is warm enough that the NPC may offer a small everyday gift today..\n- This authorization applies to this one reply only. It is an opportunity, not an obligation: offer at most one small in-game gift and include exactly one hidden action with type give_small_gift only if the visible reply gives it now. Do not upgrade it to give_meaningful_gift unless another explicit LivingNPCs context authorizes that tier.\n- If you include give_small_gift, the visible dialogue must explicitly offer the gift before the hidden metadata, using natural wording such as 'I brought you a small thing' or 'this is for you'. If the visible reply does not offer a gift, do not include the hidden action.\n- Shared small gift IDs: (O)20 Leek; (O)18 Daffodil.\n- 潘妮's personalized small gift IDs: (O)591 Tulip.\n- If naming a specific gift, copy both itemId and its matching itemLabel from the two lists above. If you cannot make that exact match, use only generic wording such as 'a small thing' and leave both fields empty.\n- Never invent jewelry, clothing, keepsakes, notes, handmade props, or any other object outside those lists, even if it would sound in character.\n- If the moment feels emotionally wrong, crowded, or abrupt, skip the gift rather than forcing it.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "zh/new-help",
+      "Locale": "zh",
+      "Id": "new-help",
+      "PlayerText": "今天有什么需要我帮忙的吗？",
+      "NpcDisplayName": "潘妮",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "今天有什么需要我帮忙的吗？"
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: 潘妮\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: may naturally ask for one modest favor now; a modest favor fits today; ask once, clearly, then await the farmer's reply; do not withdraw it or answer for them.\n- Help-request lifecycle: Offered = asked but not accepted; Pending = accepted/active; only Pending is a task.\n- Help-request fit: theme practical; currently reasonable item requests: Wood (O)388; Milk (O)184; item_request only.\n- Nothing recorded yet for: help requests; do not invent such shared history.\n## LivingNPCs Gift Restriction: no NPC gift is authorized for this reply — do not offer or give the farmer any item, include no give_small_gift or give_meaningful_gift action, and do not claim any earlier unsupported gift offer was received or kept.\n## LivingNPCs Help Request Opportunity\n- Today 潘妮 is inclined to ask the farmer for one small favor during this conversation.\n- If natural for this reply, ask one concrete item favor from the help-request fit list and emit exactly one hidden helpRequests entry for the whole favor; never spoken-only.\n- One-step favors request only their requestedItemId/requestedItemLabel. Multiple items require ordered steps in the same helpRequests entry, matching the exact spoken order.\n- No unencoded optional or bonus item ('if you can also bring', 'while you're at it', 'another would be better', 'that would make it perfect'): encode each as a required step or omit it.\n- Keep it brief and in character; if the moment does not fit, wait for another day.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "zh/existing-help-reminder",
+      "Locale": "zh",
+      "Id": "existing-help-reminder",
+      "PlayerText": "上次你要的东西是什么？",
+      "NpcDisplayName": "潘妮",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "上次你要的东西是什么？"
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: 潘妮\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: should not open a new help request now (no new favor is appropriate now); even if the farmer offers to help, gently decline/deflect; never name, accept or commit to a new favor.\n- Help-request lifecycle: Offered = asked but not accepted; Pending = accepted/active; only Pending is a task.\n- Help-request fit: theme practical; currently reasonable item requests: Wood (O)388; Milk (O)184; item_request only.\n- Help requests involving the farmer: item_request, due tomorrow, status Pending, step 1/2; current step: Wood (O)388; summary: first Wood, then Milk.\n## LivingNPCs Gift Restriction: no NPC gift is authorized for this reply — do not offer or give the farmer any item, include no give_small_gift or give_meaningful_gift action, and do not claim any earlier unsupported gift offer was received or kept.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "zh/invitation",
+      "Locale": "zh",
+      "Id": "invitation",
+      "PlayerText": "现在一起去海边吧。",
+      "NpcDisplayName": "潘妮",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "现在一起去海边吧。"
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: 潘妮\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: should not open a new help request now (no new favor is appropriate now); even if the farmer offers to help, gently decline/deflect; never name, accept or commit to a new favor.\n- Nothing recorded yet for: help requests; do not invent such shared history.\n## LivingNPCs Gift Restriction: no NPC gift is authorized for this reply — do not offer or give the farmer any item, include no give_small_gift or give_meaningful_gift action, and do not claim any earlier unsupported gift offer was received or kept.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "zh/short-continuation",
+      "Locale": "zh",
+      "Id": "short-continuation",
+      "PlayerText": "好呀。",
+      "NpcDisplayName": "潘妮",
+      "Conversation": [
+        {
+          "Id": "prior-player",
+          "IsPlayer": true,
+          "Text": "我们一起去海边吧。"
+        },
+        {
+          "Id": "prior-npc",
+          "IsPlayer": false,
+          "Text": "让我先把书收好，再拿件外套。"
+        },
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "好呀。"
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: 潘妮\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: should not open a new help request now (no new favor is appropriate now); even if the farmer offers to help, gently decline/deflect; never name, accept or commit to a new favor.\n- Nothing recorded yet for: help requests; do not invent such shared history.\n## LivingNPCs Gift Restriction: no NPC gift is authorized for this reply — do not offer or give the farmer any item, include no give_small_gift or give_meaningful_gift action, and do not claim any earlier unsupported gift offer was received or kept.",
+      "IsEventActive": false
+    },
+    {
+      "Key": "zh/multiple-families",
+      "Locale": "zh",
+      "Id": "multiple-families",
+      "PlayerText": "一起去海边吧。能送我一朵花，再借我50金币吗？",
+      "NpcDisplayName": "潘妮",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "一起去海边吧。能送我一朵花，再借我50金币吗？"
+        }
+      ],
+      "BehaviorContext": "## LivingNPCs Context: 潘妮\nPurpose: hidden continuity for ValleyTalk's next in-character reply.\nCurrent state:\n- Scene: quiet afternoon; location: Town; spring 15; time: 1330.\n- Mood: calm; attention to farmer: 60/100; openness: 55/100; response inclination: chat.\n- Help-request readiness: may naturally ask for one modest favor now; a modest favor fits today; ask once, clearly, then await the farmer's reply; do not withdraw it or answer for them.\n- Help-request lifecycle: Offered = asked but not accepted; Pending = accepted/active; only Pending is a task.\n- Help-request fit: theme practical; currently reasonable item requests: Wood (O)388; Milk (O)184; item_request only.\n- Nothing recorded yet for: help requests; do not invent such shared history.\n## LivingNPCs Gift Opportunity\n- Gift cue: The relationship is warm enough that the NPC may offer a small everyday gift today..\n- This authorization applies to this one reply only. It is an opportunity, not an obligation: offer at most one small in-game gift and include exactly one hidden action with type give_small_gift only if the visible reply gives it now. Do not upgrade it to give_meaningful_gift unless another explicit LivingNPCs context authorizes that tier.\n- If you include give_small_gift, the visible dialogue must explicitly offer the gift before the hidden metadata, using natural wording such as 'I brought you a small thing' or 'this is for you'. If the visible reply does not offer a gift, do not include the hidden action.\n- Shared small gift IDs: (O)20 Leek; (O)18 Daffodil.\n- 潘妮's personalized small gift IDs: (O)591 Tulip.\n- If naming a specific gift, copy both itemId and its matching itemLabel from the two lists above. If you cannot make that exact match, use only generic wording such as 'a small thing' and leave both fields empty.\n- Never invent jewelry, clothing, keepsakes, notes, handmade props, or any other object outside those lists, even if it would sound in character.\n- If the moment feels emotionally wrong, crowded, or abrupt, skip the gift rather than forcing it.\n## LivingNPCs Help Request Opportunity\n- Today 潘妮 is inclined to ask the farmer for one small favor during this conversation.\n- If natural for this reply, ask one concrete item favor from the help-request fit list and emit exactly one hidden helpRequests entry for the whole favor; never spoken-only.\n- One-step favors request only their requestedItemId/requestedItemLabel. Multiple items require ordered steps in the same helpRequests entry, matching the exact spoken order.\n- No unencoded optional or bonus item ('if you can also bring', 'while you're at it', 'another would be better', 'that would make it perfect'): encode each as a required step or omit it.\n- Keep it brief and in character; if the moment does not fit, wait for another day.",
+      "IsEventActive": true
+    },
+    {
+      "Key": "zh/unknown-context-fallback",
+      "Locale": "zh",
+      "Id": "unknown-context-fallback",
+      "PlayerText": "你好，潘妮。",
+      "NpcDisplayName": "潘妮",
+      "Conversation": [
+        {
+          "Id": "current-player",
+          "IsPlayer": true,
+          "Text": "你好，潘妮。"
+        }
+      ],
+      "BehaviorContext": "External behavior context has no recognized capability fields.",
+      "IsEventActive": false
+    }
+  ],
+  "Comparisons": [
+    {
+      "Locale": "en",
+      "Scenario": "greeting",
+      "Plan": "core-only",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 186,
+      "CurrentContractChars": 4529,
+      "ContractSavedChars": 1561,
+      "ContractSavedPercent": 25.63,
+      "BaselineTotalChars": 28655,
+      "CurrentTotalChars": 27094,
+      "TotalSavedChars": 1561,
+      "TotalSavedPercent": 5.45,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "en",
+      "Scenario": "preference",
+      "Plan": "core-only",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 186,
+      "CurrentContractChars": 4529,
+      "ContractSavedChars": 1561,
+      "ContractSavedPercent": 25.63,
+      "BaselineTotalChars": 28678,
+      "CurrentTotalChars": 27117,
+      "TotalSavedChars": 1561,
+      "TotalSavedPercent": 5.44,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "en",
+      "Scenario": "current-gift",
+      "Plan": "Gifts",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 553,
+      "CurrentContractChars": 4896,
+      "ContractSavedChars": 1194,
+      "ContractSavedPercent": 19.61,
+      "BaselineTotalChars": 29719,
+      "CurrentTotalChars": 28525,
+      "TotalSavedChars": 1194,
+      "TotalSavedPercent": 4.02,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "en",
+      "Scenario": "new-help",
+      "Plan": "NewHelp",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 1044,
+      "CurrentContractChars": 5387,
+      "ContractSavedChars": 703,
+      "ContractSavedPercent": 11.54,
+      "BaselineTotalChars": 29623,
+      "CurrentTotalChars": 28920,
+      "TotalSavedChars": 703,
+      "TotalSavedPercent": 2.37,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "en",
+      "Scenario": "existing-help-reminder",
+      "Plan": "HelpUpdates",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 392,
+      "CurrentContractChars": 4735,
+      "ContractSavedChars": 1355,
+      "ContractSavedPercent": 22.25,
+      "BaselineTotalChars": 28974,
+      "CurrentTotalChars": 27619,
+      "TotalSavedChars": 1355,
+      "TotalSavedPercent": 4.68,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "en",
+      "Scenario": "invitation",
+      "Plan": "Travel",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 666,
+      "CurrentContractChars": 5009,
+      "ContractSavedChars": 1081,
+      "ContractSavedPercent": 17.75,
+      "BaselineTotalChars": 28670,
+      "CurrentTotalChars": 27589,
+      "TotalSavedChars": 1081,
+      "TotalSavedPercent": 3.77,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "en",
+      "Scenario": "short-continuation",
+      "Plan": "Travel",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 666,
+      "CurrentContractChars": 5009,
+      "ContractSavedChars": 1081,
+      "ContractSavedPercent": 17.75,
+      "BaselineTotalChars": 28736,
+      "CurrentTotalChars": 27655,
+      "TotalSavedChars": 1081,
+      "TotalSavedPercent": 3.76,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "en",
+      "Scenario": "multiple-families",
+      "Plan": "Travel+Gifts+NewHelp+Money+Festival",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 2099,
+      "CurrentContractChars": 6442,
+      "ContractSavedChars": -352,
+      "ContractSavedPercent": -5.78,
+      "BaselineTotalChars": 30725,
+      "CurrentTotalChars": 31077,
+      "TotalSavedChars": -352,
+      "TotalSavedPercent": -1.15,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "en",
+      "Scenario": "unknown-context-fallback",
+      "Plan": "Travel+Gifts+NewHelp+HelpUpdates+Money+Festival (fallback)",
+      "IsFallback": true,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 2405,
+      "CurrentContractChars": 6748,
+      "ContractSavedChars": -658,
+      "ContractSavedPercent": -10.8,
+      "BaselineTotalChars": 27909,
+      "CurrentTotalChars": 28567,
+      "TotalSavedChars": -658,
+      "TotalSavedPercent": -2.36,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "zh",
+      "Scenario": "greeting",
+      "Plan": "core-only",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 186,
+      "CurrentContractChars": 4529,
+      "ContractSavedChars": 1561,
+      "ContractSavedPercent": 25.63,
+      "BaselineTotalChars": 22679,
+      "CurrentTotalChars": 21118,
+      "TotalSavedChars": 1561,
+      "TotalSavedPercent": 6.88,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "zh",
+      "Scenario": "preference",
+      "Plan": "core-only",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 186,
+      "CurrentContractChars": 4529,
+      "ContractSavedChars": 1561,
+      "ContractSavedPercent": 25.63,
+      "BaselineTotalChars": 22687,
+      "CurrentTotalChars": 21126,
+      "TotalSavedChars": 1561,
+      "TotalSavedPercent": 6.88,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "zh",
+      "Scenario": "current-gift",
+      "Plan": "Gifts",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 553,
+      "CurrentContractChars": 4896,
+      "ContractSavedChars": 1194,
+      "ContractSavedPercent": 19.61,
+      "BaselineTotalChars": 23735,
+      "CurrentTotalChars": 22541,
+      "TotalSavedChars": 1194,
+      "TotalSavedPercent": 5.03,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "zh",
+      "Scenario": "new-help",
+      "Plan": "NewHelp",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 1044,
+      "CurrentContractChars": 5387,
+      "ContractSavedChars": 703,
+      "ContractSavedPercent": 11.54,
+      "BaselineTotalChars": 23643,
+      "CurrentTotalChars": 22940,
+      "TotalSavedChars": 703,
+      "TotalSavedPercent": 2.97,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "zh",
+      "Scenario": "existing-help-reminder",
+      "Plan": "HelpUpdates",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 392,
+      "CurrentContractChars": 4735,
+      "ContractSavedChars": 1355,
+      "ContractSavedPercent": 22.25,
+      "BaselineTotalChars": 22985,
+      "CurrentTotalChars": 21630,
+      "TotalSavedChars": 1355,
+      "TotalSavedPercent": 5.9,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "zh",
+      "Scenario": "invitation",
+      "Plan": "Travel",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 666,
+      "CurrentContractChars": 5009,
+      "ContractSavedChars": 1081,
+      "ContractSavedPercent": 17.75,
+      "BaselineTotalChars": 22681,
+      "CurrentTotalChars": 21600,
+      "TotalSavedChars": 1081,
+      "TotalSavedPercent": 4.77,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "zh",
+      "Scenario": "short-continuation",
+      "Plan": "Travel",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 666,
+      "CurrentContractChars": 5009,
+      "ContractSavedChars": 1081,
+      "ContractSavedPercent": 17.75,
+      "BaselineTotalChars": 22712,
+      "CurrentTotalChars": 21631,
+      "TotalSavedChars": 1081,
+      "TotalSavedPercent": 4.76,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "zh",
+      "Scenario": "multiple-families",
+      "Plan": "Travel+Gifts+NewHelp+Money+Festival",
+      "IsFallback": false,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 2099,
+      "CurrentContractChars": 6442,
+      "ContractSavedChars": -352,
+      "ContractSavedPercent": -5.78,
+      "BaselineTotalChars": 24709,
+      "CurrentTotalChars": 25061,
+      "TotalSavedChars": -352,
+      "TotalSavedPercent": -1.42,
+      "NonContractDelta": 0
+    },
+    {
+      "Locale": "zh",
+      "Scenario": "unknown-context-fallback",
+      "Plan": "Travel+Gifts+NewHelp+HelpUpdates+Money+Festival (fallback)",
+      "IsFallback": true,
+      "BaselineContractChars": 6090,
+      "CoreChars": 4343,
+      "SceneChars": 2405,
+      "CurrentContractChars": 6748,
+      "ContractSavedChars": -658,
+      "ContractSavedPercent": -10.8,
+      "BaselineTotalChars": 21945,
+      "CurrentTotalChars": 22603,
+      "TotalSavedChars": -658,
+      "TotalSavedPercent": -3.0,
+      "NonContractDelta": 0
+    }
+  ],
+  "FamilyCombinations": [
+    {
+      "Mask": 0,
+      "Plan": "core-only",
+      "CoreChars": 4343,
+      "SceneChars": 186,
+      "CombinedChars": 4529,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1561,
+      "SavedPercent": 25.63
+    },
+    {
+      "Mask": 1,
+      "Plan": "Travel",
+      "CoreChars": 4343,
+      "SceneChars": 666,
+      "CombinedChars": 5009,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1081,
+      "SavedPercent": 17.75
+    },
+    {
+      "Mask": 2,
+      "Plan": "Gifts",
+      "CoreChars": 4343,
+      "SceneChars": 553,
+      "CombinedChars": 4896,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1194,
+      "SavedPercent": 19.61
+    },
+    {
+      "Mask": 3,
+      "Plan": "Travel+Gifts",
+      "CoreChars": 4343,
+      "SceneChars": 1098,
+      "CombinedChars": 5441,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 649,
+      "SavedPercent": 10.66
+    },
+    {
+      "Mask": 4,
+      "Plan": "NewHelp",
+      "CoreChars": 4343,
+      "SceneChars": 1044,
+      "CombinedChars": 5387,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 703,
+      "SavedPercent": 11.54
+    },
+    {
+      "Mask": 5,
+      "Plan": "Travel+NewHelp",
+      "CoreChars": 4343,
+      "SceneChars": 1624,
+      "CombinedChars": 5967,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 123,
+      "SavedPercent": 2.02
+    },
+    {
+      "Mask": 6,
+      "Plan": "Gifts+NewHelp",
+      "CoreChars": 4343,
+      "SceneChars": 1511,
+      "CombinedChars": 5854,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 236,
+      "SavedPercent": 3.88
+    },
+    {
+      "Mask": 7,
+      "Plan": "Travel+Gifts+NewHelp",
+      "CoreChars": 4343,
+      "SceneChars": 2056,
+      "CombinedChars": 6399,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -309,
+      "SavedPercent": -5.07
+    },
+    {
+      "Mask": 8,
+      "Plan": "HelpUpdates",
+      "CoreChars": 4343,
+      "SceneChars": 392,
+      "CombinedChars": 4735,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1355,
+      "SavedPercent": 22.25
+    },
+    {
+      "Mask": 9,
+      "Plan": "Travel+HelpUpdates",
+      "CoreChars": 4343,
+      "SceneChars": 972,
+      "CombinedChars": 5315,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 775,
+      "SavedPercent": 12.73
+    },
+    {
+      "Mask": 10,
+      "Plan": "Gifts+HelpUpdates",
+      "CoreChars": 4343,
+      "SceneChars": 859,
+      "CombinedChars": 5202,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 888,
+      "SavedPercent": 14.58
+    },
+    {
+      "Mask": 11,
+      "Plan": "Travel+Gifts+HelpUpdates",
+      "CoreChars": 4343,
+      "SceneChars": 1404,
+      "CombinedChars": 5747,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 343,
+      "SavedPercent": 5.63
+    },
+    {
+      "Mask": 12,
+      "Plan": "NewHelp+HelpUpdates",
+      "CoreChars": 4343,
+      "SceneChars": 1350,
+      "CombinedChars": 5693,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 397,
+      "SavedPercent": 6.52
+    },
+    {
+      "Mask": 13,
+      "Plan": "Travel+NewHelp+HelpUpdates",
+      "CoreChars": 4343,
+      "SceneChars": 1930,
+      "CombinedChars": 6273,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -183,
+      "SavedPercent": -3.0
+    },
+    {
+      "Mask": 14,
+      "Plan": "Gifts+NewHelp+HelpUpdates",
+      "CoreChars": 4343,
+      "SceneChars": 1817,
+      "CombinedChars": 6160,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -70,
+      "SavedPercent": -1.15
+    },
+    {
+      "Mask": 15,
+      "Plan": "Travel+Gifts+NewHelp+HelpUpdates",
+      "CoreChars": 4343,
+      "SceneChars": 2362,
+      "CombinedChars": 6705,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -615,
+      "SavedPercent": -10.1
+    },
+    {
+      "Mask": 16,
+      "Plan": "Money",
+      "CoreChars": 4343,
+      "SceneChars": 143,
+      "CombinedChars": 4486,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1604,
+      "SavedPercent": 26.34
+    },
+    {
+      "Mask": 17,
+      "Plan": "Travel+Money",
+      "CoreChars": 4343,
+      "SceneChars": 688,
+      "CombinedChars": 5031,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1059,
+      "SavedPercent": 17.39
+    },
+    {
+      "Mask": 18,
+      "Plan": "Gifts+Money",
+      "CoreChars": 4343,
+      "SceneChars": 575,
+      "CombinedChars": 4918,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1172,
+      "SavedPercent": 19.24
+    },
+    {
+      "Mask": 19,
+      "Plan": "Travel+Gifts+Money",
+      "CoreChars": 4343,
+      "SceneChars": 1120,
+      "CombinedChars": 5463,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 627,
+      "SavedPercent": 10.3
+    },
+    {
+      "Mask": 20,
+      "Plan": "NewHelp+Money",
+      "CoreChars": 4343,
+      "SceneChars": 1101,
+      "CombinedChars": 5444,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 646,
+      "SavedPercent": 10.61
+    },
+    {
+      "Mask": 21,
+      "Plan": "Travel+NewHelp+Money",
+      "CoreChars": 4343,
+      "SceneChars": 1646,
+      "CombinedChars": 5989,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 101,
+      "SavedPercent": 1.66
+    },
+    {
+      "Mask": 22,
+      "Plan": "Gifts+NewHelp+Money",
+      "CoreChars": 4343,
+      "SceneChars": 1533,
+      "CombinedChars": 5876,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 214,
+      "SavedPercent": 3.51
+    },
+    {
+      "Mask": 23,
+      "Plan": "Travel+Gifts+NewHelp+Money",
+      "CoreChars": 4343,
+      "SceneChars": 2078,
+      "CombinedChars": 6421,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -331,
+      "SavedPercent": -5.44
+    },
+    {
+      "Mask": 24,
+      "Plan": "HelpUpdates+Money",
+      "CoreChars": 4343,
+      "SceneChars": 449,
+      "CombinedChars": 4792,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1298,
+      "SavedPercent": 21.31
+    },
+    {
+      "Mask": 25,
+      "Plan": "Travel+HelpUpdates+Money",
+      "CoreChars": 4343,
+      "SceneChars": 994,
+      "CombinedChars": 5337,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 753,
+      "SavedPercent": 12.36
+    },
+    {
+      "Mask": 26,
+      "Plan": "Gifts+HelpUpdates+Money",
+      "CoreChars": 4343,
+      "SceneChars": 881,
+      "CombinedChars": 5224,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 866,
+      "SavedPercent": 14.22
+    },
+    {
+      "Mask": 27,
+      "Plan": "Travel+Gifts+HelpUpdates+Money",
+      "CoreChars": 4343,
+      "SceneChars": 1426,
+      "CombinedChars": 5769,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 321,
+      "SavedPercent": 5.27
+    },
+    {
+      "Mask": 28,
+      "Plan": "NewHelp+HelpUpdates+Money",
+      "CoreChars": 4343,
+      "SceneChars": 1407,
+      "CombinedChars": 5750,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 340,
+      "SavedPercent": 5.58
+    },
+    {
+      "Mask": 29,
+      "Plan": "Travel+NewHelp+HelpUpdates+Money",
+      "CoreChars": 4343,
+      "SceneChars": 1952,
+      "CombinedChars": 6295,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -205,
+      "SavedPercent": -3.37
+    },
+    {
+      "Mask": 30,
+      "Plan": "Gifts+NewHelp+HelpUpdates+Money",
+      "CoreChars": 4343,
+      "SceneChars": 1839,
+      "CombinedChars": 6182,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -92,
+      "SavedPercent": -1.51
+    },
+    {
+      "Mask": 31,
+      "Plan": "Travel+Gifts+NewHelp+HelpUpdates+Money",
+      "CoreChars": 4343,
+      "SceneChars": 2384,
+      "CombinedChars": 6727,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -637,
+      "SavedPercent": -10.46
+    },
+    {
+      "Mask": 32,
+      "Plan": "Festival",
+      "CoreChars": 4343,
+      "SceneChars": 182,
+      "CombinedChars": 4525,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1565,
+      "SavedPercent": 25.7
+    },
+    {
+      "Mask": 33,
+      "Plan": "Travel+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 687,
+      "CombinedChars": 5030,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1060,
+      "SavedPercent": 17.41
+    },
+    {
+      "Mask": 34,
+      "Plan": "Gifts+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 614,
+      "CombinedChars": 4957,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1133,
+      "SavedPercent": 18.6
+    },
+    {
+      "Mask": 35,
+      "Plan": "Travel+Gifts+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1119,
+      "CombinedChars": 5462,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 628,
+      "SavedPercent": 10.31
+    },
+    {
+      "Mask": 36,
+      "Plan": "NewHelp+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1140,
+      "CombinedChars": 5483,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 607,
+      "SavedPercent": 9.97
+    },
+    {
+      "Mask": 37,
+      "Plan": "Travel+NewHelp+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1645,
+      "CombinedChars": 5988,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 102,
+      "SavedPercent": 1.67
+    },
+    {
+      "Mask": 38,
+      "Plan": "Gifts+NewHelp+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1572,
+      "CombinedChars": 5915,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 175,
+      "SavedPercent": 2.87
+    },
+    {
+      "Mask": 39,
+      "Plan": "Travel+Gifts+NewHelp+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 2077,
+      "CombinedChars": 6420,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -330,
+      "SavedPercent": -5.42
+    },
+    {
+      "Mask": 40,
+      "Plan": "HelpUpdates+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 488,
+      "CombinedChars": 4831,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1259,
+      "SavedPercent": 20.67
+    },
+    {
+      "Mask": 41,
+      "Plan": "Travel+HelpUpdates+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 993,
+      "CombinedChars": 5336,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 754,
+      "SavedPercent": 12.38
+    },
+    {
+      "Mask": 42,
+      "Plan": "Gifts+HelpUpdates+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 920,
+      "CombinedChars": 5263,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 827,
+      "SavedPercent": 13.58
+    },
+    {
+      "Mask": 43,
+      "Plan": "Travel+Gifts+HelpUpdates+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1425,
+      "CombinedChars": 5768,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 322,
+      "SavedPercent": 5.29
+    },
+    {
+      "Mask": 44,
+      "Plan": "NewHelp+HelpUpdates+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1446,
+      "CombinedChars": 5789,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 301,
+      "SavedPercent": 4.94
+    },
+    {
+      "Mask": 45,
+      "Plan": "Travel+NewHelp+HelpUpdates+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1951,
+      "CombinedChars": 6294,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -204,
+      "SavedPercent": -3.35
+    },
+    {
+      "Mask": 46,
+      "Plan": "Gifts+NewHelp+HelpUpdates+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1878,
+      "CombinedChars": 6221,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -131,
+      "SavedPercent": -2.15
+    },
+    {
+      "Mask": 47,
+      "Plan": "Travel+Gifts+NewHelp+HelpUpdates+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 2383,
+      "CombinedChars": 6726,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -636,
+      "SavedPercent": -10.44
+    },
+    {
+      "Mask": 48,
+      "Plan": "Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 204,
+      "CombinedChars": 4547,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1543,
+      "SavedPercent": 25.34
+    },
+    {
+      "Mask": 49,
+      "Plan": "Travel+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 709,
+      "CombinedChars": 5052,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1038,
+      "SavedPercent": 17.04
+    },
+    {
+      "Mask": 50,
+      "Plan": "Gifts+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 636,
+      "CombinedChars": 4979,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1111,
+      "SavedPercent": 18.24
+    },
+    {
+      "Mask": 51,
+      "Plan": "Travel+Gifts+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1141,
+      "CombinedChars": 5484,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 606,
+      "SavedPercent": 9.95
+    },
+    {
+      "Mask": 52,
+      "Plan": "NewHelp+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1162,
+      "CombinedChars": 5505,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 585,
+      "SavedPercent": 9.61
+    },
+    {
+      "Mask": 53,
+      "Plan": "Travel+NewHelp+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1667,
+      "CombinedChars": 6010,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 80,
+      "SavedPercent": 1.31
+    },
+    {
+      "Mask": 54,
+      "Plan": "Gifts+NewHelp+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1594,
+      "CombinedChars": 5937,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 153,
+      "SavedPercent": 2.51
+    },
+    {
+      "Mask": 55,
+      "Plan": "Travel+Gifts+NewHelp+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 2099,
+      "CombinedChars": 6442,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -352,
+      "SavedPercent": -5.78
+    },
+    {
+      "Mask": 56,
+      "Plan": "HelpUpdates+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 510,
+      "CombinedChars": 4853,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 1237,
+      "SavedPercent": 20.31
+    },
+    {
+      "Mask": 57,
+      "Plan": "Travel+HelpUpdates+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1015,
+      "CombinedChars": 5358,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 732,
+      "SavedPercent": 12.02
+    },
+    {
+      "Mask": 58,
+      "Plan": "Gifts+HelpUpdates+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 942,
+      "CombinedChars": 5285,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 805,
+      "SavedPercent": 13.22
+    },
+    {
+      "Mask": 59,
+      "Plan": "Travel+Gifts+HelpUpdates+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1447,
+      "CombinedChars": 5790,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 300,
+      "SavedPercent": 4.93
+    },
+    {
+      "Mask": 60,
+      "Plan": "NewHelp+HelpUpdates+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1468,
+      "CombinedChars": 5811,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": 279,
+      "SavedPercent": 4.58
+    },
+    {
+      "Mask": 61,
+      "Plan": "Travel+NewHelp+HelpUpdates+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1973,
+      "CombinedChars": 6316,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -226,
+      "SavedPercent": -3.71
+    },
+    {
+      "Mask": 62,
+      "Plan": "Gifts+NewHelp+HelpUpdates+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 1900,
+      "CombinedChars": 6243,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": false,
+      "BaselineContractChars": 6090,
+      "SavedChars": -153,
+      "SavedPercent": -2.51
+    },
+    {
+      "Mask": 63,
+      "Plan": "Travel+Gifts+NewHelp+HelpUpdates+Money+Festival",
+      "CoreChars": 4343,
+      "SceneChars": 2405,
+      "CombinedChars": 6748,
+      "CurrentCompatibilityFullChars": 6093,
+      "SameAsFullFallback": true,
+      "BaselineContractChars": 6090,
+      "SavedChars": -658,
+      "SavedPercent": -10.8
+    }
+  ]
+}

@@ -175,7 +175,9 @@ internal static class LivingNpcMetadataExtractionPass
         string responseText,
         string playerText,
         string visibleNpcReply,
-        DialogueContext context)
+        DialogueContext context,
+        SceneActionContractPlan? actionContract = null,
+        IReadOnlyList<Behavior.HelpRequestItemAlias>? helpItemAliases = null)
     {
         if (context == null || string.IsNullOrWhiteSpace(responseText) || string.IsNullOrWhiteSpace(visibleNpcReply))
         {
@@ -244,6 +246,19 @@ internal static class LivingNpcMetadataExtractionPass
             // classifier resolve it; a text cue alone must never create or authorize an item.
             return LivingNpcMetadataExtractionResult.Failed(
                 "inline metadata omitted the visible immediate gift action", rawResponse: responseText);
+        }
+
+        if (parsed.Success && actionContract != null)
+        {
+            string? missingEffect = SceneActionContractCompleteness.FindMissingEffect(
+                parsed.Analysis, actionContract, playerText, visibleNpcReply, context,
+                helpItemAliases ?? Array.Empty<Behavior.HelpRequestItemAlias>());
+            if (missingEffect != null)
+            {
+                // Selection only saves prompt space. It cannot certify an omitted effect or
+                // grant an action: the existing full classifier must resolve an unexpected one.
+                return LivingNpcMetadataExtractionResult.Failed(missingEffect, rawResponse: responseText);
+            }
         }
 
         return parsed.Success
@@ -551,29 +566,7 @@ internal static class LivingNpcMetadataExtractionPass
 
     private static void AppendMetadataContract(StringBuilder prompt)
     {
-        // Keep the full field reference shared with the fallback classifier. Consolidating prose
-        // saves input tokens without hiding categories or weakening the complete:true certificate.
-        prompt.AppendLine("Evaluate every metadata category below; certify completion with boolean complete:true.");
-        prompt.AppendLine("Use sparse JSON: include complete:true and only top-level fields with non-default effects. Omitted fields mean no change, not skipped analysis.");
-        prompt.AppendLine("Omitted effect fields default to 0/false/empty (emotion=none, no travel/gift decision).");
-        prompt.AppendLine("No effects: !LIVINGNPCS_META {\"complete\":true}.");
-        prompt.AppendLine("Field reference (optional effect fields, typed examples/enums; no placeholder records):");
-        prompt.AppendLine("{\"complete\":true,\"rapportDelta\":0,\"endConversation\":false,\"ambientFollowUp\":{\"text\":\"\",\"delayMinutes\":0},\"emotionImpact\":{\"emotion\":\"happy|calm|jealous|worried|grateful|disappointed|uneasy|upset|angry|sad|none\",\"intensityDelta\":0,\"apology\":false,\"repairDelta\":0,\"reason\":\"\"},\"behaviorInfluences\":[{\"type\":\"visit_location|comforted|offended|give_space|stay_near|pause_to_talk\",\"summary\":\"\",\"targetLocation\":\"\",\"targetLocationLabel\":\"\",\"durationDays\":0,\"intensity\":0,\"maxTriggers\":0}],\"actions\":[{\"type\":\"give_small_gift|give_meaningful_gift|give_money|companion_outing|festival_interaction\",\"amount\":0,\"durationMinutes\":0,\"delayMinutes\":0,\"targetLocation\":\"\",\"travelConsent\":\"accepted_now|accepted_later|declined|tentative|none\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"\"}],\"conflicts\":[{\"causeKind\":\"dialogue|gift|boundary|promise\",\"summary\":\"\",\"severity\":0}],\"memories\":[{\"kind\":\"fact|preference|promise|boundary|relationship\",\"summary\":\"\",\"importance\":0,\"playerPreference\":false,\"playerPreferenceKind\":\"liked_item_category|disliked_item|habit|value|goal|none\",\"subject\":\"\",\"tags\":[]}],\"helpRequests\":[{\"type\":\"item_request\",\"summary\":\"\",\"requiresAcceptance\":true,\"steps\":[{\"type\":\"item_request\",\"summary\":\"\",\"requestedItemId\":\"\",\"requestedItemLabel\":\"\",\"questionTopic\":\"\"}],\"requestedItemId\":\"\",\"requestedItemLabel\":\"\",\"questionTopic\":\"\",\"dueInDays\":1,\"reason\":\"\",\"followUpPotential\":\"none|deeper_relationship\"}],\"helpRequestUpdates\":[{\"summary\":\"\",\"status\":\"accepted|declined|advanced|fulfilled\",\"resolution\":\"\"}],\"travelDecision\":{\"isTravelReply\":false,\"consent\":\"accepted_now|accepted_later|declined|tentative|none\",\"targetLocation\":\"\",\"delayMinutes\":0,\"durationMinutes\":0,\"reason\":\"\"},\"giftDecision\":{\"isGiftReply\":false,\"timing\":\"now|later|mail|promise|none\",\"tier\":\"small|meaningful\",\"itemId\":\"\",\"itemLabel\":\"\",\"reason\":\"\"}}");
-        prompt.AppendLine("Rules:");
-        prompt.AppendLine("- Use documented keys/types. Omit empty strings/arrays and irrelevant zero/false fields. Retain all effects, item IDs, help steps, consent and useful memories; never duplicate across actions/decisions.");
-        prompt.AppendLine("- Effects require this turn's player input or visible NPC reply; context only constrains/de-duplicates. Options are hypothetical future player choices, never events.");
-        prompt.AppendLine("- rapportDelta (new relationship value): routine pleasant small talk 0-2; genuine new understanding 3-7; clear warmth 8-15; major earned moments 16-24; 25-30 exceptional.");
-        prompt.AppendLine("- endConversation=true only when the visible NPC reply clearly closes; discard any accompanying farmer options.");
-        prompt.AppendLine("- Memories use importance 0-100 (stored at >=40): new durable preferences/facts 60-80, meaningful promises/explicit lasting boundaries 70-90. Omit trivia.");
-        prompt.AppendLine("- Player preferences: kind=preference, playerPreference=true; subject is the specific item/category/habit/value/goal, never 'the farmer'. Separate distinct preferences (max two); use short useful tags.");
-        prompt.AppendLine("- Flustered, embarrassed, shy, playful-defensive or mildly teased = uneasy, not angry. No offended/give_space/conflict/boundary memory without an NPC stop/leave request, visible prior pressure or clear harm.");
-        prompt.AppendLine("- One ordinary polite question about family/partner/personal life alone is not a boundary violation. Preserve explicit refusals/stop requests and harm: insult, threat, humiliation, private disclosure, malicious provocation, broken promise, repeated pressure.");
-        prompt.AppendLine("- A location name does not prove visibility, adjacency, distance, or a route. Infer no spatial facts/consequences from it.");
-        prompt.AppendLine("- Do not store first meeting/first conversation itself, first-day calendar facts, routine chores or repeated thanks. Still store concrete facts, promises, preferences, boundaries or goals disclosed then.");
-        prompt.AppendLine("- Caps: one action, two memories, two behavior influences, one conflict, one help request, two help updates.");
-        prompt.AppendLine("- Help requests must match all visibly requested items. A one-step request may name only its single requestedItemId/requestedItemLabel. Multiple items: ordered steps in the same helpRequests entry, exact spoken order; no splitting/omitting/reordering. If any item is outside the reasonable-item list, emit no request. Even 'if you can also bring', 'while you're at it', 'another would be better', or 'that would make it perfect' requests items.");
-        prompt.AppendLine("- companion_outing: invitation to leave + visible accepted_now consent + supported destination. Short departure waits ('等会/等会儿再去') count as accepted_now; staying here is not travel. delayMinutes=0; leave when dialogue closes.");
-        prompt.AppendLine("- giftDecision is immediate only when the NPC visibly offers an item now; mail, later, and promises create no gift action.");
+        LivingNpcMetadataContract.AppendFull(prompt);
     }
 
     internal static void ApplyConservativeInterpersonalEvidenceRules(

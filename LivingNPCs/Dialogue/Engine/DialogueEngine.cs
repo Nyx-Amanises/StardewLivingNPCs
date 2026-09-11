@@ -853,6 +853,7 @@ internal sealed class DialogueEngine : IDialogueEngine
 
         List<string> lines = new() { parsed.DialogueLine };
         lines.AddRange(parsed.Options);
+        IReadOnlyList<HelpRequestItemAlias> helpItemAliases = this.BuildRequestableHelpItemAliases(request.NpcName);
         LivingNpcActionDecisionDiagnostics? actionDiagnostics = null;
         if (request.Trigger is GenerationTrigger.Conversation or GenerationTrigger.Gift)
         {
@@ -869,7 +870,8 @@ internal sealed class DialogueEngine : IDialogueEngine
                 try
                 {
                     extracted = LivingNpcMetadataExtractionPass.ParseInlineResponse(
-                        response.Text, playerText, parsed.DialogueLine, prepared.Context);
+                        response.Text, playerText, parsed.DialogueLine, prepared.Context,
+                        prepared.Prompt.ActionContract, helpItemAliases);
                     if (extracted.Success)
                     {
                         prepared.MetadataOutcome = "inline";
@@ -951,7 +953,7 @@ internal sealed class DialogueEngine : IDialogueEngine
             parsed.DialogueLine,
             analysis,
             this.services.GetItemDisplayName,
-            this.BuildRequestableHelpItemAliases(request.NpcName));
+            helpItemAliases);
         string reconciledDialogueLine = helpRequestCleanup.DialogueLine;
         if (helpRequestCleanup.RemovedOptionalAddOn && !helpRequestCleanup.HasValidRequest)
         {

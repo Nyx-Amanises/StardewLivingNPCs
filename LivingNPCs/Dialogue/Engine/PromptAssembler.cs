@@ -61,6 +61,7 @@ internal sealed class AssembledPrompt
     public string Command { get; set; } = string.Empty;
     public string ResponseStart { get; init; } = string.Empty;
     public IReadOnlyDictionary<string, int> SectionLengths { get; init; } = new Dictionary<string, int>();
+    public SceneActionContractPlan ActionContract { get; init; } = SceneActionContractPlan.Full();
 
     // Instructions are rendered from this request's NPC, portraits, locale and provider. Keep
     // them ahead of the changing scene/history so equal text can share a provider cache prefix;
@@ -142,12 +143,23 @@ internal sealed class PromptAssembler
 
     private readonly PromptAssemblyInput input;
     private readonly Dictionary<string, int> lengths = new();
+    private readonly SceneActionContractPlan actionContract;
 
     public PromptAssembler(PromptAssemblyInput input)
     {
         this.input = input;
         // §4.5：这是所有到达提示词的计划统一收敛依赖关系的唯一位置。
         input.Plan.ApplyDependencies();
+        this.actionContract = SceneActionContractSelector.Select(
+            input.Request.CurrentPlayerText,
+            input.Request.BehaviorContext,
+            input.Conversation.Select(turn => new ConversationElement(turn.Text, turn.IsPlayerLine) { Id = turn.Id }).ToList(),
+            input.Request.Trigger,
+            isFestival: input.S.IsEventActive || (input.S.CurrentTravelPurposeConfirmed
+                && input.S.CurrentTravelPurpose == SchedulePurposeKind.AttendDesertFestival),
+            isPhysicalItemHandIn: input.Request.Trigger == GenerationTrigger.Gift
+                && !RsvAiPolicy.IsBlockedContentId(input.Request.GiftItemId),
+            locale: input.Locale);
     }
 
     public AssembledPrompt Assemble()
@@ -178,7 +190,8 @@ internal sealed class PromptAssembler
             Instructions = instructions,
             Command = command,
             ResponseStart = responseStart,
-            SectionLengths = this.lengths
+            SectionLengths = this.lengths,
+            ActionContract = this.actionContract
         };
     }
 
@@ -336,6 +349,14 @@ internal sealed class PromptAssembler
         // set of clothing, address, and relationship suggestions later in the same prompt.
         this.Section(builder, "Preoccupation", ContextModule.Preoccupation, this.BuildPreoccupation);
         this.Section(builder, "CurrentConversation", ContextModule.CurrentConversation, this.BuildCurrentConversation);
+        this.Section(builder, "SceneActionContract", null,
+            b =>
+            {
+                if (this.input.Request.Trigger is GenerationTrigger.Conversation or GenerationTrigger.Gift)
+                {
+                    AppendLine(b, LivingNpcMetadataContract.BuildSceneInstructions(this.actionContract));
+                }
+            }, overridable: false);
 
         return builder.ToString();
     }
@@ -1069,7 +1090,9 @@ internal sealed class PromptAssembler
         AppendLine(builder, this.Text("instructionsResponses"));
         if (this.input.Request.Trigger is GenerationTrigger.Conversation or GenerationTrigger.Gift)
         {
-            AppendLine(builder, LivingNpcMetadataExtractionPass.BuildInlineInstructions());
+            string commonContract = LivingNpcMetadataContract.BuildInlineCoreInstructions();
+            this.lengths["InlineMetadataCore"] = commonContract.Length;
+            AppendLine(builder, commonContract);
         }
         else
         {

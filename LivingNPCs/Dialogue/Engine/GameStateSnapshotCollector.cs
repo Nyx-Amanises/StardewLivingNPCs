@@ -77,6 +77,7 @@ internal static class GameStateSnapshotCollector
             TimeOfDay = Game1.timeOfDay,
             WeatherFlags = CollectWeather(npc?.currentLocation ?? player.currentLocation),
             IsGreenRain = TryGet(() => Game1.isGreenRain),
+            IsEventActive = TryGet(() => Game1.eventUp),
 
             FriendshipPoints = friendship?.Points ?? -1,
             IsMarriedToFarmer = TryGet(() => friendship?.IsMarried() == true && !friendship.IsRoommate()),

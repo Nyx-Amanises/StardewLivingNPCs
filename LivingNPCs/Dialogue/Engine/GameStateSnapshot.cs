@@ -66,6 +66,9 @@ internal sealed class GameStateSnapshot
     /// <summary>游戏全局绿雨日标志；用于复现 Dialogue.getPortraitIndex 的强制肖像规则。</summary>
     public bool IsGreenRain { get; init; }
 
+    /// <summary>捕获当前事件状态，供节日动作字段选择；实际执行仍由运行时校验。</summary>
+    public bool IsEventActive { get; init; }
+
     // ---- 好感与关系 ----
     /// <summary>好感点原始值；-1 = 无好感数据。</summary>
     public int FriendshipPoints { get; init; } = -1;
