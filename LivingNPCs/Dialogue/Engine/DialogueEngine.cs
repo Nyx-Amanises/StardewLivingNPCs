@@ -508,7 +508,8 @@ internal sealed class DialogueEngine : IDialogueEngine
                 snapshot.ActiveDialogueEvents,
                 this.services.Now(),
                 displayName,
-                conversation.FirstOrDefault()?.Id ?? string.Empty)
+                conversation.FirstOrDefault()?.Id ?? string.Empty,
+                currentPlayerText: request.CurrentPlayerText)
             : new List<string>();
 
         bool justSpoke = this.services.History.JustSpoke(request.NpcName, this.services.Now());

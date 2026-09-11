@@ -577,7 +577,9 @@ internal sealed class BehaviorMemory
             maxPendingHelpRequestsPerNpc,
             helpRequestCooldownDays,
             Game1.Date.TotalDays,
-            Game1.timeOfDay
+            Game1.timeOfDay,
+            currentPlayerText,
+            markFollowUpCues: markRecalled
         );
         if (markRecalled)
         {

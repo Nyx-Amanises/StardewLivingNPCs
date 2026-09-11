@@ -1,0 +1,924 @@
+{
+  "SchemaVersion": 1,
+  "Date": "2026-09-12",
+  "BaselineCommit": "8bbc9b1",
+  "CurrentCode": "Task-only isolated staged source snapshot; current assembly identified by SHA-256 below.",
+  "Offline": {
+    "Script": "tools/measure_memory_context.ps1",
+    "ScriptSha256": "B93726EB7AD507B5CACA1FCF2380EBF7811C18D9426390A729B25DA825F5757F",
+    "Unit": "UTF-16 code units (.NET String.Length), including CR/LF; not tokens or latency",
+    "BaselineAssembly": {
+      "Sha256": "A1BF749F9722C5D2B02564C1860705ADE09FB4419E7B067309AA19FB307B17FB",
+      "Runtime": ".NET 10.0.11",
+      "Mvid": "f4c9b07d-ae79-4f35-beba-b24690a59ac0"
+    },
+    "CurrentAssembly": {
+      "Sha256": "3E4B2073F14FE4100354D6087989E748A69FD96BDF3DAFAE67F081D4554C8997",
+      "Runtime": ".NET 10.0.11",
+      "Mvid": "ae55f855-a3c9-41cc-9523-d69b471fdf04"
+    },
+    "FixtureSha256": "65F248ECFD779A6A8F1920A1004DF5C83E15E04938EBC50FADAF216A54A63759",
+    "AssetSources": [
+      {
+        "Asset": "prompts/default.json",
+        "Sha256": "2EEC938039E4AA8A9D24E9EA5FC4D1C41A7FA9C1A00358D85C9EFB1E182DDD57",
+        "Characters": 102144
+      },
+      {
+        "Asset": "prompts/zh.json",
+        "Sha256": "E1431ABC4FA56285D819B5512BEA7CB5A34561242F91A3181ED27C5277A1D998",
+        "Characters": 33694
+      },
+      {
+        "Asset": "bios-zh/Penny.json",
+        "Sha256": "4F4A559348E05D43F57453AE087E47D32B108419639A169F9CB43125CFEE9C10",
+        "Characters": 1723
+      },
+      {
+        "Asset": "world/GameSummary.json",
+        "Sha256": "2AE929FABF20687146949AAC833F9A4A21915120D34F0FEDBDE0514D1D197ED6",
+        "Characters": 20428
+      }
+    ],
+    "Scope": [
+      "Both production assemblies run in independent processes and consume identical fixture.json bytes; identical assembly hashes identify a smoke run only.",
+      "Real MemoryRecallService budgets: 3 personal facts, 4 preferences, 2 community impressions. Real BehaviorPromptContextBuilder and PromptAssembler run for every case.",
+      "The current production MergeLocalizedPrompts creates one captured Chinese prompt map; inherited English gender variants are removed according to production rules.",
+      "WorldEntryIndex retrieves once per case with 8 entries / 6000 characters. Both versions receive the same captured core and entries, never the older full-world prompt.",
+      "Penny biography and repository prompt assets are real. States, previous dialogue, history lines and the current player input are synthetic; sample dialogue and runtime portrait matching are not included.",
+      "Saturated cases contain at least eight entries per historical store; the low-salience atlas experience is outside the old top four. The cross-language target preference is English and the query is Chinese.",
+      "The active stress case has six current behavior influences, six active/recovering conflicts and an unclaimed reward. It may legitimately grow when all constraints are preserved.",
+      "Offered/Pending help requests are not sampled: their real builder path enters HelpRequestAdvisor and live WorldContext. This tool does not stub that path or initialize a game; unit tests must cover those obligations.",
+      "ConcisePromptContext=false, Full context routing, no optimized prompts. Query and follow-up-mark parameters are detected by name for compatibility; every case has fresh state.",
+      "HistoryLines and the full three-turn current conversation are identical in both assembled versions. Separate HistorySampler stats use 25 short transcripts plus one 40-day-old topic transcript, with null/query and an oversized-newest variant; they do not change live fixtures.",
+      "Provider fixture order is System plus GameConstantContext + CacheableNpcContext + Tail, with ResponseStart excluded. Live fixtures omit model, credentials and thinking_type.",
+      "Character savings are not model token counts or evidence of lower latency. No network calls, builds, deployments, configuration, secrets, saves or real player logs are used."
+    ],
+    "RecallBudgets": {
+      "Preferences": 4,
+      "Community": 2,
+      "LongTerm": 3
+    },
+    "Comparisons": [
+      {
+        "Scenario": "sparse",
+        "InputCounts": {
+          "LongTermMemories": 0,
+          "PlayerPreferenceMemories": 0,
+          "CommunityImpressions": 0,
+          "SharedExperiences": 0,
+          "DialogueBehaviorInfluences": 0,
+          "HelpRequests": 0,
+          "Conflicts": 0
+        },
+        "BaselineBehaviorChars": 3234,
+        "CurrentBehaviorChars": 3234,
+        "BehaviorSavedChars": 0,
+        "BaselineTotalChars": 16015,
+        "CurrentTotalChars": 16015,
+        "TotalSavedChars": 0,
+        "TotalSavedPercent": 0.0,
+        "OutsideBehaviorLengthDelta": 0,
+        "SystemEqual": true,
+        "GameContextEqual": true,
+        "NpcAndInstructionsEqual": true,
+        "SharedWorld": {
+          "RetrievalNote": "",
+          "SelectedEntries": 4,
+          "RetrievedSha256": "342413395ABAAC504A95B6D4548B7C3DE80CC2E89BDF9AE12BE22BDADCB35BB4",
+          "CoreCharacters": 1015,
+          "TotalEntries": 67,
+          "CoreSha256": "A9477030E66A125A7467327EE641BAE372161E4920473DEC5CEAC39BCAC496CB",
+          "RetrievedCharacters": 1182
+        },
+        "BaselinePayloadSha256": "7851C72FE6453DB04E1FF9139954834341E86E99D74A119FCEB1FB4C2AC05E73",
+        "CurrentPayloadSha256": "7851C72FE6453DB04E1FF9139954834341E86E99D74A119FCEB1FB4C2AC05E73",
+        "BaselineChecks": {
+          "ExpectedIds": [],
+          "ExpectedFound": [],
+          "ExpectedMissing": [],
+          "RequiredIds": [],
+          "RequiredCount": 0,
+          "RequiredMissing": [],
+          "AllRequiredPreserved": true
+        },
+        "CurrentChecks": {
+          "ExpectedIds": [],
+          "ExpectedFound": [],
+          "ExpectedMissing": [],
+          "RequiredIds": [],
+          "RequiredCount": 0,
+          "RequiredMissing": [],
+          "AllRequiredPreserved": true
+        }
+      },
+      {
+        "Scenario": "saturated-greeting",
+        "InputCounts": {
+          "LongTermMemories": 9,
+          "PlayerPreferenceMemories": 9,
+          "CommunityImpressions": 8,
+          "SharedExperiences": 9,
+          "DialogueBehaviorInfluences": 8,
+          "HelpRequests": 9,
+          "Conflicts": 9
+        },
+        "BaselineBehaviorChars": 6620,
+        "CurrentBehaviorChars": 5665,
+        "BehaviorSavedChars": 955,
+        "BaselineTotalChars": 19390,
+        "CurrentTotalChars": 18435,
+        "TotalSavedChars": 955,
+        "TotalSavedPercent": 4.93,
+        "OutsideBehaviorLengthDelta": 0,
+        "SystemEqual": true,
+        "GameContextEqual": true,
+        "NpcAndInstructionsEqual": true,
+        "SharedWorld": {
+          "RetrievalNote": "",
+          "SelectedEntries": 4,
+          "RetrievedSha256": "342413395ABAAC504A95B6D4548B7C3DE80CC2E89BDF9AE12BE22BDADCB35BB4",
+          "CoreCharacters": 1015,
+          "TotalEntries": 67,
+          "CoreSha256": "A9477030E66A125A7467327EE641BAE372161E4920473DEC5CEAC39BCAC496CB",
+          "RetrievedCharacters": 1182
+        },
+        "BaselinePayloadSha256": "7C5A21FB72F059D090A0C2C819A6AA6AC1D2D1F5C19B3525EC947484282D1D0E",
+        "CurrentPayloadSha256": "6088C9AF29ABAB0E89065A4E1EA4AF78EB35F6D0F36A8D55F3A54D880B35F2F5",
+        "BaselineChecks": {
+          "ExpectedIds": [],
+          "ExpectedFound": [],
+          "ExpectedMissing": [],
+          "RequiredIds": [],
+          "RequiredCount": 0,
+          "RequiredMissing": [],
+          "AllRequiredPreserved": true
+        },
+        "CurrentChecks": {
+          "ExpectedIds": [],
+          "ExpectedFound": [],
+          "ExpectedMissing": [],
+          "RequiredIds": [],
+          "RequiredCount": 0,
+          "RequiredMissing": [],
+          "AllRequiredPreserved": true
+        }
+      },
+      {
+        "Scenario": "older-experience",
+        "InputCounts": {
+          "LongTermMemories": 9,
+          "PlayerPreferenceMemories": 9,
+          "CommunityImpressions": 8,
+          "SharedExperiences": 9,
+          "DialogueBehaviorInfluences": 8,
+          "HelpRequests": 9,
+          "Conflicts": 9
+        },
+        "BaselineBehaviorChars": 6620,
+        "CurrentBehaviorChars": 5323,
+        "BehaviorSavedChars": 1297,
+        "BaselineTotalChars": 19409,
+        "CurrentTotalChars": 18112,
+        "TotalSavedChars": 1297,
+        "TotalSavedPercent": 6.68,
+        "OutsideBehaviorLengthDelta": 0,
+        "SystemEqual": true,
+        "GameContextEqual": true,
+        "NpcAndInstructionsEqual": true,
+        "SharedWorld": {
+          "RetrievalNote": "",
+          "SelectedEntries": 4,
+          "RetrievedSha256": "46A67FCD085298F74255AB1FE0DF7D2A881BC2E7BE8A1297D8C8E832AB093BD8",
+          "CoreCharacters": 1015,
+          "TotalEntries": 67,
+          "CoreSha256": "A9477030E66A125A7467327EE641BAE372161E4920473DEC5CEAC39BCAC496CB",
+          "RetrievedCharacters": 1188
+        },
+        "BaselinePayloadSha256": "520EBECB5DFE119A9281CF417CE23E5C10E98A6960A81564A93362ABD82C233E",
+        "CurrentPayloadSha256": "B240916C5744DCE7247003B3999A657FE7D890CDD5D44643EF8DBB688A0B5A17",
+        "BaselineChecks": {
+          "ExpectedIds": [
+            "experience-old-atlas"
+          ],
+          "ExpectedFound": [],
+          "ExpectedMissing": [
+            "experience-old-atlas"
+          ],
+          "RequiredIds": [],
+          "RequiredCount": 0,
+          "RequiredMissing": [],
+          "AllRequiredPreserved": true
+        },
+        "CurrentChecks": {
+          "ExpectedIds": [
+            "experience-old-atlas"
+          ],
+          "ExpectedFound": [
+            "experience-old-atlas"
+          ],
+          "ExpectedMissing": [],
+          "RequiredIds": [],
+          "RequiredCount": 0,
+          "RequiredMissing": [],
+          "AllRequiredPreserved": true
+        }
+      },
+      {
+        "Scenario": "cross-language-preference",
+        "InputCounts": {
+          "LongTermMemories": 9,
+          "PlayerPreferenceMemories": 9,
+          "CommunityImpressions": 8,
+          "SharedExperiences": 9,
+          "DialogueBehaviorInfluences": 8,
+          "HelpRequests": 9,
+          "Conflicts": 9
+        },
+        "BaselineBehaviorChars": 6620,
+        "CurrentBehaviorChars": 5792,
+        "BehaviorSavedChars": 828,
+        "BaselineTotalChars": 19397,
+        "CurrentTotalChars": 18569,
+        "TotalSavedChars": 828,
+        "TotalSavedPercent": 4.27,
+        "OutsideBehaviorLengthDelta": 0,
+        "SystemEqual": true,
+        "GameContextEqual": true,
+        "NpcAndInstructionsEqual": true,
+        "SharedWorld": {
+          "RetrievalNote": "NoRelevantEntries",
+          "SelectedEntries": 4,
+          "RetrievedSha256": "342413395ABAAC504A95B6D4548B7C3DE80CC2E89BDF9AE12BE22BDADCB35BB4",
+          "CoreCharacters": 1015,
+          "TotalEntries": 67,
+          "CoreSha256": "A9477030E66A125A7467327EE641BAE372161E4920473DEC5CEAC39BCAC496CB",
+          "RetrievedCharacters": 1182
+        },
+        "BaselinePayloadSha256": "E7DE38ECDA8815CA2CACA2A42F431AC5508F33C7B30404B31884BFCBA353B012",
+        "CurrentPayloadSha256": "12B8AF5363DCD2D435598DCFA2E36B7CF22D0E9B21CF1D19EA1F479DFADA059E",
+        "BaselineChecks": {
+          "ExpectedIds": [
+            "preference-quiet"
+          ],
+          "ExpectedFound": [],
+          "ExpectedMissing": [
+            "preference-quiet"
+          ],
+          "RequiredIds": [],
+          "RequiredCount": 0,
+          "RequiredMissing": [],
+          "AllRequiredPreserved": true
+        },
+        "CurrentChecks": {
+          "ExpectedIds": [
+            "preference-quiet"
+          ],
+          "ExpectedFound": [
+            "preference-quiet"
+          ],
+          "ExpectedMissing": [],
+          "RequiredIds": [],
+          "RequiredCount": 0,
+          "RequiredMissing": [],
+          "AllRequiredPreserved": true
+        }
+      },
+      {
+        "Scenario": "active-constraints",
+        "InputCounts": {
+          "LongTermMemories": 9,
+          "PlayerPreferenceMemories": 9,
+          "CommunityImpressions": 8,
+          "SharedExperiences": 9,
+          "DialogueBehaviorInfluences": 14,
+          "HelpRequests": 10,
+          "Conflicts": 15
+        },
+        "BaselineBehaviorChars": 7514,
+        "CurrentBehaviorChars": 7827,
+        "BehaviorSavedChars": -313,
+        "BaselineTotalChars": 20285,
+        "CurrentTotalChars": 20598,
+        "TotalSavedChars": -313,
+        "TotalSavedPercent": -1.54,
+        "OutsideBehaviorLengthDelta": 0,
+        "SystemEqual": true,
+        "GameContextEqual": true,
+        "NpcAndInstructionsEqual": true,
+        "SharedWorld": {
+          "RetrievalNote": "NoRelevantEntries",
+          "SelectedEntries": 4,
+          "RetrievedSha256": "342413395ABAAC504A95B6D4548B7C3DE80CC2E89BDF9AE12BE22BDADCB35BB4",
+          "CoreCharacters": 1015,
+          "TotalEntries": 67,
+          "CoreSha256": "A9477030E66A125A7467327EE641BAE372161E4920473DEC5CEAC39BCAC496CB",
+          "RetrievedCharacters": 1182
+        },
+        "BaselinePayloadSha256": "6A9E3740A01CA87CF860B1C3CC98EA5BB1BAF4EAC5C0B835EE5006DB490311D1",
+        "CurrentPayloadSha256": "B88ACC0CAB16E26FCB1B9422D1852A36A003B1E904279828BFFD5F5A80E5C026",
+        "BaselineChecks": {
+          "ExpectedIds": [
+            "unclaimed-reward"
+          ],
+          "ExpectedFound": [],
+          "ExpectedMissing": [
+            "unclaimed-reward"
+          ],
+          "RequiredIds": [
+            "active-influence-0",
+            "active-influence-1",
+            "active-influence-2",
+            "active-influence-3",
+            "active-influence-4",
+            "active-influence-5",
+            "unclaimed-reward",
+            "active-conflict-0",
+            "active-conflict-1",
+            "active-conflict-2",
+            "active-conflict-3",
+            "active-conflict-4",
+            "active-conflict-5"
+          ],
+          "RequiredCount": 13,
+          "RequiredMissing": [
+            "active-influence-4",
+            "active-influence-5",
+            "unclaimed-reward",
+            "active-conflict-3",
+            "active-conflict-5"
+          ],
+          "AllRequiredPreserved": false
+        },
+        "CurrentChecks": {
+          "ExpectedIds": [
+            "unclaimed-reward"
+          ],
+          "ExpectedFound": [
+            "unclaimed-reward"
+          ],
+          "ExpectedMissing": [],
+          "RequiredIds": [
+            "active-influence-0",
+            "active-influence-1",
+            "active-influence-2",
+            "active-influence-3",
+            "active-influence-4",
+            "active-influence-5",
+            "unclaimed-reward",
+            "active-conflict-0",
+            "active-conflict-1",
+            "active-conflict-2",
+            "active-conflict-3",
+            "active-conflict-4",
+            "active-conflict-5"
+          ],
+          "RequiredCount": 13,
+          "RequiredMissing": [],
+          "AllRequiredPreserved": true
+        }
+      }
+    ],
+    "HistorySampling": [
+      {
+        "Scenario": "old-topic-null",
+        "Baseline": {
+          "Id": "old-topic-null",
+          "InputRecordCount": 26,
+          "QuerySupplied": false,
+          "QueryParameterSupported": false,
+          "SelectedRecordCount": 20,
+          "SelectedCharacters": 1422,
+          "JoinedCharacters": 1460,
+          "TargetAgeDays": 40,
+          "TargetFound": false,
+          "StoredHistoryUnchanged": true,
+          "StoredBeforeSha256": "91FA5D7602B89825E4016C27B9462413C687DE9B0404B91F760EA605B7CECFE8",
+          "StoredAfterSha256": "91FA5D7602B89825E4016C27B9462413C687DE9B0404B91F760EA605B7CECFE8"
+        },
+        "Current": {
+          "Id": "old-topic-null",
+          "InputRecordCount": 26,
+          "QuerySupplied": false,
+          "QueryParameterSupported": true,
+          "SelectedRecordCount": 20,
+          "SelectedCharacters": 1422,
+          "JoinedCharacters": 1460,
+          "TargetAgeDays": 40,
+          "TargetFound": false,
+          "StoredHistoryUnchanged": true,
+          "StoredBeforeSha256": "91FA5D7602B89825E4016C27B9462413C687DE9B0404B91F760EA605B7CECFE8",
+          "StoredAfterSha256": "91FA5D7602B89825E4016C27B9462413C687DE9B0404B91F760EA605B7CECFE8"
+        }
+      },
+      {
+        "Scenario": "old-topic-query",
+        "Baseline": {
+          "Id": "old-topic-query",
+          "InputRecordCount": 26,
+          "QuerySupplied": true,
+          "QueryParameterSupported": false,
+          "SelectedRecordCount": 20,
+          "SelectedCharacters": 1422,
+          "JoinedCharacters": 1460,
+          "TargetAgeDays": 40,
+          "TargetFound": false,
+          "StoredHistoryUnchanged": true,
+          "StoredBeforeSha256": "91FA5D7602B89825E4016C27B9462413C687DE9B0404B91F760EA605B7CECFE8",
+          "StoredAfterSha256": "91FA5D7602B89825E4016C27B9462413C687DE9B0404B91F760EA605B7CECFE8"
+        },
+        "Current": {
+          "Id": "old-topic-query",
+          "InputRecordCount": 26,
+          "QuerySupplied": true,
+          "QueryParameterSupported": true,
+          "SelectedRecordCount": 3,
+          "SelectedCharacters": 308,
+          "JoinedCharacters": 312,
+          "TargetAgeDays": 40,
+          "TargetFound": true,
+          "StoredHistoryUnchanged": true,
+          "StoredBeforeSha256": "91FA5D7602B89825E4016C27B9462413C687DE9B0404B91F760EA605B7CECFE8",
+          "StoredAfterSha256": "91FA5D7602B89825E4016C27B9462413C687DE9B0404B91F760EA605B7CECFE8"
+        }
+      },
+      {
+        "Scenario": "oversized-newest-null",
+        "Baseline": {
+          "Id": "oversized-newest-null",
+          "InputRecordCount": 27,
+          "QuerySupplied": false,
+          "QueryParameterSupported": false,
+          "SelectedRecordCount": 0,
+          "SelectedCharacters": 0,
+          "JoinedCharacters": 0,
+          "TargetAgeDays": 40,
+          "TargetFound": false,
+          "StoredHistoryUnchanged": true,
+          "StoredBeforeSha256": "587D61AECD2178C8737D7C952EAA125B283B849B784DC2C8BE0DEF339DDCD14A",
+          "StoredAfterSha256": "587D61AECD2178C8737D7C952EAA125B283B849B784DC2C8BE0DEF339DDCD14A"
+        },
+        "Current": {
+          "Id": "oversized-newest-null",
+          "InputRecordCount": 27,
+          "QuerySupplied": false,
+          "QueryParameterSupported": true,
+          "SelectedRecordCount": 19,
+          "SelectedCharacters": 1350,
+          "JoinedCharacters": 1386,
+          "TargetAgeDays": 40,
+          "TargetFound": false,
+          "StoredHistoryUnchanged": true,
+          "StoredBeforeSha256": "587D61AECD2178C8737D7C952EAA125B283B849B784DC2C8BE0DEF339DDCD14A",
+          "StoredAfterSha256": "587D61AECD2178C8737D7C952EAA125B283B849B784DC2C8BE0DEF339DDCD14A"
+        }
+      },
+      {
+        "Scenario": "oversized-newest-query",
+        "Baseline": {
+          "Id": "oversized-newest-query",
+          "InputRecordCount": 27,
+          "QuerySupplied": true,
+          "QueryParameterSupported": false,
+          "SelectedRecordCount": 0,
+          "SelectedCharacters": 0,
+          "JoinedCharacters": 0,
+          "TargetAgeDays": 40,
+          "TargetFound": false,
+          "StoredHistoryUnchanged": true,
+          "StoredBeforeSha256": "587D61AECD2178C8737D7C952EAA125B283B849B784DC2C8BE0DEF339DDCD14A",
+          "StoredAfterSha256": "587D61AECD2178C8737D7C952EAA125B283B849B784DC2C8BE0DEF339DDCD14A"
+        },
+        "Current": {
+          "Id": "oversized-newest-query",
+          "InputRecordCount": 27,
+          "QuerySupplied": true,
+          "QueryParameterSupported": true,
+          "SelectedRecordCount": 2,
+          "SelectedCharacters": 237,
+          "JoinedCharacters": 239,
+          "TargetAgeDays": 40,
+          "TargetFound": true,
+          "StoredHistoryUnchanged": true,
+          "StoredBeforeSha256": "587D61AECD2178C8737D7C952EAA125B283B849B784DC2C8BE0DEF339DDCD14A",
+          "StoredAfterSha256": "587D61AECD2178C8737D7C952EAA125B283B849B784DC2C8BE0DEF339DDCD14A"
+        }
+      }
+    ],
+    "CurrentScriptSha256": "610E870F6AF5DBE45E71D569089EE4F12D3FC512819AC4EDAC3F1BAEA4BE4B7A",
+    "ScriptRevisionNote": "ScriptSha256 identifies the measured script. After measurement only #requires changed from PowerShell 7.0 to 7.2 to match the net6 runtime and hashing APIs; CurrentScriptSha256 identifies the committed file. The rest of the script is byte-identical."
+  },
+  "Live": {
+    "Script": "tools/benchmark_dialogue_latency.py",
+    "ScriptSha256": "B01399FCE2C64357A8C4B29A5161D3C94ACCD3D181BFC1A178B4BF00ABC818D7",
+    "RequestedModel": "deepseek-flash",
+    "Provider": "OpenAiCompatible",
+    "RequestCount": 6,
+    "RequestFixtureSha256": "06E08881C06676D6B718567975358917488EF3CF7F5569CDE731AE296D1741DC",
+    "ResultSha256": "DF80C1661AEE5235FE74044395C40370540B76567C20FA47DB177272B4CAF51E",
+    "Settings": {
+      "ThinkingType": "enabled",
+      "ReasoningEffort": "low",
+      "MaxTokens": 16000,
+      "BudgetField": "max_tokens",
+      "Stream": true,
+      "TimeoutSeconds": 85,
+      "Retries": 0
+    },
+    "Scope": [
+      "User-authorized calls use the configured endpoint and API key; only repository assets and synthetic state were sent.",
+      "Three scenario pairs, one request per version; pair order alternates. There is no independent accuracy benchmark or repeated latency distribution.",
+      "FirstContentMs is the first nonempty content delta; ElapsedMs measures the main HTTP request, not the complete in-game pipeline.",
+      "Both greeting outputs lack inline metadata and need the existing full classifier fallback. That extra request was neither called nor timed.",
+      "All six synthetic prompt contexts selected a full action-contract fallback due to missing runtime capability context; these calls do not benchmark scoped action contracts.",
+      "Prompt cache hits, reasoning tokens and response lengths differ. Shorter input did not consistently reduce latency.",
+      "No game, portrait texture matching, live item catalog, action effects, deployment or configuration mutation were exercised.",
+      "Credentials, endpoint, raw prompts, model replies and reasoning text are excluded from this artifact."
+    ],
+    "Validation": {
+      "ProductionAssemblySha256": "3E4B2073F14FE4100354D6087989E748A69FD96BDF3DAFAE67F081D4554C8997",
+      "FixtureSha256": "65F248ECFD779A6A8F1920A1004DF5C83E15E04938EBC50FADAF216A54A63759",
+      "ValidatorScriptSha256": "54D682B1CBCBA7E19142F01F321C6E20CBB62B09262D3C1C374AF8CAF424AB88",
+      "ContextSource": "Each measured prompt captured its production GameStateSnapshot and ActionContract; validator checked prompt, fixture and assembly hashes.",
+      "PortraitPolicy": "Logical base portrait markers plus normalized explicit biography extras; no game texture/runtime portrait assessment.",
+      "HelpItemAliases": "Empty: these synthetic measurement scenarios exclude Offered/Pending runtime item requests and do not initialize the live item catalog.",
+      "HiddenMetadataCheck": "Parsed visible dialogue/options have no metadata marker or production-detected metadata/schema lines; tag check also records think/analysis/reasoning tags.",
+      "CountsOnFailure": "Strict candidate counts are null when strict parsing fails; no assertion about a later classifier or runtime outcome.",
+      "DialoguePassCount": 6,
+      "StrictMetadataPassCount": 4,
+      "FallbackNeededCount": 2,
+      "MetadataOrThoughtTagLeakCount": 0,
+      "EffectsExecuted": 0,
+      "ClassifierFallbackCalls": 0
+    },
+    "ManualQualityObservations": [
+      "Older experience: the baseline reply disclaimed the stored atlas memory; the current reply referred to the library/atlas but added unsupported details about fragile pages, a folded page at the binding and smoothing it. Retrieval coverage improved; full factual grounding was not demonstrated.",
+      "Cross-language preference: the current input retrieved the English quiet/crowds preference, but both replies accepted quiet company. This single pair showed no clear visible-answer quality improvement.",
+      "Greeting replies omitted metadata in both versions and also inferred scene details; these are not six successful end-to-end game conversations."
+    ],
+    "Runs": [
+      {
+        "Order": 1,
+        "Case": "baseline-saturated-greeting",
+        "StartedUtc": "2026-09-12T03:29:18.850902+08:00",
+        "ResolvedModel": "deepseek-flash",
+        "PromptSha256": "7c5a21fb72f059d090a0c2c819a6aa6ac1d2d1f5c19b3525ec947484282d1d0e",
+        "PromptCharacters": 19390,
+        "MaxOutputTokens": 16000,
+        "OutputBudgetField": "max_tokens",
+        "ThinkingType": "enabled",
+        "Effort": "low",
+        "Stream": true,
+        "Status": "ok",
+        "HttpStatus": 200,
+        "FinishReason": "stop",
+        "ReceivedDone": true,
+        "FirstContentMs": 6408,
+        "ElapsedMs": 6762,
+        "Usage": {
+          "PromptTokens": 5795,
+          "CompletionTokens": 954,
+          "TotalTokens": 6749,
+          "ReasoningTokens": 874,
+          "CachedPromptTokens": 0,
+          "UncachedPromptTokens": 5795
+        },
+        "ProductionParser": {
+          "RawResponseSha256": "68CE8D7E597E0F7243E3AAD32E49E9E6D212D41CA75976DF6DC38679E8A58BC0",
+          "RawResponseCharacters": 130,
+          "DialogueParseSuccess": true,
+          "NonEmptyVisibleDialogue": true,
+          "VisibleDialogueCharacters": 77,
+          "OptionsCount": 4,
+          "MetadataNotLeaked": true,
+          "VisibleHasHiddenThoughtTags": false,
+          "RawMetadataMarkerPresent": false,
+          "StrictMetadataSuccess": false,
+          "StrictMetadataFailureReason": "missing inline metadata marker",
+          "NeedsAuthoritativeMetadataFallback": true,
+          "StrictActionsCount": null,
+          "StrictMemoriesCount": null,
+          "StrictBehaviorInfluencesCount": null,
+          "StrictHelpRequestsCount": null,
+          "StrictHelpRequestUpdatesCount": null,
+          "StrictConflictsCount": null,
+          "ActionContract": {
+            "IncludeTravel": true,
+            "IncludeGifts": true,
+            "IncludeNewHelp": true,
+            "IncludeHelpUpdates": true,
+            "IncludeMoney": true,
+            "IncludeFestival": true,
+            "IsFallback": true
+          },
+          "ActionContractReason": "missing-capability-context",
+          "StrictPass": false
+        }
+      },
+      {
+        "Order": 2,
+        "Case": "current-saturated-greeting",
+        "StartedUtc": "2026-09-12T03:29:25.615367+08:00",
+        "ResolvedModel": "deepseek-flash",
+        "PromptSha256": "6088c9af29abab0e89065a4e1ea4af78eb35f6d0f36a8d55f3a54d880b35f2f5",
+        "PromptCharacters": 18435,
+        "MaxOutputTokens": 16000,
+        "OutputBudgetField": "max_tokens",
+        "ThinkingType": "enabled",
+        "Effort": "low",
+        "Stream": true,
+        "Status": "ok",
+        "HttpStatus": 200,
+        "FinishReason": "stop",
+        "ReceivedDone": true,
+        "FirstContentMs": 2874,
+        "ElapsedMs": 3423,
+        "Usage": {
+          "PromptTokens": 5595,
+          "CompletionTokens": 481,
+          "TotalTokens": 6076,
+          "ReasoningTokens": 397,
+          "CachedPromptTokens": 3712,
+          "UncachedPromptTokens": 1883
+        },
+        "ProductionParser": {
+          "RawResponseSha256": "EE2E7C480F25AA6DFD5318F6949E04BAF70EB2C1701E59DEA31FDFBED16EF6AB",
+          "RawResponseCharacters": 114,
+          "DialogueParseSuccess": true,
+          "NonEmptyVisibleDialogue": true,
+          "VisibleDialogueCharacters": 52,
+          "OptionsCount": 4,
+          "MetadataNotLeaked": true,
+          "VisibleHasHiddenThoughtTags": false,
+          "RawMetadataMarkerPresent": false,
+          "StrictMetadataSuccess": false,
+          "StrictMetadataFailureReason": "missing inline metadata marker",
+          "NeedsAuthoritativeMetadataFallback": true,
+          "StrictActionsCount": null,
+          "StrictMemoriesCount": null,
+          "StrictBehaviorInfluencesCount": null,
+          "StrictHelpRequestsCount": null,
+          "StrictHelpRequestUpdatesCount": null,
+          "StrictConflictsCount": null,
+          "ActionContract": {
+            "IncludeTravel": true,
+            "IncludeGifts": true,
+            "IncludeNewHelp": true,
+            "IncludeHelpUpdates": true,
+            "IncludeMoney": true,
+            "IncludeFestival": true,
+            "IsFallback": true
+          },
+          "ActionContractReason": "missing-capability-context",
+          "StrictPass": false
+        }
+      },
+      {
+        "Order": 3,
+        "Case": "current-older-experience",
+        "StartedUtc": "2026-09-12T03:29:29.039709+08:00",
+        "ResolvedModel": "deepseek-flash",
+        "PromptSha256": "b240916c5744dce7247003b3999a657fe7d890cdd5d44643ef8dbb688a0b5a17",
+        "PromptCharacters": 18112,
+        "MaxOutputTokens": 16000,
+        "OutputBudgetField": "max_tokens",
+        "ThinkingType": "enabled",
+        "Effort": "low",
+        "Stream": true,
+        "Status": "ok",
+        "HttpStatus": 200,
+        "FinishReason": "stop",
+        "ReceivedDone": true,
+        "FirstContentMs": 4547,
+        "ElapsedMs": 5305,
+        "Usage": {
+          "PromptTokens": 5543,
+          "CompletionTokens": 870,
+          "TotalTokens": 6413,
+          "ReasoningTokens": 702,
+          "CachedPromptTokens": 2688,
+          "UncachedPromptTokens": 2855
+        },
+        "ProductionParser": {
+          "RawResponseSha256": "FE5F28E5F3930C68ECEE3815ECE9E3C7A1E496B458EC833DDFF380E9B4050C5A",
+          "RawResponseCharacters": 331,
+          "DialogueParseSuccess": true,
+          "NonEmptyVisibleDialogue": true,
+          "VisibleDialogueCharacters": 123,
+          "OptionsCount": 4,
+          "MetadataNotLeaked": true,
+          "VisibleHasHiddenThoughtTags": false,
+          "RawMetadataMarkerPresent": true,
+          "StrictMetadataSuccess": true,
+          "StrictMetadataFailureReason": "",
+          "NeedsAuthoritativeMetadataFallback": false,
+          "StrictActionsCount": 0,
+          "StrictMemoriesCount": 0,
+          "StrictBehaviorInfluencesCount": 0,
+          "StrictHelpRequestsCount": 0,
+          "StrictHelpRequestUpdatesCount": 0,
+          "StrictConflictsCount": 0,
+          "ActionContract": {
+            "IncludeTravel": true,
+            "IncludeGifts": true,
+            "IncludeNewHelp": true,
+            "IncludeHelpUpdates": true,
+            "IncludeMoney": true,
+            "IncludeFestival": true,
+            "IsFallback": true
+          },
+          "ActionContractReason": "missing-capability-context",
+          "StrictPass": true
+        }
+      },
+      {
+        "Order": 4,
+        "Case": "baseline-older-experience",
+        "StartedUtc": "2026-09-12T03:29:34.345381+08:00",
+        "ResolvedModel": "deepseek-flash",
+        "PromptSha256": "520ebecb5dfe119a9281cf417ce23e5c10e98a6960a81564a93362abd82c233e",
+        "PromptCharacters": 19409,
+        "MaxOutputTokens": 16000,
+        "OutputBudgetField": "max_tokens",
+        "ThinkingType": "enabled",
+        "Effort": "low",
+        "Stream": true,
+        "Status": "ok",
+        "HttpStatus": 200,
+        "FinishReason": "stop",
+        "ReceivedDone": true,
+        "FirstContentMs": 5679,
+        "ElapsedMs": 6133,
+        "Usage": {
+          "PromptTokens": 5800,
+          "CompletionTokens": 974,
+          "TotalTokens": 6774,
+          "ReasoningTokens": 863,
+          "CachedPromptTokens": 3712,
+          "UncachedPromptTokens": 2088
+        },
+        "ProductionParser": {
+          "RawResponseSha256": "432E0D0CC89FDA05E11B6245A4ECDC29E6EB100CF66600C5439B6AF08541D557",
+          "RawResponseCharacters": 184,
+          "DialogueParseSuccess": true,
+          "NonEmptyVisibleDialogue": true,
+          "VisibleDialogueCharacters": 78,
+          "OptionsCount": 4,
+          "MetadataNotLeaked": true,
+          "VisibleHasHiddenThoughtTags": false,
+          "RawMetadataMarkerPresent": true,
+          "StrictMetadataSuccess": true,
+          "StrictMetadataFailureReason": "",
+          "NeedsAuthoritativeMetadataFallback": false,
+          "StrictActionsCount": 0,
+          "StrictMemoriesCount": 0,
+          "StrictBehaviorInfluencesCount": 0,
+          "StrictHelpRequestsCount": 0,
+          "StrictHelpRequestUpdatesCount": 0,
+          "StrictConflictsCount": 0,
+          "ActionContract": {
+            "IncludeTravel": true,
+            "IncludeGifts": true,
+            "IncludeNewHelp": true,
+            "IncludeHelpUpdates": true,
+            "IncludeMoney": true,
+            "IncludeFestival": true,
+            "IsFallback": true
+          },
+          "ActionContractReason": "missing-capability-context",
+          "StrictPass": true
+        }
+      },
+      {
+        "Order": 5,
+        "Case": "baseline-cross-language-preference",
+        "StartedUtc": "2026-09-12T03:29:40.479627+08:00",
+        "ResolvedModel": "deepseek-flash",
+        "PromptSha256": "e7de38ecda8815ca2caca2a42f431ac5508f33c7b30404b31884bfcba353b012",
+        "PromptCharacters": 19397,
+        "MaxOutputTokens": 16000,
+        "OutputBudgetField": "max_tokens",
+        "ThinkingType": "enabled",
+        "Effort": "low",
+        "Stream": true,
+        "Status": "ok",
+        "HttpStatus": 200,
+        "FinishReason": "stop",
+        "ReceivedDone": true,
+        "FirstContentMs": 2661,
+        "ElapsedMs": 3153,
+        "Usage": {
+          "PromptTokens": 5800,
+          "CompletionTokens": 375,
+          "TotalTokens": 6175,
+          "ReasoningTokens": 282,
+          "CachedPromptTokens": 4992,
+          "UncachedPromptTokens": 808
+        },
+        "ProductionParser": {
+          "RawResponseSha256": "D485B00EAD99F52EA4DC718E3AF46CF095F9AD6F1F00FF82187DC232893E2477",
+          "RawResponseCharacters": 157,
+          "DialogueParseSuccess": true,
+          "NonEmptyVisibleDialogue": true,
+          "VisibleDialogueCharacters": 27,
+          "OptionsCount": 4,
+          "MetadataNotLeaked": true,
+          "VisibleHasHiddenThoughtTags": false,
+          "RawMetadataMarkerPresent": true,
+          "StrictMetadataSuccess": true,
+          "StrictMetadataFailureReason": "",
+          "NeedsAuthoritativeMetadataFallback": false,
+          "StrictActionsCount": 0,
+          "StrictMemoriesCount": 0,
+          "StrictBehaviorInfluencesCount": 0,
+          "StrictHelpRequestsCount": 0,
+          "StrictHelpRequestUpdatesCount": 0,
+          "StrictConflictsCount": 0,
+          "ActionContract": {
+            "IncludeTravel": true,
+            "IncludeGifts": true,
+            "IncludeNewHelp": true,
+            "IncludeHelpUpdates": true,
+            "IncludeMoney": true,
+            "IncludeFestival": true,
+            "IsFallback": true
+          },
+          "ActionContractReason": "missing-capability-context",
+          "StrictPass": true
+        }
+      },
+      {
+        "Order": 6,
+        "Case": "current-cross-language-preference",
+        "StartedUtc": "2026-09-12T03:29:43.633001+08:00",
+        "ResolvedModel": "deepseek-flash",
+        "PromptSha256": "12b8af5363dcd2d435598dcfa2e36b7cf22d0e9b21cf1d19ea1f479dfada059e",
+        "PromptCharacters": 18569,
+        "MaxOutputTokens": 16000,
+        "OutputBudgetField": "max_tokens",
+        "ThinkingType": "enabled",
+        "Effort": "low",
+        "Stream": true,
+        "Status": "ok",
+        "HttpStatus": 200,
+        "FinishReason": "stop",
+        "ReceivedDone": true,
+        "FirstContentMs": 4333,
+        "ElapsedMs": 5030,
+        "Usage": {
+          "PromptTokens": 5611,
+          "CompletionTokens": 729,
+          "TotalTokens": 6340,
+          "ReasoningTokens": 559,
+          "CachedPromptTokens": 3712,
+          "UncachedPromptTokens": 1899
+        },
+        "ProductionParser": {
+          "RawResponseSha256": "853F4F316046554D8765910EAF24EA9D49E9E61F8A11197CE23FDF8C8B205593",
+          "RawResponseCharacters": 367,
+          "DialogueParseSuccess": true,
+          "NonEmptyVisibleDialogue": true,
+          "VisibleDialogueCharacters": 30,
+          "OptionsCount": 4,
+          "MetadataNotLeaked": true,
+          "VisibleHasHiddenThoughtTags": false,
+          "RawMetadataMarkerPresent": true,
+          "StrictMetadataSuccess": true,
+          "StrictMetadataFailureReason": "",
+          "NeedsAuthoritativeMetadataFallback": false,
+          "StrictActionsCount": 0,
+          "StrictMemoriesCount": 0,
+          "StrictBehaviorInfluencesCount": 1,
+          "StrictHelpRequestsCount": 0,
+          "StrictHelpRequestUpdatesCount": 0,
+          "StrictConflictsCount": 0,
+          "ActionContract": {
+            "IncludeTravel": true,
+            "IncludeGifts": true,
+            "IncludeNewHelp": true,
+            "IncludeHelpUpdates": true,
+            "IncludeMoney": true,
+            "IncludeFestival": true,
+            "IsFallback": true
+          },
+          "ActionContractReason": "missing-capability-context",
+          "StrictPass": true
+        }
+      }
+    ]
+  },
+  "Regression": {
+    "Source": "Task-only isolated snapshot, excluding unrelated working-tree modifications",
+    "DotnetPassed": 2597,
+    "DotnetFailed": 0,
+    "DotnetSkipped": 1,
+    "ExistingSkip": "ContextRoutingPlanTests.PromptOptimizationAndRoutingConfigKeysAreLocalizedAndInjected",
+    "PythonPassed": 9,
+    "PythonFailed": 0,
+    "BuildFlags": [
+      "-p:EnableModDeploy=false",
+      "-p:EnableModZip=false"
+    ],
+    "Deployed": false
+  }
+}

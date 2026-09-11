@@ -8,8 +8,6 @@ namespace LivingNPCs.Behavior;
 internal static class MemoryRecallService
 {
     private const int MaxRecallScore = 512;
-    // The native dialogue box accepts 500 characters; include a full CJK turn after bigram expansion.
-    private const int MaxQueryTokens = 512;
 
     public static MemoryRecallPlan BuildPlan(
         LivingNpcState state,
@@ -22,13 +20,13 @@ internal static class MemoryRecallService
     {
         MemoryRecallContext context = BuildContext(state, world, recentEntries);
         // Keep the query transient and separate from the passive scene context and saved facts.
-        IReadOnlySet<string> queryTokens = LocalTextSearch.Tokenize(currentPlayerText, MaxQueryTokens);
+        MemoryTopicQuery query = MemoryTopicQuery.Create(currentPlayerText);
         var longTermMemories = state.LongTermMemories
             .Where(memory => memory != null
                 && !string.IsNullOrWhiteSpace(memory.Summary)
                 && IsPromptSafeMemory(memory.Subject, memory.Summary, memory.Tags))
             .Select(LongTermMemoryStore.NormalizeForStore)
-            .Select(memory => ScoreLongTermMemory(memory, context, queryTokens, currentTotalDays))
+            .Select(memory => ScoreLongTermMemory(memory, context, query, currentTotalDays))
             .Where(candidate => candidate.Selection.Score >= 45)
             // An explicit current topic must not lose to many weak cues from an old scene.
             .OrderByDescending(candidate => candidate.QueryScore)
@@ -44,7 +42,7 @@ internal static class MemoryRecallService
                 && !string.IsNullOrWhiteSpace(memory.Summary)
                 && IsPromptSafeMemory(memory.Subject, memory.Summary, memory.Tags))
             .Select(PlayerPreferenceMemoryStore.NormalizeForStore)
-            .Select(memory => ScorePlayerPreferenceMemory(memory, context, queryTokens, currentTotalDays))
+            .Select(memory => ScorePlayerPreferenceMemory(memory, context, query, currentTotalDays))
             .Where(candidate => candidate.Selection.Score >= 45)
             .OrderByDescending(candidate => candidate.QueryScore)
             .ThenByDescending(candidate => candidate.Selection.Score)
@@ -71,7 +69,7 @@ internal static class MemoryRecallService
         int currentTotalDays,
         string? currentPlayerText = null)
     {
-        IReadOnlySet<string> queryTokens = LocalTextSearch.Tokenize(currentPlayerText, MaxQueryTokens);
+        MemoryTopicQuery query = MemoryTopicQuery.Create(currentPlayerText);
         // Only impressions already known by this NPC are candidates. Source and visibility stay
         // attached to the selected fact; a query never grants access to another NPC's memories.
         return state.CommunityImpressions
@@ -81,7 +79,7 @@ internal static class MemoryRecallService
                 && !RsvAiPolicy.IsBlockedNpcName(memory.SubjectNpcName)
                 && !RsvAiPolicy.IsBlockedNpcName(memory.HeardFromNpcName)
                 && !RsvAiPolicy.ContainsBlockedReference(memory.Summary))
-            .Select(memory => ScoreCommunityImpression(memory, queryTokens, currentTotalDays))
+            .Select(memory => ScoreCommunityImpression(memory, query, currentTotalDays))
             .Where(candidate => candidate.Selection.Score >= 45)
             .OrderByDescending(candidate => candidate.QueryScore)
             .ThenByDescending(candidate => candidate.Selection.Score)
@@ -152,7 +150,7 @@ internal static class MemoryRecallService
 
     private static (CommunityImpressionSelection Selection, int QueryScore) ScoreCommunityImpression(
         CommunityImpressionFact memory,
-        IReadOnlySet<string> queryTokens,
+        MemoryTopicQuery query,
         int currentTotalDays)
     {
         int age = GetMemoryAge(memory.LastUpdatedTotalDays, currentTotalDays);
@@ -189,8 +187,7 @@ internal static class MemoryRecallService
             _ => 0
         };
         recentRecallPenalty += (int)System.Math.Clamp((long)memory.RecallCount * 3, 0, 12);
-        int queryScore = GetCurrentTopicScore(
-            queryTokens,
+        int queryScore = query.Score(
             $"{memory.SubjectNpcName} {memory.SubjectDisplayName}",
             memory.Summary);
         long score = (long)memory.Importance
@@ -341,7 +338,7 @@ internal static class MemoryRecallService
     private static (LongTermMemorySelection Selection, int QueryScore) ScoreLongTermMemory(
         LongTermMemoryFact memory,
         MemoryRecallContext context,
-        IReadOnlySet<string> queryTokens,
+        MemoryTopicQuery query,
         int currentTotalDays)
     {
         var reasons = new List<string>();
@@ -383,7 +380,7 @@ internal static class MemoryRecallService
             reasons.Add($"topic +{tokenBonus}");
         }
 
-        int queryScore = GetCurrentTopicScore(queryTokens, memory.Subject, memory.Summary, memory.Tags);
+        int queryScore = query.Score(memory.Subject, memory.Summary, memory.Tags);
         if (queryScore > 0)
         {
             score += queryScore;
@@ -406,7 +403,7 @@ internal static class MemoryRecallService
     private static (PlayerPreferenceSelection Selection, int QueryScore) ScorePlayerPreferenceMemory(
         PlayerPreferenceFact memory,
         MemoryRecallContext context,
-        IReadOnlySet<string> queryTokens,
+        MemoryTopicQuery query,
         int currentTotalDays)
     {
         var reasons = new List<string>();
@@ -441,7 +438,7 @@ internal static class MemoryRecallService
             reasons.Add($"topic +{tokenBonus}");
         }
 
-        int queryScore = GetCurrentTopicScore(queryTokens, memory.Subject, memory.Summary, memory.Tags);
+        int queryScore = query.Score(memory.Subject, memory.Summary, memory.Tags);
         if (queryScore > 0)
         {
             score += queryScore;
@@ -459,37 +456,6 @@ internal static class MemoryRecallService
             memory,
             System.Math.Clamp(score, 0, MaxRecallScore),
             reasons.Count == 0 ? "base salience" : string.Join(", ", reasons)), queryScore);
-    }
-
-    private static int GetCurrentTopicScore(
-        IReadOnlySet<string> queryTokens,
-        string subject,
-        string summary,
-        IReadOnlyList<string>? tags = null)
-    {
-        if (queryTokens.Count == 0)
-        {
-            return 0;
-        }
-
-        var subjectTokens = LocalTextSearch.Tokenize(subject, maxTokens: 64);
-        var memoryTokens = new HashSet<string>(subjectTokens, System.StringComparer.OrdinalIgnoreCase);
-        memoryTokens.UnionWith(LocalTextSearch.Tokenize(summary, maxTokens: 256));
-        if (tags != null)
-        {
-            memoryTokens.UnionWith(tags);
-        }
-
-        int overlap = memoryTokens.Count(queryTokens.Contains);
-        if (overlap == 0)
-        {
-            return 0;
-        }
-
-        int subjectOverlap = subjectTokens.Count(queryTokens.Contains);
-        int coverageBonus = 16 * overlap / queryTokens.Count;
-        return System.Math.Min(100, 48 + (System.Math.Min(4, overlap) * 10)
-            + (System.Math.Min(2, subjectOverlap) * 8) + coverageBonus);
     }
 
     private static int CountRecallTokenOverlap(string subject, string summary, IReadOnlySet<string> contextTokens)

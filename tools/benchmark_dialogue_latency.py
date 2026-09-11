@@ -54,6 +54,9 @@ def screening_cases() -> list[dict]:
 
 def call(session: requests.Session, endpoint: str, model: str,
          case: dict, timeout: int) -> dict:
+    thinking_type = case.get("thinking_type")
+    if thinking_type not in (None, "enabled", "disabled"):
+        raise ValueError("thinking_type must be enabled or disabled when supplied.")
     token_field = "max_completion_tokens" if (
         "gpt-5" in model.lower() or "gpt5" in model.lower()
         or any(len(part) > 1 and part[0].lower() == "o" and part[1].isdigit()
@@ -66,6 +69,12 @@ def call(session: requests.Session, endpoint: str, model: str,
         token_field: case.get("max_tokens", 2048),
         "reasoning_effort": case["effort"],
     }
+    # A fixture may carry the explicit switch exported from production DeepSeek settings.
+    # Keep it separate from effort: omitting a disabled switch can re-enable thinking.
+    if thinking_type is not None:
+        body["thinking"] = {"type": thinking_type}
+        if thinking_type == "disabled":
+            body.pop("reasoning_effort")
     stream = case.get("stream", False)
     if stream:
         body.update(stream=True, stream_options={"include_usage": True})
@@ -73,6 +82,8 @@ def call(session: requests.Session, endpoint: str, model: str,
         body["response_format"] = {"type": "json_object"}
     result = {
         "name": case["name"], "effort": case["effort"], "stream": stream,
+        "thinking_type": thinking_type,
+        "max_output_tokens": body[token_field], "output_budget_field": token_field,
         "prompt_chars": len(case["system"]) + len(case["user"]),
         "prompt_sha256": hashlib.sha256(
             (case["system"] + "\n" + case["user"]).encode("utf-8")).hexdigest(),
@@ -262,6 +273,8 @@ def main() -> None:
     all_cases = cases + [case["metadata_followup"] for case in cases if "metadata_followup" in case]
     if any(case["effort"] not in ("low", "none") for case in all_cases):
         raise SystemExit("The probe compares only low and none on the configured model.")
+    if any(case.get("thinking_type") not in (None, "enabled", "disabled") for case in all_cases):
+        raise SystemExit("thinking_type must be enabled or disabled when supplied.")
     if any(not 2 <= case.get("timeout_seconds", args.timeout) <= 120 for case in all_cases):
         raise SystemExit("Each case timeout must be 2-120 seconds.")
     report = {"requested_model": model, "results": []}

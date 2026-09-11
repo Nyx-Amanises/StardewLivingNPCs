@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 
+using LivingNPCs.Behavior;
 using LivingNPCs.Dialogue.Content;
 using LivingNPCs.Dialogue.Diagnostics;
 using LivingNPCs.Dialogue.Llm;
@@ -11,12 +12,17 @@ namespace LivingNPCs.Dialogue.Engine;
 
 /// <summary>
 /// 提示词内历史采样（WP10 §4.15）：四类记录 + 第三方目击 + 活动事件合成，按时间合并后
-/// 取最近 20 条，再从最新往回累计 4000 字符预算，输出按时间正序。纯逻辑、可单测。
+/// 无本轮查询时取最近 20 条；有查询时保留最近接续与匹配记录，统一受 4000 字符预算约束。
+/// 完整记录按时间正序输出，不裁剪当前会话、不改写存档。纯逻辑、可单测。
 /// </summary>
 internal static class HistorySampler
 {
     public const int MaxEntries = 20;
     public const int CharacterBudget = 4000;
+    internal const int RecentContinuityEntries = 2;
+    internal const int RelatedEntries = 6;
+
+    private sealed record HistoryEntry(StardewTime Time, string Text, string Subject, string TopicText);
 
     /// <summary>可合成为历史条目的活动事件键（§4.15）。</summary>
     private static readonly Dictionary<string, (string PromptKey, string Fallback)> SynthesizableEvents = new(StringComparer.Ordinal)
@@ -41,10 +47,11 @@ internal static class HistorySampler
         StardewTime now,
         string npcDisplayName,
         string currentConversationId,
-        Func<string, string?>? getPrompt = null)
+        Func<string, string?>? getPrompt = null,
+        string? currentPlayerText = null)
     {
         getPrompt ??= LookupPrompt;
-        var entries = new List<(StardewTime Time, string Text)>();
+        var entries = new List<HistoryEntry>();
 
         foreach (var entry in history.ConversationHistory)
         {
@@ -55,10 +62,10 @@ internal static class HistorySampler
                 continue;
             }
 
-            string transcript = JoinConversation(entry.Item2.ConversationElements, npcDisplayName, getPrompt);
+            string transcript = JoinConversation(entry.Item2.ConversationElements, npcDisplayName, getPrompt, out string topicText);
             if (transcript.Length > 0)
             {
-                entries.Add((entry.Item1, Format("historyConversationFormat", entry.Item1, transcript, npcDisplayName, string.Empty, npcDisplayName, null, getPrompt)));
+                entries.Add(new(entry.Item1, Format("historyConversationFormat", entry.Item1, transcript, npcDisplayName, string.Empty, npcDisplayName, null, getPrompt), string.Empty, topicText));
             }
         }
 
@@ -67,7 +74,7 @@ internal static class HistorySampler
             string text = JoinLines(entry.Item2.Dialogues);
             if (text.Length > 0)
             {
-                entries.Add((entry.Item1, Format("historyDialogueFormat", entry.Item1, text, npcDisplayName, string.Empty, npcDisplayName, null, getPrompt)));
+                entries.Add(new(entry.Item1, Format("historyDialogueFormat", entry.Item1, text, npcDisplayName, string.Empty, npcDisplayName, null, getPrompt), string.Empty, text));
             }
         }
 
@@ -82,7 +89,7 @@ internal static class HistorySampler
             string text = JoinLines(entry.Item2.Dialogues);
             if (text.Length > 0)
             {
-                entries.Add((entry.Item1, Format("historyEventFormat", entry.Item1, text, npcDisplayName, entry.Item2.EventName, npcDisplayName, entry.Item2.Listeners, getPrompt)));
+                entries.Add(new(entry.Item1, Format("historyEventFormat", entry.Item1, text, npcDisplayName, entry.Item2.EventName, npcDisplayName, entry.Item2.Listeners, getPrompt), entry.Item2.EventName, text));
             }
         }
 
@@ -96,7 +103,7 @@ internal static class HistorySampler
             string text = JoinLines(entry.Item2.Dialogues);
             if (text.Length > 0)
             {
-                entries.Add((entry.Item1, Format("historyOverheardFormat", entry.Item1, text, entry.Item2.SpeakerName, string.Empty, npcDisplayName, null, getPrompt)));
+                entries.Add(new(entry.Item1, Format("historyOverheardFormat", entry.Item1, text, entry.Item2.SpeakerName, string.Empty, npcDisplayName, null, getPrompt), entry.Item2.SpeakerName, text));
             }
         }
 
@@ -113,36 +120,96 @@ internal static class HistorySampler
             if (text.Length > 0)
             {
                 // historyThirdPartyFestival is only an event-name suffix, never a complete record.
-                entries.Add((entry.Item1, Format("historyThirdPartyFormat", entry.Item1, text, entry.Item2.SpeakerName, entry.Item2.EventName, npcDisplayName, null, getPrompt)));
+                entries.Add(new(entry.Item1, Format("historyThirdPartyFormat", entry.Item1, text, entry.Item2.SpeakerName, entry.Item2.EventName, npcDisplayName, null, getPrompt), entry.Item2.SpeakerName, $"{entry.Item2.EventName}\n{text}"));
             }
         }
 
         foreach (var synthesized in SynthesizeActiveEvents(activeDialogueEvents, now, getPrompt))
         {
-            entries.Add(synthesized);
+            entries.Add(new(synthesized.Time, synthesized.Text, string.Empty, synthesized.Text));
         }
 
-        // 最近 20 条 → 从最新往回累计预算 → 时间正序输出。
-        var newestFirst = entries
-            .OrderByDescending(entry => entry.Time)
-            .Take(MaxEntries)
-            .ToList();
-
-        var kept = new List<(StardewTime Time, string Text)>();
+        var newestFirst = entries.Distinct().OrderByDescending(entry => entry.Time).ToList();
+        var kept = new HashSet<HistoryEntry>();
         int budget = CharacterBudget;
-        foreach (var entry in newestFirst)
+        bool TryKeep(HistoryEntry entry)
         {
-            if (entry.Text.Length > budget)
+            if (kept.Contains(entry) || entry.Text.Length > budget || kept.Count >= MaxEntries)
             {
-                break;
+                return false;
             }
 
             budget -= entry.Text.Length;
             kept.Add(entry);
+            return true;
+        }
+
+        MemoryTopicQuery query = MemoryTopicQuery.Create(currentPlayerText);
+        if (!query.HasQuery)
+        {
+            foreach (HistoryEntry entry in newestFirst.Take(MaxEntries))
+            {
+                // One oversized transcript must not suppress every smaller record behind it.
+                TryKeep(entry);
+            }
+        }
+        else
+        {
+            // Search the allowed stored records before applying the old recency window. Search
+            // raw evidence, not localized boilerplate which can contain unrelated topic words.
+            var matches = newestFirst
+                .Where(entry => entry.Text.Length <= CharacterBudget)
+                .Select(entry => (Entry: entry, Score: query.Score(entry.Subject, entry.TopicText)))
+                .Where(candidate => candidate.Score > 0)
+                .OrderByDescending(candidate => candidate.Score)
+                .ThenByDescending(candidate => candidate.Entry.Time)
+                .ToList();
+
+            // Reserve one recent complete record before an older match can fill the budget: it
+            // may contain a correction such as "I no longer like it" without the query's noun.
+            foreach (HistoryEntry entry in newestFirst)
+            {
+                if (TryKeep(entry))
+                {
+                    break;
+                }
+            }
+            // Also retain the latest matching evidence so a newer bilingual correction does
+            // not lose every slot to older literal matches. Similarity never resolves facts.
+            var latestMatch = matches.OrderByDescending(match => match.Entry.Time)
+                .FirstOrDefault(match => !kept.Contains(match.Entry) && match.Entry.Text.Length <= budget);
+            if (latestMatch.Entry != null)
+            {
+                TryKeep(latestMatch.Entry);
+            }
+            foreach (var match in matches)
+            {
+                if (TryKeep(match.Entry))
+                {
+                    break;
+                }
+            }
+            foreach (HistoryEntry entry in newestFirst.Take(RecentContinuityEntries))
+            {
+                TryKeep(entry);
+            }
+            int relatedKept = matches.Count(match => kept.Contains(match.Entry));
+            foreach (var match in matches)
+            {
+                if (relatedKept >= RelatedEntries)
+                {
+                    break;
+                }
+                if (TryKeep(match.Entry))
+                {
+                    relatedKept++;
+                }
+            }
         }
 
         return kept
             .OrderBy(entry => entry.Time)
+            .ThenBy(entry => newestFirst.IndexOf(entry))
             .Select(entry => entry.Text)
             .ToList();
     }
@@ -184,19 +251,21 @@ internal static class HistorySampler
         return result;
     }
 
-    private static string JoinConversation(List<ConversationElement> elements, string npcDisplayName, Func<string, string?> getPrompt)
+    private static string JoinConversation(List<ConversationElement> elements, string npcDisplayName,
+        Func<string, string?> getPrompt, out string topicText)
     {
         string farmerLabel = getPrompt("generalFarmerLabel") ?? "Farmer";
         var cleaned = ConversationTurnDeduplicator.CollapseExpandedNpcPages(
             elements,
             element => element.Text,
             element => element.IsPlayerLine);
-        return string.Join(
-            " / ",
-            cleaned
-                .Where(element => !string.IsNullOrWhiteSpace(element.Text)
-                    && !RsvAiPolicy.ContainsBlockedReference(element.Text))
-                .Select(element => $"{(element.IsPlayerLine ? farmerLabel : npcDisplayName)}: {element.Text.Trim()}"));
+        var allowed = cleaned
+            .Where(element => !string.IsNullOrWhiteSpace(element.Text)
+                && !RsvAiPolicy.ContainsBlockedReference(element.Text))
+            .ToArray();
+        topicText = string.Join(" / ", allowed.Select(element => element.Text.Trim()));
+        return string.Join(" / ", allowed.Select(element =>
+            $"{(element.IsPlayerLine ? farmerLabel : npcDisplayName)}: {element.Text.Trim()}"));
     }
 
     private static string JoinLines(List<HistoryLine> lines)

@@ -88,6 +88,68 @@ public sealed class SceneActionContractSelectorTests
     }
 
     [Theory]
+    [InlineData("Help requests involving the farmer", "Expired")]
+    [InlineData("Help requests involving the farmer", "Declined")]
+    [InlineData("Help requests involving the farmer", "Fulfilled")]
+    [InlineData("Help requests", "Expired")]
+    [InlineData("Help requests", "Declined")]
+    [InlineData("Active help request", "Expired")]
+    [InlineData("Active help request", "Declined")]
+    public void FinishedRequestsDoNotBecomeActiveFromPendingStepsOrQuotedStatuses(string field, string status)
+    {
+        string context = Context(extra: $"- {field}: {RequestWithPendingStep(status)}");
+
+        AssertCoreOnly(Select("好的。", context));
+    }
+
+    [Theory]
+    [InlineData("Offered")]
+    [InlineData("Pending")]
+    public void LaterTopLevelActiveRequestSurvivesAnEarlierFinishedRequest(string status)
+    {
+        string context = Context(extra: PromptFragments.Context.HelpRequestsLine(
+            RequestWithPendingStep("Expired") + "; " + RequestWithPendingStep(status)));
+
+        SceneActionContractPlan plan = Select("好的。", context);
+
+        Assert.False(plan.IsFallback);
+        Assert.True(plan.IncludeHelpUpdates);
+        Assert.False(plan.IncludeNewHelp);
+        Assert.False(plan.IncludeGifts);
+        Assert.False(plan.IncludeTravel);
+    }
+
+    [Fact]
+    public void FinishedRequestStepDoesNotSuppressClassificationOfANewVisibleAsk()
+    {
+        string context = Context(extra: PromptFragments.Context.HelpRequestsLine(RequestWithPendingStep("Declined")));
+        SceneActionContractPlan plan = Select("Hello.", context);
+        var analysis = new ConversationAnalysis();
+
+        string? reason = SceneActionContractCompleteness.FindMissingEffect(
+            analysis, plan, "Hello.", "Please bring me some Sugar.", new DialogueContext(),
+            [new HelpRequestItemAlias("(O)245", "Sugar", ["Sugar"])]);
+
+        AssertCoreOnly(plan);
+        Assert.Contains("helpRequests", reason);
+        Assert.Empty(analysis.HelpRequests);
+        Assert.Empty(analysis.HelpRequestUpdates);
+    }
+
+    [Theory]
+    [InlineData("custom request, status Pending")]
+    [InlineData("item_request, summary: unstructured; current step: status Pending")]
+    [InlineData("item_request, status FutureUnknownState; current step: status Pending")]
+    [InlineData("item_request, status Fulfilled; summary: old; future_request, status Pending")]
+    [InlineData("item_request, status Fulfilled; summary: old; item_request, due eventually, status Pending")]
+    [InlineData("item_request, status Fulfilled; summary: old; item_request, summary: status Pending")]
+    [InlineData("no active request; item_request, status Pending")]
+    public void UnrecognizedRequestHeadersOrLaterStatesKeepTheFullFallback(string requests)
+    {
+        AssertFull(Select("Hello.", Context(extra: PromptFragments.Context.HelpRequestsLine(requests))));
+    }
+
+    [Theory]
     [InlineData("好的。")]
     [InlineData("这两样都齐了。")]
     [InlineData("先是木材，再是牛奶，对吧？")]
@@ -428,6 +490,20 @@ public sealed class SceneActionContractSelectorTests
 
     private static ConversationElement Player(string text) => new(text, true);
     private static ConversationElement Npc(string text) => new(text, false);
+
+    private static string RequestWithPendingStep(string status) => PromptFragments.Facts.HelpRequest(new NpcHelpRequestFact
+    {
+        Status = status,
+        DueTotalDays = TestScenarios.Today - 1,
+        Summary = "The old note quoted status Offered and status Pending.",
+        Steps =
+        [
+            new NpcHelpRequestStepFact
+            {
+                Summary = "Bring a classroom supply.", RequestedItemId = "(O)80", RequestedItemLabel = "Quartz", Status = "Pending"
+            }
+        ]
+    }, TestScenarios.Today);
 
     private static void AssertCoreOnly(SceneActionContractPlan plan)
     {

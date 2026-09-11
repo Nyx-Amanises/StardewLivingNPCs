@@ -57,6 +57,27 @@ def call(response, stream=True):
 
 
 class ProbeTests(unittest.TestCase):
+    def test_deepseek_fixture_keeps_explicit_thinking_switch_and_output_budget(self):
+        for thinking_type in ("enabled", "disabled"):
+            with self.subTest(thinking_type=thinking_type):
+                session = Session(Response({"choices": [{"message": {"content": "Hello"}, "finish_reason": "stop"}]}))
+                result = probe.call(session, ENDPOINT, "deepseek-flash", dict(
+                    CASE, stream=False, thinking_type=thinking_type, max_tokens=16000), 2)
+                body = session.posts[0]
+                self.assertEqual({"type": thinking_type}, body["thinking"])
+                self.assertEqual(16000, body["max_tokens"])
+                self.assertEqual(16000, result["max_output_tokens"])
+                if thinking_type == "enabled":
+                    self.assertEqual("low", body["reasoning_effort"])
+                else:
+                    self.assertNotIn("reasoning_effort", body)
+
+    def test_invalid_thinking_switch_fails_before_sending_a_request(self):
+        session = Session()
+        with self.assertRaises(ValueError):
+            probe.call(session, ENDPOINT, "deepseek-flash", dict(CASE, thinking_type="arbitrary"), 2)
+        self.assertEqual([], session.posts)
+
     def test_error_messages_redact_credentials_and_case_insensitive_urls(self):
         for streamed in (False, True):
             with self.subTest(streamed=streamed):

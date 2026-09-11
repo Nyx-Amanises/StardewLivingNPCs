@@ -65,6 +65,31 @@ public sealed class WorldRetrievalIntegrationTests : IDisposable
         Assert.DoesNotContain("Selected beach reference.", next.ConcatenatedUserContent());
     }
 
+    [Fact]
+    public async Task StoredHistoryUsesTheCurrentInputAndStaysInTheDynamicTail()
+    {
+        var history = new StardewEventHistory();
+        var now = new StardewTime(3, StardewValley.Season.Spring, 14, 1200);
+        for (int i = 1; i <= 25; i++)
+        {
+            history.Add(now.AddDays(-i), new DialogueHistory(new() { new($"An ordinary afternoon {i}.") }));
+        }
+        history.Add(now.AddDays(-40), new DialogueHistory(new() { new("The old quartz display had a blue label.") }));
+        var client = new CapturingClient();
+        var engine = CreateEngine(client, history: history);
+
+        await engine.GenerateAsync(Request("石英收藏还记得吗？", null), CancellationToken.None);
+        await engine.GenerateAsync(Request("unmatched_object", null), CancellationToken.None);
+
+        Assert.Equal(2, client.Requests.Count);
+        Assert.Contains("The old quartz display had a blue label.", client.Requests[0].Tail);
+        Assert.DoesNotContain("The old quartz display had a blue label.", client.Requests[1].Tail);
+        Assert.Contains("An ordinary afternoon 1.", client.Requests[1].Tail);
+        Assert.Equal(client.Requests[0].StableContext, client.Requests[1].StableContext);
+        Assert.Equal(client.Requests[0].NpcContext, client.Requests[1].NpcContext);
+        Assert.DoesNotContain("quartz display", client.Requests[0].StableContext + client.Requests[0].NpcContext);
+    }
+
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -188,7 +213,8 @@ public sealed class WorldRetrievalIntegrationTests : IDisposable
     };
 
     private static DialogueEngine CreateEngine(
-        CapturingClient client, Action? liveWorldRead = null, Action? serviceRetrieval = null)
+        CapturingClient client, Action? liveWorldRead = null, Action? serviceRetrieval = null,
+        StardewEventHistory? history = null)
     {
         var store = new DialogueHistoryStore(new FakePersistenceEnvironment()) { ArchiveSink = null };
         return new DialogueEngine(new DialogueEngineServices
@@ -206,7 +232,7 @@ public sealed class WorldRetrievalIntegrationTests : IDisposable
                 throw new InvalidOperationException("runtime capture was bypassed");
             },
             GetClient = () => client,
-            History = new EngineHistoryWriter(store), GetHistory = store.GetHistory,
+            History = new EngineHistoryWriter(store), GetHistory = name => history ?? store.GetHistory(name),
             Now = () => new StardewTime(2, StardewValley.Season.Spring, 5, 1200),
             GetNpcDisplayName = name => name, GetLocale = () => "en"
         });

@@ -40,8 +40,9 @@ internal static class SceneActionContractSelector
         @"明天|明日|下次|改天|以后|以後|晚点|晚點|稍后|稍後|等会|等會|邮寄|郵寄|寄给|寄給|给你寄|給你寄|寄到|\b(?:mail|tomorrow|later|next time|another day)\b", Options);
     private static readonly Regex Continuation = new(
         @"^(?:(?:好|好的|好呀|好啊|好吧|行|行啊|嗯|嗯嗯|可以|当然|當然|愿意|願意|没问题|沒問題|太好了|谢谢|谢谢你|謝謝|謝謝你|交给我|交給我|包在我身上|一个不少|一個不少|都齐了|都齊了|就是这些|就是這些|就是这个|就是這個|带来了|帶來了|拿到了|做不到|算了吧|不接了|不了|不用了|不行|不去了|走吧|出发吧|出發吧|等一下|等会儿|等會兒|等会再去|等會再去|明天吧|那就明天|yes|no|ok|okay|sure|agreed|deal|done|great|thanks|thank you|sounds good|of course|absolutely|go ahead|let's go|here it is|here they are|i have it|got it|that's everything|that is everything|last one|not now|not today|maybe later|tomorrow|wait a moment|in a moment|what about the other one|the other one too)(?:[\s，,。.!！?？;；:：…~～-]+|$))+$", Options);
-    private static readonly Regex ActiveHelpStatus = new(@"\bstatus\s+(?:Offered|Pending)\b", Options);
-    private static readonly Regex AnyHelpStatus = new(@"\bstatus\s+(?:Offered|Pending|Fulfilled|Declined|Expired|Cancelled|Canceled)\b", Options);
+    private static readonly Regex HelpRequestEntryStart = new(@"(?:^|;\s*)(?<type>[a-z][a-z0-9_]*_request)\s*,", Options);
+    private static readonly Regex HelpRequestHeaderStatus = new(
+        @"^(?:item_request|question_request)\s*,\s*(?:(?:no due date|past due|due today|due tomorrow|due in \d+ days)\s*,\s*)?status\s+(?<status>[a-z][a-z0-9_]*)(?=\s*(?:[,;.]|$))", Options);
 
     public static SceneActionContractPlan Select(
         string? playerText,
@@ -185,11 +186,9 @@ internal static class SceneActionContractSelector
                 || field.StartsWith("Help requests:", StringComparison.OrdinalIgnoreCase))
             {
                 string value = field[(field.IndexOf(':') + 1)..].Trim();
-                bool empty = value.StartsWith("none", StringComparison.OrdinalIgnoreCase)
-                    || value.StartsWith("no ", StringComparison.OrdinalIgnoreCase)
-                    || value.StartsWith("<none>", StringComparison.OrdinalIgnoreCase);
-                result.ActiveHelp |= ActiveHelpStatus.IsMatch(value);
-                unknownHelpState |= !empty && !AnyHelpStatus.IsMatch(value);
+                bool known = TryReadHelpRequestStates(value, out bool active);
+                result.ActiveHelp |= active;
+                unknownHelpState |= !known;
             }
         }
 
@@ -216,6 +215,57 @@ internal static class SceneActionContractSelector
         }
 
         reason = string.Empty;
+        return true;
+    }
+
+    private static bool TryReadHelpRequestStates(string value, out bool active)
+    {
+        active = false;
+        string emptyLabel = value.TrimEnd('.', ' ', '\t');
+        if (emptyLabel.Equals("none", StringComparison.OrdinalIgnoreCase)
+            || emptyLabel.Equals("<none>", StringComparison.OrdinalIgnoreCase)
+            || emptyLabel.Equals("no active request", StringComparison.OrdinalIgnoreCase)
+            || emptyLabel.Equals("no active requests", StringComparison.OrdinalIgnoreCase)
+            || emptyLabel.Equals(PromptFragments.State.EmptyHelpRequests, StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Facts.HelpRequest puts the request's status in its header, before current-step details
+        // and summary prose. A declined/expired request can still have a Pending step. Do not
+        // treat that nested status (or a quoted status in its summary) as an active request.
+        // Store lines join several requests with semicolons, so inspect every request header.
+        MatchCollection entries = HelpRequestEntryStart.Matches(value);
+        if (entries.Count == 0 || entries[0].Index != 0)
+        {
+            return false;
+        }
+
+        foreach (Match entry in entries)
+        {
+            Match header = HelpRequestHeaderStatus.Match(value[entry.Groups["type"].Index..]);
+            if (!header.Success)
+            {
+                return false;
+            }
+
+            switch (header.Groups["status"].Value.ToLowerInvariant())
+            {
+                case "offered":
+                case "pending":
+                    active = true;
+                    break;
+                case "fulfilled":
+                case "declined":
+                case "expired":
+                case "cancelled":
+                case "canceled":
+                    break;
+                default:
+                    return false;
+            }
+        }
+
         return true;
     }
 
