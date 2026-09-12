@@ -144,14 +144,16 @@ internal static class DialogueConfigMenuSection
             max: 30,
             interval: 1);
 
-        string[] thinkingOptions = ThinkingOptionsFor(config);
+        // GMCM caches allowed values at registration and commits edited fields only on save.
+        // Keep every preference selectable across model changes; requests handle model limits.
+        string[] thinkingOptions = LlmThinking.Options.ToArray();
 
         api.AddTextOption(
             mod: manifest,
             name: () => T("dialogue.config.routingThinking.name"),
             tooltip: () => T("dialogue.config.routingThinking.tooltip"),
-            getValue: () => LlmThinking.NormalizeForModel(config.RoutingThinkingLevel, config.Provider, config.ModelName, LlmThinking.Off),
-            setValue: value => config.RoutingThinkingLevel = LlmThinking.NormalizeForModel(value, config.Provider, config.ModelName, LlmThinking.Off),
+            getValue: () => LlmThinking.Normalize(config.RoutingThinkingLevel, LlmThinking.Off),
+            setValue: value => config.RoutingThinkingLevel = LlmThinking.Normalize(value, LlmThinking.Off),
             allowedValues: thinkingOptions,
             formatAllowedValue: FormatThinkingLevel);
 
@@ -159,8 +161,8 @@ internal static class DialogueConfigMenuSection
             mod: manifest,
             name: () => T("dialogue.config.chatThinking.name"),
             tooltip: () => T("dialogue.config.chatThinking.tooltip"),
-            getValue: () => LlmThinking.NormalizeForModel(config.ChatThinkingLevel, config.Provider, config.ModelName),
-            setValue: value => config.ChatThinkingLevel = LlmThinking.NormalizeForModel(value, config.Provider, config.ModelName),
+            getValue: () => LlmThinking.Normalize(config.ChatThinkingLevel, LlmThinking.Auto),
+            setValue: value => config.ChatThinkingLevel = LlmThinking.Normalize(value, LlmThinking.Auto),
             allowedValues: thinkingOptions,
             formatAllowedValue: FormatThinkingLevel);
 
@@ -219,7 +221,6 @@ internal static class DialogueConfigMenuSection
     public static void OnSave(ModEntry modEntry, ModConfig config)
     {
         bool providerChanged = ClearApiKeyWhenProviderChanged(config, DialogueServices.Config.Provider, DialogueServices.Config.ApiKey);
-        bool modelChanged = !string.Equals(config.ModelName, DialogueServices.Config.ModelName, StringComparison.Ordinal);
         bool sveChanged = DialogueServices.Config.EnableSveCompatibility != config.EnableSveCompatibility;
         bool connectionChanged = ConnectionSettingsChanged(config, DialogueServices.Config);
         DialogueServices.Config.SyncFrom(config);
@@ -257,7 +258,7 @@ internal static class DialogueConfigMenuSection
             }
         }
 
-        if (providerChanged || modelChanged)
+        if (providerChanged)
         {
             QueueMenuRefresh(modEntry, config);
         }
@@ -399,12 +400,6 @@ internal static class DialogueConfigMenuSection
                 $"Could not parse dialogue frequency value '{raw}'; keeping the previous setting."),
             LogLevel.Warn);
         return fallback;
-    }
-
-    /// <summary>按实际提供商和模型列出支持的思考档位；保存模型变更后重建菜单。</summary>
-    internal static string[] ThinkingOptionsFor(ModConfig config)
-    {
-        return LlmThinking.OptionsFor(config.Provider, config.ModelName);
     }
 
     /// <summary>
