@@ -609,7 +609,6 @@ internal sealed class BehaviorEngine
         if (e.IsMultipleOf(120))
         {
             this.SafeRun("update tick: dialogue behavior influences", () => this.dialogueBehaviorInfluences.TryApply());
-            this.SafeRun("update tick: help request follow-ups", () => this.helpRequests.ShowFollowUps());
         }
     }
 

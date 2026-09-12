@@ -281,14 +281,6 @@ internal sealed class LivingNpcState
                     request.RewardMoneyClaimQueued = true;
                 }
 
-                if (!request.SpecialFollowUpPlanned
-                    && request.Status == "Fulfilled"
-                    && request.FollowUpEligibleTotalDays > 0
-                    && request.FollowUpShownTotalDays < 0)
-                {
-                    request.SpecialFollowUpPlanned = true;
-                }
-
                 return request;
             })
             .Where(request => request.Type != "none")
@@ -717,9 +709,6 @@ internal sealed class LivingNpcState
                     LastMentionedTimeOfDay = request.LastMentionedTimeOfDay,
                     FulfilledTotalDays = request.FulfilledTotalDays,
                     FulfilledTimeOfDay = request.FulfilledTimeOfDay,
-                    FollowUpEligibleTotalDays = request.FollowUpEligibleTotalDays,
-                    FollowUpShownTotalDays = request.FollowUpShownTotalDays,
-                    FollowUpShownTimeOfDay = request.FollowUpShownTimeOfDay,
                     RewardFriendship = request.RewardFriendship,
                     RewardGranted = request.RewardGranted,
                     RewardMoney = request.RewardMoney,
@@ -727,7 +716,6 @@ internal sealed class LivingNpcState
                     RewardMoneyClaimQueued = request.RewardMoneyClaimQueued,
                     RewardMoneyQuestPosted = request.RewardMoneyQuestPosted,
                     RewardGiftGiven = request.RewardGiftGiven,
-                    SpecialFollowUpPlanned = request.SpecialFollowUpPlanned,
                     TimesReinforced = request.TimesReinforced
                 })
                 .ToList(),

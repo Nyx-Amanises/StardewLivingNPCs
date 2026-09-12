@@ -161,7 +161,6 @@ internal sealed class BehaviorEngineServices
             config,
             this.Memory,
             npcName => this.Locator.TryFindNpcInCurrentLocation(npcName, out NPC? npc) ? npc : null,
-            (npc, text) => this.Feedback.TryShowNpcSpeechBubble(npc, text),
             (npc, debugMessage) => this.ContextService.PushInteractionContext(npc, debugMessage),
             () =>
             {

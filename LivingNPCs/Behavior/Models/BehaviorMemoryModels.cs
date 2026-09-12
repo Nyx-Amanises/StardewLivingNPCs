@@ -266,9 +266,6 @@ internal sealed class NpcHelpRequestFact
     public int LastMentionedTimeOfDay { get; set; }
     public int FulfilledTotalDays { get; set; } = -1;
     public int FulfilledTimeOfDay { get; set; }
-    public int FollowUpEligibleTotalDays { get; set; } = -1;
-    public int FollowUpShownTotalDays { get; set; } = -1;
-    public int FollowUpShownTimeOfDay { get; set; }
     public int RewardFriendship { get; set; }
     public bool RewardGranted { get; set; }
     public int RewardMoney { get; set; }
@@ -276,7 +273,6 @@ internal sealed class NpcHelpRequestFact
     public bool RewardMoneyClaimQueued { get; set; }
     public bool RewardMoneyQuestPosted { get; set; }
     public bool RewardGiftGiven { get; set; }
-    public bool SpecialFollowUpPlanned { get; set; }
     public int TimesReinforced { get; set; }
 
     /// <summary>The step the request is currently waiting on, or null when no steps exist.</summary>

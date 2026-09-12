@@ -725,7 +725,6 @@ internal static class PromptFragments
             $"- LivingNPCs added a system money reward of {rewardMoney}g to the quest journal for the farmer to claim.";
 
         public const string ThankYouMailLine = HelpRequestHandIn.ThankYouMailLine;
-        public const string FollowUpLine = "- A later in-person follow-up may happen; do not promise it as guaranteed.";
     }
 
     /// <summary>The "## Active Companion Outing" section.</summary>

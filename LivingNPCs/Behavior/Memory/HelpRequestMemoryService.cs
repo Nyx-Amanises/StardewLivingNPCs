@@ -914,10 +914,6 @@ internal sealed class HelpRequestMemoryService
             16,
             $"the farmer helped with a personal request: {request.Summary}"
         );
-        request.SpecialFollowUpPlanned = HelpRequestMemoryRules.ShouldPlanFollowUp(state, request);
-        request.FollowUpEligibleTotalDays = request.SpecialFollowUpPlanned
-            ? Game1.Date.TotalDays + 1
-            : -1;
         StoreSharedExperience(state, request);
         state.LastInteraction = $"the farmer helped with a personal request: {request.Summary}";
         state.LastUpdatedTotalDays = Game1.Date.TotalDays;

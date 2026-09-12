@@ -1,6 +1,5 @@
 using System;
 using System.Linq;
-using Microsoft.Xna.Framework;
 using StardewModdingAPI;
 using StardewValley;
 
@@ -11,7 +10,6 @@ internal sealed class HelpRequestRuntime
     private readonly ModConfig config;
     private readonly BehaviorMemory memory;
     private readonly Func<string, NPC?> findNpcInCurrentLocation;
-    private readonly Func<NPC, string, bool> tryShowNpcSpeechBubble;
     private readonly Action<NPC, string> pushInteractionContext;
     private readonly Action syncQuestLog;
 
@@ -19,14 +17,12 @@ internal sealed class HelpRequestRuntime
         ModConfig config,
         BehaviorMemory memory,
         Func<string, NPC?> findNpcInCurrentLocation,
-        Func<NPC, string, bool> tryShowNpcSpeechBubble,
         Action<NPC, string> pushInteractionContext,
         Action syncQuestLog)
     {
         this.config = config;
         this.memory = memory;
         this.findNpcInCurrentLocation = findNpcInCurrentLocation;
-        this.tryShowNpcSpeechBubble = tryShowNpcSpeechBubble;
         this.pushInteractionContext = pushInteractionContext;
         this.syncQuestLog = syncQuestLog;
     }
@@ -75,65 +71,5 @@ internal sealed class HelpRequestRuntime
         {
             this.syncQuestLog();
         }
-    }
-
-    public void ShowFollowUps()
-    {
-        // 多人 v1：回访标记写入求助账本，仅主机执行（farmhand 上的标记会被镜像快照覆盖并重放）。
-        if (!this.config.EnableDialogueFollowUps
-            || !Context.IsMainPlayer
-            || Game1.currentLocation == null
-            || Game1.player == null
-            || Game1.activeClickableMenu != null
-            || Game1.eventUp)
-        {
-            return;
-        }
-
-        foreach (var npc in Game1.currentLocation.characters.Where(candidate => !string.IsNullOrWhiteSpace(candidate.Name)))
-        {
-            var state = this.memory.GetState(npc);
-            if (state == null
-                || Vector2.Distance(npc.Tile, Game1.player.Tile) > this.config.MaxInteractionDistanceTiles)
-            {
-                continue;
-            }
-
-            var request = state.HelpRequests.FirstOrDefault(candidate =>
-                candidate.Status == "Fulfilled"
-                && candidate.SpecialFollowUpPlanned
-                && candidate.FollowUpEligibleTotalDays <= Game1.Date.TotalDays
-                && candidate.FollowUpShownTotalDays < 0
-                && candidate.FulfilledTotalDays >= Game1.Date.TotalDays - 7
-            );
-            if (request == null)
-            {
-                continue;
-            }
-
-            if (!this.tryShowNpcSpeechBubble(npc, BuildHelpRequestFollowUp(request)))
-            {
-                continue;
-            }
-
-            request.FollowUpShownTotalDays = Game1.Date.TotalDays;
-            request.FollowUpShownTimeOfDay = Game1.timeOfDay;
-        }
-    }
-
-    private static string BuildHelpRequestFollowUp(NpcHelpRequestFact request)
-    {
-        if (request.RewardMoney >= 1000)
-        {
-            return request.Type == "question_request"
-                ? I18n.Get("help.followUp.questionBigReward")
-                : I18n.Get("help.followUp.itemBigReward");
-        }
-
-        return request.Type switch
-        {
-            "question_request" => I18n.Get("help.followUp.question"),
-            _ => I18n.Get("help.followUp.item")
-        };
     }
 }

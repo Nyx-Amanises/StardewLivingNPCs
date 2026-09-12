@@ -35,32 +35,6 @@ internal static class HelpRequestMemoryRules
         return System.Math.Clamp(total <= 0 ? 200 : total, 200, 10000);
     }
 
-    public static bool ShouldPlanFollowUp(LivingNpcState state, NpcHelpRequestFact request)
-    {
-        int chance = request.FollowUpPotential switch
-        {
-            "deeper_relationship" => 75,
-            _ => 45
-        };
-
-        if (request.RewardMoney >= 1000)
-        {
-            chance += 10;
-        }
-
-        unchecked
-        {
-            string seed = $"{state.NpcName}:{request.Summary}:{request.RequestedItemId}:{request.FulfilledTotalDays}:{request.FollowUpPotential}";
-            int hash = 17;
-            foreach (char character in seed)
-            {
-                hash = (hash * 31) + character;
-            }
-
-            return System.Math.Abs(hash % 100) < System.Math.Clamp(chance, 0, 90);
-        }
-    }
-
     public static int GetMaxStepsForCurrentWorldStage()
     {
         return WorldProgression.Current().ResidentStage switch

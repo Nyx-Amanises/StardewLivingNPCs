@@ -487,11 +487,6 @@ internal sealed class ConversationStartRecorder
             {
                 lines.Add(PromptFragments.HelpRequestDelivery.ThankYouMailLine);
             }
-
-            if (request.SpecialFollowUpPlanned)
-            {
-                lines.Add(PromptFragments.HelpRequestDelivery.FollowUpLine);
-            }
         }
 
         return string.Join("\n", lines);

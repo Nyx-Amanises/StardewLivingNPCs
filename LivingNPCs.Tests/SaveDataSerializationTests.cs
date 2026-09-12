@@ -95,6 +95,92 @@ public sealed class SaveDataSerializationTests
     }
 
     [Fact]
+    public void LegacyHelpRequestBubbleFieldsDoNotAffectRewardsOrSharedExperienceRoundTrip()
+    {
+        // Old saves can contain an unshown fixed bubble. Its retired fields must be ignored,
+        // while the independent shared-experience cue remains available for normal dialogue.
+        const string legacyJson = """
+            {
+              "StatesByNpc": {
+                "Emily": {
+                  "NpcName": "Emily",
+                  "HelpRequests": [{
+                    "AssignedPlayerId": 987654321,
+                    "QuestLogId": "livingnpcs:emily:quartz",
+                    "Type": "item_request",
+                    "Summary": "Bring quartz.",
+                    "RequestedItemId": "(O)80",
+                    "Status": "Fulfilled",
+                    "Steps": [{
+                      "Type": "item_request",
+                      "Summary": "Bring quartz.",
+                      "RequestedItemId": "(O)80",
+                      "Status": "Fulfilled",
+                      "CompletedTotalDays": 100,
+                      "CompletedTimeOfDay": 1200
+                    }],
+                    "FulfilledTotalDays": 100,
+                    "FulfilledTimeOfDay": 1200,
+                    "RewardFriendship": 75,
+                    "RewardGranted": true,
+                    "RewardMoney": 500,
+                    "RewardMoneyClaimQueued": true,
+                    "RewardMoneyQuestPosted": true,
+                    "LastMentionedTotalDays": -1,
+                    "FollowUpPotential": "deeper_relationship",
+                    "SpecialFollowUpPlanned": true,
+                    "FollowUpEligibleTotalDays": 101,
+                    "FollowUpShownTotalDays": -1,
+                    "FollowUpShownTimeOfDay": 0
+                  }],
+                  "SharedExperiences": [{
+                    "Type": "help_request",
+                    "Summary": "The farmer brought Emily quartz.",
+                    "LastUpdatedTotalDays": 100,
+                    "Importance": 82,
+                    "FollowUpEligibleTotalDays": 102,
+                    "FollowUpShownTotalDays": -1,
+                    "FollowUpShownTimeOfDay": 0
+                  }]
+                }
+              }
+            }
+            """;
+
+        var restored = Newtonsoft.Json.JsonConvert.DeserializeObject<BehaviorMemorySaveData>(legacyJson);
+        Assert.NotNull(restored);
+        LivingNpcState state = restored.StatesByNpc["Emily"].Clone();
+
+        var request = Assert.Single(state.HelpRequests);
+        Assert.Equal("Fulfilled", request.Status);
+        Assert.Equal("Fulfilled", Assert.Single(request.Steps).Status);
+        Assert.Equal("(O)80", request.RequestedItemId);
+        Assert.Equal(987654321, request.AssignedPlayerId);
+        Assert.Equal("livingnpcs:emily:quartz", request.QuestLogId);
+        Assert.Equal(100, request.FulfilledTotalDays);
+        Assert.Equal(1200, request.FulfilledTimeOfDay);
+        Assert.Equal(75, request.RewardFriendship);
+        Assert.True(request.RewardGranted);
+        Assert.Equal(500, request.RewardMoney);
+        Assert.False(request.RewardMoneyGranted);
+        Assert.True(request.RewardMoneyClaimQueued);
+        Assert.True(request.RewardMoneyQuestPosted);
+        Assert.Equal(-1, request.LastMentionedTotalDays);
+        Assert.Equal("deeper_relationship", request.FollowUpPotential);
+
+        var experience = Assert.Single(state.SharedExperiences);
+        Assert.Equal("The farmer brought Emily quartz.", experience.Summary);
+        Assert.Equal(102, experience.FollowUpEligibleTotalDays);
+        Assert.Equal(-1, experience.FollowUpShownTotalDays);
+
+        var savedRequest = Newtonsoft.Json.Linq.JObject.FromObject(request);
+        Assert.Null(savedRequest["SpecialFollowUpPlanned"]);
+        Assert.Null(savedRequest["FollowUpEligibleTotalDays"]);
+        Assert.Null(savedRequest["FollowUpShownTotalDays"]);
+        Assert.Null(savedRequest["FollowUpShownTimeOfDay"]);
+    }
+
+    [Fact]
     public void CloneCopiesEveryGiftMailField()
     {
         // Save data is produced via LivingNpcState.Clone(), so any NpcGiftMailFact property the
