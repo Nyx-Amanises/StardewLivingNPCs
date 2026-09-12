@@ -33,8 +33,7 @@ internal static class DialogueConfigMenuSection
 
         // 打开菜单时归一化（§4.9）：钳制路由超时、思考档位过 Normalize。
         config.SemanticContextRoutingTimeoutSeconds = Math.Clamp(config.SemanticContextRoutingTimeoutSeconds, 2, 30);
-        config.RoutingThinkingLevel = LlmThinking.Normalize(config.RoutingThinkingLevel, LlmThinking.Off);
-        config.ChatThinkingLevel = LlmThinking.Normalize(config.ChatThinkingLevel, LlmThinking.Auto);
+        config.ThinkingLevel = LlmThinking.NormalizePreference(config.ThinkingLevel);
 
         LlmClientFactory.TryGetMetadata(config.Provider, out LlmProviderMetadata? metadata);
 
@@ -146,23 +145,14 @@ internal static class DialogueConfigMenuSection
 
         // GMCM caches allowed values at registration and commits edited fields only on save.
         // Keep every preference selectable across model changes; requests handle model limits.
-        string[] thinkingOptions = LlmThinking.Options.ToArray();
+        string[] thinkingOptions = LlmThinking.PreferenceOptions.ToArray();
 
         api.AddTextOption(
             mod: manifest,
-            name: () => T("dialogue.config.routingThinking.name"),
-            tooltip: () => T("dialogue.config.routingThinking.tooltip"),
-            getValue: () => LlmThinking.Normalize(config.RoutingThinkingLevel, LlmThinking.Off),
-            setValue: value => config.RoutingThinkingLevel = LlmThinking.Normalize(value, LlmThinking.Off),
-            allowedValues: thinkingOptions,
-            formatAllowedValue: FormatThinkingLevel);
-
-        api.AddTextOption(
-            mod: manifest,
-            name: () => T("dialogue.config.chatThinking.name"),
-            tooltip: () => T("dialogue.config.chatThinking.tooltip"),
-            getValue: () => LlmThinking.Normalize(config.ChatThinkingLevel, LlmThinking.Auto),
-            setValue: value => config.ChatThinkingLevel = LlmThinking.Normalize(value, LlmThinking.Auto),
+            name: () => T("dialogue.config.thinkingLevel.name"),
+            tooltip: () => T("dialogue.config.thinkingLevel.tooltip"),
+            getValue: () => LlmThinking.NormalizePreference(config.ThinkingLevel),
+            setValue: value => config.ThinkingLevel = LlmThinking.NormalizePreference(value),
             allowedValues: thinkingOptions,
             formatAllowedValue: FormatThinkingLevel);
 

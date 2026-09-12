@@ -26,7 +26,7 @@ internal sealed class GeminiClient : LlmClientBase, IModelNameSource
 
     protected override IReadOnlyList<RequestCandidate> BuildRequestCandidates(LlmRequest request)
     {
-        string level = LlmThinking.ForCall(fastPass: request.DisableThinking);
+        string level = LlmThinking.ForCall();
         string url = $"{BaseUrl}/models/{EffectiveModelName}:generateContent?key={Uri.EscapeDataString(ApiKey)}";
         JObject? thinkingConfig = LlmThinking.BuildGeminiThinkingConfig(level, EffectiveModelName);
 

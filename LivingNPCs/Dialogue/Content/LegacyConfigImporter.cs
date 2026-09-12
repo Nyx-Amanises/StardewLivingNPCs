@@ -120,14 +120,9 @@ internal static class LegacyConfigImporter
             config.SemanticContextRoutingTimeoutSeconds = Math.Clamp(legacy.SemanticContextRoutingTimeoutSeconds.Value, 2, 30);
         }
 
-        if (!string.IsNullOrWhiteSpace(legacy.RoutingThinkingLevel))
+        if (!string.IsNullOrWhiteSpace(legacy.RoutingThinkingLevel) || !string.IsNullOrWhiteSpace(legacy.ChatThinkingLevel))
         {
-            config.RoutingThinkingLevel = LlmThinking.Normalize(legacy.RoutingThinkingLevel, LlmThinking.Off);
-        }
-
-        if (!string.IsNullOrWhiteSpace(legacy.ChatThinkingLevel))
-        {
-            config.ChatThinkingLevel = LlmThinking.Normalize(legacy.ChatThinkingLevel, LlmThinking.Auto);
+            config.ThinkingLevel = LlmThinking.FromLegacyLevels(legacy.ChatThinkingLevel, legacy.RoutingThinkingLevel);
         }
 
         if (legacy.DisableCharacters != null)

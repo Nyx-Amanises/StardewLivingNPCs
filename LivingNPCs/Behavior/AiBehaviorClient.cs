@@ -8,6 +8,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using LivingNPCs.Dialogue.Llm;
 using Microsoft.Xna.Framework;
+using Newtonsoft.Json.Linq;
 using StardewModdingAPI;
 using StardewValley;
 
@@ -45,7 +46,8 @@ internal sealed class AiBehaviorClient
         string payloadJson = BuildPayloadJson(
             this.config.AiPlannerModel,
             RsvAiPolicy.RemoveBlockedLines(PromptFragments.Planner.SystemMessage),
-            prompt);
+            prompt,
+            this.config.ThinkingLevel);
 
         using var request = new HttpRequestMessage(HttpMethod.Post, this.config.AiPlannerEndpoint);
         request.Content = new StringContent(payloadJson, Encoding.UTF8, "application/json");
@@ -81,19 +83,24 @@ internal sealed class AiBehaviorClient
 
     /// <summary>
     /// 组 chat/completions 请求体。端点与模型名都来自用户配置（OpenAI 兼容形态），
-    /// 按模型名走同一推理模型判定：gpt-5/o 系拒绝 max_tokens 与非默认 temperature，
+    /// 按模型名走同一推理模型判定：gpt-5/gpt-6/o 系拒绝 max_tokens 与非默认 temperature，
     /// 改发 max_completion_tokens 并省略 temperature；其余模型保持原字段不变。
+    /// 思考档位与对话共用配置，并按规划器自己的模型映射为支持的参数。
     /// </summary>
-    internal static string BuildPayloadJson(string model, string systemContent, string userContent)
+    internal static string BuildPayloadJson(
+        string model,
+        string systemContent,
+        string userContent,
+        string thinkingLevel = LlmThinking.Auto)
     {
-        var payload = new Dictionary<string, object>
+        var payload = new JObject
         {
             ["model"] = model,
             [LlmThinking.OpenAiMaxTokensFieldName(model)] = 120,
-            ["messages"] = new object[]
+            ["messages"] = new JArray
             {
-                new { role = "system", content = systemContent },
-                new { role = "user", content = userContent }
+                new JObject { ["role"] = "system", ["content"] = systemContent },
+                new JObject { ["role"] = "user", ["content"] = userContent }
             }
         };
 
@@ -102,7 +109,8 @@ internal sealed class AiBehaviorClient
             payload["temperature"] = 0.2;
         }
 
-        return JsonSerializer.Serialize(payload);
+        LlmThinking.AddOpenAiCompatibleThinkingParameters(payload, model, LlmThinking.NormalizePreference(thinkingLevel));
+        return payload.ToString(Newtonsoft.Json.Formatting.None, Array.Empty<Newtonsoft.Json.JsonConverter>());
     }
 
     private string BuildPrompt(NPC npc, BehaviorTrigger trigger)

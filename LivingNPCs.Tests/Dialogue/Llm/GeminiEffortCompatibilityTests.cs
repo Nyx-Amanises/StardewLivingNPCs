@@ -16,18 +16,18 @@ public sealed class GeminiEffortCompatibilityTests : LlmTestBase
     [InlineData("gemini-3.7-flash", LlmThinking.Minimal, "low")]
     [InlineData("gemini-3.8-flash", LlmThinking.Medium, "medium")]
     [InlineData("gemini-3.8-flash", LlmThinking.Ultra, "high")]
-    [InlineData("gemini-3.6-flash", LlmThinking.Minimal, "minimal")]
+    [InlineData("gemini-3.6-flash", LlmThinking.Minimal, "low")]
     [InlineData("gemini-3.5-flash-lite", LlmThinking.Off, "minimal")]
-    [InlineData("gemini-3-flash-preview", LlmThinking.Minimal, "minimal")]
+    [InlineData("gemini-3-flash-preview", LlmThinking.Minimal, "low")]
     [InlineData("gemini-3.1-pro-preview", LlmThinking.Medium, "medium")]
     [InlineData("gemini-3-pro-preview", LlmThinking.Medium, "high")]
     [InlineData("gemini-3-pro-preview", LlmThinking.Minimal, "low")]
-    [InlineData("gemini-3.1-flash-lite", LlmThinking.Minimal, "minimal")]
+    [InlineData("gemini-3.1-flash-lite", LlmThinking.Minimal, "low")]
     [InlineData("gemini-3.1-flash-lite-image", LlmThinking.Low, "minimal")]
     [InlineData("gemini-3.1-flash-lite-image", LlmThinking.Medium, "high")]
     public async Task NativeGemini3UsesOnlyTheModelsSupportedThinkingLevel(string model, string level, string expected)
     {
-        Config.ChatThinkingLevel = level;
+        Config.ThinkingLevel = level;
         var client = new GeminiClient(Settings("Google", modelName: model));
         Http.EnqueueJson(Reply);
 
@@ -48,7 +48,7 @@ public sealed class GeminiEffortCompatibilityTests : LlmTestBase
     [InlineData("gemini-2.5-pro", LlmThinking.Ultra, 1024)]
     public async Task NativeGemini25KeepsItsExistingBudgetProtocol(string model, string level, int expectedBudget)
     {
-        Config.ChatThinkingLevel = level;
+        Config.ThinkingLevel = level;
         var client = new GeminiClient(Settings("Google", modelName: model));
         Http.EnqueueJson(Reply);
 
@@ -66,7 +66,7 @@ public sealed class GeminiEffortCompatibilityTests : LlmTestBase
     [InlineData("gemini-3.1-flash-lite-image", LlmThinking.Low, "minimal")]
     public async Task CompatibleEndpointUsesMatchingReasoningEffort(string model, string level, string expected)
     {
-        Config.ChatThinkingLevel = level;
+        Config.ThinkingLevel = level;
         var client = new OpenAiCompatibleClient(Settings("OpenAiCompatible", modelName: model));
         Http.EnqueueJson("{\"choices\":[{\"message\":{\"content\":\"Hello\"}}]}");
 
@@ -84,12 +84,42 @@ public sealed class GeminiEffortCompatibilityTests : LlmTestBase
     [InlineData("gemini-2.0-flash", LlmThinking.High)]
     public async Task AutoAndModelsWithoutThinkingDoNotReceiveThinkingConfig(string model, string level)
     {
-        Config.ChatThinkingLevel = level;
+        Config.ThinkingLevel = level;
         var client = new GeminiClient(Settings("Google", modelName: model));
         Http.EnqueueJson(Reply);
 
         Assert.True((await client.CompleteAsync(Request(), CancellationToken.None)).IsSuccess);
 
         Assert.Null(JObject.Parse(Http.Requests.Single().Body!)["generationConfig"]!["thinkingConfig"]);
+    }
+
+    [Theory]
+    [InlineData("gemini-3.6-flash")]
+    [InlineData("gemini-3-flash-preview")]
+    [InlineData("gemini-3.1-flash-lite")]
+    public void NativeMinimalRemainsAvailableInsideTheProviderAdapter(string model)
+    {
+        JObject thinking = LlmThinking.BuildGeminiThinkingConfig(LlmThinking.Minimal, model);
+
+        Assert.Equal("minimal", thinking.Value<string>("thinkingLevel"));
+        Assert.Null(thinking["thinkingBudget"]);
+    }
+
+    [Theory]
+    [InlineData(LlmThinking.Auto, null)]
+    [InlineData(LlmThinking.Low, "low")]
+    [InlineData(LlmThinking.High, "high")]
+    public async Task BackgroundAndDialogueUseTheSameGeminiLevel(string level, string? expected)
+    {
+        Config.ThinkingLevel = level;
+        var client = new GeminiClient(Settings("Google", modelName: "gemini-3.8-flash"));
+        Http.DefaultResponder = _ => FakeHttpHandler.Json(Reply);
+
+        Assert.True((await client.CompleteAsync(Request(disableThinking: true), CancellationToken.None)).IsSuccess);
+        Assert.True((await client.CompleteAsync(Request(), CancellationToken.None)).IsSuccess);
+
+        Assert.Equal(2, Http.Requests.Count);
+        Assert.All(Http.Requests, request => Assert.Equal(expected,
+            JObject.Parse(request.Body!)["generationConfig"]!["thinkingConfig"]?.Value<string>("thinkingLevel")));
     }
 }

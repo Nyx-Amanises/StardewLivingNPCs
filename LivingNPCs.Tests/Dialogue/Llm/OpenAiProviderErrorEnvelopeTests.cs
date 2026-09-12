@@ -32,7 +32,7 @@ public sealed class OpenAiProviderErrorEnvelopeTests : LlmTestBase
     public async Task ServiceErrorEnvelopeUsesOnlyTheSameRequestShapeBudget(string shape, bool allowRetry)
     {
         Config.UseStreamingDialogueTransport = UsesStreamingTransport(shape);
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         var client = CreateClient();
         Http.DefaultResponder = _ => ErrorResponse(shape);
 
@@ -61,7 +61,7 @@ public sealed class OpenAiProviderErrorEnvelopeTests : LlmTestBase
     public async Task ATransientEnvelopeCanRecoverWithinTheSameFormatBudget(string shape)
     {
         Config.UseStreamingDialogueTransport = UsesStreamingTransport(shape);
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         Http.Enqueue(_ => ErrorResponse(shape));
         Http.Enqueue(_ => shape == "sse"
             ? FakeHttpHandler.Text(ContentChunk + "data: [DONE]\n")

@@ -18,6 +18,9 @@ internal static partial class LlmThinking
 
     public static readonly string[] Options = [Auto, Off, Minimal, Low, Medium, High, XHigh, Max, Ultra];
 
+    // Minimal remains an internal API value for older models, not a user preference.
+    public static readonly string[] PreferenceOptions = [Auto, Off, Low, Medium, High, XHigh, Max, Ultra];
+
     public static string Normalize(string value, string fallback = Auto)
     {
         if (string.IsNullOrWhiteSpace(value))
@@ -36,11 +39,21 @@ internal static partial class LlmThinking
         return fallback;
     }
 
-    public static string ForCall(bool fastPass)
+    public static string NormalizePreference(string? value, string fallback = Auto)
     {
-        return fastPass
-            ? Normalize(DialogueServices.Config?.RoutingThinkingLevel, Off)
-            : Normalize(DialogueServices.Config?.ChatThinkingLevel, Auto);
+        string normalized = Normalize(value ?? string.Empty, fallback);
+        return normalized == Minimal ? Low : normalized;
+    }
+
+    public static string FromLegacyLevels(string? chatLevel, string? routingLevel)
+    {
+        string chat = NormalizePreference(chatLevel, string.Empty);
+        return string.IsNullOrEmpty(chat) ? NormalizePreference(routingLevel) : chat;
+    }
+
+    public static string ForCall()
+    {
+        return NormalizePreference(DialogueServices.Config?.ThinkingLevel);
     }
 
     public static bool IsOff(string level)
@@ -362,10 +375,12 @@ internal static partial class LlmThinking
 
     public static string RoutingSystemPrompt()
     {
-        string level = ForCall(fastPass: true);
+        string level = ForCall();
         string thinkingHint = IsOff(level)
-            ? "Thinking/reasoning is disabled."
-            : $"Use {level.ToLowerInvariant()} routing reasoning only if the model supports it.";
+            ? "Use the least reasoning the model supports."
+            : IsAuto(level)
+                ? "Use the model's default reasoning effort."
+                : $"Use {level.ToLowerInvariant()} reasoning only if the model supports it.";
         return $"You are a fast JSON router. {thinkingHint} Do not over-analyze. Output only one compact JSON object.";
     }
 

@@ -111,7 +111,7 @@ internal sealed class ClaudeClient : LlmClientBase, IModelNameSource
             ["model"] = EffectiveModelName,
             ["max_tokens"] = request.MaxTokens
         };
-        ClaudeThinking.AddRequestParameters(body, LlmThinking.ForCall(request.DisableThinking), EffectiveModelName, request.MaxTokens);
+        ClaudeThinking.AddRequestParameters(body, LlmThinking.ForCall(), EffectiveModelName, request.MaxTokens);
 
         var systemBlocks = new JArray();
         if (!string.IsNullOrEmpty(request.SystemPrompt))

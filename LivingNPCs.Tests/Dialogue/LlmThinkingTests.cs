@@ -145,15 +145,11 @@ public sealed class LlmThinkingTests
     }
 
     [Fact]
-    public void ThinkingOptionsExposeAllCommonReasoningEfforts()
+    public void ThinkingPreferencesExcludeMinimalWhileKeepingHigherLevels()
     {
-        Assert.Contains(LlmThinking.Auto, LlmThinking.Options);
-        Assert.Contains(LlmThinking.Off, LlmThinking.Options);
-        Assert.Contains(LlmThinking.Minimal, LlmThinking.Options);
-        Assert.Contains(LlmThinking.Low, LlmThinking.Options);
-        Assert.Contains(LlmThinking.Medium, LlmThinking.Options);
-        Assert.Contains(LlmThinking.High, LlmThinking.Options);
-        Assert.Contains(LlmThinking.XHigh, LlmThinking.Options);
+        Assert.Equal(new[] { "Auto", "Off", "Low", "Medium", "High", "XHigh", "Max", "Ultra" }, LlmThinking.PreferenceOptions);
+        Assert.Equal(LlmThinking.Low, LlmThinking.NormalizePreference(" Minimal "));
+        Assert.Equal(LlmThinking.Minimal, LlmThinking.Normalize("minimal"));
     }
 
     [Theory]

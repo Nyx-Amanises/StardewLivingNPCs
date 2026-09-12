@@ -32,7 +32,7 @@ internal sealed class LlmRequest
 
     public int MaxTokens { get; init; } = 2048;
 
-    /// <summary>辅助请求为 true，按路由思考档位取值；输出格式由 OutputFormat 独立指定。</summary>
+    /// <summary>旧名保留的辅助请求标记，用于传输选择；所有请求共享 ThinkingLevel，输出格式由 OutputFormat 独立指定。</summary>
     public bool DisableThinking { get; init; }
 
     /// <summary>Whether the caller expects plain text or a JSON object, independent of thinking level.</summary>

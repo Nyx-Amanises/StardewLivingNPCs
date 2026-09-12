@@ -44,7 +44,7 @@ public sealed class ModelEffortCompatibilityTests : LlmTestBase
     [MemberData(nameof(ModernOpenAiEfforts))]
     public async Task ModernOpenAiModelsSendMaxForMaxAndUltra(string provider, string model, string level)
     {
-        Config.ChatThinkingLevel = level;
+        Config.ThinkingLevel = level;
 
         JObject body = await CompleteAndReadBodyAsync(provider, model);
 
@@ -60,10 +60,11 @@ public sealed class ModelEffortCompatibilityTests : LlmTestBase
     [InlineData("openai/gpt6-astra", LlmThinking.Off, "low")]
     [InlineData("gpt-5.6", LlmThinking.Off, "none")]
     [InlineData("gpt-5.6", LlmThinking.Minimal, "low")]
+    [InlineData("gpt-5", LlmThinking.Minimal, "low")]
     [InlineData("openai/gpt-5.6-luna", LlmThinking.Off, "none")]
     public async Task OffAndMinimalRespectEachOpenAiModelsMinimumEffort(string model, string level, string expected)
     {
-        Config.ChatThinkingLevel = level;
+        Config.ThinkingLevel = level;
 
         JObject body = await CompleteAndReadBodyAsync("OpenAiCompatible", model);
 
@@ -80,7 +81,7 @@ public sealed class ModelEffortCompatibilityTests : LlmTestBase
     [InlineData("gpt-5.1", LlmThinking.Ultra, "high")]
     public async Task OlderOpenAiModelsReceiveTheirSupportedMaximum(string model, string level, string expected)
     {
-        Config.ChatThinkingLevel = level;
+        Config.ThinkingLevel = level;
 
         JObject body = await CompleteAndReadBodyAsync("OpenAiCompatible", model);
 
@@ -103,7 +104,7 @@ public sealed class ModelEffortCompatibilityTests : LlmTestBase
     [InlineData("OpenAiCompatible", "deepseek/deepseek-v4-flash:free", LlmThinking.XHigh, "high")]
     public async Task ModernDeepSeekRequestsUseLowHighOrMax(string provider, string model, string level, string expected)
     {
-        Config.ChatThinkingLevel = level;
+        Config.ThinkingLevel = level;
 
         JObject body = await CompleteAndReadBodyAsync(provider, model);
 
@@ -117,7 +118,7 @@ public sealed class ModelEffortCompatibilityTests : LlmTestBase
     [InlineData("OpenAiCompatible", "deepseek/deepseek-v4-pro")]
     public async Task DeepSeekOffExplicitlyDisablesThinking(string provider, string model)
     {
-        Config.ChatThinkingLevel = LlmThinking.Off;
+        Config.ThinkingLevel = LlmThinking.Off;
 
         JObject body = await CompleteAndReadBodyAsync(provider, model);
 
@@ -135,7 +136,7 @@ public sealed class ModelEffortCompatibilityTests : LlmTestBase
     [InlineData("deepseek-v4-pro/other-model")]
     public async Task SimilarNamesAndProviderNamespacesDoNotEnableDeepSeekParameters(string model)
     {
-        Config.ChatThinkingLevel = LlmThinking.Ultra;
+        Config.ThinkingLevel = LlmThinking.Ultra;
 
         JObject body = await CompleteAndReadBodyAsync("OpenAiCompatible", model);
 
@@ -145,21 +146,26 @@ public sealed class ModelEffortCompatibilityTests : LlmTestBase
     }
 
     [Theory]
-    [InlineData("OpenAI", "gpt-6-astra", "max_completion_tokens")]
-    [InlineData("OpenAiCompatible", "openai/gpt-5.6-sol", "max_completion_tokens")]
-    [InlineData("DeepSeek", "deepseek-flash", "max_tokens")]
-    [InlineData("OpenAiCompatible", "deepseek/deepseek-v4-pro", "max_tokens")]
-    public async Task RoutingAndChatUseTheirOwnEffortWithoutReducingOutputBudget(string provider, string model, string tokenField)
+    [InlineData("OpenAI", "gpt-6-astra", "max_completion_tokens", LlmThinking.Low, "low")]
+    [InlineData("OpenAI", "gpt-6-astra", "max_completion_tokens", LlmThinking.Ultra, "max")]
+    [InlineData("OpenAiCompatible", "openai/gpt-5.6-sol", "max_completion_tokens", LlmThinking.Low, "low")]
+    [InlineData("OpenAiCompatible", "openai/gpt-5.6-sol", "max_completion_tokens", LlmThinking.Ultra, "max")]
+    [InlineData("DeepSeek", "deepseek-flash", "max_tokens", LlmThinking.Low, "low")]
+    [InlineData("DeepSeek", "deepseek-flash", "max_tokens", LlmThinking.Ultra, "max")]
+    [InlineData("OpenAiCompatible", "deepseek/deepseek-v4-pro", "max_tokens", LlmThinking.Low, "low")]
+    [InlineData("OpenAiCompatible", "deepseek/deepseek-v4-pro", "max_tokens", LlmThinking.Ultra, "max")]
+    public async Task RoutingAndChatUseTheSameEffortWithoutReducingOutputBudget(
+        string provider, string model, string tokenField, string level, string expected)
     {
-        Config.ChatThinkingLevel = LlmThinking.Ultra;
-        Config.RoutingThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = level;
 
         JObject routingBody = await CompleteAndReadBodyAsync(provider, model, routing: true);
         Http.Requests.Clear();
         JObject chatBody = await CompleteAndReadBodyAsync(provider, model);
 
-        Assert.Equal("low", routingBody.Value<string>("reasoning_effort"));
-        Assert.Equal("max", chatBody.Value<string>("reasoning_effort"));
+        Assert.Equal(expected, routingBody.Value<string>("reasoning_effort"));
+        Assert.Equal(expected, chatBody.Value<string>("reasoning_effort"));
+        Assert.True(JToken.DeepEquals(routingBody["thinking"], chatBody["thinking"]));
         AssertOutputBudget(routingBody, tokenField);
         AssertOutputBudget(chatBody, tokenField);
     }
@@ -171,10 +177,9 @@ public sealed class ModelEffortCompatibilityTests : LlmTestBase
     [InlineData("DeepSeek", "deepseek-flash", "max_tokens", false)]
     [InlineData("DeepSeek", "deepseek-flash", "max_tokens", true)]
     [InlineData("OpenAiCompatible", "deepseek/deepseek-v4-pro", "max_tokens", true)]
-    public async Task AutoOmitsThinkingParametersInSelectedChannel(string provider, string model, string tokenField, bool routing)
+    public async Task AutoOmitsThinkingParametersForBothRequestKinds(string provider, string model, string tokenField, bool routing)
     {
-        Config.ChatThinkingLevel = routing ? LlmThinking.Ultra : LlmThinking.Auto;
-        Config.RoutingThinkingLevel = routing ? LlmThinking.Auto : LlmThinking.Ultra;
+        Config.ThinkingLevel = LlmThinking.Auto;
 
         JObject body = await CompleteAndReadBodyAsync(provider, model, routing);
 
@@ -189,10 +194,9 @@ public sealed class ModelEffortCompatibilityTests : LlmTestBase
     [InlineData("OpenAiCompatible", "openai/gpt-5.6-terra", LlmThinking.Off, "none", "max_completion_tokens")]
     [InlineData("DeepSeek", "deepseek-flash", LlmThinking.XHigh, "high", "max_tokens")]
     [InlineData("OpenAiCompatible", "deepseek/deepseek-v4-pro", LlmThinking.Ultra, "max", "max_tokens")]
-    public async Task StreamingPayloadPreservesChatEffortAndFullBudget(string provider, string model, string level, string expected, string tokenField)
+    public async Task StreamingPayloadPreservesSharedEffortAndFullBudget(string provider, string model, string level, string expected, string tokenField)
     {
-        Config.ChatThinkingLevel = level;
-        Config.RoutingThinkingLevel = LlmThinking.Medium;
+        Config.ThinkingLevel = level;
         LlmClientBase client = LlmClientFactory.TryCreate(Settings(provider, modelName: model))!;
         string sse = "data: {\"choices\":[{\"delta\":{\"content\":\"Hello\"},\"finish_reason\":\"stop\"}]}\n"
             + "data: [DONE]\n";

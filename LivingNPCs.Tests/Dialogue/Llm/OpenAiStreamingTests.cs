@@ -120,9 +120,9 @@ public sealed class OpenAiStreamingTests : LlmTestBase
     }
 
     [Fact]
-    public async Task StreamingBodyUsesChatThinkingLevelWithoutFallbackCandidates()
+    public async Task StreamingBodyUsesSharedThinkingLevelWithoutFallbackCandidates()
     {
-        Config.ChatThinkingLevel = "High";
+        Config.ThinkingLevel = "High";
         var client = new OpenAiClient(Settings("OpenAI", modelName: "gpt-5.5"));
         Http.DefaultResponder = _ => FakeHttpHandler.Json("{\"error\":\"bad param\"}", HttpStatusCode.BadRequest);
 

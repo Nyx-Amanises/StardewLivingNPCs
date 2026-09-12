@@ -80,7 +80,7 @@ public sealed class OpenAiFamilyClientTests : LlmTestBase
 
         // 主对话默认纯文本，即便档位是 off 也不强制 JSON。
         Http.Requests.Clear();
-        Config.ChatThinkingLevel = "off";
+        Config.ThinkingLevel = "off";
         Http.EnqueueJson(CompletionJson);
         await client.CompleteAsync(Request(), CancellationToken.None);
         Assert.Null(JObject.Parse(Http.Requests[0].Body!)["response_format"]);
@@ -89,7 +89,7 @@ public sealed class OpenAiFamilyClientTests : LlmTestBase
     [Fact]
     public async Task ThinkingCandidateFallsBackToBareBodyAndWarnsOnce()
     {
-        Config.ChatThinkingLevel = "High";
+        Config.ThinkingLevel = "High";
         var client = new OpenAiClient(Settings("OpenAI", modelName: "gpt-5.5"));
         Http.DefaultResponder = request =>
         {

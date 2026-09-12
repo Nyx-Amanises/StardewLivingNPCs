@@ -24,7 +24,7 @@ internal sealed class VolcEngineClient : LlmClientBase, IModelNameSource
         "deepseek-r1"
     };
 
-    /// <summary>可关闭思考的混合模型：仅这些才发 thinking:disabled；名单之外一律不发（保守设计，宁可少提速）。</summary>
+    /// <summary>可切换思考的混合模型：仅这些才发 thinking:enabled/disabled；名单之外一律不发。</summary>
     private static readonly string[] SwitchableThinkingModels =
     {
         "seed-1.6",
@@ -44,7 +44,7 @@ internal sealed class VolcEngineClient : LlmClientBase, IModelNameSource
 
     protected override string DefaultModelName => "doubao-1.5-pro";
 
-    /// <summary>白/黑名单（小写子串匹配）：本次是快速路由调用且当前模型确实支持关闭思考才发 thinking:disabled。</summary>
+    /// <summary>白/黑名单（小写子串匹配）：只有明确支持切换思考的模型才发送 thinking 控制字段。</summary>
     internal static bool SupportsDisableThinking(string modelName)
     {
         string lower = (modelName ?? string.Empty).ToLowerInvariant();
@@ -106,9 +106,13 @@ internal sealed class VolcEngineClient : LlmClientBase, IModelNameSource
             }
         };
 
-        if (request.DisableThinking && SupportsDisableThinking(EffectiveModelName))
+        string level = LlmThinking.ForCall();
+        if (!LlmThinking.IsAuto(level) && SupportsDisableThinking(EffectiveModelName))
         {
-            body["thinking"] = new JObject { ["type"] = "disabled" };
+            body["thinking"] = new JObject
+            {
+                ["type"] = LlmThinking.IsOff(level) ? "disabled" : "enabled"
+            };
         }
 
         // Output shape is independent of the auxiliary thinking settings.

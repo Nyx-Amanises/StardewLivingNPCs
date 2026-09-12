@@ -45,8 +45,7 @@ internal sealed class DialogueConfig
     public int QueryTimeout { get; set; } = 85;
     public int SemanticContextRoutingTimeoutSeconds { get; set; } = 8;
     public int LivingNpcActionDecisionTimeoutSeconds { get; set; } = ActionDecisionTimeoutSecondsDefault;
-    public string RoutingThinkingLevel { get; set; } = "off";
-    public string ChatThinkingLevel { get; set; } = "auto";
+    public string ThinkingLevel { get; set; } = "Auto";
     public bool UseStreamingDialogueTransport { get; set; }
     public SButton InitiateTypedDialogueKey { get; set; } = SButton.None;
     public bool AllowWakeSleepingNpc { get; set; } = true;
@@ -75,8 +74,7 @@ internal sealed class DialogueConfig
         this.SuppressConnectionCheck = source.SuppressConnectionCheck;
         this.QueryTimeout = source.QueryTimeout;
         this.SemanticContextRoutingTimeoutSeconds = Math.Clamp(source.SemanticContextRoutingTimeoutSeconds, 2, 30);
-        this.RoutingThinkingLevel = source.RoutingThinkingLevel;
-        this.ChatThinkingLevel = source.ChatThinkingLevel;
+        this.ThinkingLevel = Llm.LlmThinking.NormalizePreference(source.ThinkingLevel);
         this.UseStreamingDialogueTransport = source.UseStreamingDialogueTransport;
         this.InitiateTypedDialogueKey = source.InitiateTypedDialogueKey;
         this.AllowWakeSleepingNpc = source.AllowWakeSleepingNpc;

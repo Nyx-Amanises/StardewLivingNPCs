@@ -30,10 +30,9 @@ public sealed class AuxiliaryOutputFormatTests : LlmTestBase
     [InlineData("VolcEngine", "low", true)]
     [InlineData("VolcEngine", "auto", false)]
     [InlineData("VolcEngine", "auto", true)]
-    public async Task ProseGeneratorsKeepPlainTextAndTheirOutputBudget(string provider, string routingLevel, bool giftMail)
+    public async Task ProseGeneratorsKeepPlainTextAndTheirOutputBudget(string provider, string thinkingLevel, bool giftMail)
     {
-        Config.RoutingThinkingLevel = routingLevel;
-        Config.ChatThinkingLevel = "high";
+        Config.ThinkingLevel = thinkingLevel;
         var host = new LlmClientHost();
         host.ReplaceClient(ProviderSettings(provider));
         Http.DefaultResponder = _ => FakeHttpHandler.Json(Success(provider, GeneratedProse));
@@ -69,9 +68,9 @@ public sealed class AuxiliaryOutputFormatTests : LlmTestBase
     [InlineData("VolcEngine", "off")]
     [InlineData("VolcEngine", "low")]
     [InlineData("VolcEngine", "auto")]
-    public async Task ExplicitJsonCrossesLegacyBridgeAtEveryThinkingLevel(string provider, string routingLevel)
+    public async Task ExplicitJsonCrossesLegacyBridgeAtEveryThinkingLevel(string provider, string thinkingLevel)
     {
-        Config.RoutingThinkingLevel = routingLevel;
+        Config.ThinkingLevel = thinkingLevel;
         var host = new LlmClientHost();
         host.ReplaceClient(ProviderSettings(provider));
         Http.DefaultResponder = _ => FakeHttpHandler.Json(Success(provider, "{\"complete\":true}"));
@@ -109,7 +108,7 @@ public sealed class AuxiliaryOutputFormatTests : LlmTestBase
 
         foreach (string level in new[] { LlmThinking.Off, normalized })
         {
-            Config.RoutingThinkingLevel = level;
+            Config.ThinkingLevel = level;
             LlmResponse result = await LegacyLlm.Instance.RunInference(
                 "Return the requested output format.", "", "", "Classify this exchange.",
                 disableThinking: true,
@@ -145,11 +144,9 @@ public sealed class AuxiliaryOutputFormatTests : LlmTestBase
     [InlineData(true)]
     public async Task StreamFallbackRetainsExplicitOutputFormatWhenCloningRequest(bool jsonOutput)
     {
-        // StreamAsync uses chat thinking; its non-streaming fallback uses the request's auxiliary profile.
-        // The explicit format must survive both CloneWithoutRetry and the change in thinking profile.
-        Config.ChatThinkingLevel = "low";
-        Config.RoutingThinkingLevel = "off";
-        var client = new OpenAiClient(ProviderSettings("OpenAI"));
+        // The auxiliary flag survives CloneWithoutRetry without changing the shared effort or output format.
+        Config.ThinkingLevel = LlmThinking.Low;
+        var client = new OpenAiClient(Settings("OpenAI", modelName: "gpt-5.5"));
         Http.DefaultResponder = request => JObject.Parse(request.Body!).Value<bool?>("stream") == true
             ? FakeHttpHandler.Json("{\"error\":\"stream is unsupported\"}", HttpStatusCode.BadRequest)
             : FakeHttpHandler.Json(Success("OpenAI", "{\"complete\":true}"));
@@ -159,10 +156,14 @@ public sealed class AuxiliaryOutputFormatTests : LlmTestBase
             outputFormat: jsonOutput ? LlmOutputFormat.JsonObject : LlmOutputFormat.Text), CancellationToken.None));
 
         Assert.Equal(LlmStreamEventKind.Done, events[^1].Kind);
-        Assert.True(Http.Requests.Count >= 2);
+        Assert.Equal(2, Http.Requests.Count);
         Assert.False(JObject.Parse(Http.Requests[^1].Body!).Value<bool?>("stream") == true);
-        Assert.All(Http.Requests, request => Assert.Equal(jsonOutput ? "json_object" : null,
-            JsonFormat(JObject.Parse(request.Body!), "OpenAI")));
+        Assert.All(Http.Requests, request =>
+        {
+            var body = JObject.Parse(request.Body!);
+            Assert.Equal("low", body.Value<string>("reasoning_effort"));
+            Assert.Equal(jsonOutput ? "json_object" : null, JsonFormat(body, "OpenAI"));
+        });
     }
 
     private static LlmConnectionSettings ProviderSettings(string provider) => Settings(provider, modelName: provider switch

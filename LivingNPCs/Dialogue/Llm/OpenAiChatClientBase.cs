@@ -51,7 +51,7 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
 
     protected override IReadOnlyList<RequestCandidate> BuildRequestCandidates(LlmRequest request)
     {
-        string level = LlmThinking.ForCall(fastPass: request.DisableThinking);
+        string level = LlmThinking.ForCall();
         var candidates = new List<RequestCandidate>();
         AppendCandidatePair(candidates, request, level, instructionsForm: false);
         if (SupportsInstructionsFallback)
@@ -124,8 +124,8 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
             throw new LlmStreamException(ex.Message, 500);
         }
 
-        // 流式思考档位按"非快速通道"取值，且没有思考参数回退序列（§3.1）。
-        string level = LlmThinking.ForCall(fastPass: false);
+        // 流式回复使用与后台任务相同的思考档位，且没有思考参数回退序列（§3.1）。
+        string level = LlmThinking.ForCall();
         JObject body = BuildBody(request, level, instructionsForm: false);
         LlmThinking.AddOpenAiCompatibleThinkingParameters(body, EffectiveModelName, level);
         body["stream"] = true;

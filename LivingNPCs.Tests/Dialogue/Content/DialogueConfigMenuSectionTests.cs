@@ -76,8 +76,8 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
     [InlineData("DeepSeek", "deepseek-v4-pro", "xhigh", "XHigh")]
     [InlineData("OpenAI", "gpt-6-astra", "Off", "Off")]
     [InlineData("OpenAI", "gpt-5.6-sol", " Ultra ", "Ultra")]
-    [InlineData("OpenAI", "gpt-4o", "Minimal", "Minimal")]
-    [InlineData("Google", "gemini-3.8-flash", "Minimal", "Minimal")]
+    [InlineData("OpenAI", "gpt-4o", "Minimal", "Low")]
+    [InlineData("Google", "gemini-3.8-flash", "Minimal", "Low")]
     [InlineData("Google", "gemini-2.5-flash", "Max", "Max")]
     [InlineData("Anthropic", "claude-opus-4-6", "XHigh", "XHigh")]
     [InlineData("Anthropic", "claude-fable-5-1", "Off", "Off")]
@@ -88,93 +88,88 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
             EnableDialogueEngine = false,
             Provider = provider,
             ModelName = model,
-            RoutingThinkingLevel = saved,
-            ChatThinkingLevel = saved
+            ThinkingLevel = saved
         };
         DialogueServices.Config.SyncFrom(config);
         MenuApiProxy menu = OpenMenu(config);
 
-        AssertThinkingOptions(menu, expected, expected);
+        AssertThinkingOptions(menu, expected);
         ModConfig reloaded = SaveAndReloadConfig(menu, config);
 
-        Assert.Equal(expected, reloaded.RoutingThinkingLevel);
-        Assert.Equal(expected, reloaded.ChatThinkingLevel);
-        AssertThinkingOptions(OpenMenu(reloaded), expected, expected);
+        Assert.Equal(expected, reloaded.ThinkingLevel);
+        AssertThinkingOptions(OpenMenu(reloaded), expected);
     }
 
     [Theory]
-    [InlineData("Low", "Max")]
-    [InlineData("Medium", "Ultra")]
-    [InlineData("Off", "High")]
-    public void ModelNameChange_SaveAndReopen_PreservesBothThinkingPreferences(string routing, string chat)
+    [InlineData("Low")]
+    [InlineData("Medium")]
+    [InlineData("Off")]
+    [InlineData("Max")]
+    [InlineData("Ultra")]
+    public void ModelNameChange_SaveAndReopen_PreservesSharedThinkingPreference(string level)
     {
         var config = new ModConfig
         {
             EnableDialogueEngine = false,
             Provider = "OpenAiCompatible",
             ModelName = "deepseek-flash",
-            RoutingThinkingLevel = routing,
-            ChatThinkingLevel = chat
+            ThinkingLevel = level
         };
         DialogueServices.Config.SyncFrom(config);
         MenuApiProxy menu = OpenMenu(config);
 
         foreach (string nextModel in new[] { "deppseek-flash", "gateway-custom-model", "", "deepseek-flash" })
         {
-            // GMCM edits its cache, then commits the model before the two thinking fields.
+            // GMCM edits its cache, then commits the model before the thinking field.
             menu.Option("modelName").CachedValue = nextModel;
             ModConfig reloaded = SaveAndReloadConfig(menu, config);
 
             Assert.Equal(nextModel, reloaded.ModelName);
             Assert.Equal(nextModel, DialogueServices.Config.ModelName);
-            Assert.Equal(routing, DialogueServices.Config.RoutingThinkingLevel);
-            Assert.Equal(chat, DialogueServices.Config.ChatThinkingLevel);
+            Assert.Equal(level, DialogueServices.Config.ThinkingLevel);
 
             // Closing/reopening reuses the registered options; a fresh registration also works.
             menu.ReloadValues();
-            AssertThinkingOptions(menu, routing, chat);
+            AssertThinkingOptions(menu, level);
             config = reloaded;
             menu = OpenMenu(config);
-            AssertThinkingOptions(menu, routing, chat);
+            AssertThinkingOptions(menu, level);
         }
     }
 
     [Theory]
-    [InlineData("gpt-6-astra", "deppseek-flash", "Medium", "Ultra")]
-    [InlineData("gpt-6-astra", "gpt-4o", "Low", "Max")]
-    [InlineData("custom-model", "deepseek-flash", "Medium", "Ultra")]
-    [InlineData("deppseek-flash", "deppseek-flash", "Low", "Max")]
-    public void ModelAndThinkingEdits_InSameSave_PreserveNewSelections(string previousModel, string nextModel, string routing, string chat)
+    [InlineData("gpt-6-astra", "deppseek-flash", "Medium")]
+    [InlineData("gpt-6-astra", "gpt-4o", "Max")]
+    [InlineData("custom-model", "deepseek-flash", "Ultra")]
+    [InlineData("deppseek-flash", "deppseek-flash", "Low")]
+    public void ModelAndThinkingEdits_InSameSave_PreserveNewSelection(string previousModel, string nextModel, string level)
     {
         var config = new ModConfig
         {
             EnableDialogueEngine = false,
             Provider = "OpenAiCompatible",
             ModelName = previousModel,
-            RoutingThinkingLevel = "Auto",
-            ChatThinkingLevel = "Auto"
+            ThinkingLevel = "Auto"
         };
         DialogueServices.Config.SyncFrom(config);
         MenuApiProxy menu = OpenMenu(config);
 
         menu.Option("modelName").CachedValue = nextModel;
-        menu.Option("routingThinking").CachedValue = routing;
-        menu.Option("chatThinking").CachedValue = chat;
+        menu.Option("thinkingLevel").CachedValue = level;
         ModConfig reloaded = SaveAndReloadConfig(menu, config);
 
         Assert.Equal(nextModel, reloaded.ModelName);
-        AssertThinkingOptions(OpenMenu(reloaded), routing, chat);
+        AssertThinkingOptions(OpenMenu(reloaded), level);
     }
 
     [Fact]
-    public void ProviderChange_ReregisteringMenu_KeepsBothThinkingPreferences()
+    public void ProviderChange_ReregisteringMenu_KeepsSharedThinkingPreference()
     {
         var config = new ModConfig
         {
             Provider = "OpenAiCompatible",
             ModelName = "deepseek-flash",
-            RoutingThinkingLevel = "Medium",
-            ChatThinkingLevel = "Ultra"
+            ThinkingLevel = "Ultra"
         };
         MenuApiProxy menu = OpenMenu(config);
 
@@ -185,7 +180,7 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
 
         Assert.Equal("Google", config.Provider);
         Assert.Equal("gemini-3.8-flash", config.ModelName);
-        AssertThinkingOptions(OpenMenu(config), "Medium", "Ultra");
+        AssertThinkingOptions(OpenMenu(config), "Ultra");
     }
 
     [Fact]
@@ -195,8 +190,7 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
         {
             Provider = "Google",
             ModelName = "gemini-3.8-flash",
-            RoutingThinkingLevel = "Ultra",
-            ChatThinkingLevel = "Low"
+            ThinkingLevel = "Low"
         };
         MenuApiProxy menu = OpenMenu(config);
 
@@ -206,10 +200,9 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
         menu.CommitValues();
         config.Validate();
 
-        Assert.Equal("Off", config.RoutingThinkingLevel);
-        Assert.Equal("Auto", config.ChatThinkingLevel);
-        AssertThinkingOptions(menu, "Off", "Auto");
-        AssertThinkingOptions(OpenMenu(config), "Off", "Auto");
+        Assert.Equal("Auto", config.ThinkingLevel);
+        AssertThinkingOptions(menu, "Auto");
+        AssertThinkingOptions(OpenMenu(config), "Auto");
     }
 
     [Fact]
@@ -335,15 +328,14 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
         return JsonConvert.DeserializeObject<ModConfig>(JsonConvert.SerializeObject(config))!;
     }
 
-    private static void AssertThinkingOptions(MenuApiProxy menu, string routing, string chat)
+    private static void AssertThinkingOptions(MenuApiProxy menu, string expected)
     {
-        foreach ((string name, string expected) in new[] { ("routingThinking", routing), ("chatThinking", chat) })
-        {
-            TextOption option = menu.Option(name);
-            Assert.Equal(new[] { "Auto", "Off", "Minimal", "Low", "Medium", "High", "XHigh", "Max", "Ultra" }, option.AllowedValues);
-            Assert.Equal(expected, option.GetValue());
-            Assert.Equal(expected, option.CachedValue);
-        }
+        TextOption option = Assert.Single(menu.TextOptions, item => item.AllowedValues?.Contains("Auto") == true);
+        Assert.Equal("dialogue.config.thinkingLevel.name", option.Name);
+        Assert.DoesNotContain(menu.TextOptions, item => item.Name is "dialogue.config.routingThinking.name" or "dialogue.config.chatThinking.name");
+        Assert.Equal(new[] { "Auto", "Off", "Low", "Medium", "High", "XHigh", "Max", "Ultra" }, option.AllowedValues);
+        Assert.Equal(expected, option.GetValue());
+        Assert.Equal(expected, option.CachedValue);
     }
 
     internal sealed record TextOption(string Name, Func<string> GetValue, Action<string> SetValue, string[]? AllowedValues)
@@ -354,6 +346,8 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
     public class MenuApiProxy : DispatchProxy
     {
         private readonly List<TextOption> textOptions = new();
+
+        internal IReadOnlyList<TextOption> TextOptions => this.textOptions;
 
         internal TextOption Option(string name) => this.textOptions.Single(option => option.Name == $"dialogue.config.{name}.name");
 

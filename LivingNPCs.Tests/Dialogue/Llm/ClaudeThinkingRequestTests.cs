@@ -157,11 +157,12 @@ public sealed class ClaudeThinkingRequestTests : LlmTestBase
         Assert.Equal(LlmThinking.Low, ClaudeThinking.NormalizeLevel(" low ", model));
     }
 
-    [Fact]
-    public async Task BackgroundRequestsUseRoutingLevelAndPreserveCachingAndAuth()
+    [Theory]
+    [InlineData(LlmThinking.Low, "low")]
+    [InlineData(LlmThinking.Max, "max")]
+    public async Task BackgroundAndDialogueShareEffortAndPreserveCachingAndAuth(string level, string expectedEffort)
     {
-        Config.ChatThinkingLevel = LlmThinking.Max;
-        Config.RoutingThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = level;
         var client = new ClaudeClient(Settings("Anthropic", modelName: "claude-sonnet-4-6"));
         Http.EnqueueJson(ReplyJson);
 
@@ -170,19 +171,28 @@ public sealed class ClaudeThinkingRequestTests : LlmTestBase
         Assert.True(reply.IsSuccess);
         FakeHttpHandler.RecordedRequest sent = Assert.Single(Http.Requests);
         JObject body = JObject.Parse(sent.Body!);
-        Assert.Equal("low", body["output_config"]!.Value<string>("effort"));
+        Assert.Equal(expectedEffort, body["output_config"]!.Value<string>("effort"));
         Assert.Equal("ephemeral", body["system"]![1]!["cache_control"]!.Value<string>("type"));
         Assert.Equal("ephemeral", body["messages"]![0]!["content"]![0]!["cache_control"]!.Value<string>("type"));
         Assert.Null(body["messages"]![0]!["content"]![1]!["cache_control"]);
         Assert.Null(sent.Authorization);
         Assert.Equal("test-key", sent.Headers["x-api-key"]);
         Assert.Equal("2023-06-01", sent.Headers["anthropic-version"]);
+
+        Http.EnqueueJson(ReplyJson);
+        LlmReply dialogueReply = await client.CompleteAsync(Request(maxTokens: 10000), CancellationToken.None);
+
+        Assert.True(dialogueReply.IsSuccess);
+        Assert.Equal(2, Http.Requests.Count);
+        var dialogueBody = JObject.Parse(Http.Requests[^1].Body!);
+        Assert.Equal(expectedEffort, dialogueBody["output_config"]!.Value<string>("effort"));
+        Assert.True(JToken.DeepEquals(body["thinking"], dialogueBody["thinking"]));
     }
 
     [Fact]
     public async Task ThinkingBlocksBeforeAndBetweenTextDoNotHideTheReply()
     {
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         var client = new ClaudeClient(Settings("Anthropic", modelName: "claude-opus-5"));
         Http.EnqueueJson("""
             {"content":[
@@ -205,7 +215,7 @@ public sealed class ClaudeThinkingRequestTests : LlmTestBase
     [Fact]
     public async Task ExhaustedThinkingOnlyReplyKeepsUsageWithoutLoggingReasoningOrRetrying()
     {
-        Config.ChatThinkingLevel = LlmThinking.High;
+        Config.ThinkingLevel = LlmThinking.High;
         var client = new ClaudeClient(Settings("Anthropic", modelName: "claude-opus-5"));
         Http.EnqueueJson("""
             {"content":[
@@ -232,7 +242,7 @@ public sealed class ClaudeThinkingRequestTests : LlmTestBase
 
     private async Task<JObject> SendRequestAsync(string modelName, string level, int maxTokens = 10000)
     {
-        Config.ChatThinkingLevel = level;
+        Config.ThinkingLevel = level;
         var client = new ClaudeClient(Settings("Anthropic", modelName: modelName));
         Http.EnqueueJson(ReplyJson);
 

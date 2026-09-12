@@ -25,11 +25,10 @@ public sealed class OpenAiResponseFailureTests : LlmTestBase
     [InlineData("OpenAiCompatible", "proxy/deepseek-ai/DeepSeek_Flash", LlmThinking.Minimal, true, true)]
     [InlineData("OpenAiCompatible", "deepseek-flash-20260912", LlmThinking.Low, false, true)]
     [InlineData("OpenAiCompatible", "deepseek-flash", LlmThinking.Minimal, false, true)]
-    public async Task DeepSeekLowEffortRequestsHonorChatAndRoutingSettings(
+    public async Task DeepSeekLowEffortRequestsHonorSharedSettingsForBothRequestKinds(
         string provider, string model, string level, bool fastPass, bool bufferedStream)
     {
-        Config.ChatThinkingLevel = fastPass ? LlmThinking.High : level;
-        Config.RoutingThinkingLevel = fastPass ? level : LlmThinking.High;
+        Config.ThinkingLevel = level;
         Config.UseStreamingDialogueTransport = bufferedStream;
         LlmClientBase client = LlmClientFactory.TryCreate(Settings(provider, modelName: model))!;
         Http.EnqueueJson(CompletionJson);
@@ -51,7 +50,7 @@ public sealed class OpenAiResponseFailureTests : LlmTestBase
     [InlineData("OpenAiCompatible", "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", LlmThinking.Low)]
     public async Task LegacyDeepSeekRequestsKeepCompatibleReasoningEffort(string provider, string model, string level)
     {
-        Config.ChatThinkingLevel = level;
+        Config.ThinkingLevel = level;
         LlmClientBase client = LlmClientFactory.TryCreate(Settings(provider, modelName: model))!;
         Http.EnqueueJson(CompletionJson);
 
@@ -71,7 +70,7 @@ public sealed class OpenAiResponseFailureTests : LlmTestBase
     [InlineData("deepseek-flash/other-model")]
     public async Task CompatibleEndpointDoesNotAddDeepSeekControlsToLookalikeModels(string model)
     {
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         var client = new OpenAiCompatibleClient(Settings("OpenAiCompatible", modelName: model));
         Http.EnqueueJson(CompletionJson);
 
@@ -90,7 +89,7 @@ public sealed class OpenAiResponseFailureTests : LlmTestBase
     [InlineData(2048, false)]
     public async Task ReasoningExhaustionStopsAllCandidatesAndKeepsReasoningOutOfErrors(int budget, bool fastPass)
     {
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         var client = new OpenAiCompatibleClient(Settings("OpenAiCompatible", modelName: "deepseek-v4-flash"));
         Http.DefaultResponder = _ => FakeHttpHandler.Json(ReasoningOnlyJson(budget));
 
@@ -137,6 +136,7 @@ public sealed class OpenAiResponseFailureTests : LlmTestBase
     [Fact]
     public async Task DeepSeekOffKeepsDisabledSwitchInCompatibilityFallback()
     {
+        Config.ThinkingLevel = LlmThinking.Off;
         var client = new OpenAiCompatibleClient(Settings("OpenAiCompatible", modelName: "deepseek-v4-flash"));
         Http.DefaultResponder = request => JObject.Parse(request.Body!)["instructions"] == null
             ? FakeHttpHandler.Json("{\"error\":{\"message\":\"Unsupported system role\"}}", HttpStatusCode.BadRequest)
@@ -162,7 +162,7 @@ public sealed class OpenAiResponseFailureTests : LlmTestBase
     [InlineData("OpenAiCompatible", "deepseek-flash")]
     public async Task RejectedDeepSeekOffNeverFallsBackToEnabledDefaults(string provider, string model)
     {
-        Config.ChatThinkingLevel = LlmThinking.Off;
+        Config.ThinkingLevel = LlmThinking.Off;
         LlmClientBase client = LlmClientFactory.TryCreate(Settings(provider, modelName: model))!;
         Http.DefaultResponder = _ => FakeHttpHandler.Json("{\"error\":{\"message\":\"Unsupported thinking\"}}", HttpStatusCode.BadRequest);
 
@@ -174,15 +174,17 @@ public sealed class OpenAiResponseFailureTests : LlmTestBase
     }
 
     [Theory]
-    [InlineData(HttpStatusCode.TooManyRequests, 3)]
-    [InlineData(HttpStatusCode.InternalServerError, 6)]
-    public async Task TransientFailuresKeepThinkingControlsThroughoutRetries(HttpStatusCode status, int expectedCalls)
+    [InlineData(HttpStatusCode.TooManyRequests, 3, false)]
+    [InlineData(HttpStatusCode.TooManyRequests, 3, true)]
+    [InlineData(HttpStatusCode.InternalServerError, 6, false)]
+    [InlineData(HttpStatusCode.InternalServerError, 6, true)]
+    public async Task TransientFailuresKeepSharedThinkingControlsThroughoutRetries(HttpStatusCode status, int expectedCalls, bool background)
     {
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         var client = new OpenAiCompatibleClient(Settings("OpenAiCompatible", modelName: "deepseek-v4-flash"));
         Http.DefaultResponder = _ => FakeHttpHandler.Json("temporarily unavailable", status);
 
-        LlmReply reply = await client.CompleteAsync(Request(), CancellationToken.None);
+        LlmReply reply = await client.CompleteAsync(Request(disableThinking: background), CancellationToken.None);
 
         Assert.False(reply.IsSuccess);
         // Rate limiting keeps one shape; HTTP 500 retains compatibility with older gateways.
@@ -200,7 +202,7 @@ public sealed class OpenAiResponseFailureTests : LlmTestBase
     [Fact]
     public async Task TransientFailureStillRecoversWithSameRequest()
     {
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         var client = new DeepSeekClient(Settings("DeepSeek", modelName: "deepseek-v4-flash"));
         Http.EnqueueJson("temporarily unavailable", HttpStatusCode.ServiceUnavailable);
         Http.EnqueueJson(CompletionJson);
@@ -219,7 +221,7 @@ public sealed class OpenAiResponseFailureTests : LlmTestBase
     [InlineData(HttpStatusCode.Forbidden, true)]
     public async Task AuthenticationFailureStopsImmediatelyAcrossAllShapes(HttpStatusCode status, bool stream)
     {
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         var client = new OpenAiCompatibleClient(Settings("OpenAiCompatible", modelName: "deepseek-v4-flash"));
         Http.DefaultResponder = _ => FakeHttpHandler.Json("authentication rejected", status);
 
@@ -248,7 +250,7 @@ public sealed class OpenAiResponseFailureTests : LlmTestBase
     [InlineData(true, true)]
     public async Task TransportFailuresKeepSameShapeBudgetWithoutStreamOrInstructionsFallback(bool timeout, bool stream)
     {
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         var client = new OpenAiCompatibleClient(Settings("OpenAiCompatible", modelName: "deepseek-v4-flash"));
         Http.DefaultResponder = _ =>
         {
@@ -289,7 +291,7 @@ public sealed class OpenAiResponseFailureTests : LlmTestBase
     [InlineData(true)]
     public async Task NoRetryRateLimitMakesExactlyOneRequest(bool stream)
     {
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         var client = new OpenAiCompatibleClient(Settings("OpenAiCompatible", modelName: "deepseek-v4-flash"));
         Http.DefaultResponder = _ => FakeHttpHandler.Json("rate limited", HttpStatusCode.TooManyRequests);
 
@@ -329,7 +331,7 @@ public sealed class OpenAiResponseFailureTests : LlmTestBase
     [Fact]
     public async Task SseReasoningExhaustionStopsWithoutNonStreamingFallback()
     {
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         var client = new OpenAiCompatibleClient(Settings("OpenAiCompatible", modelName: "deepseek-v4-flash"));
         string sse = "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"PRIVATE_REASONING\"}}]}\n"
             + "data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"length\"}],\"usage\":{\"completion_tokens\":2048,\"completion_tokens_details\":{\"reasoning_tokens\":2048}}}\n"

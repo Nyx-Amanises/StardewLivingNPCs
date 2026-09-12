@@ -23,7 +23,7 @@ public sealed class BufferedDialogueTransportTests : LlmTestBase
     public async Task MainReplyBuffersAllSseTextAndProviderUsageInOnePost()
     {
         Config.UseStreamingDialogueTransport = true;
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         var client = CreateClient();
         string sse = "data: {\"choices\":[{\"delta\":{\"role\":\"assistant\"}}]}\n"
             + "data: {\"choices\":[{\"delta\":{\"reasoning_content\":\"PRIVATE_REASONING\"}}]}\n"
@@ -55,12 +55,11 @@ public sealed class BufferedDialogueTransportTests : LlmTestBase
     [Theory]
     [InlineData(LlmThinking.Off, "disabled", null)]
     [InlineData(LlmThinking.High, "enabled", "high")]
-    public async Task FastPassRemainsNonStreamingAndKeepsItsOwnThinkingLevel(
-        string routingLevel, string thinkingType, string? effort)
+    public async Task BackgroundAndBufferedDialogueShareEffortWhileKeepingTheirTransportAndFormat(
+        string thinkingLevel, string thinkingType, string? effort)
     {
         Config.UseStreamingDialogueTransport = true;
-        Config.ChatThinkingLevel = LlmThinking.Low;
-        Config.RoutingThinkingLevel = routingLevel;
+        Config.ThinkingLevel = thinkingLevel;
         var client = CreateClient();
         Http.EnqueueJson(CompletionJson);
 
@@ -75,13 +74,28 @@ public sealed class BufferedDialogueTransportTests : LlmTestBase
         Assert.Equal("json_object", body["response_format"]!.Value<string>("type"));
 
         AssertStandardMessages(body);
+
+        Http.Requests.Clear();
+        Http.Enqueue(_ => FakeHttpHandler.Text(
+            "data: {\"choices\":[{\"delta\":{\"content\":\"Hello there\"},\"finish_reason\":\"stop\"}]}\n"
+            + "data: [DONE]\n"));
+
+        LlmReply dialogueReply = await client.CompleteAsync(Request(), CancellationToken.None);
+
+        Assert.True(dialogueReply.IsSuccess);
+        var dialogueBody = JObject.Parse(Assert.Single(Http.Requests).Body!);
+        Assert.True(dialogueBody.Value<bool>("stream"));
+        Assert.Equal(thinkingType, dialogueBody["thinking"]!.Value<string>("type"));
+        Assert.Equal(effort, dialogueBody.Value<string>("reasoning_effort"));
+        Assert.Null(dialogueBody["response_format"]);
+        AssertStandardMessages(dialogueBody);
     }
 
     [Fact]
     public async Task DisabledFlagPreservesTheNonStreamingMainReply()
     {
         Config.UseStreamingDialogueTransport = false;
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         var client = CreateClient();
         Http.EnqueueJson(CompletionJson);
 
@@ -101,7 +115,7 @@ public sealed class BufferedDialogueTransportTests : LlmTestBase
     public async Task RejectedStreamFallsBackToNonStreamingWithoutReenteringBufferedTransport()
     {
         Config.UseStreamingDialogueTransport = true;
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         var client = CreateClient();
         Http.EnqueueJson("{\"error\":\"stream is unsupported\"}", HttpStatusCode.BadRequest);
         // Returning complete JSON for the second request also bounds a recursive-dispatch regression.
@@ -286,7 +300,7 @@ public sealed class BufferedDialogueTransportTests : LlmTestBase
         HttpStatusCode status, bool allowRetry, int expectedRequests)
     {
         Config.UseStreamingDialogueTransport = true;
-        Config.ChatThinkingLevel = LlmThinking.Low;
+        Config.ThinkingLevel = LlmThinking.Low;
         var client = CreateClient();
         Http.DefaultResponder = _ => FakeHttpHandler.Json("{\"error\":\"temporarily unavailable\"}", status);
 

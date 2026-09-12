@@ -172,7 +172,8 @@ public sealed class GeminiClientTests : LlmTestBase
     [Fact]
     public async Task NonStopFinishReasonRetriesThenBareCandidateSucceeds()
     {
-        // DisableThinking=true + 默认路由档位 off → thinkingConfig 候选 + 裸候选。
+        // 显式统一档位 Off → thinkingConfig 候选 + 裸候选。
+        Config.ThinkingLevel = LlmThinking.Off;
         var client = new GeminiClient(Settings("Google"));
         Http.DefaultResponder = request =>
         {
@@ -195,6 +196,7 @@ public sealed class GeminiClientTests : LlmTestBase
     [Fact]
     public async Task EmptyTextWith200AbortsCandidateWithoutRetry()
     {
+        Config.ThinkingLevel = LlmThinking.Off;
         var client = new GeminiClient(Settings("Google"));
         int thinkingCalls = 0;
         Http.DefaultResponder = request =>
@@ -231,7 +233,7 @@ public sealed class GeminiClientTests : LlmTestBase
         Http.Requests.Clear();
         await client.CompleteAsync(Request(), CancellationToken.None);
         Assert.Null(JObject.Parse(Http.Requests[0].Body!)["generationConfig"]!["responseMimeType"]);
-        // 聊天档位 auto → 无 thinkingConfig，单候选。
+        // 统一档位默认 Auto → 无 thinkingConfig，单候选。
         Assert.Single(Http.Requests);
     }
 
@@ -266,16 +268,20 @@ public sealed class VolcEngineClientTests : LlmTestBase
         Assert.Equal(expected, VolcEngineClient.SupportsDisableThinking(model));
     }
 
-    [Fact]
-    public async Task EndpointHasNoV1AndThinkingFieldOnlyForWhitelistedFastPass()
+    [Theory]
+    [InlineData(LlmThinking.Off, "disabled")]
+    [InlineData(LlmThinking.Low, "enabled")]
+    [InlineData(LlmThinking.Auto, null)]
+    public async Task WhitelistedModelsUseSharedThinkingWithIndependentOutputFormat(string level, string? expectedThinkingType)
     {
+        Config.ThinkingLevel = level;
         var whitelisted = new VolcEngineClient(Settings("VolcEngine", modelName: "doubao-seed-1.6"));
         Http.DefaultResponder = _ => FakeHttpHandler.Json(ReplyJson);
 
         await whitelisted.CompleteAsync(Request(disableThinking: true, outputFormat: LlmOutputFormat.JsonObject), CancellationToken.None);
         Assert.Equal("https://ark.cn-beijing.volces.com/api/v3/chat/completions", Http.Requests[0].Url);
         var body = JObject.Parse(Http.Requests[0].Body!);
-        Assert.Equal("disabled", body["thinking"]!.Value<string>("type"));
+        Assert.Equal(expectedThinkingType, body["thinking"]?.Value<string>("type"));
         Assert.Equal("json_object", body["response_format"]!.Value<string>("type"));
 
         // 非白名单模型：快速通道仍带 response_format，但不发 thinking（发了会报参数不支持）。
@@ -286,13 +292,31 @@ public sealed class VolcEngineClientTests : LlmTestBase
         Assert.Null(body["thinking"]);
         Assert.Equal("json_object", body["response_format"]!.Value<string>("type"));
 
-        // 主对话请求体两者皆不带。
+        // 主对话沿用同一档位，仅输出格式恢复为纯文本。
         Http.Requests.Clear();
         await whitelisted.CompleteAsync(Request(), CancellationToken.None);
         body = JObject.Parse(Http.Requests[0].Body!);
-        Assert.Null(body["thinking"]);
+        Assert.Equal(expectedThinkingType, body["thinking"]?.Value<string>("type"));
         Assert.Null(body["response_format"]);
         Assert.Equal("doubao-seed-1.6", body.Value<string>("model"));
+    }
+
+    [Theory]
+    [InlineData("doubao-seed-1.6-thinking", LlmThinking.Off)]
+    [InlineData("doubao-seed-1.6-thinking", LlmThinking.High)]
+    [InlineData("deepseek-r1-distill", LlmThinking.Off)]
+    [InlineData("deepseek-r1-distill", LlmThinking.Low)]
+    public async Task AlwaysThinkingModelsOmitSwitchesForBothRequestKinds(string model, string level)
+    {
+        Config.ThinkingLevel = level;
+        var client = new VolcEngineClient(Settings("VolcEngine", modelName: model));
+        Http.DefaultResponder = _ => FakeHttpHandler.Json(ReplyJson);
+
+        Assert.True((await client.CompleteAsync(Request(disableThinking: true), CancellationToken.None)).IsSuccess);
+        Assert.True((await client.CompleteAsync(Request(), CancellationToken.None)).IsSuccess);
+
+        Assert.Equal(2, Http.Requests.Count);
+        Assert.All(Http.Requests, request => Assert.Null(JObject.Parse(request.Body!)["thinking"]));
     }
 }
 

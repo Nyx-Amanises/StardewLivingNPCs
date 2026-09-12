@@ -61,7 +61,7 @@ public sealed class ReasoningModelTokenFieldTests : LlmTestBase
     [InlineData("o3-mini")]
     public async Task ReasoningModelSendsMaxCompletionTokensInsteadOfMaxTokens(string model)
     {
-        // 默认聊天档位 auto：无思考参数、单候选（裸候选路径本身即被覆盖）。
+        // 默认统一档位 Auto：无思考参数、单候选（裸候选路径本身即被覆盖）。
         var client = new OpenAiClient(Settings("OpenAI", modelName: model));
         Http.EnqueueJson(CompletionJson);
 
@@ -112,7 +112,7 @@ public sealed class ReasoningModelTokenFieldTests : LlmTestBase
     public async Task ThinkingCandidateAndBareFallbackBothUseMaxCompletionTokens()
     {
         // A rejected thinking shape immediately falls back; both must retain the reasoning token field.
-        Config.ChatThinkingLevel = "High";
+        Config.ThinkingLevel = "High";
         var client = new OpenAiClient(Settings("OpenAI", modelName: "gpt-5.5"));
         Http.DefaultResponder = request =>
         {
@@ -173,5 +173,35 @@ public sealed class ReasoningModelTokenFieldTests : LlmTestBase
         Assert.Equal(120, plain.Value<int>("max_tokens"));
         Assert.Null(plain["max_completion_tokens"]);
         Assert.Equal(0.2, plain.Value<double>("temperature"), 5);
+    }
+
+    [Theory]
+    [InlineData("gpt-6-astra", LlmThinking.Ultra, "max", null, "max_completion_tokens")]
+    [InlineData("gpt-5", LlmThinking.Minimal, "low", null, "max_completion_tokens")]
+    [InlineData("gpt-5.5", LlmThinking.Auto, null, null, "max_completion_tokens")]
+    [InlineData("deepseek-flash", LlmThinking.High, "high", "enabled", "max_tokens")]
+    [InlineData("deepseek-flash", LlmThinking.Off, null, "disabled", "max_tokens")]
+    [InlineData("deepseek-flash", LlmThinking.Auto, null, null, "max_tokens")]
+    [InlineData("google/gemini-3.8-flash", LlmThinking.XHigh, "high", null, "max_tokens")]
+    [InlineData("gpt-4o-mini", LlmThinking.High, null, null, "max_tokens")]
+    public void BehaviorPlannerAppliesSharedPreferenceWithoutIncreasingItsOutputBudget(
+        string model, string level, string? expectedEffort, string? expectedThinkingType, string tokenField)
+    {
+        Config.ThinkingLevel = level;
+
+        var body = JObject.Parse(AiBehaviorClient.BuildPayloadJson(model, "SYS", "USER", Config.ThinkingLevel));
+
+        Assert.Equal(expectedEffort, body.Value<string>("reasoning_effort"));
+        Assert.Equal(expectedThinkingType, body["thinking"]?.Value<string>("type"));
+        Assert.Equal(120, body.Value<int>(tokenField));
+        Assert.Null(body[tokenField == "max_tokens" ? "max_completion_tokens" : "max_tokens"]);
+        if (tokenField == "max_completion_tokens")
+        {
+            Assert.Null(body["temperature"]);
+        }
+        else
+        {
+            Assert.Equal(0.2, body.Value<double>("temperature"), 5);
+        }
     }
 }

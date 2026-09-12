@@ -7,7 +7,7 @@ using StardewModdingAPI.Utilities;
 
 namespace LivingNPCs;
 
-internal sealed class ModConfig
+internal sealed partial class ModConfig
 {
     public const int MaxHelpRequestDailyOfferChancePercent = 60;
     public const int MaxAiDailyGiftChancePercent = 25;
@@ -123,8 +123,6 @@ internal sealed class ModConfig
     public bool UseOptimizedPrompts { get; set; } = false;
     public bool EnableSemanticContextRouting { get; set; } = true;
     public int SemanticContextRoutingTimeoutSeconds { get; set; } = 8;
-    public string RoutingThinkingLevel { get; set; } = "Off";
-    public string ChatThinkingLevel { get; set; } = "Auto";
     /// <summary>在 OpenAI 兼容端点后台流式接收主回复，收齐后仍交给原生对话框。</summary>
     public bool UseStreamingDialogueTransport { get; set; } = false;
     public bool SuppressConnectionCheck { get; set; } = false;
@@ -159,7 +157,8 @@ internal sealed class ModConfig
 
     public bool Migrate()
     {
-        bool changed = false;
+        bool changed = this.needsThinkingLevelMigration;
+        this.needsThinkingLevelMigration = false;
         if (this.BehaviorHotkey.ToString().Equals("B", StringComparison.OrdinalIgnoreCase))
         {
             this.BehaviorHotkey = KeybindList.Parse("LeftShift + H");
@@ -266,17 +265,10 @@ internal sealed class ModConfig
         this.MarriageFrequency = Clamp(this.MarriageFrequency, 0, 4);
         this.GiftFrequency = Clamp(this.GiftFrequency, 0, 4);
 
-        string routing = Dialogue.Llm.LlmThinking.Normalize(this.RoutingThinkingLevel, Dialogue.Llm.LlmThinking.Off);
-        if (!string.Equals(routing, this.RoutingThinkingLevel, StringComparison.Ordinal))
+        string thinking = Dialogue.Llm.LlmThinking.NormalizePreference(this.ThinkingLevel);
+        if (!string.Equals(thinking, this.ThinkingLevel, StringComparison.Ordinal))
         {
-            this.RoutingThinkingLevel = routing;
-            changed = true;
-        }
-
-        string chat = Dialogue.Llm.LlmThinking.Normalize(this.ChatThinkingLevel, Dialogue.Llm.LlmThinking.Auto);
-        if (!string.Equals(chat, this.ChatThinkingLevel, StringComparison.Ordinal))
-        {
-            this.ChatThinkingLevel = chat;
+            this.ThinkingLevel = thinking;
             changed = true;
         }
 
@@ -385,8 +377,7 @@ internal sealed class ModConfig
         this.UseOptimizedPrompts = defaults.UseOptimizedPrompts;
         this.EnableSemanticContextRouting = defaults.EnableSemanticContextRouting;
         this.SemanticContextRoutingTimeoutSeconds = defaults.SemanticContextRoutingTimeoutSeconds;
-        this.RoutingThinkingLevel = defaults.RoutingThinkingLevel;
-        this.ChatThinkingLevel = defaults.ChatThinkingLevel;
+        this.ThinkingLevel = defaults.ThinkingLevel;
         this.UseStreamingDialogueTransport = defaults.UseStreamingDialogueTransport;
         this.SuppressConnectionCheck = defaults.SuppressConnectionCheck;
         this.DisableCharacters = defaults.DisableCharacters;

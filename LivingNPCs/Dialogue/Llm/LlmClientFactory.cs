@@ -21,7 +21,7 @@ internal sealed class LlmProviderMetadata
     /// <summary>是否实现 IModelNameSource（GMCM 模型列表段落的显示条件）。</summary>
     public bool SupportsModelList { get; init; }
 
-    /// <summary>是否消费聊天/路由思考档位（VolcEngine 仅支持快速通道关思考，不消费档位，记 false）。</summary>
+    /// <summary>是否消费统一思考偏好；VolcEngine 将明确档位映射为思考开/关，不支持细分力度。</summary>
     public bool SupportsThinkingLevels { get; init; }
 }
 
@@ -57,7 +57,7 @@ internal static class LlmClientFactory
             new LlmProviderMetadata { ProviderId = "Mistral", RequiresApiKey = true, RequiresModelName = true, SupportsModelList = true, SupportsThinkingLevels = true },
             settings => new MistralClient(settings));
         Register(
-            new LlmProviderMetadata { ProviderId = "VolcEngine", RequiresApiKey = true, RequiresModelName = true, SupportsModelList = true },
+            new LlmProviderMetadata { ProviderId = "VolcEngine", RequiresApiKey = true, RequiresModelName = true, SupportsModelList = true, SupportsThinkingLevels = true },
             settings => new VolcEngineClient(settings));
         RegisterOpenAiPreset("Zhipu", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash", requiresApiKey: true);
         RegisterOpenAiPreset("Moonshot", "https://api.moonshot.cn/v1", "kimi-latest", requiresApiKey: true);

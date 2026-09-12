@@ -119,8 +119,7 @@ public sealed class LegacyConfigImporterTests
         LegacyConfigImporter.Apply(legacy, config);
 
         Assert.Equal("With Generated", config.TypedResponses);
-        Assert.Equal("High", config.RoutingThinkingLevel);
-        Assert.Equal("Auto", config.ChatThinkingLevel);
+        Assert.Equal("High", config.ThinkingLevel);
         Assert.Equal(SButton.LeftControl, config.InitiateTypedDialogueKey);
     }
 
