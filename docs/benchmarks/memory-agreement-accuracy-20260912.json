@@ -1,0 +1,3166 @@
+{
+  "SchemaVersion": 1,
+  "Date": "2026-09-12",
+  "BaselineCommit": "fb9c9c2",
+  "SyntheticOnly": true,
+  "HistoricalDevelopmentSamples": true,
+  "GameEndToEndAcceptance": false,
+  "LiveRequestsRecorded": 64,
+  "FinalPositiveControlRequestsRecorded": 2,
+  "ProviderRequestsDuringSummary": 0,
+  "ScoringDimensions": {
+    "Facts": "Source-linked semantic review of dialogue, option premises and proposed metadata; whole-reply grounding is a required criterion. Any failed criterion fails the reply; uncertainty remains separate.",
+    "PythonFormat": "Recorded Python envelope and line-layout inspection; it is not production parser validation.",
+    "ProductionParser": "Separate offline validation joined to replies by request, prompt and reply hashes. Body, strict inline metadata and strict pipeline results remain distinct.",
+    "MetadataContract": "Counts and observations of recall-time memory proposals are separate from factual correctness. Proposals were not executed or persisted to game saves."
+  },
+  "ReviewMethod": {
+    "Kind": "Model-assisted semantic review; no independent human sign-off or automatic judge call is claimed.",
+    "FixedRubricAndLiteralReplyCitationsVerified": true,
+    "OriginalRepliesAndReviewQuotesStoredOnlyInTemp": true,
+    "PublishedFields": "Hashes, counts, case/criterion identifiers, verdicts and concise limitations only; no raw prompts, replies, evidence quotes, provider addresses or credentials."
+  },
+  "Fixtures": [
+    {
+      "Id": "initial-10",
+      "Path": "tools/fixtures/memory_agreement_accuracy.initial.json",
+      "Sha256": "8EBD702B9519536E97D6BF7F8EC1AF6C72496DBA817A67062124DD1BE25733CE",
+      "Cases": 10,
+      "AppliesToRounds": [
+        1
+      ]
+    },
+    {
+      "Id": "revised-11",
+      "Path": "tools/fixtures/memory_agreement_accuracy.json",
+      "Sha256": "ACB95348177A85E7C8ED18B3077C433EC3A21E4EBE677B5EDC651E2761F660AA",
+      "Cases": 11,
+      "AppliesToRounds": [
+        2,
+        3,
+        4,
+        5
+      ]
+    },
+    {
+      "Id": "positive-controls-2",
+      "Path": "tools/fixtures/memory_agreement_accuracy.controls.json",
+      "Sha256": "15B8BE2C82771C6DBA75591DB55AF7EDD93A443BB82DD7095928A847521A3D83",
+      "Cases": 2,
+      "AppliesTo": "FinalPositiveControls"
+    }
+  ],
+  "Limitations": [
+    "These are development cases used to find failures and tune prompts, not an independent held-out evaluation.",
+    "Each variant has one provider sample per scenario. Do not infer general accuracy, statistical improvement or all-model behavior.",
+    "Round one preserves its initial fixture and rubric; rounds two through five use a changed fixture. Prompts and assembly snapshots also differ between rounds.",
+    "No pooled factual accuracy is calculated across these rounds. Only the initial baseline/candidate run is a paired comparison with identical fixture and asset bytes.",
+    "Semantic judgments can depend on whether wording asserts an event or merely expresses a current attitude; unresolved interpretations remain uncertain.",
+    "Quoted evidence retention and budget checks are capture diagnostics, not evidence that the model answered correctly.",
+    "Parser acceptance does not establish factual accuracy, renderer behavior, runtime action authorization or end-to-end in-game acceptance.",
+    "Offline parser validation made no network calls, invoked no classifier fallback and executed no game actions.",
+    "Historical assembly hashes identify recorded experiments and must not be presented as validation of later code changes.",
+    "The final positive controls establish two valid metadata proposals while retaining one whole-reply failure. No game save was written and no end-to-end game acceptance was performed.",
+    "Final delivery retains observed hallucinations, semantic drift and review uncertainty rather than further tuning prompts to these same samples."
+  ],
+  "Rounds": [
+    {
+      "Number": 1,
+      "Id": "initial-paired",
+      "FixturePath": "tools/fixtures/memory_agreement_accuracy.initial.json",
+      "FixtureSha256": "8EBD702B9519536E97D6BF7F8EC1AF6C72496DBA817A67062124DD1BE25733CE",
+      "RunReportSha256": "60FE962B359DC1650ACF84CBFE32642927B2E23B897F920073F4C34AC5204B14",
+      "ReviewedReportSha256": "8F41408948F91AAFCD6036C50E31B18D6306A54767CC9C0D075760D33CB881F7",
+      "PlannedRequests": 20,
+      "RecordedRequests": 20,
+      "ConfiguredModelSha256": "7D963F65D1EDE1BD9416A5F55575EFE0D202E0A00519EF04E47DAE20C3180445",
+      "TransportProfile": {
+        "Parameters": {
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "low"
+        },
+        "OutputBudgetField": "max_tokens"
+      },
+      "StreamingRequests": 20,
+      "MaxOutputTokens": [
+        16000
+      ],
+      "TransportStatusCounts": {
+        "ok": 20
+      },
+      "Notes": [
+        "The baseline and first candidate share identical initial fixture and asset bytes and use alternating request order.",
+        "The initial rubric overconstrains undated relative-day statements. Those original criteria are preserved; unsupported date anchoring is reported as uncertain where applicable.",
+        "The matched baseline capture is the later offline parser capture. Its fixture, assembly and every provider prompt hash match the recorded live requests.",
+        "Two first-candidate Python line-layout failures are accepted by the production parser."
+      ],
+      "Variants": [
+        {
+          "Variant": "baseline",
+          "Requests": 10,
+          "SamplesPerCase": 1,
+          "CapturedAssemblySha256": "5C0CB8497415A07B24DF84AD8E732902FB514B136717B06FBDA929FE211D0702",
+          "MatchingCaptureSha256": "72F39C24DE8A5A688DD4AA9631A5CD3F37714FA4CC5EA3C35E6104B036466DCB",
+          "CaptureScriptSha256": "B8A6EC7DF637E04434EDEB06CD1AC5C45E1FBE9FF45277AD68C8D9B8912AAF05",
+          "CaptureAssetSha256": {
+            "prompts/default.json": "4315583D055528F8CF4240EC88DF16741C85E6D70774FEDBD884A1B46EA431A9",
+            "prompts/zh.json": "50EF05039CF0B7F11173EE336224F40F7FCFA12DF93AFCC5949B52DFC09377CA",
+            "bios/Penny.json": "5883416645E2976ADC996A13382F63791AE9E78048BFFB7DF53B88983FB56505",
+            "bios-zh/Penny.json": "4F4A559348E05D43F57453AE087E47D32B108419639A169F9CB43125CFEE9C10",
+            "world/GameSummary.json": "A6F882848683DEA97A1974A150C0920EF69043FA60AB39FE3BF993F8B8000829"
+          },
+          "ProductionParserReportSha256": "B4444B86625C244B2D9E481D123CB391623E030C55E150DCF80322705EAFF333",
+          "ArtifactHashJoinVerified": true,
+          "CaptureDiagnostics": {
+            "Checks": 40,
+            "ChecksPassed": 40,
+            "UnchangedInputs": 10,
+            "UnresolvedNameTokenCount": 0,
+            "NotAnAccuracyVerdict": true
+          },
+          "FactVerdicts": {
+            "pass": 0,
+            "fail": 9,
+            "uncertain": 1
+          },
+          "CriterionVerdicts": {
+            "pass": 10,
+            "fail": 18,
+            "uncertain": 2
+          },
+          "PythonFormat": {
+            "Passed": 10,
+            "Failed": 0,
+            "Total": 10
+          },
+          "ProductionParser": {
+            "Body": {
+              "Passed": 10,
+              "Failed": 0,
+              "Total": 10
+            },
+            "StrictInlineMetadata": {
+              "Passed": 10,
+              "Failed": 0,
+              "Total": 10
+            },
+            "StrictPipeline": {
+              "Passed": 10,
+              "Failed": 0,
+              "Total": 10
+            },
+            "ParserInputsUnchanged": 10,
+            "VisibleHiddenMarkerLeaks": 0,
+            "NetworkCalls": 0,
+            "ClassifierFallbackInvoked": false,
+            "GameActionsExecuted": false
+          },
+          "Cases": [
+            {
+              "CaseId": "current-pronoun-reschedule",
+              "RequestId": "baseline/current-pronoun-reschedule",
+              "PromptSha256": "15988E3ED0659C19DB40C02FB85801C75CAE656231A517367798E0D50024367E",
+              "ReplySha256": "4BBB00913EC0731D75588FEFAB2BFBB45C3D8A9C33D28512284315743FEB741C",
+              "InputSha256": "472497B1C1014954F98D64889CCE717474ECFA73202214061ABA6278923CF0F1",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "uses-revised-day": "fail",
+                "does-not-invent-clock-time": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "current-far-cancellation",
+              "RequestId": "baseline/current-far-cancellation",
+              "PromptSha256": "C22B2F65014FCEFA125FC175A8A6F042B77EA11F77D742583657D6E4E5408A8C",
+              "ReplySha256": "E68BBFFC0A769ECFCAD1138713253F7D9824A5BD4358F52F759778EF7827BA13",
+              "InputSha256": "4D9B7AE847FBE31258B543BBB105F3B5A0ABB89CA216D09451A4890E0F4E9D9F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "cancellation-remains-effective": "fail",
+                "no-invented-meeting-details": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 1,
+                "ProposedMemoryImportance": [
+                  60
+                ],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "current-two-hop-correction",
+              "RequestId": "baseline/current-two-hop-correction",
+              "PromptSha256": "FB704250D9DA392F51BFC898D1F844DB9F69579CDFDB0E2C432F221090188D2A",
+              "ReplySha256": "0184B7EED690B3F127A0098C6954F3683717451470D566477CCBAC7E4289D50F",
+              "InputSha256": "277A3A2FD08378087491313AB712AD17559D37EC0FE3921FC94BC4C47B140E67",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "keeps-two-hop-revision": "fail",
+                "no-extra-location-details": "fail",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 3
+              }
+            },
+            {
+              "CaseId": "history-pronoun-revision",
+              "RequestId": "baseline/history-pronoun-revision",
+              "PromptSha256": "8487D5460B65FE1F296A3F19D6EC646EA4BBDC913A6BFE230727D4DA08F348B2",
+              "ReplySha256": "819630D4F122E53F663DA29D4E05875DE3837CE047B42A67CBAA64BEBEE50830",
+              "InputSha256": "1A09BEF8B2275CF9CB49C2B1EDE0CD3B7B1DA7C9F7C45F3F1CB8091BD2199690",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "uses-later-session-revision": "fail",
+                "does-not-invent-a-move": "fail",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 3
+              }
+            },
+            {
+              "CaseId": "preference-short-correction",
+              "RequestId": "baseline/preference-short-correction",
+              "PromptSha256": "6F39C1E290894666C39A9DAC7E4EB33EF593436BD946410075DEE27C1F69C2A6",
+              "ReplySha256": "5FE7E4784D8A0F2CD95FF8EB7BE261EA518DE7B42435EF2B252D1B157872F02D",
+              "InputSha256": "18134A563F28C0166F3A3C7627E0F5D251AB4F69188C761AB1D4A7407F6DA17D",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "uncertain",
+              "CriterionVerdicts": {
+                "respects-short-correction": "pass",
+                "does-not-invent-replacement": "pass",
+                "whole-reply-grounded": "uncertain"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 1,
+                "ProposedMemoryImportance": [
+                  60
+                ],
+                "ParsedPlayerOptionCount": 3
+              }
+            },
+            {
+              "CaseId": "atlas-no-invented-damage",
+              "RequestId": "baseline/atlas-no-invented-damage",
+              "PromptSha256": "EF6A428C176B2A1199DF92404614BC3288E144DE807BA223D4D4DC8BDDA519B8",
+              "ReplySha256": "2693BA6F79DF060FFF2D9E662AC4CFB50EB4F14737941083076CE498C853A819",
+              "InputSha256": "140C7A839987D7F0DD35AD8E6EE7A4CCCF45506C1F5B72A38EBB5161C53E64A5",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "recalls-supported-experience": "pass",
+                "no-damage-or-scene-fabrication": "fail",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "unknown-unrecorded-memory",
+              "RequestId": "baseline/unknown-unrecorded-memory",
+              "PromptSha256": "68F74A8B8F77D5F1E76FB97AD3C9D7F186BC68B211AF870339667612C31D2E0B",
+              "ReplySha256": "237B4783DA0F9B32B2CC83953A5E999B0D474FF47090747098BA23A672E9D360",
+              "InputSha256": "171626C8AE2E1A3344808235728BDD859744AA701D4F125B22C5FD8F0CA0A77F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "acknowledges-missing-evidence": "fail",
+                "does-not-affirm-invented-event": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "two-independent-agreements",
+              "RequestId": "baseline/two-independent-agreements",
+              "PromptSha256": "950C77A4C0D3816CC9606C9F3FECB7A8796799CC6C48FF1053005B1DE6772087",
+              "ReplySha256": "BE8D00D8272FA272DF933939CEBAE4B508008F56A62E0601D35146EBC5523705",
+              "InputSha256": "FE679112FD42162DC35D63B21BC2BC9FE630A0C2351824A591E329F9A67DFAAE",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "cancels-only-lake": "uncertain",
+                "keeps-independent-book-promise": "fail",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "fulfilled-help-over-old-promise",
+              "RequestId": "baseline/fulfilled-help-over-old-promise",
+              "PromptSha256": "435FABE556B4980B472F3325B778A5E547BBBE8C4F2B18589C0344B982AA8CA4",
+              "ReplySha256": "D8BEE0E9F52066EA64DED89F5CE3D6BFF732A24CCF1BF208F401BD35DCEE5122",
+              "InputSha256": "1A991142085DEEB33CC4F14A3787A0EDBC40E69C120103C9DFE3179F69BE104F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "honors-fulfilled-state": "pass",
+                "no-duplicate-request-or-reward": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "oversized-revision-uncertainty",
+              "RequestId": "baseline/oversized-revision-uncertainty",
+              "PromptSha256": "53E9460E7E876CE2EEAC46B6F16A28A51FB5A5DB7AD2B9DA052A0A7DA955C900",
+              "ReplySha256": "D7FC3608DFBDAC83CCEB13459FFAE778244DB38BE5BD28CC77C817BE02F20751",
+              "InputSha256": "C77CD7871E9F3FD3FD5EED42FD3DDCF2CF85702B8E56FB509FA4DCA10BDD23EA",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "no-stale-certainty": "pass",
+                "no-invented-explanation": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            }
+          ]
+        },
+        {
+          "Variant": "candidate",
+          "Requests": 10,
+          "SamplesPerCase": 1,
+          "CapturedAssemblySha256": "E8DCC12E5D7985A76A0E91F21A94A61450637C94F226CB7F32892F4DE700D8D7",
+          "MatchingCaptureSha256": "C3E68C29B1110FE9CD3EE86506562FAB3E0457FB41765032C1206C52F44EF00B",
+          "CaptureScriptSha256": "B8A6EC7DF637E04434EDEB06CD1AC5C45E1FBE9FF45277AD68C8D9B8912AAF05",
+          "CaptureAssetSha256": {
+            "prompts/default.json": "4315583D055528F8CF4240EC88DF16741C85E6D70774FEDBD884A1B46EA431A9",
+            "prompts/zh.json": "50EF05039CF0B7F11173EE336224F40F7FCFA12DF93AFCC5949B52DFC09377CA",
+            "bios/Penny.json": "5883416645E2976ADC996A13382F63791AE9E78048BFFB7DF53B88983FB56505",
+            "bios-zh/Penny.json": "4F4A559348E05D43F57453AE087E47D32B108419639A169F9CB43125CFEE9C10",
+            "world/GameSummary.json": "A6F882848683DEA97A1974A150C0920EF69043FA60AB39FE3BF993F8B8000829"
+          },
+          "ProductionParserReportSha256": "DC4F18552A6C0A855B5B3ED2A82F85FF60FB1E4A587D7308D5A2D86360C86307",
+          "ArtifactHashJoinVerified": true,
+          "CaptureDiagnostics": {
+            "Checks": 40,
+            "ChecksPassed": 40,
+            "UnchangedInputs": 10,
+            "UnresolvedNameTokenCount": 0,
+            "NotAnAccuracyVerdict": true
+          },
+          "FactVerdicts": {
+            "pass": 1,
+            "fail": 7,
+            "uncertain": 2
+          },
+          "CriterionVerdicts": {
+            "pass": 15,
+            "fail": 12,
+            "uncertain": 3
+          },
+          "PythonFormat": {
+            "Passed": 8,
+            "Failed": 2,
+            "Total": 10
+          },
+          "ProductionParser": {
+            "Body": {
+              "Passed": 10,
+              "Failed": 0,
+              "Total": 10
+            },
+            "StrictInlineMetadata": {
+              "Passed": 10,
+              "Failed": 0,
+              "Total": 10
+            },
+            "StrictPipeline": {
+              "Passed": 10,
+              "Failed": 0,
+              "Total": 10
+            },
+            "ParserInputsUnchanged": 10,
+            "VisibleHiddenMarkerLeaks": 0,
+            "NetworkCalls": 0,
+            "ClassifierFallbackInvoked": false,
+            "GameActionsExecuted": false
+          },
+          "Cases": [
+            {
+              "CaseId": "current-pronoun-reschedule",
+              "RequestId": "candidate/current-pronoun-reschedule",
+              "PromptSha256": "ED2B024FDFD421CDA9BEC5F07821FE910013D3FAFF9FDA01C664AA03B8D9D4F6",
+              "ReplySha256": "0932075DC115B001D7DB9D5320FABE179F85D69FABA9FE9122C78DBD958F901B",
+              "InputSha256": "472497B1C1014954F98D64889CCE717474ECFA73202214061ABA6278923CF0F1",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "uses-revised-day": "uncertain",
+                "does-not-invent-clock-time": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "current-far-cancellation",
+              "RequestId": "candidate/current-far-cancellation",
+              "PromptSha256": "5FBCB188CFE6B1B28F3EFED9F671AB9DDA8E0702BF487D68383CFBB8172D97D7",
+              "ReplySha256": "5416501EBA8C21FDF3D4FD2AF3B2B0A889EBCB16523EDEA9583DD207FAF64F79",
+              "InputSha256": "4D9B7AE847FBE31258B543BBB105F3B5A0ABB89CA216D09451A4890E0F4E9D9F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "cancellation-remains-effective": "pass",
+                "no-invented-meeting-details": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "current-two-hop-correction",
+              "RequestId": "candidate/current-two-hop-correction",
+              "PromptSha256": "FA00355AE054ED2A67AF1DFD84860631E66D04D0F8992383393F3D7B3944396C",
+              "ReplySha256": "CFEF6CDC6A77D3BAFECB45C7E5752E8F9C35A82397A1527504B7439EB2DDDCBB",
+              "InputSha256": "277A3A2FD08378087491313AB712AD17559D37EC0FE3921FC94BC4C47B140E67",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "keeps-two-hop-revision": "pass",
+                "no-extra-location-details": "fail",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "history-pronoun-revision",
+              "RequestId": "candidate/history-pronoun-revision",
+              "PromptSha256": "4AF37BAA7A8CC6615B40DD7B2BEDED35E8889F374CC8680C18B74D9AC8A4A584",
+              "ReplySha256": "63DF1BE2506E158B43E74A21AE84402DA253FA6A758D4394D566D1ECDFC3271C",
+              "InputSha256": "1A09BEF8B2275CF9CB49C2B1EDE0CD3B7B1DA7C9F7C45F3F1CB8091BD2199690",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "uncertain",
+              "CriterionVerdicts": {
+                "uses-later-session-revision": "pass",
+                "does-not-invent-a-move": "pass",
+                "whole-reply-grounded": "uncertain"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "preference-short-correction",
+              "RequestId": "candidate/preference-short-correction",
+              "PromptSha256": "66412F6F0631620E0A756B5EA04BCE752001048539C2F7B840F80B790C3D4417",
+              "ReplySha256": "BAF5DE11A9C55D5C958DDAEE5F48A07459431BCB36105AC77911B297F34EE6A7",
+              "InputSha256": "18134A563F28C0166F3A3C7627E0F5D251AB4F69188C761AB1D4A7407F6DA17D",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "respects-short-correction": "fail",
+                "does-not-invent-replacement": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": false,
+                "Failures": [
+                  "noncanonical_dialogue_or_options"
+                ]
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 1,
+                "ProposedMemoryImportance": [
+                  70
+                ],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "atlas-no-invented-damage",
+              "RequestId": "candidate/atlas-no-invented-damage",
+              "PromptSha256": "8A90BC9F60FFA2F3D94FE6629739B109590613EAF0AB934A86D950B3AB01F6CD",
+              "ReplySha256": "699181C89257783B3038EED7EDF11DF8D631B5C3271AF8B4149EC27AA2395E1F",
+              "InputSha256": "140C7A839987D7F0DD35AD8E6EE7A4CCCF45506C1F5B72A38EBB5161C53E64A5",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "recalls-supported-experience": "pass",
+                "no-damage-or-scene-fabrication": "fail",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "unknown-unrecorded-memory",
+              "RequestId": "candidate/unknown-unrecorded-memory",
+              "PromptSha256": "EF4619D7A9C957BC2284546F0456094CE25076FCF84CC6269F5C78796465CB82",
+              "ReplySha256": "28B1EADF8F6EF400618F5BB672EBE8238DB33B72ACD552D49C8FA38C0D43091F",
+              "InputSha256": "171626C8AE2E1A3344808235728BDD859744AA701D4F125B22C5FD8F0CA0A77F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "acknowledges-missing-evidence": "pass",
+                "does-not-affirm-invented-event": "fail",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "two-independent-agreements",
+              "RequestId": "candidate/two-independent-agreements",
+              "PromptSha256": "9D6BA4722189419F84F55890444D397F4574866A1DED29607057B70DEE3E0842",
+              "ReplySha256": "E0262458E93B55300B17610708A3CF92C741B6E639F471621BD348EA8497EE78",
+              "InputSha256": "FE679112FD42162DC35D63B21BC2BC9FE630A0C2351824A591E329F9A67DFAAE",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "uncertain",
+              "CriterionVerdicts": {
+                "cancels-only-lake": "pass",
+                "keeps-independent-book-promise": "pass",
+                "whole-reply-grounded": "uncertain"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "fulfilled-help-over-old-promise",
+              "RequestId": "candidate/fulfilled-help-over-old-promise",
+              "PromptSha256": "64889CD6D9FAC9A4B1705577F9AB98BE23A1CC79EDF2268AF78940821D595D3F",
+              "ReplySha256": "4D21B455F76B65C0776AF3403E38B2B5AD630330C4B1A2C8766D76BF41D98182",
+              "InputSha256": "1A991142085DEEB33CC4F14A3787A0EDBC40E69C120103C9DFE3179F69BE104F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "honors-fulfilled-state": "pass",
+                "no-duplicate-request-or-reward": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 1,
+                "ProposedMemoryImportance": [
+                  38
+                ],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "oversized-revision-uncertainty",
+              "RequestId": "candidate/oversized-revision-uncertainty",
+              "PromptSha256": "6AD6C02623DBC30B54217B2FD9C346AF125D5734AAC7C37F60C80367A7485A64",
+              "ReplySha256": "F2E4E6480A7EED59D6514114006A77FC59F8146121997F4F1F86AB3E0850D2B0",
+              "InputSha256": "C77CD7871E9F3FD3FD5EED42FD3DDCF2CF85702B8E56FB509FA4DCA10BDD23EA",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "no-stale-certainty": "pass",
+                "no-invented-explanation": "fail",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": false,
+                "Failures": [
+                  "noncanonical_dialogue_or_options"
+                ]
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 5
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Number": 2,
+      "Id": "refined",
+      "FixturePath": "tools/fixtures/memory_agreement_accuracy.json",
+      "FixtureSha256": "ACB95348177A85E7C8ED18B3077C433EC3A21E4EBE677B5EDC651E2761F660AA",
+      "RunReportSha256": "DF117A44B9A6496F0CB01DEFCC60FD0552E372970A633B8575C391AA08C5A948",
+      "ReviewedReportSha256": "0A4D82571851B918CBF3F61C23EC4E269707054D929B0AC5CB85A2B17E9EA213",
+      "PlannedRequests": 11,
+      "RecordedRequests": 11,
+      "ConfiguredModelSha256": "7D963F65D1EDE1BD9416A5F55575EFE0D202E0A00519EF04E47DAE20C3180445",
+      "TransportProfile": {
+        "Parameters": {
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "low"
+        },
+        "OutputBudgetField": "max_tokens"
+      },
+      "StreamingRequests": 11,
+      "MaxOutputTokens": [
+        16000
+      ],
+      "TransportStatusCounts": {
+        "ok": 11
+      },
+      "Notes": [
+        "Uses the revised 11-case fixture: undated relative days require clarification, and an explicitly dated reschedule is added.",
+        "Unsupported details and past-event premises in player options remain despite correct core revisions.",
+        "One semantically supported memory proposal during pure recall is recorded as a separate metadata-contract observation, not retroactively added to the fact rubric."
+      ],
+      "Variants": [
+        {
+          "Variant": "candidate-refined",
+          "Requests": 11,
+          "SamplesPerCase": 1,
+          "CapturedAssemblySha256": "83FA4BDB693CFF0C37D5D0058124A5B65CEE34F3AED7BD2D991371D03981DB33",
+          "MatchingCaptureSha256": "485B811881587D766444F1BC21DA964A39D27CF940ADF27E6F01A365FB4DEAB1",
+          "CaptureScriptSha256": "0AD280B50D629AF86D4E684D2EE9BCA9165943571FA520A5D4A3984B5EA095B4",
+          "CaptureAssetSha256": {
+            "prompts/default.json": "54C389994DA7E37A77CC7DF56A59419508E09A64DC8D66510A8645BA117CF423",
+            "prompts/zh.json": "B5978A58DA64160E9AA47CC384CB080466A19882535D1AD3A052A20EB8D9AFDF",
+            "bios/Penny.json": "5883416645E2976ADC996A13382F63791AE9E78048BFFB7DF53B88983FB56505",
+            "bios-zh/Penny.json": "4F4A559348E05D43F57453AE087E47D32B108419639A169F9CB43125CFEE9C10",
+            "world/GameSummary.json": "A6F882848683DEA97A1974A150C0920EF69043FA60AB39FE3BF993F8B8000829"
+          },
+          "ProductionParserReportSha256": "8AAE38658EAAFE7926A355F4FC94D9883C0C58BDF86AB23937D0000B0110001E",
+          "ArtifactHashJoinVerified": true,
+          "CaptureDiagnostics": {
+            "Checks": 44,
+            "ChecksPassed": 44,
+            "UnchangedInputs": 11,
+            "UnresolvedNameTokenCount": 0,
+            "NotAnAccuracyVerdict": true
+          },
+          "FactVerdicts": {
+            "pass": 4,
+            "fail": 6,
+            "uncertain": 1
+          },
+          "CriterionVerdicts": {
+            "pass": 28,
+            "fail": 6,
+            "uncertain": 1
+          },
+          "PythonFormat": {
+            "Passed": 11,
+            "Failed": 0,
+            "Total": 11
+          },
+          "ProductionParser": {
+            "Body": {
+              "Passed": 11,
+              "Failed": 0,
+              "Total": 11
+            },
+            "StrictInlineMetadata": {
+              "Passed": 11,
+              "Failed": 0,
+              "Total": 11
+            },
+            "StrictPipeline": {
+              "Passed": 11,
+              "Failed": 0,
+              "Total": 11
+            },
+            "ParserInputsUnchanged": 11,
+            "VisibleHiddenMarkerLeaks": 0,
+            "NetworkCalls": 0,
+            "ClassifierFallbackInvoked": false,
+            "GameActionsExecuted": false
+          },
+          "Cases": [
+            {
+              "CaseId": "current-pronoun-reschedule",
+              "RequestId": "candidate-refined/current-pronoun-reschedule",
+              "PromptSha256": "05EA8A8AD215E2B7C1344DDBA4FEC08B2ADA14C2D4092D1C61EAC6B7FC35E448",
+              "ReplySha256": "36A996BD360D2A5CCA2FA83E5C7AC161319E6BD383EB6BD468119A0DE148561F",
+              "InputSha256": "472497B1C1014954F98D64889CCE717474ECFA73202214061ABA6278923CF0F1",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "uses-revised-day": "pass",
+                "does-not-reanchor-old-relative-day": "pass",
+                "does-not-invent-clock-time": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "current-far-cancellation",
+              "RequestId": "candidate-refined/current-far-cancellation",
+              "PromptSha256": "1009EDECB99CDA4192EA64F542D6BA7F4BF6E343E488EB97FA1B48687F46AF60",
+              "ReplySha256": "4C6B79A55E820EEAAFFECF7D5215A3929552E67A587BA244201A3056D1224389",
+              "InputSha256": "4D9B7AE847FBE31258B543BBB105F3B5A0ABB89CA216D09451A4890E0F4E9D9F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "cancellation-remains-effective": "pass",
+                "no-invented-meeting-details": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "current-two-hop-correction",
+              "RequestId": "candidate-refined/current-two-hop-correction",
+              "PromptSha256": "E56E444D9B313F00CBC8E787D476CBC6E01E353F2D8BDC7F196B938D7940D164",
+              "ReplySha256": "D819965493C68D22B42BAD969B9FEF630040A2691095DE251DF41EBDF8BD391D",
+              "InputSha256": "277A3A2FD08378087491313AB712AD17559D37EC0FE3921FC94BC4C47B140E67",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "keeps-two-hop-revision": "pass",
+                "no-extra-location-details": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 1,
+                "ProposedMemoryImportance": [
+                  60
+                ],
+                "ParsedPlayerOptionCount": 3
+              }
+            },
+            {
+              "CaseId": "history-pronoun-revision",
+              "RequestId": "candidate-refined/history-pronoun-revision",
+              "PromptSha256": "40391D08BE6250B5A1E6EACD3BD5EE173C049C1E37000A5D73EE900859ABB07F",
+              "ReplySha256": "291A2AC60332ED7DC4C862B5F85BC8F5F310991D72A68C92DFAED56CFAA09B67",
+              "InputSha256": "1A09BEF8B2275CF9CB49C2B1EDE0CD3B7B1DA7C9F7C45F3F1CB8091BD2199690",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "uses-later-session-revision": "pass",
+                "does-not-invent-a-move": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "preference-short-correction",
+              "RequestId": "candidate-refined/preference-short-correction",
+              "PromptSha256": "DD215B9E0A9AE4CC21989FCF6A4D25BDD1F04C52DFC734B3178A42FDFB1D60C3",
+              "ReplySha256": "A428D656D41F9653A11F9AA2DC40A83B5EC0F2CA4F00904155901D6E121A2F3C",
+              "InputSha256": "18134A563F28C0166F3A3C7627E0F5D251AB4F69188C761AB1D4A7407F6DA17D",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "respects-short-correction": "pass",
+                "does-not-invent-replacement": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "atlas-no-invented-damage",
+              "RequestId": "candidate-refined/atlas-no-invented-damage",
+              "PromptSha256": "5CA66B06DC608CF3447388BF655B261F8BDC730569FE14C605BC674E9B27A3C8",
+              "ReplySha256": "C4C158F259BC72D73941B782D740174CFE9C985B9407F414D2849F5A6CC1881A",
+              "InputSha256": "140C7A839987D7F0DD35AD8E6EE7A4CCCF45506C1F5B72A38EBB5161C53E64A5",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "recalls-supported-experience": "pass",
+                "no-damage-or-scene-fabrication": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "unknown-unrecorded-memory",
+              "RequestId": "candidate-refined/unknown-unrecorded-memory",
+              "PromptSha256": "8961D6442FA3E9C55385CAC0FFDA5412ADADFD93DF2527F28F28717D343CF4F6",
+              "ReplySha256": "15CFE523657A75D120A33A9D3CD9B3AA48750CD2BA23338B7B85334B82DC41A1",
+              "InputSha256": "171626C8AE2E1A3344808235728BDD859744AA701D4F125B22C5FD8F0CA0A77F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "acknowledges-missing-evidence": "pass",
+                "does-not-affirm-invented-event": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "two-independent-agreements",
+              "RequestId": "candidate-refined/two-independent-agreements",
+              "PromptSha256": "E61708E743F4E7DDFDD95787B01C2515B539A7BC803EC3C4DBEB74A5A76BF30E",
+              "ReplySha256": "A2BBDA078602563B4EF2599091BFBBF2BC477921490F86D1BF094ED2AC7A4B50",
+              "InputSha256": "FE679112FD42162DC35D63B21BC2BC9FE630A0C2351824A591E329F9A67DFAAE",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "cancels-only-lake": "pass",
+                "keeps-independent-book-promise": "pass",
+                "does-not-reanchor-book-return-day": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "fulfilled-help-over-old-promise",
+              "RequestId": "candidate-refined/fulfilled-help-over-old-promise",
+              "PromptSha256": "0E2997DCBEAB82F27CB759EC9214D09C15A8F24B84D8106F4AF7FFE93AEB93E3",
+              "ReplySha256": "80F5E03066F8751F406FCD045BB772E2CC556276FFCFF0023B5E192CECAE7A2A",
+              "InputSha256": "1A991142085DEEB33CC4F14A3787A0EDBC40E69C120103C9DFE3179F69BE104F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "uncertain",
+              "CriterionVerdicts": {
+                "honors-fulfilled-state": "pass",
+                "no-duplicate-request-or-reward": "pass",
+                "whole-reply-grounded": "uncertain"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "oversized-revision-uncertainty",
+              "RequestId": "candidate-refined/oversized-revision-uncertainty",
+              "PromptSha256": "298F2CF9169481993421A494018E30BED9522227A7A940488508378B20CEBA70",
+              "ReplySha256": "7BBBBD060F540EC7871ADA16A39C9BDC623472C564D43BA6A664371378483307",
+              "InputSha256": "C77CD7871E9F3FD3FD5EED42FD3DDCF2CF85702B8E56FB509FA4DCA10BDD23EA",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "no-stale-certainty": "pass",
+                "no-invented-explanation": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "current-dated-reschedule",
+              "RequestId": "candidate-refined/current-dated-reschedule",
+              "PromptSha256": "161F287BFBB21BDA1FBD784F74FAF8C48748CAF4810F5D7C057A6AE4C143D793",
+              "ReplySha256": "506942C75A176DEFB1BAD033669E02995F1B83D9E40B8736AD143EE8637D1B84",
+              "InputSha256": "C59BCBA3B7ED2C31D1D560AE9DF97A4687A00EA6E32E7D39482D8500CC179E62",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "uses-explicitly-anchored-revised-day": "pass",
+                "does-not-invent-clock-time": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Number": 3,
+      "Id": "scope-guidance",
+      "FixturePath": "tools/fixtures/memory_agreement_accuracy.json",
+      "FixtureSha256": "ACB95348177A85E7C8ED18B3077C433EC3A21E4EBE677B5EDC651E2761F660AA",
+      "RunReportSha256": "09F6F84D80441217D2C2C36DCC00B4F2C7969377627DAC3B20E721435056B142",
+      "ReviewedReportSha256": "6F7B4F8032DA1C3E880A1C2EF8D295F090FF093BA35C22E73BB06E0AA28D83B9",
+      "PlannedRequests": 11,
+      "RecordedRequests": 11,
+      "ConfiguredModelSha256": "7D963F65D1EDE1BD9416A5F55575EFE0D202E0A00519EF04E47DAE20C3180445",
+      "TransportProfile": {
+        "Parameters": {
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "low"
+        },
+        "OutputBudgetField": "max_tokens"
+      },
+      "StreamingRequests": 11,
+      "MaxOutputTokens": [
+        16000
+      ],
+      "TransportStatusCounts": {
+        "ok": 11
+      },
+      "Notes": [
+        "candidate-final is a historical experiment name, not final delivery acceptance.",
+        "Player options still introduce past-event premises and can reverse the book-return actor; an explicitly dated meeting gains an unsupported clock time.",
+        "The unknown-memory reply lacks metadata. The dated-reschedule reply fails Python line-layout inspection but passes the production parser."
+      ],
+      "Variants": [
+        {
+          "Variant": "candidate-final",
+          "Requests": 11,
+          "SamplesPerCase": 1,
+          "CapturedAssemblySha256": "7C6188F1C01704D3D88411991568332A728AD50A050E81104D11BAEF360C07E9",
+          "MatchingCaptureSha256": "86B6E4DAE35E0AD571D88869FAAB1B73E6BCE2AE2F8217ECB0D7612FA264DD81",
+          "CaptureScriptSha256": "E8F73CF07E088AB1515563AA9D73DD6056E803F3791C2F82B16A2F46D38E3C49",
+          "CaptureAssetSha256": {
+            "prompts/default.json": "F59119CDCD6F2B84264D6A4AC4BE2F647328396B68706782A97821C4569F2867",
+            "prompts/zh.json": "6ABD2B389567908FD7232F7D4238D0889CD0033ED7951D3DE3E3052257576479",
+            "bios/Penny.json": "5883416645E2976ADC996A13382F63791AE9E78048BFFB7DF53B88983FB56505",
+            "bios-zh/Penny.json": "4F4A559348E05D43F57453AE087E47D32B108419639A169F9CB43125CFEE9C10",
+            "world/GameSummary.json": "A6F882848683DEA97A1974A150C0920EF69043FA60AB39FE3BF993F8B8000829"
+          },
+          "ProductionParserReportSha256": "79841A4B09669D1B5B65C9E06AA7E72A2B958779F81403FD37AE9114036F1C85",
+          "ArtifactHashJoinVerified": true,
+          "CaptureDiagnostics": {
+            "Checks": 44,
+            "ChecksPassed": 44,
+            "UnchangedInputs": 11,
+            "UnresolvedNameTokenCount": 0,
+            "NotAnAccuracyVerdict": true
+          },
+          "FactVerdicts": {
+            "pass": 4,
+            "fail": 7,
+            "uncertain": 0
+          },
+          "CriterionVerdicts": {
+            "pass": 23,
+            "fail": 11,
+            "uncertain": 1
+          },
+          "PythonFormat": {
+            "Passed": 9,
+            "Failed": 2,
+            "Total": 11
+          },
+          "ProductionParser": {
+            "Body": {
+              "Passed": 11,
+              "Failed": 0,
+              "Total": 11
+            },
+            "StrictInlineMetadata": {
+              "Passed": 10,
+              "Failed": 1,
+              "Total": 11
+            },
+            "StrictPipeline": {
+              "Passed": 10,
+              "Failed": 1,
+              "Total": 11
+            },
+            "ParserInputsUnchanged": 11,
+            "VisibleHiddenMarkerLeaks": 0,
+            "NetworkCalls": 0,
+            "ClassifierFallbackInvoked": false,
+            "GameActionsExecuted": false
+          },
+          "Cases": [
+            {
+              "CaseId": "current-pronoun-reschedule",
+              "RequestId": "candidate-final/current-pronoun-reschedule",
+              "PromptSha256": "773D80167C70C68F5F9442E3FA79E9BD8DD707E6E92B6CF095F3AF9F28595B0A",
+              "ReplySha256": "F4471B8AA4B4F61FC4F8E60E9CA9EBFA5BF00B027CA6273310828EE75ABAD028",
+              "InputSha256": "472497B1C1014954F98D64889CCE717474ECFA73202214061ABA6278923CF0F1",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "uses-revised-day": "pass",
+                "does-not-reanchor-old-relative-day": "pass",
+                "does-not-invent-clock-time": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "current-far-cancellation",
+              "RequestId": "candidate-final/current-far-cancellation",
+              "PromptSha256": "B60471F7AAF2C5ADCECA1185AAB16DE370EE4812A80845D019907725887B5663",
+              "ReplySha256": "BC8F52B2B62526CC021922B1D0CF0A8609A53A7BA22063494EDAB0B181AE9D6E",
+              "InputSha256": "4D9B7AE847FBE31258B543BBB105F3B5A0ABB89CA216D09451A4890E0F4E9D9F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "cancellation-remains-effective": "pass",
+                "no-invented-meeting-details": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "current-two-hop-correction",
+              "RequestId": "candidate-final/current-two-hop-correction",
+              "PromptSha256": "FEE45E7083BA7D42309B77F253B5FDC6E6DF7B343E7EF233C9D7FCAC16F114E3",
+              "ReplySha256": "F66C218152B95158E484C14569454346D708CA3F66BA7BABEDCA02155A53F1A3",
+              "InputSha256": "277A3A2FD08378087491313AB712AD17559D37EC0FE3921FC94BC4C47B140E67",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "keeps-two-hop-revision": "pass",
+                "no-extra-location-details": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "history-pronoun-revision",
+              "RequestId": "candidate-final/history-pronoun-revision",
+              "PromptSha256": "10F8A8D9B59049BE8D012A31D7A7DEC9D89B1DEFDF43ADA09D08C11E1B486B9B",
+              "ReplySha256": "EFC418B56816BEEAD965F99C74A8954819092830F9A1ED9CDE83E394DB70E58F",
+              "InputSha256": "1A09BEF8B2275CF9CB49C2B1EDE0CD3B7B1DA7C9F7C45F3F1CB8091BD2199690",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "uses-later-session-revision": "pass",
+                "does-not-invent-a-move": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "preference-short-correction",
+              "RequestId": "candidate-final/preference-short-correction",
+              "PromptSha256": "54F96CDDD6A6E3ABB7DF67DE7F3F92A09D733AD7BCACA5328011FFF5DBF7B8EF",
+              "ReplySha256": "5206F4D8E7E82247F7EF77F150454DC34AC9D003A2049D7ADA9A5CA91F52FD26",
+              "InputSha256": "18134A563F28C0166F3A3C7627E0F5D251AB4F69188C761AB1D4A7407F6DA17D",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "respects-short-correction": "pass",
+                "does-not-invent-replacement": "fail",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "atlas-no-invented-damage",
+              "RequestId": "candidate-final/atlas-no-invented-damage",
+              "PromptSha256": "E8A729EAE077DE40907A87D35A0A40151A0C429C6EA9B7F4E5A396E1C1E41658",
+              "ReplySha256": "B5283C0B3FF921C28AFCC4440CAF0FE17766661DBE64018E76551BC0E21F54AE",
+              "InputSha256": "140C7A839987D7F0DD35AD8E6EE7A4CCCF45506C1F5B72A38EBB5161C53E64A5",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "recalls-supported-experience": "pass",
+                "no-damage-or-scene-fabrication": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "unknown-unrecorded-memory",
+              "RequestId": "candidate-final/unknown-unrecorded-memory",
+              "PromptSha256": "8854E9856C03F8E6CFF36926B136301865CA1B03D05447CF7E79A4CAFD72D4BA",
+              "ReplySha256": "7FEDAD51D8DF93FBE1CB79A6A8181D2C26E3BDA17B0DA3D457BEB4594D2EDAD8",
+              "InputSha256": "171626C8AE2E1A3344808235728BDD859744AA701D4F125B22C5FD8F0CA0A77F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "acknowledges-missing-evidence": "pass",
+                "does-not-affirm-invented-event": "uncertain",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": false,
+                "Failures": [
+                  "expected_exactly_one_final_metadata_object"
+                ]
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": false,
+                "StrictPipelinePassed": false,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": false,
+                "ProposedMemoryCount": null,
+                "ProposedMemoryImportance": null,
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "two-independent-agreements",
+              "RequestId": "candidate-final/two-independent-agreements",
+              "PromptSha256": "A990EF72B2F48BDE370AFC48E425EC2CB7A617B959326C79E4EB039AE57141C1",
+              "ReplySha256": "89F535964E7A89B6E79CD80A936C99C106B6AA7A3CACE4ABA360597244D72723",
+              "InputSha256": "FE679112FD42162DC35D63B21BC2BC9FE630A0C2351824A591E329F9A67DFAAE",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "cancels-only-lake": "pass",
+                "keeps-independent-book-promise": "fail",
+                "does-not-reanchor-book-return-day": "fail",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "fulfilled-help-over-old-promise",
+              "RequestId": "candidate-final/fulfilled-help-over-old-promise",
+              "PromptSha256": "6E18D8FD19D14749E09F0A42A4489663BDB1F9032E0348815C83D1F07D517021",
+              "ReplySha256": "AF44D94D4C224633688E73A69D7F53C1BB5D102B6D3021327EE5D76F2A11DD7C",
+              "InputSha256": "1A991142085DEEB33CC4F14A3787A0EDBC40E69C120103C9DFE3179F69BE104F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "honors-fulfilled-state": "pass",
+                "no-duplicate-request-or-reward": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 3
+              }
+            },
+            {
+              "CaseId": "oversized-revision-uncertainty",
+              "RequestId": "candidate-final/oversized-revision-uncertainty",
+              "PromptSha256": "678AD4AB5FD4DE24BE8460255D3E786085A9E3BE4C7216A7B72F857369139BEE",
+              "ReplySha256": "B832149AEBC3F279A25AFC11655863F545F84E681BDCB258595013E59706EF58",
+              "InputSha256": "C77CD7871E9F3FD3FD5EED42FD3DDCF2CF85702B8E56FB509FA4DCA10BDD23EA",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "no-stale-certainty": "pass",
+                "no-invented-explanation": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            },
+            {
+              "CaseId": "current-dated-reschedule",
+              "RequestId": "candidate-final/current-dated-reschedule",
+              "PromptSha256": "17DE6D895974A1D3F2C068BCBE9826872FF7D3B17EB07E16C2E794202A54A757",
+              "ReplySha256": "381FDD6C3C3F04B6886A09770E215AC4FD4F4C97613D8702C0F649B79BFC4077",
+              "InputSha256": "C59BCBA3B7ED2C31D1D560AE9DF97A4687A00EA6E32E7D39482D8500CC179E62",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "uses-explicitly-anchored-revised-day": "pass",
+                "does-not-invent-clock-time": "fail",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": false,
+                "Failures": [
+                  "noncanonical_dialogue_or_options"
+                ]
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 4
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Number": 4,
+      "Id": "concise",
+      "FixturePath": "tools/fixtures/memory_agreement_accuracy.json",
+      "FixtureSha256": "ACB95348177A85E7C8ED18B3077C433EC3A21E4EBE677B5EDC651E2761F660AA",
+      "RunReportSha256": "A5F804017914CB2899A4DED61B35C96E8973AE8F7361A1C7DC1B721EB18E4E5B",
+      "ReviewedReportSha256": "36F3A7FDEE7A8C70A0A99939FF44AA9143D893532C1231FA5084D0E3E25AF454",
+      "PlannedRequests": 11,
+      "RecordedRequests": 11,
+      "ConfiguredModelSha256": "7D963F65D1EDE1BD9416A5F55575EFE0D202E0A00519EF04E47DAE20C3180445",
+      "TransportProfile": {
+        "Parameters": {
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "low"
+        },
+        "OutputBudgetField": "max_tokens"
+      },
+      "StreamingRequests": 11,
+      "MaxOutputTokens": [
+        16000
+      ],
+      "TransportStatusCounts": {
+        "ok": 11
+      },
+      "Notes": [
+        "Pure recall uses short answers without automatically generated player options.",
+        "The atlas reply adds an unsupported multi-volume handling sequence; the independent-agreements reply adds a reserved shelf position and its unchanged state.",
+        "Three replies omit metadata. The supported coffee preference is also proposed again as a 70-point memory; this is a separate contract issue, not a false-preference finding."
+      ],
+      "Variants": [
+        {
+          "Variant": "candidate-concise",
+          "Requests": 11,
+          "SamplesPerCase": 1,
+          "CapturedAssemblySha256": "63AE065F08993E2540C504B23915C434A7DB18E0D85B71AF58F1E7F25C0B077F",
+          "MatchingCaptureSha256": "61342D4DDD14572B54E01FF2F98254C53AD3F2351F89469A749059F4FE52BAD6",
+          "CaptureScriptSha256": "E8F73CF07E088AB1515563AA9D73DD6056E803F3791C2F82B16A2F46D38E3C49",
+          "CaptureAssetSha256": {
+            "prompts/default.json": "77FDDD289A3111F3A5F6A14ECFE321628A491D220587042BE7F790372F1535EE",
+            "prompts/zh.json": "297759038F935C6DD42B3B4AA3A4E7099D4B610F73E0A598D158A59C4B2F1330",
+            "bios/Penny.json": "5883416645E2976ADC996A13382F63791AE9E78048BFFB7DF53B88983FB56505",
+            "bios-zh/Penny.json": "4F4A559348E05D43F57453AE087E47D32B108419639A169F9CB43125CFEE9C10",
+            "world/GameSummary.json": "A6F882848683DEA97A1974A150C0920EF69043FA60AB39FE3BF993F8B8000829"
+          },
+          "ProductionParserReportSha256": "950269D7C95BB78BFEB5460FBD77FA5ECDDC97712E15B0AFD8BFBE094E92EB5F",
+          "ArtifactHashJoinVerified": true,
+          "CaptureDiagnostics": {
+            "Checks": 44,
+            "ChecksPassed": 44,
+            "UnchangedInputs": 11,
+            "UnresolvedNameTokenCount": 0,
+            "NotAnAccuracyVerdict": true
+          },
+          "FactVerdicts": {
+            "pass": 9,
+            "fail": 2,
+            "uncertain": 0
+          },
+          "CriterionVerdicts": {
+            "pass": 33,
+            "fail": 2,
+            "uncertain": 0
+          },
+          "PythonFormat": {
+            "Passed": 8,
+            "Failed": 3,
+            "Total": 11
+          },
+          "ProductionParser": {
+            "Body": {
+              "Passed": 11,
+              "Failed": 0,
+              "Total": 11
+            },
+            "StrictInlineMetadata": {
+              "Passed": 8,
+              "Failed": 3,
+              "Total": 11
+            },
+            "StrictPipeline": {
+              "Passed": 8,
+              "Failed": 3,
+              "Total": 11
+            },
+            "ParserInputsUnchanged": 11,
+            "VisibleHiddenMarkerLeaks": 0,
+            "NetworkCalls": 0,
+            "ClassifierFallbackInvoked": false,
+            "GameActionsExecuted": false
+          },
+          "Cases": [
+            {
+              "CaseId": "current-pronoun-reschedule",
+              "RequestId": "candidate-concise/current-pronoun-reschedule",
+              "PromptSha256": "4790943A6D05E8A457FBE30566E279B8B32AA96340BCBA7CB022F8674EB178AB",
+              "ReplySha256": "B02630231151A53AA9A09630B35DD51AB1405CA1B58BFB269B6AFB1474ED92DE",
+              "InputSha256": "472497B1C1014954F98D64889CCE717474ECFA73202214061ABA6278923CF0F1",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "uses-revised-day": "pass",
+                "does-not-reanchor-old-relative-day": "pass",
+                "does-not-invent-clock-time": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "current-far-cancellation",
+              "RequestId": "candidate-concise/current-far-cancellation",
+              "PromptSha256": "E306561EA19DF84F34C3930CE26065BC08A791B5971EE492F39F117A555DAB1D",
+              "ReplySha256": "0516F9C73895D7AB4227EEFBD5EEBADB0D9D920DB2BBFCDF4B443BA3E36B5DCA",
+              "InputSha256": "4D9B7AE847FBE31258B543BBB105F3B5A0ABB89CA216D09451A4890E0F4E9D9F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "cancellation-remains-effective": "pass",
+                "no-invented-meeting-details": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "current-two-hop-correction",
+              "RequestId": "candidate-concise/current-two-hop-correction",
+              "PromptSha256": "0749BDD8428C6651DE5E3FCDA81925B2B8452476D0106838C1FD5983759E7DC5",
+              "ReplySha256": "D902B22E6E179A0F7CC98E95F81A4A5C7F6017EA80EBCAFEF9F97223653A197D",
+              "InputSha256": "277A3A2FD08378087491313AB712AD17559D37EC0FE3921FC94BC4C47B140E67",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "keeps-two-hop-revision": "pass",
+                "no-extra-location-details": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": false,
+                "Failures": [
+                  "expected_exactly_one_final_metadata_object"
+                ]
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": false,
+                "StrictPipelinePassed": false,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": false,
+                "ProposedMemoryCount": null,
+                "ProposedMemoryImportance": null,
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "history-pronoun-revision",
+              "RequestId": "candidate-concise/history-pronoun-revision",
+              "PromptSha256": "D7CA29983D79DDEE41FEB23B6EA01352B799E92DA270C7B8FF53613BE90CB344",
+              "ReplySha256": "AE3BB8FFEE7CD2FF8DC9B265F84B27FE4A25AE6B87376D16982B15908BE415C3",
+              "InputSha256": "1A09BEF8B2275CF9CB49C2B1EDE0CD3B7B1DA7C9F7C45F3F1CB8091BD2199690",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "uses-later-session-revision": "pass",
+                "does-not-invent-a-move": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "preference-short-correction",
+              "RequestId": "candidate-concise/preference-short-correction",
+              "PromptSha256": "36F02FD113CE8C16E59F53739428E131D695B786E75EE6778F8E457365E3A59D",
+              "ReplySha256": "F29831A6B7C72D78F0ADA8B016D267CB35D6137214E27D710E634E9658E81A62",
+              "InputSha256": "18134A563F28C0166F3A3C7627E0F5D251AB4F69188C761AB1D4A7407F6DA17D",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "respects-short-correction": "pass",
+                "does-not-invent-replacement": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 1,
+                "ProposedMemoryImportance": [
+                  70
+                ],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "atlas-no-invented-damage",
+              "RequestId": "candidate-concise/atlas-no-invented-damage",
+              "PromptSha256": "D6237CFD58EDB2E4C5430056DFB7DCBBC5ADB4614AC360B61164B9C3BFAC22FB",
+              "ReplySha256": "25DDE0ECFC8FF1B4E61D0F0ADC593D83FEEF73C1027DDEB097BFF27853A9377D",
+              "InputSha256": "140C7A839987D7F0DD35AD8E6EE7A4CCCF45506C1F5B72A38EBB5161C53E64A5",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "recalls-supported-experience": "pass",
+                "no-damage-or-scene-fabrication": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": false,
+                "Failures": [
+                  "expected_exactly_one_final_metadata_object"
+                ]
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": false,
+                "StrictPipelinePassed": false,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": false,
+                "ProposedMemoryCount": null,
+                "ProposedMemoryImportance": null,
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "unknown-unrecorded-memory",
+              "RequestId": "candidate-concise/unknown-unrecorded-memory",
+              "PromptSha256": "EC24DE5981058F9100166F9ED18F7A31515A7A297349C32CA0EF2ECD1F7156F1",
+              "ReplySha256": "EF0AC93350C7D3F0C8573921B741BE4A470A8AB064D2C5F0D956308E8A03CF4D",
+              "InputSha256": "171626C8AE2E1A3344808235728BDD859744AA701D4F125B22C5FD8F0CA0A77F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "acknowledges-missing-evidence": "pass",
+                "does-not-affirm-invented-event": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "two-independent-agreements",
+              "RequestId": "candidate-concise/two-independent-agreements",
+              "PromptSha256": "9996D5B88F530AF7466D9B6385441790E955ACCAA2F74A62465AD9004D2D1A7F",
+              "ReplySha256": "3CFDAE2169110F51DB1EF03A9819715E18C6D004D9603C869A8681C934D7E27F",
+              "InputSha256": "FE679112FD42162DC35D63B21BC2BC9FE630A0C2351824A591E329F9A67DFAAE",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "cancels-only-lake": "pass",
+                "keeps-independent-book-promise": "pass",
+                "does-not-reanchor-book-return-day": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "fulfilled-help-over-old-promise",
+              "RequestId": "candidate-concise/fulfilled-help-over-old-promise",
+              "PromptSha256": "E39D6DBEF7E3D3C074E34C18E3FC867804EBF46B53C6314D1BA6AADB1C819881",
+              "ReplySha256": "E9ADCF406BD341312DFBCCC28CF94C58D0F275BB8961AE3AD3D34285DF759341",
+              "InputSha256": "1A991142085DEEB33CC4F14A3787A0EDBC40E69C120103C9DFE3179F69BE104F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "honors-fulfilled-state": "pass",
+                "no-duplicate-request-or-reward": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "oversized-revision-uncertainty",
+              "RequestId": "candidate-concise/oversized-revision-uncertainty",
+              "PromptSha256": "278F0837D424575698AAB200A7DFBD33962AB3896CAA65F603872E8C95BCD169",
+              "ReplySha256": "2204F0314C6E438D49B26DA7A193256F08BE680BD224BDDC363A04EC27C907F2",
+              "InputSha256": "C77CD7871E9F3FD3FD5EED42FD3DDCF2CF85702B8E56FB509FA4DCA10BDD23EA",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "no-stale-certainty": "pass",
+                "no-invented-explanation": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": false,
+                "Failures": [
+                  "expected_exactly_one_final_metadata_object"
+                ]
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": false,
+                "StrictPipelinePassed": false,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": false,
+                "ProposedMemoryCount": null,
+                "ProposedMemoryImportance": null,
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "current-dated-reschedule",
+              "RequestId": "candidate-concise/current-dated-reschedule",
+              "PromptSha256": "9F297EB342550D6DC53155032BB7621E80DD4892581EB7CAFE530C7B16C6FCA0",
+              "ReplySha256": "604A29D9A14359E13CA840617FED1639C71080C6C18D202D7E75F83B4FEAEA02",
+              "InputSha256": "C59BCBA3B7ED2C31D1D560AE9DF97A4687A00EA6E32E7D39482D8500CC179E62",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "uses-explicitly-anchored-revised-day": "pass",
+                "does-not-invent-clock-time": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "Number": 5,
+      "Id": "layout",
+      "FixturePath": "tools/fixtures/memory_agreement_accuracy.json",
+      "FixtureSha256": "ACB95348177A85E7C8ED18B3077C433EC3A21E4EBE677B5EDC651E2761F660AA",
+      "RunReportSha256": "6039DCDC329DC9872EBFF3F768D0906C9AFA785F27D5831FE6E55EAF868BF1D6",
+      "ReviewedReportSha256": "28D5D33D575DF0C80060F37A118B8EF82272814C16DC7D5F9AA64E5D5E925006",
+      "PlannedRequests": 11,
+      "RecordedRequests": 11,
+      "ConfiguredModelSha256": "7D963F65D1EDE1BD9416A5F55575EFE0D202E0A00519EF04E47DAE20C3180445",
+      "TransportProfile": {
+        "Parameters": {
+          "thinking": {
+            "type": "enabled"
+          },
+          "reasoning_effort": "low"
+        },
+        "OutputBudgetField": "max_tokens"
+      },
+      "StreamingRequests": 11,
+      "MaxOutputTokens": [
+        16000
+      ],
+      "TransportStatusCounts": {
+        "ok": 11
+      },
+      "Notes": [
+        "Adds an explicit complete-only metadata requirement for no-effect replies and ends pure recall after the answer or necessary clarification.",
+        "The atlas reply adds a remembered shelf arrangement. The oversized-revision reply avoids the stale answer but presupposes farmer ownership and prior custody.",
+        "Two whole-reply judgments remain uncertain: conversational recency of a correction and whether no longer waiting describes expectation or an unrecorded action.",
+        "The fulfilled-help reply passes facts but omits metadata. The other ten replies contain only complete:true metadata and no player options.",
+        "This captured prompt and assembly predate later history-sampling, load-order and conversation-budget repairs. These live samples do not certify the final code."
+      ],
+      "Variants": [
+        {
+          "Variant": "candidate-layout",
+          "Requests": 11,
+          "SamplesPerCase": 1,
+          "CapturedAssemblySha256": "ACBD578F03434FD0CAFCBB3BC55F1E3B300405A17863F0815840B6ACCA70ECB3",
+          "MatchingCaptureSha256": "BF01896A4BC6B4060BFFE33B2430CCD05BDE0042BCA778301918D790E746E552",
+          "CaptureScriptSha256": "E8F73CF07E088AB1515563AA9D73DD6056E803F3791C2F82B16A2F46D38E3C49",
+          "CaptureAssetSha256": {
+            "prompts/default.json": "A6ED8F8321132381810B2EE08BA289ACCB8FA2F664B87BE8E2E3A1CA33791EAC",
+            "prompts/zh.json": "4CC9D561CF6F9A6D901CE133FA3BF61CD4FBFFAE4DFC6761A7B016051F92DC50",
+            "bios/Penny.json": "5883416645E2976ADC996A13382F63791AE9E78048BFFB7DF53B88983FB56505",
+            "bios-zh/Penny.json": "4F4A559348E05D43F57453AE087E47D32B108419639A169F9CB43125CFEE9C10",
+            "world/GameSummary.json": "A6F882848683DEA97A1974A150C0920EF69043FA60AB39FE3BF993F8B8000829"
+          },
+          "ProductionParserReportSha256": "00E0C882657C6CEC71D1A3F80604A2607F40BDF112B23BD4756285621902D152",
+          "ArtifactHashJoinVerified": true,
+          "CaptureDiagnostics": {
+            "Checks": 44,
+            "ChecksPassed": 44,
+            "UnchangedInputs": 11,
+            "UnresolvedNameTokenCount": 0,
+            "NotAnAccuracyVerdict": true
+          },
+          "FactVerdicts": {
+            "pass": 7,
+            "fail": 2,
+            "uncertain": 2
+          },
+          "CriterionVerdicts": {
+            "pass": 31,
+            "fail": 2,
+            "uncertain": 2
+          },
+          "PythonFormat": {
+            "Passed": 10,
+            "Failed": 1,
+            "Total": 11
+          },
+          "ProductionParser": {
+            "Body": {
+              "Passed": 11,
+              "Failed": 0,
+              "Total": 11
+            },
+            "StrictInlineMetadata": {
+              "Passed": 10,
+              "Failed": 1,
+              "Total": 11
+            },
+            "StrictPipeline": {
+              "Passed": 10,
+              "Failed": 1,
+              "Total": 11
+            },
+            "ParserInputsUnchanged": 11,
+            "VisibleHiddenMarkerLeaks": 0,
+            "NetworkCalls": 0,
+            "ClassifierFallbackInvoked": false,
+            "GameActionsExecuted": false
+          },
+          "Cases": [
+            {
+              "CaseId": "current-pronoun-reschedule",
+              "RequestId": "candidate-layout/current-pronoun-reschedule",
+              "PromptSha256": "258E13B83A5A5581DE8EA4BD9BCA5AE262096A1826468E922F2714875E117DB3",
+              "ReplySha256": "04FB968FF57E06E9AC29DE0C2CB87BB3F9B8344FE1D3D82F412A1CC1CA531014",
+              "InputSha256": "472497B1C1014954F98D64889CCE717474ECFA73202214061ABA6278923CF0F1",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "uses-revised-day": "pass",
+                "does-not-reanchor-old-relative-day": "pass",
+                "does-not-invent-clock-time": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "current-far-cancellation",
+              "RequestId": "candidate-layout/current-far-cancellation",
+              "PromptSha256": "1FF8A4AF2FBE8FC8969620AFADA406E5F89A87B329F2AA833E1BABBE9D8059CC",
+              "ReplySha256": "5ABB1B45A238D9A1D9C246DF948018ACA78D0F5F14706A6605F2DE5A0793EC2D",
+              "InputSha256": "4D9B7AE847FBE31258B543BBB105F3B5A0ABB89CA216D09451A4890E0F4E9D9F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "cancellation-remains-effective": "pass",
+                "no-invented-meeting-details": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "current-two-hop-correction",
+              "RequestId": "candidate-layout/current-two-hop-correction",
+              "PromptSha256": "77C743CC0254D2CC7B495CE94B92BE9F3913C7BBF434513C50AA88267B76D4A5",
+              "ReplySha256": "FFB8EA43B4D7849CAA051FAC27C5B03E353C9F7A512C036D7209FDB4D6B6EA75",
+              "InputSha256": "277A3A2FD08378087491313AB712AD17559D37EC0FE3921FC94BC4C47B140E67",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "uncertain",
+              "CriterionVerdicts": {
+                "keeps-two-hop-revision": "pass",
+                "no-extra-location-details": "pass",
+                "whole-reply-grounded": "uncertain"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "history-pronoun-revision",
+              "RequestId": "candidate-layout/history-pronoun-revision",
+              "PromptSha256": "D742331A7442998DA000739C799C711535F19BAB474710797F6641414A18E51B",
+              "ReplySha256": "DF2321DED50305B7F00D7518945DCD9D3C01EC57B3766DA51289288DEC2F2ADF",
+              "InputSha256": "1A09BEF8B2275CF9CB49C2B1EDE0CD3B7B1DA7C9F7C45F3F1CB8091BD2199690",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "uses-later-session-revision": "pass",
+                "does-not-invent-a-move": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "preference-short-correction",
+              "RequestId": "candidate-layout/preference-short-correction",
+              "PromptSha256": "B5AC62BCEA9C533517A15E7AA61547D4ECF75362401F9D33A56BD7F516E96938",
+              "ReplySha256": "B9F1B9A248A1E7AB6B040A3F22A6337C1C70748CAEDDFA2BA8C5182E39A1DD0C",
+              "InputSha256": "18134A563F28C0166F3A3C7627E0F5D251AB4F69188C761AB1D4A7407F6DA17D",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "respects-short-correction": "pass",
+                "does-not-invent-replacement": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "atlas-no-invented-damage",
+              "RequestId": "candidate-layout/atlas-no-invented-damage",
+              "PromptSha256": "D13EE46DFEE339C4E63E05D4C561551AE2DA1BCFF2A235A7E094AAE8F30CCC7A",
+              "ReplySha256": "FA4EE0C1F5204CECD9A30E93C3827B58B47884E1156ABFAF33153E7F6AC38B11",
+              "InputSha256": "140C7A839987D7F0DD35AD8E6EE7A4CCCF45506C1F5B72A38EBB5161C53E64A5",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "recalls-supported-experience": "pass",
+                "no-damage-or-scene-fabrication": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "unknown-unrecorded-memory",
+              "RequestId": "candidate-layout/unknown-unrecorded-memory",
+              "PromptSha256": "6D5B396381F26F1407FD810BE6D960687DDC9A8A70504FA0299AB8AF8920C829",
+              "ReplySha256": "E39B78BF66C7AB696E9F30418369940505DB7C27897509AF17A71C822C468D25",
+              "InputSha256": "171626C8AE2E1A3344808235728BDD859744AA701D4F125B22C5FD8F0CA0A77F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "acknowledges-missing-evidence": "pass",
+                "does-not-affirm-invented-event": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "two-independent-agreements",
+              "RequestId": "candidate-layout/two-independent-agreements",
+              "PromptSha256": "E05C781862CB83FDD2F1AB8409A8B8AFCF9A7C2829F81C7F4FCFFFE30D447479",
+              "ReplySha256": "B1E43471E460E0843A99E0042B5F25AC111957FD95A54AF2D80A3447EED99182",
+              "InputSha256": "FE679112FD42162DC35D63B21BC2BC9FE630A0C2351824A591E329F9A67DFAAE",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "uncertain",
+              "CriterionVerdicts": {
+                "cancels-only-lake": "pass",
+                "keeps-independent-book-promise": "pass",
+                "does-not-reanchor-book-return-day": "pass",
+                "whole-reply-grounded": "uncertain"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "fulfilled-help-over-old-promise",
+              "RequestId": "candidate-layout/fulfilled-help-over-old-promise",
+              "PromptSha256": "D2E49330A2E3FFCE6DCE55D205C0DF6F2BA6F9865D40EB8A577A42A3903F1852",
+              "ReplySha256": "C6B5A4728317F6B183F0EDEF3FE724FCEE087B55972E1E98342601F7DA44E5E4",
+              "InputSha256": "1A991142085DEEB33CC4F14A3787A0EDBC40E69C120103C9DFE3179F69BE104F",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "honors-fulfilled-state": "pass",
+                "no-duplicate-request-or-reward": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": false,
+                "Failures": [
+                  "expected_exactly_one_final_metadata_object"
+                ]
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": false,
+                "StrictPipelinePassed": false,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": false,
+                "ProposedMemoryCount": null,
+                "ProposedMemoryImportance": null,
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "oversized-revision-uncertainty",
+              "RequestId": "candidate-layout/oversized-revision-uncertainty",
+              "PromptSha256": "2218314F458CD67ED263EAA760D75D990DE462CB09032D2E9352C67FDB97391D",
+              "ReplySha256": "02DC237B7ED8E6D994D369DCBF840D30092794F318AD482DB8F724995BF8E4B8",
+              "InputSha256": "C77CD7871E9F3FD3FD5EED42FD3DDCF2CF85702B8E56FB509FA4DCA10BDD23EA",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "fail",
+              "CriterionVerdicts": {
+                "no-stale-certainty": "pass",
+                "no-invented-explanation": "pass",
+                "whole-reply-grounded": "fail"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            },
+            {
+              "CaseId": "current-dated-reschedule",
+              "RequestId": "candidate-layout/current-dated-reschedule",
+              "PromptSha256": "5339A932D50C1EBFBE3BF090095F8F7C88CC1E3106418A153EF7CC355B870EC2",
+              "ReplySha256": "7E5D4DB5722318C42BD97B2844A7E6868E274F9C0D01452613E5273F5AF34634",
+              "InputSha256": "C59BCBA3B7ED2C31D1D560AE9DF97A4687A00EA6E32E7D39482D8500CC179E62",
+              "InputUnchanged": true,
+              "TransportStatus": "ok",
+              "FactVerdict": "pass",
+              "CriterionVerdicts": {
+                "uses-explicitly-anchored-revised-day": "pass",
+                "does-not-invent-clock-time": "pass",
+                "whole-reply-grounded": "pass"
+              },
+              "ObjectiveFactualFailures": [],
+              "PythonFormat": {
+                "Passed": true,
+                "Failures": []
+              },
+              "ProductionParser": {
+                "BodyPassed": true,
+                "StrictInlineMetadataPassed": true,
+                "StrictPipelinePassed": true,
+                "InputsUnchanged": true,
+                "VisibleHiddenMarkerLeakCount": 0
+              },
+              "MetadataContract": {
+                "CompleteMetadataPresent": true,
+                "ProposedMemoryCount": 0,
+                "ProposedMemoryImportance": [],
+                "ParsedPlayerOptionCount": 0
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "FinalPositiveControls": {
+    "Id": "final-preference-positive-controls",
+    "FixturePath": "tools/fixtures/memory_agreement_accuracy.controls.json",
+    "FixtureSha256": "15B8BE2C82771C6DBA75591DB55AF7EDD93A443BB82DD7095928A847521A3D83",
+    "RunReportSha256": "F75A9334E9EDA20C4C4CF1F8622EC2B4CB02E03FEF12FE99B938F56853BC7402",
+    "ReviewedReportSha256": "838B3EE3F3B0F8FAF7A4C050E9787E2EB23B653D7E9E629FD6D7400408A1A663",
+    "PlannedRequests": 2,
+    "RecordedRequests": 2,
+    "ConfiguredModelSha256": "7D963F65D1EDE1BD9416A5F55575EFE0D202E0A00519EF04E47DAE20C3180445",
+    "TransportProfile": {
+      "Parameters": {
+        "thinking": {
+          "type": "enabled"
+        },
+        "reasoning_effort": "low"
+      },
+      "OutputBudgetField": "max_tokens"
+    },
+    "StreamingRequests": 2,
+    "MaxOutputTokens": [
+      16000
+    ],
+    "TransportStatusCounts": {
+      "ok": 2
+    },
+    "Notes": [
+      "Two post-hoc positive controls run with the final isolated assembly, separate from the 64 historical development requests.",
+      "Both cases propose the correct farmer preference, specific subject, preference kind and importance 60; this demonstrates valid proposals in these two samples only, not actual save writes or general persistence reliability.",
+      "The strawberry reply uses supplied seasonal and teaching background and an explicitly imagined future scene. Its separate line break fails Python layout inspection but is accepted by production parsers.",
+      "The peach reply correctly proposes the new dislike but recasts a real preference change as prior NPC memory error and adds unsupported premises in player options; whole-reply grounding fails.",
+      "These controls are not held-out data. Their remaining failure is retained without further prompt tuning on the same samples."
+    ],
+    "Variants": [
+      {
+        "Variant": "controls-resume",
+        "Requests": 2,
+        "SamplesPerCase": 1,
+        "CapturedAssemblySha256": "A64A86CCA301D7B44492A8BBB14209D41A2C7AD49B02531E3CE669FF58A7BA7E",
+        "MatchingCaptureSha256": "6569A4F29D460C2F2E8AAA4100B6FA9707F4F6FAAAB7A33F2F322B71AC3B00D1",
+        "CaptureScriptSha256": "E8F73CF07E088AB1515563AA9D73DD6056E803F3791C2F82B16A2F46D38E3C49",
+        "CaptureAssetSha256": {
+          "prompts/default.json": "A6ED8F8321132381810B2EE08BA289ACCB8FA2F664B87BE8E2E3A1CA33791EAC",
+          "prompts/zh.json": "4CC9D561CF6F9A6D901CE133FA3BF61CD4FBFFAE4DFC6761A7B016051F92DC50",
+          "bios/Penny.json": "5883416645E2976ADC996A13382F63791AE9E78048BFFB7DF53B88983FB56505",
+          "bios-zh/Penny.json": "4F4A559348E05D43F57453AE087E47D32B108419639A169F9CB43125CFEE9C10",
+          "world/GameSummary.json": "A6F882848683DEA97A1974A150C0920EF69043FA60AB39FE3BF993F8B8000829"
+        },
+        "ProductionParserReportSha256": "75E15E846A2DD38EFD8336A52734C39121D2ED9A34DE7321D46A0A9E01AB904E",
+        "ArtifactHashJoinVerified": true,
+        "CaptureDiagnostics": {
+          "Checks": 8,
+          "ChecksPassed": 8,
+          "UnchangedInputs": 2,
+          "UnresolvedNameTokenCount": 0,
+          "NotAnAccuracyVerdict": true
+        },
+        "FactVerdicts": {
+          "pass": 1,
+          "fail": 1,
+          "uncertain": 0
+        },
+        "CriterionVerdicts": {
+          "pass": 7,
+          "fail": 1,
+          "uncertain": 0
+        },
+        "PythonFormat": {
+          "Passed": 1,
+          "Failed": 1,
+          "Total": 2
+        },
+        "ProductionParser": {
+          "Body": {
+            "Passed": 2,
+            "Failed": 0,
+            "Total": 2
+          },
+          "StrictInlineMetadata": {
+            "Passed": 2,
+            "Failed": 0,
+            "Total": 2
+          },
+          "StrictPipeline": {
+            "Passed": 2,
+            "Failed": 0,
+            "Total": 2
+          },
+          "ParserInputsUnchanged": 2,
+          "VisibleHiddenMarkerLeaks": 0,
+          "NetworkCalls": 0,
+          "ClassifierFallbackInvoked": false,
+          "GameActionsExecuted": false
+        },
+        "Cases": [
+          {
+            "CaseId": "control-new-strawberry-preference",
+            "RequestId": "controls-resume/control-new-strawberry-preference",
+            "PromptSha256": "FA40854F2ECE23C7A80E039EBD989C0BC0878E701666F50CE0922CEAA4297251",
+            "ReplySha256": "C56A3D9D4A54643E90E74D5F691D2683075106CA5C5F58D17EAD6329C975C2BB",
+            "InputSha256": "D8143C690FCD15BE9DD13DC9D4C24C65B5F5799FDCFC8C91EDC96919C80D9DE0",
+            "InputUnchanged": true,
+            "TransportStatus": "ok",
+            "FactVerdict": "pass",
+            "CriterionVerdicts": {
+              "proposes-new-durable-preference": "pass",
+              "keeps-farmer-and-specific-subject": "pass",
+              "does-not-expand-new-preference": "pass",
+              "whole-reply-grounded": "pass"
+            },
+            "ObjectiveFactualFailures": [],
+            "PythonFormat": {
+              "Passed": false,
+              "Failures": [
+                "noncanonical_dialogue_or_options"
+              ]
+            },
+            "ProductionParser": {
+              "BodyPassed": true,
+              "StrictInlineMetadataPassed": true,
+              "StrictPipelinePassed": true,
+              "InputsUnchanged": true,
+              "VisibleHiddenMarkerLeakCount": 0
+            },
+            "MetadataContract": {
+              "CompleteMetadataPresent": true,
+              "ProposedMemoryCount": 1,
+              "ProposedMemoryImportance": [
+                60
+              ],
+              "ParsedPlayerOptionCount": 3
+            }
+          },
+          {
+            "CaseId": "control-current-peach-preference-revision",
+            "RequestId": "controls-resume/control-current-peach-preference-revision",
+            "PromptSha256": "67A0BC698784DC7BFEFFB3A06285D2E959722DD6E587EC73EAE34A82FB037713",
+            "ReplySha256": "258154899B0FFF10C277A8DF875AEB1501A8F56A7A97A666954121E3B2F6FDEF",
+            "InputSha256": "312B785A6B0AE3B9F9A19AE1F9CA4FD65C1EBDD2482D3847702E39E3B9872F73",
+            "InputUnchanged": true,
+            "TransportStatus": "ok",
+            "FactVerdict": "fail",
+            "CriterionVerdicts": {
+              "proposes-current-durable-preference-revision": "pass",
+              "preserves-farmer-and-existing-subject": "pass",
+              "does-not-expand-preference-revision": "pass",
+              "whole-reply-grounded": "fail"
+            },
+            "ObjectiveFactualFailures": [],
+            "PythonFormat": {
+              "Passed": true,
+              "Failures": []
+            },
+            "ProductionParser": {
+              "BodyPassed": true,
+              "StrictInlineMetadataPassed": true,
+              "StrictPipelinePassed": true,
+              "InputsUnchanged": true,
+              "VisibleHiddenMarkerLeakCount": 0
+            },
+            "MetadataContract": {
+              "CompleteMetadataPresent": true,
+              "ProposedMemoryCount": 1,
+              "ProposedMemoryImportance": [
+                60
+              ],
+              "ParsedPlayerOptionCount": 3
+            }
+          }
+        ]
+      }
+    ],
+    "NotIncludedInHistoricalRequestCount": true,
+    "CorePreferenceContract": {
+      "RequestsWithValidProposal": 2,
+      "RequestsWithCorrectFarmerAndSubject": 2,
+      "TotalRequests": 2,
+      "ActualGameSaveWrites": 0
+    }
+  },
+  "FinalVerification": {
+    "Scope": "Final isolated source snapshot and offline regression, distinct from the five historical live rounds and the two final positive controls.",
+    "AssemblySha256": "A64A86CCA301D7B44492A8BBB14209D41A2C7AD49B02531E3CE669FF58A7BA7E",
+    "SourceFilesAndAssets": {
+      "Compared": 21,
+      "AllByteIdenticalToWorkspace": true,
+      "UnrelatedWorkspaceChangesExcluded": 13,
+      "Files": [
+        {
+          "Path": "LivingNPCs.Tests/Dialogue/Engine/CurrentConversationEvidenceTests.cs",
+          "Sha256": "371E4EF8D6FC07CD106E8B1DB5E6E4AF7F5056035094F051E69B17C8D8B4D545"
+        },
+        {
+          "Path": "LivingNPCs.Tests/Dialogue/Engine/HistoryRevisionEvidenceTests.cs",
+          "Sha256": "4B1CE88E3E0E6C847D6E6CDDD2C97EC8DB35831AA9DF163AC35D9D48A99CFAD5"
+        },
+        {
+          "Path": "LivingNPCs.Tests/MemoryEvidenceAccuracyTests.cs",
+          "Sha256": "69D96A565E3BD8F58F8DC73BB1D3F0A7FEB731BB41624DE74FA7D7B16E46185C"
+        },
+        {
+          "Path": "LivingNPCs.Tests/MemoryRecallTests.cs",
+          "Sha256": "49E0E59A284D3F5407B4D74BA94CE8E7066C8693AC1034DB30CB0B1FBE663501"
+        },
+        {
+          "Path": "LivingNPCs.Tests/MemoryRevisionTests.cs",
+          "Sha256": "F8E684C5C2F1A4DED694D12C22AD68EDFBB1FA5C3262C02266120B5B69DCC12E"
+        },
+        {
+          "Path": "LivingNPCs/Behavior/BehaviorMemory.cs",
+          "Sha256": "82CAAF7D1AFE34AFFFD2C4C6FEE4E13B5D34F5031A126814C5E5A352827C67E6"
+        },
+        {
+          "Path": "LivingNPCs/Behavior/Memory/BehaviorPromptContextBuilder.cs",
+          "Sha256": "B43AD9DA24C21BA1A07EFA746E8E36C76AA2998F3B22E8A99E8888DC9E48FFCB"
+        },
+        {
+          "Path": "LivingNPCs/Behavior/Memory/ExchangeApplicationService.cs",
+          "Sha256": "37A2EC9AE72806E67A310C3B9E366A766FEE4A710DC3C3FB74E5CFEB778529BE"
+        },
+        {
+          "Path": "LivingNPCs/Behavior/Memory/LongTermMemoryStore.cs",
+          "Sha256": "E72C2328DC185501A60521B0ED5E6B5AE5E4C5F50055024762CE42419AE8EAB3"
+        },
+        {
+          "Path": "LivingNPCs/Behavior/Memory/MemoryRecallService.cs",
+          "Sha256": "249EBC04B0341B84524735DFF8523FE0ABE3FC29183A8EF8B32B868EA2D9D280"
+        },
+        {
+          "Path": "LivingNPCs/Behavior/Memory/PlayerPreferenceMemoryStore.cs",
+          "Sha256": "AF4537F8CAA0FE7C91847B07C6BB141CC4BE9BADC547115A04A5CE4D9D5A4C63"
+        },
+        {
+          "Path": "LivingNPCs/Behavior/Prompts/MemoryEvidenceFormatter.cs",
+          "Sha256": "6E0910BFB050FD9FEA8D94C3745FD549211634CAA21737BA79DFE89592C5D2EB"
+        },
+        {
+          "Path": "LivingNPCs/Dialogue/Engine/ConversationEvidenceCues.cs",
+          "Sha256": "69747357E1AEE0148087BD618EFF614BD06917DD4C1F9B84F91E49AECB51A2A4"
+        },
+        {
+          "Path": "LivingNPCs/Dialogue/Engine/CurrentConversationProjector.cs",
+          "Sha256": "3C57613A8C748675687CDEC0DFA7A03EFC635A321886CA8D3579752BA040895D"
+        },
+        {
+          "Path": "LivingNPCs/Dialogue/Engine/HistorySampler.cs",
+          "Sha256": "B20429DE5B4A3216C87B63D47E47774241477C0BAF90CA277ADFE756091AAE29"
+        },
+        {
+          "Path": "LivingNPCs/Dialogue/Engine/LivingNpcContextCompressor.cs",
+          "Sha256": "12A9D72AFE93B30E74AE5C18BFCF886629EB65B22BC0BD7B78FBDF58B799F569"
+        },
+        {
+          "Path": "LivingNPCs/Dialogue/Engine/LivingNpcMetadataContract.cs",
+          "Sha256": "FBB3E3900CC3603350115BC445227995986BF3DC238D6838EFFC26DE9E05BF2C"
+        },
+        {
+          "Path": "LivingNPCs/Dialogue/Engine/MemoryEvidenceRules.cs",
+          "Sha256": "99753E1AF0A30361747DD7B1F86993C10599549447F0157713E1EBFDB8A63D12"
+        },
+        {
+          "Path": "LivingNPCs/Dialogue/Engine/PromptAssembler.cs",
+          "Sha256": "972D4AFEEAA1F1565548675C371EEDA94272D3D049FCDEE973859300C8FEA22B"
+        },
+        {
+          "Path": "LivingNPCs/assets/dialogue/prompts/default.json",
+          "Sha256": "A6ED8F8321132381810B2EE08BA289ACCB8FA2F664B87BE8E2E3A1CA33791EAC"
+        },
+        {
+          "Path": "LivingNPCs/assets/dialogue/prompts/zh.json",
+          "Sha256": "4CC9D561CF6F9A6D901CE133FA3BF61CD4FBFFAE4DFC6761A7B016051F92DC50"
+        }
+      ]
+    },
+    "FullRegression": {
+      "ResultFile": "accuracy-resume-final.trx",
+      "ResultSha256": "64F0E237F95F8078114D4A364772A74E9F33CF5C3B9D205697A82521AE1B9EB9",
+      "Total": 2801,
+      "Passed": 2800,
+      "Failed": 0,
+      "Skipped": 1,
+      "ExistingSkippedTest": "LivingNPCs.Tests.Dialogue.ContextRoutingPlanTests.PromptOptimizationAndRoutingConfigKeysAreLocalizedAndInjected",
+      "AddedBoundaryCases": {
+        "LoadOrder": 5,
+        "CurrentConversationBudget": 3,
+        "HistoryEvidence": 6,
+        "Total": 14
+      },
+      "HistoryBeforeFix": {
+        "ResultSha256": "329E76838B5889A7474D5713D67BAE9D148C441CDCBBA0076D40D4DC0A3C07F4",
+        "Cases": 6,
+        "Failed": 6,
+        "SameCasesPassedAfterFix": 6
+      },
+      "ModDeployEnabled": false,
+      "ModZipEnabled": false
+    },
+    "PythonToolTests": {
+      "Passed": 11,
+      "Failed": 0,
+      "IncludesFinalAssemblyParserIntegration": true,
+      "IncludesControlSourceReferences": true
+    },
+    "FinalOfflineCapture": {
+      "Variant": "candidate-resume",
+      "CaptureSha256": "807CC898E0F573A1DC3A9B8A9DFE592ACCAD9C3E68D35E04D76122FC46C5ADEA",
+      "AssemblySha256": "A64A86CCA301D7B44492A8BBB14209D41A2C7AD49B02531E3CE669FF58A7BA7E",
+      "FixtureSha256": "ACB95348177A85E7C8ED18B3077C433EC3A21E4EBE677B5EDC651E2761F660AA",
+      "CaptureScriptSha256": "E8F73CF07E088AB1515563AA9D73DD6056E803F3791C2F82B16A2F46D38E3C49",
+      "CaptureAssetSha256": {
+        "prompts/default.json": "A6ED8F8321132381810B2EE08BA289ACCB8FA2F664B87BE8E2E3A1CA33791EAC",
+        "prompts/zh.json": "4CC9D561CF6F9A6D901CE133FA3BF61CD4FBFFAE4DFC6761A7B016051F92DC50",
+        "bios/Penny.json": "5883416645E2976ADC996A13382F63791AE9E78048BFFB7DF53B88983FB56505",
+        "bios-zh/Penny.json": "4F4A559348E05D43F57453AE087E47D32B108419639A169F9CB43125CFEE9C10",
+        "world/GameSummary.json": "A6F882848683DEA97A1974A150C0920EF69043FA60AB39FE3BF993F8B8000829"
+      },
+      "Cases": 11,
+      "Checks": 44,
+      "ChecksPassed": 44,
+      "UnchangedInputs": 11,
+      "UnresolvedNameTokenCount": 0,
+      "InputEquivalenceToHistoricalRound": {
+        "Round": 5,
+        "Variant": "candidate-layout",
+        "HistoricalCaptureSha256": "BF01896A4BC6B4060BFFE33B2430CCD05BDE0042BCA778301918D790E746E552",
+        "HistoricalAssemblySha256": "ACBD578F03434FD0CAFCBB3BC55F1E3B300405A17863F0815840B6ACCA70ECB3",
+        "ComparedFieldNames": [
+          "System",
+          "User",
+          "PromptSha256",
+          "MaxTokens"
+        ],
+        "IdenticalCases": 11,
+        "HistoricalRequestsRemainAttributedToHistoricalAssembly": true,
+        "ProviderRequestsMadeByThisOfflineCapture": 0,
+        "Cases": [
+          {
+            "CaseId": "current-pronoun-reschedule",
+            "PromptSha256": "258E13B83A5A5581DE8EA4BD9BCA5AE262096A1826468E922F2714875E117DB3",
+            "AllComparedFieldsEqual": true
+          },
+          {
+            "CaseId": "current-far-cancellation",
+            "PromptSha256": "1FF8A4AF2FBE8FC8969620AFADA406E5F89A87B329F2AA833E1BABBE9D8059CC",
+            "AllComparedFieldsEqual": true
+          },
+          {
+            "CaseId": "current-two-hop-correction",
+            "PromptSha256": "77C743CC0254D2CC7B495CE94B92BE9F3913C7BBF434513C50AA88267B76D4A5",
+            "AllComparedFieldsEqual": true
+          },
+          {
+            "CaseId": "history-pronoun-revision",
+            "PromptSha256": "D742331A7442998DA000739C799C711535F19BAB474710797F6641414A18E51B",
+            "AllComparedFieldsEqual": true
+          },
+          {
+            "CaseId": "preference-short-correction",
+            "PromptSha256": "B5AC62BCEA9C533517A15E7AA61547D4ECF75362401F9D33A56BD7F516E96938",
+            "AllComparedFieldsEqual": true
+          },
+          {
+            "CaseId": "atlas-no-invented-damage",
+            "PromptSha256": "D13EE46DFEE339C4E63E05D4C561551AE2DA1BCFF2A235A7E094AAE8F30CCC7A",
+            "AllComparedFieldsEqual": true
+          },
+          {
+            "CaseId": "unknown-unrecorded-memory",
+            "PromptSha256": "6D5B396381F26F1407FD810BE6D960687DDC9A8A70504FA0299AB8AF8920C829",
+            "AllComparedFieldsEqual": true
+          },
+          {
+            "CaseId": "two-independent-agreements",
+            "PromptSha256": "E05C781862CB83FDD2F1AB8409A8B8AFCF9A7C2829F81C7F4FCFFFE30D447479",
+            "AllComparedFieldsEqual": true
+          },
+          {
+            "CaseId": "fulfilled-help-over-old-promise",
+            "PromptSha256": "D2E49330A2E3FFCE6DCE55D205C0DF6F2BA6F9865D40EB8A577A42A3903F1852",
+            "AllComparedFieldsEqual": true
+          },
+          {
+            "CaseId": "oversized-revision-uncertainty",
+            "PromptSha256": "2218314F458CD67ED263EAA760D75D990DE462CB09032D2E9352C67FDB97391D",
+            "AllComparedFieldsEqual": true
+          },
+          {
+            "CaseId": "current-dated-reschedule",
+            "PromptSha256": "5339A932D50C1EBFBE3BF090095F8F7C88CC1E3106418A153EF7CC355B870EC2",
+            "AllComparedFieldsEqual": true
+          }
+        ]
+      }
+    },
+    "Limitations": [
+      "Input equivalence for these 11 scenarios is not a rerun of their historical provider requests against the final assembly, nor proof of all runtime behavior.",
+      "History hardening without an explicit revision cue conservatively omits an older assertion only for multiple shared terms and an oversized later complete entry; it is not a semantic state parser.",
+      "The full isolated regression passes while known provider hallucinations and semantic drift remain documented. No game end-to-end acceptance is claimed."
+    ]
+  }
+}

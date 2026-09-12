@@ -16,7 +16,7 @@ internal static class PlayerPreferenceMemoryStore
             .Where(memory => memory.PreferenceKind != "none"
                 && !string.IsNullOrWhiteSpace(BuildKey(memory.PreferenceKind, memory.Subject, memory.Summary)))
             .GroupBy(
-                memory => BuildKey(memory.PreferenceKind, memory.Subject, memory.Summary),
+                memory => BuildRevisionKey(memory.PreferenceKind, memory.Subject, memory.Summary),
                 System.StringComparer.OrdinalIgnoreCase)
             .Select(MergeGroup)
             .OrderByDescending(memory => GetRetentionScore(memory, currentTotalDays))
@@ -34,27 +34,44 @@ internal static class PlayerPreferenceMemoryStore
     {
         state.PlayerPreferenceMemories ??= new List<PlayerPreferenceFact>();
 
-        string normalizedKey = BuildKey(candidate.PlayerPreferenceKind, candidate.Subject, candidate.Summary);
-        if (string.IsNullOrWhiteSpace(normalizedKey))
+        string normalizedKey = BuildRevisionKey(candidate.PlayerPreferenceKind, candidate.Subject, candidate.Summary);
+        if (string.IsNullOrWhiteSpace(normalizedKey) || string.IsNullOrWhiteSpace(candidate.Summary))
         {
             return false;
         }
 
-        var existing = state.PlayerPreferenceMemories.FirstOrDefault(memory =>
-            BuildKey(memory.PreferenceKind, memory.Subject, memory.Summary) == normalizedKey);
+        var existingVersions = state.PlayerPreferenceMemories.Where(memory =>
+                BuildRevisionKey(memory.PreferenceKind, memory.Subject, memory.Summary) == normalizedKey)
+            .ToArray();
+        var existing = existingVersions
+            .OrderBy(memory => memory.LastUpdatedTotalDays >= 0 ? memory.LastUpdatedTotalDays : memory.CreatedTotalDays)
+            .ThenBy(memory => memory.LastUpdatedTotalDays >= 0 ? memory.LastUpdatedTimeOfDay : memory.CreatedTimeOfDay)
+            .LastOrDefault();
         if (existing != null)
         {
+            int updatedDay = existing.LastUpdatedTotalDays >= 0 ? existing.LastUpdatedTotalDays : existing.CreatedTotalDays;
+            int updatedTime = existing.LastUpdatedTotalDays >= 0 ? existing.LastUpdatedTimeOfDay : existing.CreatedTimeOfDay;
+            if (IsNewerAt(updatedDay, updatedTime, currentTotalDays, currentTimeOfDay))
+            {
+                return false;
+            }
+
+            existing = MergeGroup(existingVersions.Select(NormalizeForStore));
             existing.PreferenceKind = NormalizeKind(candidate.PlayerPreferenceKind);
             existing.Subject = candidate.Subject.Trim();
             existing.Summary = candidate.Summary.Trim();
             existing.Importance = System.Math.Max(existing.Importance, candidate.Importance);
+            // A changed preference replaces its evidence, including tags derived from old text.
+            // Equal game-clock times are valid successive revisions; the later call wins.
             existing.Tags = BehaviorValueNormalizer.NormalizeMemoryTags(
-                existing.Tags.Concat(candidate.Tags),
+                candidate.Tags,
                 existing.Subject,
                 existing.Summary);
             existing.LastUpdatedTotalDays = currentTotalDays;
             existing.LastUpdatedTimeOfDay = currentTimeOfDay;
             existing.TimesReinforced += 1;
+            state.PlayerPreferenceMemories.RemoveAll(memory =>
+                existingVersions.Contains(memory) && !ReferenceEquals(memory, existing));
             return true;
         }
 
@@ -136,6 +153,18 @@ internal static class PlayerPreferenceMemoryStore
         return BehaviorValueNormalizer.BuildPlayerPreferenceKey(kind, subject, summary);
     }
 
+    // A specific item's like/dislike is one mutually exclusive preference. Other preference
+    // kinds remain independent, and an absent subject cannot identify an item to revise.
+    // Keep BuildKey's persisted/type-specific identity contract for its existing callers.
+    internal static string BuildRevisionKey(string kind, string subject, string summary)
+    {
+        string normalizedKind = NormalizeKind(kind);
+        string normalizedSubject = BehaviorValueNormalizer.NormalizeMemorySummary(subject);
+        return normalizedSubject.Length > 0 && normalizedKind is "liked_item_category" or "disliked_item"
+            ? $"item_preference:{normalizedSubject}"
+            : BuildKey(kind, subject, summary);
+    }
+
     public static string NormalizeKind(string kind)
     {
         return BehaviorValueNormalizer.NormalizePlayerPreferenceKind(kind);
@@ -144,42 +173,24 @@ internal static class PlayerPreferenceMemoryStore
     private static PlayerPreferenceFact MergeGroup(IEnumerable<PlayerPreferenceFact> group)
     {
         var memories = group
-            .OrderByDescending(GetRetentionScore)
-            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
-            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+            .Distinct()
+            .OrderBy(memory => memory.LastUpdatedTotalDays)
+            .ThenBy(memory => memory.LastUpdatedTimeOfDay)
             .ToList();
-        var primary = memories[0];
-        foreach (var memory in memories.Skip(1))
+        // Pick the latest complete revision, using stored order for same-minute corrections.
+        // Salience and length must not replace a correction with an older preference.
+        var primary = memories[^1];
+        foreach (var memory in memories.Take(memories.Count - 1))
         {
-            if (string.IsNullOrWhiteSpace(primary.Subject) && !string.IsNullOrWhiteSpace(memory.Subject))
-            {
-                primary.Subject = memory.Subject;
-            }
-
-            if (memory.Importance > primary.Importance || memory.Summary.Length > primary.Summary.Length)
-            {
-                primary.Summary = memory.Summary;
-            }
-
             primary.Importance = System.Math.Max(primary.Importance, memory.Importance);
-            primary.Tags = BehaviorValueNormalizer.NormalizeMemoryTags(
-                primary.Tags.Concat(memory.Tags),
-                primary.Subject,
-                primary.Summary,
-                memory.Subject,
-                memory.Summary);
             primary.TimesReinforced += memory.TimesReinforced;
             primary.RecallCount += memory.RecallCount;
-            if (IsOlderCreatedAt(memory.CreatedTotalDays, primary.CreatedTotalDays))
+            if (memory.CreatedTotalDays >= 0
+                && (primary.CreatedTotalDays < 0 || IsNewerAt(primary.CreatedTotalDays, primary.CreatedTimeOfDay,
+                    memory.CreatedTotalDays, memory.CreatedTimeOfDay)))
             {
                 primary.CreatedTotalDays = memory.CreatedTotalDays;
                 primary.CreatedTimeOfDay = memory.CreatedTimeOfDay;
-            }
-
-            if (IsNewerAt(memory.LastUpdatedTotalDays, memory.LastUpdatedTimeOfDay, primary.LastUpdatedTotalDays, primary.LastUpdatedTimeOfDay))
-            {
-                primary.LastUpdatedTotalDays = memory.LastUpdatedTotalDays;
-                primary.LastUpdatedTimeOfDay = memory.LastUpdatedTimeOfDay;
             }
 
             if (IsNewerAt(memory.LastRecalledTotalDays, memory.LastRecalledTimeOfDay, primary.LastRecalledTotalDays, primary.LastRecalledTimeOfDay))
@@ -197,11 +208,6 @@ internal static class PlayerPreferenceMemoryStore
         return totalDays < 0
             ? int.MaxValue
             : System.Math.Max(0, currentTotalDays - totalDays);
-    }
-
-    private static bool IsOlderCreatedAt(int candidateTotalDays, int currentTotalDays)
-    {
-        return candidateTotalDays >= 0 && (currentTotalDays < 0 || candidateTotalDays < currentTotalDays);
     }
 
     private static bool IsNewerAt(int candidateTotalDays, int candidateTimeOfDay, int currentTotalDays, int currentTimeOfDay)

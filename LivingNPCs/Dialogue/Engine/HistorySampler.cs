@@ -22,7 +22,15 @@ internal static class HistorySampler
     internal const int RecentContinuityEntries = 2;
     internal const int RelatedEntries = 6;
 
-    private sealed record HistoryEntry(StardewTime Time, string Text, string Subject, string TopicText);
+    private sealed record HistoryEntry(StardewTime Time, string Text, string Subject, string TopicText,
+        string DirectSource = "", bool HasFollowingReference = false)
+    {
+        public bool IsDirect => this.DirectSource.Length > 0;
+    }
+
+    private const string IncompleteEvidenceNotice =
+        "[Some earlier direct records were withheld because later related evidence could not fit. "
+        + "The latest status of those facts or agreements is unavailable; do not infer it from older quotes.]";
 
     /// <summary>可合成为历史条目的活动事件键（§4.15）。</summary>
     private static readonly Dictionary<string, (string PromptKey, string Fallback)> SynthesizableEvents = new(StringComparer.Ordinal)
@@ -62,10 +70,12 @@ internal static class HistorySampler
                 continue;
             }
 
-            string transcript = JoinConversation(entry.Item2.ConversationElements, npcDisplayName, getPrompt, out string topicText);
+            string transcript = JoinConversation(entry.Item2.ConversationElements, npcDisplayName, getPrompt,
+                out string topicText, out bool hasFollowingReference);
             if (transcript.Length > 0)
             {
-                entries.Add(new(entry.Item1, Format("historyConversationFormat", entry.Item1, transcript, npcDisplayName, string.Empty, npcDisplayName, null, getPrompt), string.Empty, topicText));
+                entries.Add(new(entry.Item1, Format("historyConversationFormat", entry.Item1, transcript, npcDisplayName, string.Empty, npcDisplayName, null, getPrompt), string.Empty, topicText,
+                    DirectSource: "conversation", HasFollowingReference: hasFollowingReference));
             }
         }
 
@@ -74,7 +84,8 @@ internal static class HistorySampler
             string text = JoinLines(entry.Item2.Dialogues);
             if (text.Length > 0)
             {
-                entries.Add(new(entry.Item1, Format("historyDialogueFormat", entry.Item1, text, npcDisplayName, string.Empty, npcDisplayName, null, getPrompt), string.Empty, text));
+                entries.Add(new(entry.Item1, Format("historyDialogueFormat", entry.Item1, text, npcDisplayName, string.Empty, npcDisplayName, null, getPrompt), string.Empty, text,
+                    DirectSource: "dialogue", HasFollowingReference: ConversationEvidenceCues.HasAnaphoricReference(text)));
             }
         }
 
@@ -129,18 +140,46 @@ internal static class HistorySampler
             entries.Add(new(synthesized.Time, synthesized.Text, string.Empty, synthesized.Text));
         }
 
-        var newestFirst = entries.Distinct().OrderByDescending(entry => entry.Time).ToList();
+        // These arrays have no shared sequence number. Equal timestamps from two source
+        // types cannot be ordered by the incidental order in which their arrays were read.
+        var ambiguousTimes = entries.Where(entry => entry.IsDirect).GroupBy(entry => entry.Time)
+            .Where(group => group.Select(entry => entry.DirectSource).Distinct().Count() > 1)
+            .Select(group => group.Key).ToHashSet();
+        var newestFirst = entries.Select(entry => entry.IsDirect && ambiguousTimes.Contains(entry.Time)
+                ? entry with { Text = entry.Text + " [Order among different history sources at this timestamp is unknown.]" }
+                : entry)
+            .Distinct().OrderByDescending(entry => entry.Time).ToList();
+        var directEntries = newestFirst.Where(entry => entry.IsDirect).OrderBy(entry => entry.Time).ToArray();
+        var revisionEvidence = new Dictionary<HistoryEntry, IReadOnlyList<HistoryEntry>>();
         var kept = new HashSet<HistoryEntry>();
         int budget = CharacterBudget;
+        bool incompleteEvidence = false;
         bool TryKeep(HistoryEntry entry)
         {
-            if (kept.Contains(entry) || entry.Text.Length > budget || kept.Count >= MaxEntries)
+            if (kept.Contains(entry))
             {
                 return false;
             }
 
-            budget -= entry.Text.Length;
-            kept.Add(entry);
+            if (!revisionEvidence.TryGetValue(entry, out var revisions))
+            {
+                revisions = FindLaterRevisionEvidence(entry, directEntries);
+                revisionEvidence[entry] = revisions;
+            }
+            var additions = revisions.Prepend(entry).Distinct().Where(candidate => !kept.Contains(candidate)).ToArray();
+            if (additions.Sum(candidate => (long)candidate.Text.Length) > budget || kept.Count + additions.Length > MaxEntries)
+            {
+                // Never show an old claim on its own when a known possible correction was
+                // dropped for size. Keep already-selected recent evidence; no storage changes.
+                incompleteEvidence |= revisions.Count > 0;
+                return false;
+            }
+
+            foreach (HistoryEntry addition in additions)
+            {
+                budget -= addition.Text.Length;
+                kept.Add(addition);
+            }
             return true;
         }
 
@@ -207,11 +246,128 @@ internal static class HistorySampler
             }
         }
 
-        return kept
+        var selected = kept
             .OrderBy(entry => entry.Time)
             .ThenBy(entry => newestFirst.IndexOf(entry))
-            .Select(entry => entry.Text)
             .ToList();
+        if (incompleteEvidence)
+        {
+            // Entries added as another record's dependencies may never have reached TryKeep
+            // themselves. Retain their dependency graph until all budget trimming is done.
+            foreach (HistoryEntry entry in selected)
+            {
+                if (!revisionEvidence.ContainsKey(entry))
+                {
+                    revisionEvidence[entry] = FindLaterRevisionEvidence(entry, directEntries);
+                }
+            }
+            // At an ambiguous timestamp the first line can be the correction. Removing it
+            // must also remove any claims that would otherwise outlive their evidence.
+            while (selected.Count > 0 && (selected.Count >= MaxEntries || selected.Sum(entry => entry.Text.Length) + IncompleteEvidenceNotice.Length > CharacterBudget))
+            {
+                kept.Remove(selected[0]);
+                HistoryEntry[] unsupported;
+                do
+                {
+                    unsupported = selected.Where(kept.Contains)
+                        .Where(entry => revisionEvidence[entry].Any(revision => !kept.Contains(revision)))
+                        .ToArray();
+                    kept.ExceptWith(unsupported);
+                }
+                while (unsupported.Length > 0);
+                selected.RemoveAll(entry => !kept.Contains(entry));
+            }
+        }
+        var result = selected.Select(entry => entry.Text).ToList();
+        if (incompleteEvidence)
+        {
+            result.Insert(0, IncompleteEvidenceNotice);
+        }
+        return result;
+    }
+
+    private static IReadOnlyList<HistoryEntry> FindLaterRevisionEvidence(HistoryEntry anchor, IReadOnlyList<HistoryEntry> directEntries)
+    {
+        if (!anchor.IsDirect)
+        {
+            return Array.Empty<HistoryEntry>();
+        }
+
+        string anchorTopic = ConversationEvidenceCues.GetTopicText(anchor.TopicText);
+        var anchorQuery = MemoryTopicQuery.Create(anchorTopic);
+        var anchorTokens = LocalTextSearch.Tokenize(anchorTopic, maxTokens: 512);
+        bool HasOversizedTopicContinuation(HistoryEntry entry) => entry.Text.Length > CharacterBudget
+            && LocalTextSearch.Tokenize(ConversationEvidenceCues.GetTopicText(entry.TopicText), maxTokens: 512)
+                .Count(anchorTokens.Contains) >= 2;
+
+        var revisions = directEntries.Where(entry => entry.Time == anchor.Time && entry.DirectSource != anchor.DirectSource
+                && (ConversationEvidenceCues.HasRevisionCue(entry.TopicText) || ConversationEvidenceCues.HasRevisionCue(anchor.TopicText)
+                    || HasOversizedTopicContinuation(entry)))
+            .ToList();
+        var related = new HashSet<HistoryEntry>(revisions) { anchor };
+        int anchorIndex = directEntries.ToList().IndexOf(anchor);
+        for (int index = anchorIndex + 1; index < directEntries.Count; index++)
+        {
+            HistoryEntry candidate = directEntries[index];
+            bool hasRevision = ConversationEvidenceCues.HasRevisionCue(candidate.TopicText);
+            bool followsReference = candidate.HasFollowingReference && related.Contains(directEntries[index - 1]);
+            // A later record can give a new value without saying "actually" or using a
+            // pronoun. If that whole record cannot fit, do not leave an older repeated topic
+            // as the only evidence. Require multiple lexical terms, not one shared noun;
+            // this conservative omission neither merges facts nor declares a revision.
+            if (!hasRevision && !followsReference && !HasOversizedTopicContinuation(candidate))
+            {
+                continue;
+            }
+
+            string topic = hasRevision
+                ? ConversationEvidenceCues.GetRevisionTopicText(candidate.TopicText)
+                : ConversationEvidenceCues.GetTopicText(candidate.TopicText);
+            var revisionQuery = MemoryTopicQuery.Create(topic);
+            int score = anchorQuery.Score(string.Empty, topic);
+            int chainScore = related.Max(entry => revisionQuery.Score(string.Empty, ConversationEvidenceCues.GetTopicText(entry.TopicText)));
+            var preceding = directEntries.Skip(anchorIndex + 1).Take(index - anchorIndex - 1).ToArray();
+            var competing = preceding.Where(entry => !related.Contains(entry))
+                .Select(entry => (Entry: entry, Score: revisionQuery.Score(string.Empty, ConversationEvidenceCues.GetTopicText(entry.TopicText))))
+                .OrderByDescending(match => match.Score).ThenByDescending(match => match.Entry.Time)
+                .FirstOrDefault();
+            bool agreementChange = ConversationEvidenceCues.HasAgreementRevisionCue(candidate.TopicText);
+            bool possiblePronoun = ConversationEvidenceCues.HasAnaphoricReference(candidate.TopicText)
+                || agreementChange || !revisionQuery.HasQuery;
+            if (competing.Score > Math.Max(score, chainScore)
+                || (score == 0 && chainScore == 0 && !possiblePronoun))
+            {
+                continue;
+            }
+
+            // A bare "cancel it" may refer to a second agreement. Include its nearest
+            // commitment context as raw evidence too; neither the sampler nor a score decides
+            // which agreement changed. Witnessed/overheard speech never revises direct speech.
+            if (possiblePronoun && score == 0 && chainScore == 0)
+            {
+                HistoryEntry nearest = preceding.LastOrDefault() ?? anchor;
+                if (!agreementChange && !related.Contains(nearest))
+                {
+                    // A factual "actually it is green" normally continues the nearest
+                    // ordinary fact, not an older promise. Do not drop that promise because
+                    // a separate object's correction is large or missing its noun.
+                    continue;
+                }
+                var antecedent = agreementChange
+                    ? preceding.Prepend(anchor).LastOrDefault(entry => ConversationEvidenceCues.HasCommitmentCue(entry.TopicText)
+                        || ConversationEvidenceCues.HasAgreementRevisionCue(entry.TopicText)) ?? nearest
+                    : nearest;
+                if (antecedent != null && related.Add(antecedent))
+                {
+                    revisions.Add(antecedent);
+                }
+            }
+            if (related.Add(candidate))
+            {
+                revisions.Add(candidate);
+            }
+        }
+        return revisions;
     }
 
     /// <summary>活动事件合成（键限定集合；天数 &lt;112 或为 112 整倍数；时间戳 = 今天 − 天数）。</summary>
@@ -252,7 +408,7 @@ internal static class HistorySampler
     }
 
     private static string JoinConversation(List<ConversationElement> elements, string npcDisplayName,
-        Func<string, string?> getPrompt, out string topicText)
+        Func<string, string?> getPrompt, out string topicText, out bool hasFollowingReference)
     {
         string farmerLabel = getPrompt("generalFarmerLabel") ?? "Farmer";
         var cleaned = ConversationTurnDeduplicator.CollapseExpandedNpcPages(
@@ -264,6 +420,10 @@ internal static class HistorySampler
                 && !RsvAiPolicy.ContainsBlockedReference(element.Text))
             .ToArray();
         topicText = string.Join(" / ", allowed.Select(element => element.Text.Trim()));
+        hasFollowingReference = allowed.Any(element => element.IsPlayerLine
+                && ConversationEvidenceCues.HasAnaphoricReference(element.Text))
+            || (!allowed.Any(element => element.IsPlayerLine)
+                && allowed.Any(element => ConversationEvidenceCues.HasAnaphoricReference(element.Text)));
         return string.Join(" / ", allowed.Select(element =>
             $"{(element.IsPlayerLine ? farmerLabel : npcDisplayName)}: {element.Text.Trim()}"));
     }

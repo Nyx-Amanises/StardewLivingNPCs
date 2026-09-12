@@ -106,7 +106,7 @@ public sealed class MemoryRecallTests
             tags: "coffee"));
         state.PlayerPreferenceMemories.Add(new PlayerPreferenceFact
         {
-            PreferenceKind = "liked_item",
+            PreferenceKind = "liked_item_category",
             Subject = "Rafseazz.RSVCP_Aurorean_Iris",
             Summary = "The farmer likes the Aurorean Iris.",
             Tags = new List<string> { "RSV" },
@@ -395,7 +395,7 @@ public sealed class MemoryRecallTests
     {
         return new PlayerPreferenceFact
         {
-            PreferenceKind = "liked_item",
+            PreferenceKind = "liked_item_category",
             Subject = subject,
             Summary = summary,
             Importance = importance,

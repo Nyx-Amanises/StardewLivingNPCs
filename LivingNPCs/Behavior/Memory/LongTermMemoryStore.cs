@@ -42,47 +42,71 @@ internal static class LongTermMemoryStore
         state.LongTermMemories ??= new List<LongTermMemoryFact>();
 
         string normalizedKey = BuildKey(candidate.Kind, candidate.Subject, candidate.Summary);
-        if (string.IsNullOrWhiteSpace(normalizedKey))
+        if (string.IsNullOrWhiteSpace(normalizedKey) || string.IsNullOrWhiteSpace(candidate.Summary))
         {
             return false;
         }
 
-        var existing = state.LongTermMemories.FirstOrDefault(memory =>
-            BuildKey(memory.Kind, memory.Subject, memory.Summary) == normalizedKey);
-        if (existing != null)
+        var existingVersions = state.LongTermMemories.Where(memory =>
+                BuildKey(memory.Kind, memory.Subject, memory.Summary) == normalizedKey)
+            .ToArray();
+        // An evicted revision remains evidence in the impression queue. A late older update
+        // must not return to live recall and hide the newer queued fact from impression refresh.
+        var latestKnown = (state.ImpressionInFlight ?? new List<LongTermMemoryFact>())
+            .Concat(state.ImpressionBacklog ?? new List<LongTermMemoryFact>())
+            .Concat(existingVersions)
+            .Where(memory => memory != null && !string.IsNullOrWhiteSpace(memory.Summary)
+                && BuildKey(memory.Kind, memory.Subject, memory.Summary) == normalizedKey)
+            .OrderBy(RevisionDay)
+            .ThenBy(RevisionTime)
+            .LastOrDefault();
+        if (latestKnown != null && IsNewerAt(RevisionDay(latestKnown), RevisionTime(latestKnown),
+                currentTotalDays, currentTimeOfDay))
         {
-            existing.Kind = NormalizeKind(candidate.Kind);
-            existing.Subject = candidate.Subject.Trim();
-            if (candidate.Importance >= existing.Importance || existing.Summary.Length < candidate.Summary.Trim().Length)
-            {
-                existing.Summary = candidate.Summary.Trim();
-            }
+            return false;
+        }
 
-            existing.Importance = System.Math.Max(existing.Importance, candidate.Importance);
-            existing.Tags = BehaviorValueNormalizer.NormalizeMemoryTags(
-                existing.Tags.Concat(candidate.Tags),
-                existing.Subject,
-                existing.Summary);
-            existing.LastUpdatedTotalDays = currentTotalDays;
-            existing.LastUpdatedTimeOfDay = currentTimeOfDay;
-            existing.TimesReinforced += 1;
-            storedMemory = existing;
+        var fact = existingVersions.Length > 0
+            ? MergeGroup(existingVersions.Select(NormalizeForStore))
+            : latestKnown != null
+                ? NormalizeForStore(LivingNpcState.CloneLongTermMemoryFact(latestKnown))
+                : new LongTermMemoryFact
+                {
+                    CreatedTotalDays = currentTotalDays,
+                    CreatedTimeOfDay = currentTimeOfDay
+                };
+        if (latestKnown != null && !ReferenceEquals(fact, latestKnown))
+        {
+            // Queued/in-flight versions are snapshots, not extra reinforcements to sum again.
+            fact.Importance = System.Math.Max(fact.Importance, latestKnown.Importance);
+            fact.TimesReinforced = System.Math.Max(fact.TimesReinforced, latestKnown.TimesReinforced);
+            fact.RecallCount = System.Math.Max(fact.RecallCount, latestKnown.RecallCount);
+            KeepEarlierCreation(fact, latestKnown);
+            KeepLaterRecall(fact, latestKnown);
+        }
+
+        fact.Kind = NormalizeKind(candidate.Kind);
+        fact.Subject = candidate.Subject.Trim();
+        // Importance is salience, not revision authority. Several corrections may share one
+        // game minute, so equal timestamps keep the latest accepted call's complete revision.
+        fact.Summary = candidate.Summary.Trim();
+        fact.Tags = BehaviorValueNormalizer.NormalizeMemoryTags(candidate.Tags, fact.Subject, fact.Summary);
+        fact.Importance = System.Math.Max(fact.Importance, candidate.Importance);
+        fact.LastUpdatedTotalDays = currentTotalDays;
+        fact.LastUpdatedTimeOfDay = currentTimeOfDay;
+        fact.TimesReinforced += 1;
+
+        state.LongTermMemories.RemoveAll(memory => existingVersions.Contains(memory) && !ReferenceEquals(memory, fact));
+        // Retire only superseded snapshots of this exact identity. Never mutate an in-flight
+        // batch: its result must still acknowledge the evidence that was actually submitted.
+        state.ImpressionBacklog?.RemoveAll(memory => memory != null
+            && BuildKey(memory.Kind, memory.Subject, memory.Summary) == normalizedKey);
+        if (existingVersions.Length > 0)
+        {
+            storedMemory = fact;
             return true;
         }
 
-        var fact = new LongTermMemoryFact
-        {
-            Kind = NormalizeKind(candidate.Kind),
-            Subject = candidate.Subject.Trim(),
-            Summary = candidate.Summary.Trim(),
-            Tags = BehaviorValueNormalizer.NormalizeMemoryTags(candidate.Tags, candidate.Subject, candidate.Summary),
-            Importance = candidate.Importance,
-            CreatedTotalDays = currentTotalDays,
-            CreatedTimeOfDay = currentTimeOfDay,
-            LastUpdatedTotalDays = currentTotalDays,
-            LastUpdatedTimeOfDay = currentTimeOfDay,
-            TimesReinforced = 1
-        };
         state.LongTermMemories.Add(fact);
 
         ApplyCapacity(
@@ -261,52 +285,50 @@ internal static class LongTermMemoryStore
     private static LongTermMemoryFact MergeGroup(IEnumerable<LongTermMemoryFact> group)
     {
         var memories = group
-            .OrderByDescending(GetRetentionScore)
-            .ThenByDescending(memory => memory.LastUpdatedTotalDays)
-            .ThenByDescending(memory => memory.LastUpdatedTimeOfDay)
+            .Distinct()
+            .OrderBy(memory => memory.LastUpdatedTotalDays)
+            .ThenBy(memory => memory.LastUpdatedTimeOfDay)
             .ToList();
-        var primary = memories[0];
-        foreach (var memory in memories.Skip(1))
+        // Stored list order breaks game-clock ties. Preserve one whole semantic revision;
+        // merging an older summary or tags would attach stale content to the newest date.
+        var primary = memories[^1];
+        foreach (var memory in memories.Take(memories.Count - 1))
         {
-            if (string.IsNullOrWhiteSpace(primary.Subject) && !string.IsNullOrWhiteSpace(memory.Subject))
-            {
-                primary.Subject = memory.Subject;
-            }
-
-            if (memory.Importance > primary.Importance || memory.Summary.Length > primary.Summary.Length)
-            {
-                primary.Summary = memory.Summary;
-            }
-
             primary.Importance = System.Math.Max(primary.Importance, memory.Importance);
-            primary.Tags = BehaviorValueNormalizer.NormalizeMemoryTags(
-                primary.Tags.Concat(memory.Tags),
-                primary.Subject,
-                primary.Summary,
-                memory.Subject,
-                memory.Summary);
             primary.TimesReinforced += memory.TimesReinforced;
             primary.RecallCount += memory.RecallCount;
-            if (IsOlderCreatedAt(memory.CreatedTotalDays, primary.CreatedTotalDays))
-            {
-                primary.CreatedTotalDays = memory.CreatedTotalDays;
-                primary.CreatedTimeOfDay = memory.CreatedTimeOfDay;
-            }
-
-            if (IsNewerAt(memory.LastUpdatedTotalDays, memory.LastUpdatedTimeOfDay, primary.LastUpdatedTotalDays, primary.LastUpdatedTimeOfDay))
-            {
-                primary.LastUpdatedTotalDays = memory.LastUpdatedTotalDays;
-                primary.LastUpdatedTimeOfDay = memory.LastUpdatedTimeOfDay;
-            }
-
-            if (IsNewerAt(memory.LastRecalledTotalDays, memory.LastRecalledTimeOfDay, primary.LastRecalledTotalDays, primary.LastRecalledTimeOfDay))
-            {
-                primary.LastRecalledTotalDays = memory.LastRecalledTotalDays;
-                primary.LastRecalledTimeOfDay = memory.LastRecalledTimeOfDay;
-            }
+            KeepEarlierCreation(primary, memory);
+            KeepLaterRecall(primary, memory);
         }
 
         return NormalizeForStore(primary);
+    }
+
+    private static int RevisionDay(LongTermMemoryFact memory) =>
+        memory.LastUpdatedTotalDays >= 0 ? memory.LastUpdatedTotalDays : memory.CreatedTotalDays;
+
+    private static int RevisionTime(LongTermMemoryFact memory) =>
+        memory.LastUpdatedTotalDays >= 0 ? memory.LastUpdatedTimeOfDay : memory.CreatedTimeOfDay;
+
+    private static void KeepEarlierCreation(LongTermMemoryFact primary, LongTermMemoryFact memory)
+    {
+        if (memory.CreatedTotalDays >= 0
+            && (primary.CreatedTotalDays < 0 || IsNewerAt(primary.CreatedTotalDays, primary.CreatedTimeOfDay,
+                memory.CreatedTotalDays, memory.CreatedTimeOfDay)))
+        {
+            primary.CreatedTotalDays = memory.CreatedTotalDays;
+            primary.CreatedTimeOfDay = memory.CreatedTimeOfDay;
+        }
+    }
+
+    private static void KeepLaterRecall(LongTermMemoryFact primary, LongTermMemoryFact memory)
+    {
+        if (IsNewerAt(memory.LastRecalledTotalDays, memory.LastRecalledTimeOfDay,
+                primary.LastRecalledTotalDays, primary.LastRecalledTimeOfDay))
+        {
+            primary.LastRecalledTotalDays = memory.LastRecalledTotalDays;
+            primary.LastRecalledTimeOfDay = memory.LastRecalledTimeOfDay;
+        }
     }
 
     private static int GetMemoryAge(int totalDays, int currentTotalDays)
@@ -314,11 +336,6 @@ internal static class LongTermMemoryStore
         return totalDays < 0
             ? int.MaxValue
             : System.Math.Max(0, currentTotalDays - totalDays);
-    }
-
-    private static bool IsOlderCreatedAt(int candidateTotalDays, int currentTotalDays)
-    {
-        return candidateTotalDays >= 0 && (currentTotalDays < 0 || candidateTotalDays < currentTotalDays);
     }
 
     private static bool IsNewerAt(int candidateTotalDays, int candidateTimeOfDay, int currentTotalDays, int currentTimeOfDay)

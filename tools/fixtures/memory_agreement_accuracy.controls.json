@@ -1,0 +1,179 @@
+{
+  "SchemaVersion": 1,
+  "SyntheticOnly": true,
+  "Suite": "memory-agreement-accuracy-positive-controls",
+  "Description": "Two post-hoc synthetic positive controls for preference creation and explicit revision under the concise recall policy. New evidence occurs only in the latest player statement. These controls are not a held-out benchmark and do not establish general write-path reliability. Ground truth and criteria are evaluator-only. Presence or absence of dialogue options is diagnostic only, never a pass/fail condition; any claims made in options remain subject to ordinary grounding review.",
+  "Defaults": {
+    "NpcName": "Penny",
+    "FarmerName": "小林",
+    "Now": {
+      "year": 2,
+      "season": "Summer",
+      "dayOfMonth": 15,
+      "timeOfDay": 1200
+    },
+    "LongTermCount": 3,
+    "PreferenceCount": 4,
+    "CommunityCount": 2
+  },
+  "Cases": [
+    {
+      "Id": "control-new-strawberry-preference",
+      "Title": "最后一句首次披露草莓偏好，仍应提出偏好记忆",
+      "Locale": "zh",
+      "HistoryDistractors": 0,
+      "StateDistractors": 0,
+      "History": [],
+      "State": {},
+      "Conversation": [
+        {
+          "Id": "strawberry-greeting",
+          "Player": "你好，潘妮。",
+          "Npc": "你好，小林。"
+        }
+      ],
+      "Query": "我挺喜欢草莓的。",
+      "GroundTruth": [
+        {
+          "Id": "farmer-likes-strawberries",
+          "Statement": "农夫小林在本轮首次明确表示喜欢草莓。这是农夫的物品偏好，之前没有该偏好记录；没有说明饮食习惯、最爱、喜欢原因、其他水果偏好或送礼安排。",
+          "Sources": [
+            "current-player"
+          ],
+          "Status": "current"
+        }
+      ],
+      "Criteria": [
+        {
+          "Id": "proposes-new-durable-preference",
+          "PassCondition": "最终元数据的 memories 必须包含“农夫喜欢草莓”这一新偏好的有效写入提议：kind=preference、playerPreference=true、playerPreferenceKind=liked_item_category、importance 为 40 至 100，summary 清楚表达该偏好。仅口头回应、complete:true 或空 memories 不算通过。",
+          "Sources": [
+            "current-player"
+          ],
+          "FailureExamples": [
+            "正文说记住了，但元数据只有 complete:true。",
+            "偏好记忆的 importance 为 0，不能进入持久记忆。"
+          ],
+          "Severity": "critical"
+        },
+        {
+          "Id": "keeps-farmer-and-specific-subject",
+          "PassCondition": "被提出的偏好属于农夫小林，不能改成潘妮或双方的偏好；subject 必须简短且专指草莓，可用草莓或 strawberry 等语义等价名称，不得泛化为水果、甜食或其他物品。",
+          "Sources": [
+            "current-player"
+          ],
+          "FailureExamples": [
+            "潘妮喜欢草莓。",
+            "subject=水果。"
+          ],
+          "Severity": "critical"
+        },
+        {
+          "Id": "does-not-expand-new-preference",
+          "PassCondition": "正文、选项和元数据不得把喜欢草莓扩写成最爱所有甜食、每天吃草莓、某种原因、旧共同经历或已经商定送礼；可作当下回应或明确的未来提议。是否出现选项本身仅作诊断，不作为通过条件。",
+          "Sources": [
+            "current-player"
+          ],
+          "FailureExamples": [
+            "你每天早上都会吃草莓。",
+            "记得我们以前一起在湖边吃过草莓。"
+          ],
+          "Severity": "critical"
+        }
+      ],
+      "RequiredEvidence": [
+        "current-player"
+      ],
+      "AdvisoryTerms": [],
+      "NoNewActions": true
+    },
+    {
+      "Id": "control-current-peach-preference-revision",
+      "Title": "最后一句明确改变已有桃子偏好，仍应提出修订记忆",
+      "Locale": "zh",
+      "HistoryDistractors": 0,
+      "StateDistractors": 0,
+      "History": [],
+      "State": {
+        "PlayerPreferenceMemories": [
+          {
+            "AuditId": "peach-old-preference",
+            "PreferenceKind": "liked_item_category",
+            "Subject": "桃子",
+            "Summary": "农夫喜欢桃子。",
+            "Importance": 85,
+            "AgeDays": 30,
+            "Tags": [
+              "food"
+            ]
+          }
+        ]
+      },
+      "Conversation": [
+        {
+          "Id": "peach-greeting",
+          "Player": "你好，潘妮。",
+          "Npc": "你好，小林。"
+        }
+      ],
+      "Query": "我现在不喜欢桃子了。",
+      "GroundTruth": [
+        {
+          "Id": "farmer-current-peach-dislike",
+          "Statement": "农夫小林在本轮明确更正为现在不喜欢桃子，旧的“农夫喜欢桃子”记录已经过时。变更针对相同桃子主题；没有表示不再吃桃子、桃子过敏、改吃其他水果或改变原因。",
+          "Sources": [
+            "state:peach-old-preference",
+            "current-player"
+          ],
+          "Status": "current"
+        }
+      ],
+      "Criteria": [
+        {
+          "Id": "proposes-current-durable-preference-revision",
+          "PassCondition": "最终元数据的 memories 必须包含最新“农夫现在不喜欢桃子”这一有效修订提议：kind=preference、playerPreference=true、playerPreferenceKind=disliked_item、importance 为 40 至 100，summary 清楚表达最新状态，不把旧喜好继续作为当前偏好。仅正确口头回答、complete:true 或空 memories 不算通过。",
+          "Sources": [
+            "state:peach-old-preference",
+            "current-player"
+          ],
+          "FailureExamples": [
+            "正文承认改了偏好，但 memories 为空。",
+            "仍提出 liked_item_category 的农夫喜欢桃子记忆。"
+          ],
+          "Severity": "critical"
+        },
+        {
+          "Id": "preserves-farmer-and-existing-subject",
+          "PassCondition": "修订属于农夫小林，subject 沿用已有记录的“桃子”，以便修订同一偏好；不得改成潘妮偏好、双方偏好或另建水果等泛化主题，也不能把旧的喜欢和新的不喜欢都作为当前结论。",
+          "Sources": [
+            "state:peach-old-preference",
+            "current-player"
+          ],
+          "FailureExamples": [
+            "潘妮现在不喜欢桃子。",
+            "另建 subject=水果，未修订桃子主题。"
+          ],
+          "Severity": "critical"
+        },
+        {
+          "Id": "does-not-expand-preference-revision",
+          "PassCondition": "正文、选项和元数据保留“不喜欢”的范围，不得扩写成不再吃、过敏、饮食禁忌、改吃其他东西、明确日期或未说明的原因；可作当下回应或明确的未来提议。是否出现选项本身仅作诊断，不作为通过条件。",
+          "Sources": [
+            "current-player"
+          ],
+          "FailureExamples": [
+            "你已经不吃桃子了。",
+            "因为过敏，你现在改吃苹果。"
+          ],
+          "Severity": "critical"
+        }
+      ],
+      "RequiredEvidence": [
+        "state:peach-old-preference",
+        "current-player"
+      ],
+      "AdvisoryTerms": [],
+      "NoNewActions": true
+    }
+  ]
+}

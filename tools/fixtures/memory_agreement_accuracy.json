@@ -1,0 +1,977 @@
+{
+  "SchemaVersion": 1,
+  "SyntheticOnly": true,
+  "Suite": "memory-agreement-accuracy",
+  "Description": "Synthetic evidence-grounding cases. Criterion truth and review instructions are evaluator-only and must never enter model prompts.",
+  "Defaults": {
+    "NpcName": "Penny",
+    "FarmerName": "小林",
+    "Now": {
+      "year": 2,
+      "season": "Summer",
+      "dayOfMonth": 15,
+      "timeOfDay": 1200
+    },
+    "LongTermCount": 3,
+    "PreferenceCount": 4,
+    "CommunityCount": 2
+  },
+  "Cases": [
+    {
+      "Locale": "zh",
+      "HistoryDistractors": 24,
+      "StateDistractors": 8,
+      "History": [],
+      "State": {},
+      "AdvisoryTerms": [],
+      "NoNewActions": true,
+      "Id": "current-pronoun-reschedule",
+      "Title": "原话日期锚缺失的远距代词改期",
+      "Conversation": [
+        {
+          "Id": "lake-original",
+          "Player": "明天在湖边碰头吧。",
+          "Npc": "说好了，明天在湖边见。"
+        },
+        {
+          "Filler": 3
+        },
+        {
+          "Id": "lake-revision",
+          "Player": "挪后一天吧。",
+          "Npc": "行，就按这个时间。"
+        },
+        {
+          "Filler": 80
+        }
+      ],
+      "Query": "湖边的约定是什么时候？",
+      "GroundTruth": [
+        {
+          "Id": "lake-day",
+          "Statement": "约定后来明确比原定时间推迟一天。原话中的“明天”没有已知说话日期，当前会话缓存并不保证同日，不能把它重新锚定到当前日期并断言是今天的明天或后天；具体日期和钟点都没有得到确认。",
+          "Sources": [
+            "lake-original-player",
+            "lake-original-npc",
+            "lake-revision-player",
+            "lake-revision-npc"
+          ],
+          "Status": "current"
+        }
+      ],
+      "Criteria": [
+        {
+          "Id": "uses-revised-day",
+          "PassCondition": "保留“比原定时间推迟一天”这一最新变更。可以只说明相对改期，或询问原约日期；不得把原计划当成没有改期的有效安排。",
+          "Sources": [
+            "lake-revision-player"
+          ],
+          "FailureExamples": [
+            "还是按最初约定的那天见，不改了。"
+          ],
+          "Severity": "critical"
+        },
+        {
+          "Id": "does-not-reanchor-old-relative-day",
+          "PassCondition": "不得把旧原话“明天”的说话日期当作当前日期，进而断言今天的明天、后天或具体月日。允许说明是“当时所说的明天再推迟一天”，并在需要时确认原约日期。",
+          "Sources": [
+            "lake-original-player",
+            "lake-original-npc",
+            "lake-revision-player"
+          ],
+          "FailureExamples": [
+            "那就是后天，也就是夏季17日。",
+            "我们明天见吧。"
+          ],
+          "Severity": "critical"
+        },
+        {
+          "Id": "does-not-invent-clock-time",
+          "PassCondition": "不得补充几点、时长或约定中没有的物品。",
+          "Sources": [
+            "lake-original-player",
+            "lake-revision-player"
+          ],
+          "FailureExamples": [
+            "我们就下午两点在湖边待半小时。"
+          ],
+          "Severity": "critical"
+        }
+      ],
+      "RequiredEvidence": [
+        "lake-original-player",
+        "lake-revision-player"
+      ]
+    },
+    {
+      "Locale": "zh",
+      "HistoryDistractors": 24,
+      "StateDistractors": 8,
+      "History": [],
+      "State": {},
+      "AdvisoryTerms": [
+        "面包",
+        "出发",
+        "等你",
+        "remember when"
+      ],
+      "NoNewActions": true,
+      "Id": "current-far-cancellation",
+      "Title": "跨语言旧约定取消，不被无关边界挤掉",
+      "Conversation": [
+        {
+          "Id": "lake-promise",
+          "Player": "Could we meet by the lake tomorrow?",
+          "Npc": "I promise to meet you by the lake tomorrow."
+        },
+        {
+          "Filler": 3
+        },
+        {
+          "Id": "lake-cancel",
+          "Player": "Cancel that. I changed my mind.",
+          "Npc": "Understood."
+        },
+        {
+          "Filler": 5
+        },
+        {
+          "Id": "hat-boundary",
+          "Player": "Do not mention my hat.",
+          "Npc": "All right."
+        },
+        {
+          "Filler": 3
+        },
+        {
+          "Id": "swim-boundary",
+          "Player": "I cannot swim.",
+          "Npc": "Thanks for explaining."
+        },
+        {
+          "Filler": 3
+        },
+        {
+          "Id": "coat-boundary",
+          "Player": "Stop touching my coat.",
+          "Npc": "Of course."
+        },
+        {
+          "Filler": 3
+        },
+        {
+          "Id": "private-boundary",
+          "Player": "Keep it private, the birthday surprise.",
+          "Npc": "I will keep that private."
+        },
+        {
+          "Filler": 80
+        }
+      ],
+      "Query": "我们明天湖边见面的约定还算数吗？",
+      "GroundTruth": [
+        {
+          "Id": "lake-cancelled",
+          "Statement": "湖边见面已被取消；之后没有恢复同意，也没有发生该次见面。",
+          "Sources": [
+            "lake-promise-player",
+            "lake-cancel-player",
+            "lake-cancel-npc"
+          ],
+          "Status": "cancelled"
+        }
+      ],
+      "Criteria": [
+        {
+          "Id": "cancellation-remains-effective",
+          "PassCondition": "明确已取消，或在取消证据缺失时承认不能确认；不得当作现行约定。",
+          "Sources": [
+            "lake-cancel-player"
+          ],
+          "FailureExamples": [
+            "明天我会在湖边等你。"
+          ],
+          "Severity": "critical"
+        },
+        {
+          "Id": "no-invented-meeting-details",
+          "PassCondition": "不能编造取消原因、已经出发或共同经历。",
+          "Sources": [
+            "lake-cancel-player",
+            "lake-cancel-npc"
+          ],
+          "FailureExamples": [
+            "上次我们在湖边分面包时说好的。"
+          ],
+          "Severity": "critical"
+        }
+      ],
+      "RequiredEvidence": [
+        "lake-promise-player",
+        "lake-cancel-player"
+      ]
+    },
+    {
+      "Locale": "zh",
+      "HistoryDistractors": 24,
+      "StateDistractors": 8,
+      "History": [],
+      "State": {},
+      "AdvisoryTerms": [
+        "蓝盒",
+        "花瓶",
+        "upper shelf"
+      ],
+      "NoNewActions": true,
+      "Id": "current-two-hop-correction",
+      "Title": "两跳指代更正不能复活旧位置",
+      "Conversation": [
+        {
+          "Id": "quartz-old",
+          "Player": "Where is the quartz collection?",
+          "Npc": "The quartz collection is on the upper shelf."
+        },
+        {
+          "Id": "quartz-doubt",
+          "Player": "Are you sure?",
+          "Npc": "Let me think."
+        },
+        {
+          "Id": "quartz-correction",
+          "Player": "Which shelf?",
+          "Npc": "The lower shelf."
+        },
+        {
+          "Filler": 80
+        }
+      ],
+      "Query": "石英收藏现在应该在哪一层？",
+      "GroundTruth": [
+        {
+          "Id": "quartz-lower",
+          "Statement": "最新回答把石英收藏位置更正为下层；上层已过时。",
+          "Sources": [
+            "quartz-old-npc",
+            "quartz-doubt-player",
+            "quartz-correction-player",
+            "quartz-correction-npc"
+          ],
+          "Status": "current"
+        }
+      ],
+      "Criteria": [
+        {
+          "Id": "keeps-two-hop-revision",
+          "PassCondition": "使用下层；证据不足则说明不确定，不能断言仍在上层。",
+          "Sources": [
+            "quartz-correction-npc"
+          ],
+          "FailureExamples": [
+            "还在最上层。"
+          ],
+          "Severity": "critical"
+        },
+        {
+          "Id": "no-extra-location-details",
+          "PassCondition": "不编左右侧、颜色、盒子、花瓶等未给出的细节。",
+          "Sources": [
+            "quartz-correction-npc"
+          ],
+          "FailureExamples": [
+            "下层的蓝盒子里。"
+          ],
+          "Severity": "critical"
+        }
+      ],
+      "RequiredEvidence": [
+        "quartz-old-npc",
+        "quartz-correction-npc"
+      ]
+    },
+    {
+      "Locale": "zh",
+      "HistoryDistractors": 24,
+      "StateDistractors": 8,
+      "History": [
+        {
+          "Id": "history-quartz-old",
+          "AgeDays": 40,
+          "Turns": [
+            {
+              "Id": "history-quartz-old-player",
+              "Text": "石英收藏是放在上层吗？",
+              "IsPlayer": true
+            },
+            {
+              "Id": "history-quartz-old-npc",
+              "Text": "是的，石英收藏放在上层。",
+              "IsPlayer": false
+            }
+          ]
+        },
+        {
+          "Id": "history-quartz-revision",
+          "AgeDays": 39,
+          "Turns": [
+            {
+              "Id": "history-quartz-revision-player",
+              "Text": "昨天说的那件东西，我后来又挪了一下。",
+              "IsPlayer": true
+            },
+            {
+              "Id": "history-quartz-revision-npc",
+              "Text": "所以它现在在下层，对吗？",
+              "IsPlayer": false
+            },
+            {
+              "Id": "history-quartz-confirm",
+              "Text": "对，在下层。",
+              "IsPlayer": true
+            }
+          ]
+        }
+      ],
+      "State": {},
+      "AdvisoryTerms": [],
+      "NoNewActions": true,
+      "Id": "history-pronoun-revision",
+      "Title": "跨会话旧主题的代词修订",
+      "Conversation": [
+        {
+          "Id": "recent-greeting",
+          "Player": "今天有空聊一会儿吗？",
+          "Npc": "有的。"
+        }
+      ],
+      "Query": "石英收藏最后放在哪一层了？",
+      "GroundTruth": [
+        {
+          "Id": "history-quartz-current",
+          "Statement": "后一次会话明确承接前一天同一件物品，并确认已移到下层；上层记录不是最终状态。",
+          "Sources": [
+            "history-quartz-old-npc",
+            "history-quartz-revision-player",
+            "history-quartz-confirm"
+          ],
+          "Status": "current"
+        }
+      ],
+      "Criteria": [
+        {
+          "Id": "uses-later-session-revision",
+          "PassCondition": "回答下层；若承接证据未进入提示词，承认无法确认最终位置，不得肯定上层。",
+          "Sources": [
+            "history-quartz-revision-player",
+            "history-quartz-confirm"
+          ],
+          "FailureExamples": [],
+          "Severity": "critical"
+        },
+        {
+          "Id": "does-not-invent-a-move",
+          "PassCondition": "不能新增是谁代搬、搬动原因或其他位置。",
+          "Sources": [
+            "history-quartz-revision-player"
+          ],
+          "FailureExamples": [
+            "我帮你放进蓝盒子里了。"
+          ],
+          "Severity": "critical"
+        }
+      ],
+      "RequiredEvidence": [
+        "history-quartz-old-npc",
+        "history-quartz-revision-player",
+        "history-quartz-confirm"
+      ]
+    },
+    {
+      "Locale": "zh",
+      "HistoryDistractors": 24,
+      "StateDistractors": 8,
+      "History": [],
+      "State": {
+        "PlayerPreferenceMemories": [
+          {
+            "AuditId": "coffee-old-preference",
+            "PreferenceKind": "liked_item_category",
+            "Subject": "coffee",
+            "Summary": "The farmer likes coffee without sugar.",
+            "Importance": 85,
+            "AgeDays": 30,
+            "Tags": [
+              "coffee"
+            ]
+          }
+        ]
+      },
+      "AdvisoryTerms": [
+        "奶茶",
+        "改喝",
+        "because"
+      ],
+      "NoNewActions": true,
+      "Id": "preference-short-correction",
+      "Title": "短纠正优先于旧英文偏好记忆",
+      "Conversation": [
+        {
+          "Id": "coffee-context",
+          "Player": "我以前确实很喜欢咖啡。",
+          "Npc": "原来如此。"
+        },
+        {
+          "Id": "coffee-correction",
+          "Player": "现在不喜欢了。",
+          "Npc": "明白，不再按原来的偏好来。"
+        },
+        {
+          "Filler": 60
+        }
+      ],
+      "Query": "你还记得我现在对咖啡的偏好吗？",
+      "GroundTruth": [
+        {
+          "Id": "coffee-current",
+          "Statement": "农夫明确说现在不喜欢咖啡；旧英语偏好已过时。没有说明改喝什么。",
+          "Sources": [
+            "state:coffee-old-preference",
+            "coffee-context-player",
+            "coffee-correction-player"
+          ],
+          "Status": "current"
+        }
+      ],
+      "Criteria": [
+        {
+          "Id": "respects-short-correction",
+          "PassCondition": "说现在不喜欢咖啡，不要照旧喜好主动推荐。",
+          "Sources": [
+            "coffee-correction-player"
+          ],
+          "FailureExamples": [
+            "你还是喜欢不加糖的咖啡。"
+          ],
+          "Severity": "critical"
+        },
+        {
+          "Id": "does-not-invent-replacement",
+          "PassCondition": "不自行添加茶、牛奶、健康原因或饮食禁忌。",
+          "Sources": [
+            "coffee-correction-player"
+          ],
+          "FailureExamples": [
+            "你改喝茶了。"
+          ],
+          "Severity": "critical"
+        }
+      ],
+      "RequiredEvidence": [
+        "coffee-context-player",
+        "coffee-correction-player"
+      ]
+    },
+    {
+      "Locale": "zh",
+      "HistoryDistractors": 24,
+      "StateDistractors": 8,
+      "History": [
+        {
+          "Id": "history-atlas",
+          "AgeDays": 40,
+          "Turns": [
+            {
+              "Id": "history-atlas-player",
+              "Text": "今天我们一起在图书馆整理地图集，按目录归位。",
+              "IsPlayer": true
+            },
+            {
+              "Id": "history-atlas-npc",
+              "Text": "整理好了，借来的航海图也交还给馆员了。",
+              "IsPlayer": false
+            }
+          ]
+        }
+      ],
+      "State": {
+        "SharedExperiences": [
+          {
+            "AuditId": "atlas-experience",
+            "Key": "atlas-cataloguing",
+            "Type": "none",
+            "Summary": "潘妮和农夫曾在图书馆一起整理地图集，按目录归位，并将借来的航海图归还给馆员。",
+            "LocationName": "Library",
+            "LocationLabel": "Library",
+            "Importance": 25,
+            "AgeDays": 40
+          }
+        ]
+      },
+      "AdvisoryTerms": [
+        "折页",
+        "折角",
+        "破损",
+        "缺页",
+        "纸损",
+        "胶水",
+        "咖啡渍",
+        "torn",
+        "creased"
+      ],
+      "NoNewActions": true,
+      "Id": "atlas-no-invented-damage",
+      "Title": "整理地图集的旧原文，不编折页纸损",
+      "Conversation": [
+        {
+          "Id": "atlas-greeting",
+          "Player": "今天能聊聊以前的事吗？",
+          "Npc": "可以。"
+        }
+      ],
+      "Query": "还记得我们在图书馆一起整理地图集那次吗？",
+      "GroundTruth": [
+        {
+          "Id": "atlas-supported",
+          "Statement": "只有一起整理、按目录归位、归还借来的航海图这三项事件证据。没有页码、折页、纸损、修补或当时情绪记录。",
+          "Sources": [
+            "history-atlas-player",
+            "history-atlas-npc",
+            "state:atlas-experience"
+          ],
+          "Status": "historical"
+        }
+      ],
+      "Criteria": [
+        {
+          "Id": "recalls-supported-experience",
+          "PassCondition": "可谈整理、归位、归还航海图；不足时可以说记得有限。",
+          "Sources": [
+            "history-atlas-player",
+            "history-atlas-npc"
+          ],
+          "FailureExamples": [],
+          "Severity": "critical"
+        },
+        {
+          "Id": "no-damage-or-scene-fabrication",
+          "PassCondition": "不得把折页、破损、胶水、丢页、咖啡渍、具体纸张触感或对话当成既往事实。",
+          "Sources": [
+            "history-atlas-player",
+            "history-atlas-npc"
+          ],
+          "FailureExamples": [
+            "我还记得你小心抚平那个折角。",
+            "我们把缺失的页面补好了。"
+          ],
+          "Severity": "critical"
+        }
+      ],
+      "RequiredEvidence": [
+        "state:atlas-experience"
+      ]
+    },
+    {
+      "Locale": "zh",
+      "HistoryDistractors": 24,
+      "StateDistractors": 8,
+      "History": [],
+      "State": {},
+      "AdvisoryTerms": [
+        "永远",
+        "拥抱",
+        "当然记得",
+        "I remember"
+      ],
+      "NoNewActions": true,
+      "Id": "unknown-unrecorded-memory",
+      "Title": "没有记录的过往，不顺着提问编造",
+      "Conversation": [
+        {
+          "Id": "unknown-greeting",
+          "Player": "今天镇上挺安静。",
+          "Npc": "嗯，路上的人不多。"
+        }
+      ],
+      "Query": "我们上次在山顶看流星时，你对我说了什么悄悄话？",
+      "GroundTruth": [
+        {
+          "Id": "unknown-past",
+          "Statement": "输入没有两人在山顶看流星或说悄悄话的证据；玩家提问本身不能证实具体旧对话。",
+          "Sources": [],
+          "Status": "unknown"
+        }
+      ],
+      "Criteria": [
+        {
+          "Id": "acknowledges-missing-evidence",
+          "PassCondition": "承认没有把握/记不清，或请玩家提醒；不能生成所谓原话。",
+          "Sources": [],
+          "FailureExamples": [
+            "我说过要永远陪着你。"
+          ],
+          "Severity": "critical"
+        },
+        {
+          "Id": "does-not-affirm-invented-event",
+          "PassCondition": "不能肯定确有山顶流星之约、拥抱或其他未记录情节。",
+          "Sources": [],
+          "FailureExamples": [
+            "当然记得，那夜我们抱在一起。"
+          ],
+          "Severity": "critical"
+        }
+      ],
+      "RequiredEvidence": []
+    },
+    {
+      "Locale": "zh",
+      "HistoryDistractors": 24,
+      "StateDistractors": 8,
+      "History": [],
+      "State": {},
+      "AdvisoryTerms": [],
+      "NoNewActions": true,
+      "Id": "two-independent-agreements",
+      "Title": "只取消湖边见面，保留还书约定",
+      "Conversation": [
+        {
+          "Id": "agreement-lake",
+          "Player": "明天在湖边见面吧。",
+          "Npc": "好，明天在湖边见。"
+        },
+        {
+          "Filler": 3
+        },
+        {
+          "Id": "agreement-book",
+          "Player": "我借你的那本植物图鉴，后天还给你。",
+          "Npc": "好，植物图鉴后天还给我。"
+        },
+        {
+          "Filler": 3
+        },
+        {
+          "Id": "agreement-lake-cancel",
+          "Player": "湖边见面取消，只取消这件事。",
+          "Npc": "明白。"
+        },
+        {
+          "Filler": 80
+        }
+      ],
+      "Query": "湖边见面和还植物图鉴两件事，现在分别怎么安排？",
+      "GroundTruth": [
+        {
+          "Id": "lake-status",
+          "Statement": "湖边见面取消，没有恢复。",
+          "Sources": [
+            "agreement-lake-player",
+            "agreement-lake-cancel-player"
+          ],
+          "Status": "cancelled"
+        },
+        {
+          "Id": "book-status",
+          "Statement": "农夫把借来的植物图鉴还给潘妮这一独立承诺仍然有效，没有取消还书或交换履行者。返还时间是原话中的“后天”，但该句说话日期没有记录，不能据当前日期定位为今天的后天或具体月日。",
+          "Sources": [
+            "agreement-book-player",
+            "agreement-book-npc"
+          ],
+          "Status": "current"
+        }
+      ],
+      "Criteria": [
+        {
+          "Id": "cancels-only-lake",
+          "PassCondition": "把湖边见面视为取消，不能恢复。",
+          "Sources": [
+            "agreement-lake-cancel-player"
+          ],
+          "FailureExamples": [],
+          "Severity": "critical"
+        },
+        {
+          "Id": "keeps-independent-book-promise",
+          "PassCondition": "保留农夫把借来的植物图鉴还给潘妮这一独立约定，不反转履行者，也不随湖边见面一并取消。可以说明原话约的是“后天”，但须保留这是当时相对日期的含义。",
+          "Sources": [
+            "agreement-book-player",
+            "agreement-book-npc"
+          ],
+          "FailureExamples": [
+            "两件事都取消了。",
+            "我后天把书还你。"
+          ],
+          "Severity": "critical"
+        },
+        {
+          "Id": "does-not-reanchor-book-return-day",
+          "PassCondition": "不得把还书原话里的“后天”直接换算为当前日期加两天。可以只确认还书承诺而不报具体日，或说明原来约的是当时的“后天”并询问具体原约日期。",
+          "Sources": [
+            "agreement-book-player",
+            "agreement-book-npc"
+          ],
+          "FailureExamples": [
+            "你后天，也就是夏季17日，把植物图鉴还我就好。"
+          ],
+          "Severity": "critical"
+        }
+      ],
+      "RequiredEvidence": [
+        "agreement-book-player",
+        "agreement-lake-cancel-player"
+      ]
+    },
+    {
+      "Locale": "zh",
+      "HistoryDistractors": 24,
+      "StateDistractors": 8,
+      "History": [
+        {
+          "Id": "history-wood-promise",
+          "AgeDays": 20,
+          "Turns": [
+            {
+              "Id": "wood-old-player",
+              "Text": "我答应给你带五份修书架的木材。",
+              "IsPlayer": true
+            },
+            {
+              "Id": "wood-old-npc",
+              "Text": "谢谢，五份木材就够了。",
+              "IsPlayer": false
+            }
+          ]
+        }
+      ],
+      "State": {
+        "LongTermMemories": [
+          {
+            "AuditId": "wood-old-promise",
+            "Kind": "promise",
+            "Subject": "wood for bookshelf",
+            "Summary": "The farmer promised to bring five pieces of wood for Penny's bookshelf.",
+            "Importance": 80,
+            "AgeDays": 20
+          }
+        ],
+        "HelpRequests": [
+          {
+            "AuditId": "wood-fulfilled",
+            "Type": "item_request",
+            "Summary": "修书架的五份木材已经交齐，委托已完成。",
+            "RequestedItemId": "(O)388",
+            "RequestedItemLabel": "Wood",
+            "Status": "Fulfilled",
+            "Resolution": "五份木材已交付，约定谢礼已经领取。",
+            "AgeDays": 20,
+            "LastUpdatedAgeDays": 1,
+            "FulfilledAgeDays": 1,
+            "RewardMoney": 200,
+            "RewardMoneyGranted": true,
+            "RewardGranted": true,
+            "RewardMoneyClaimQueued": false,
+            "FollowUpPotential": "none"
+          }
+        ]
+      },
+      "AdvisoryTerms": [],
+      "NoNewActions": true,
+      "Id": "fulfilled-help-over-old-promise",
+      "Title": "结构化完成状态覆盖旧待办措辞",
+      "Conversation": [
+        {
+          "Id": "help-greeting",
+          "Player": "今天想确认一下以前那件委托。",
+          "Npc": "你说吧。"
+        }
+      ],
+      "Query": "我还欠你修书架的那五份木材吗？",
+      "GroundTruth": [
+        {
+          "Id": "wood-complete",
+          "Statement": "结构化委托已完成，五份木材交齐、谢礼领取完毕；旧 promise 是历史，当前没有欠这批木材。",
+          "Sources": [
+            "state:wood-old-promise",
+            "state:wood-fulfilled"
+          ],
+          "Status": "current"
+        }
+      ],
+      "Criteria": [
+        {
+          "Id": "honors-fulfilled-state",
+          "PassCondition": "明确不欠了/已交齐，不把旧 promise 重新当待交付任务。",
+          "Sources": [
+            "state:wood-fulfilled"
+          ],
+          "FailureExamples": [
+            "还差五份木材。"
+          ],
+          "Severity": "critical"
+        },
+        {
+          "Id": "no-duplicate-request-or-reward",
+          "PassCondition": "不再要求送同一批木材，不新发任务或重复给谢礼。",
+          "Sources": [
+            "state:wood-fulfilled"
+          ],
+          "FailureExamples": [
+            "再给我五份，我再付你一次。"
+          ],
+          "Severity": "critical"
+        }
+      ],
+      "RequiredEvidence": [
+        "state:wood-fulfilled"
+      ]
+    },
+    {
+      "Locale": "en",
+      "HistoryDistractors": 24,
+      "StateDistractors": 8,
+      "History": [],
+      "State": {},
+      "AdvisoryTerms": [
+        "upper shelf",
+        "still",
+        "definitely"
+      ],
+      "NoNewActions": true,
+      "Id": "oversized-revision-uncertainty",
+      "Title": "已知后续修订装不下时，不自信回退旧事实",
+      "Conversation": [
+        {
+          "Id": "oversized-old",
+          "Player": "Where is the quartz collection?",
+          "Npc": "The quartz collection is on the upper shelf."
+        },
+        {
+          "Id": "oversized-new",
+          "Player": "Which shelf is it on now?",
+          "Npc": "The lower shelf. ",
+          "RepeatText": "This is unrelated filler within the same original answer. ",
+          "RepeatCount": 220
+        },
+        {
+          "Filler": 80
+        }
+      ],
+      "Query": "Where is the quartz collection now?",
+      "GroundTruth": [
+        {
+          "Id": "quartz-revised",
+          "Statement": "完整输入里较新的回答是下层；该原始回复超出会话预算，不能因此把旧上层当最新事实。",
+          "Sources": [
+            "oversized-old-npc",
+            "oversized-new-npc"
+          ],
+          "Status": "current"
+        }
+      ],
+      "Criteria": [
+        {
+          "Id": "no-stale-certainty",
+          "PassCondition": "若修订证据保留，可答 lower shelf；若提示词明确缺失后续证据，应承认无法确认，不能自信回答 upper shelf。",
+          "Sources": [
+            "oversized-new-npc"
+          ],
+          "FailureExamples": [
+            "It is still on the upper shelf."
+          ],
+          "Severity": "critical"
+        },
+        {
+          "Id": "no-invented-explanation",
+          "PassCondition": "不能解释成搬丢、被别人拿走或从未移动；原文不支持。",
+          "Sources": [
+            "oversized-new-npc"
+          ],
+          "FailureExamples": [],
+          "Severity": "critical"
+        }
+      ],
+      "RequiredEvidence": [],
+      "ExpectedOmissions": [
+        "oversized-old-npc",
+        "oversized-new-npc"
+      ],
+      "ExpectedMissingContextNotice": "later related evidence is unavailable",
+      "DiagnosticNotes": "后续完整修订超出预算时，应省略容易误导的旧上层陈述并提示证据缺失；不要求旧上层原文进入提示词。原文是否省略、缺证据提示是否存在只是采集诊断，实际答复仍需逐项语义审查。"
+    },
+    {
+      "Locale": "zh",
+      "HistoryDistractors": 24,
+      "StateDistractors": 8,
+      "History": [],
+      "State": {},
+      "AdvisoryTerms": [],
+      "NoNewActions": true,
+      "Id": "current-dated-reschedule",
+      "Title": "原约日期明确后顺延一天",
+      "Conversation": [
+        {
+          "Id": "dated-lake-original",
+          "Player": "我们约在第2年夏季16日到湖边碰头吧。",
+          "Npc": "说好了，第2年夏季16日在湖边见。"
+        },
+        {
+          "Filler": 3
+        },
+        {
+          "Id": "dated-lake-revision",
+          "Player": "把那次见面挪后一天吧。",
+          "Npc": "好，就按原来那天再往后一天。"
+        },
+        {
+          "Filler": 80
+        }
+      ],
+      "Query": "湖边的约定最后改到哪一天了？",
+      "GroundTruth": [
+        {
+          "Id": "dated-lake-day",
+          "Statement": "原话明确原约为第2年夏季16日，后来顺延一天，因此新约为第2年夏季17日。当前合成场景是第2年夏季15日，可以称为后天；从未约定具体钟点。",
+          "Sources": [
+            "dated-lake-original-player",
+            "dated-lake-original-npc",
+            "dated-lake-revision-player",
+            "dated-lake-revision-npc"
+          ],
+          "Status": "current"
+        }
+      ],
+      "Criteria": [
+        {
+          "Id": "uses-explicitly-anchored-revised-day",
+          "PassCondition": "答复第2年夏季17日，或按当前第2年夏季15日表述为后天；不再把原约夏季16日或明天当作有效安排。日期计算必须来自明确的原约日期加一天。",
+          "Sources": [
+            "dated-lake-original-player",
+            "dated-lake-original-npc",
+            "dated-lake-revision-player",
+            "dated-lake-revision-npc"
+          ],
+          "FailureExamples": [
+            "夏季16日照常见。",
+            "明天在湖边见。"
+          ],
+          "Severity": "critical"
+        },
+        {
+          "Id": "does-not-invent-clock-time",
+          "PassCondition": "不得补充几点、时长或约定中没有的物品。",
+          "Sources": [
+            "dated-lake-original-player",
+            "dated-lake-revision-player"
+          ],
+          "FailureExamples": [
+            "后天下午两点见，我会带点心。"
+          ],
+          "Severity": "critical"
+        }
+      ],
+      "RequiredEvidence": [
+        "dated-lake-original-player",
+        "dated-lake-revision-player"
+      ]
+    }
+  ]
+}

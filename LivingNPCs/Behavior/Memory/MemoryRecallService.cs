@@ -21,11 +21,14 @@ internal static class MemoryRecallService
         MemoryRecallContext context = BuildContext(state, world, recentEntries);
         // Keep the query transient and separate from the passive scene context and saved facts.
         MemoryTopicQuery query = MemoryTopicQuery.Create(currentPlayerText);
-        var longTermMemories = state.LongTermMemories
+        var longTermCandidates = state.LongTermMemories
             .Where(memory => memory != null
                 && !string.IsNullOrWhiteSpace(memory.Summary)
                 && IsPromptSafeMemory(memory.Subject, memory.Summary, memory.Tags))
             .Select(LongTermMemoryStore.NormalizeForStore)
+            .GroupBy(memory => LongTermMemoryStore.BuildKey(memory.Kind, memory.Subject, memory.Summary), System.StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderBy(memory => memory.LastUpdatedTotalDays)
+                .ThenBy(memory => memory.LastUpdatedTimeOfDay).Last())
             .Select(memory => ScoreLongTermMemory(memory, context, query, currentTotalDays))
             .Where(candidate => candidate.Selection.Score >= 45)
             // An explicit current topic must not lose to many weak cues from an old scene.
@@ -34,14 +37,16 @@ internal static class MemoryRecallService
             .ThenByDescending(candidate => candidate.Selection.Memory.Importance)
             .ThenByDescending(candidate => candidate.Selection.Memory.LastUpdatedTotalDays)
             .ThenByDescending(candidate => candidate.Selection.Memory.LastUpdatedTimeOfDay)
-            .Take(System.Math.Max(0, longTermCount))
-            .Select(candidate => candidate.Selection)
             .ToList();
-        var playerPreferences = state.PlayerPreferenceMemories
+        var preferenceCandidates = state.PlayerPreferenceMemories
             .Where(memory => memory != null
                 && !string.IsNullOrWhiteSpace(memory.Summary)
                 && IsPromptSafeMemory(memory.Subject, memory.Summary, memory.Tags))
             .Select(PlayerPreferenceMemoryStore.NormalizeForStore)
+            .Where(memory => memory.PreferenceKind != "none")
+            .GroupBy(memory => PlayerPreferenceMemoryStore.BuildRevisionKey(memory.PreferenceKind, memory.Subject, memory.Summary), System.StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.OrderBy(memory => memory.LastUpdatedTotalDays)
+                .ThenBy(memory => memory.LastUpdatedTimeOfDay).Last())
             .Select(memory => ScorePlayerPreferenceMemory(memory, context, query, currentTotalDays))
             .Where(candidate => candidate.Selection.Score >= 45)
             .OrderByDescending(candidate => candidate.QueryScore)
@@ -49,11 +54,45 @@ internal static class MemoryRecallService
             .ThenByDescending(candidate => candidate.Selection.Memory.Importance)
             .ThenByDescending(candidate => candidate.Selection.Memory.LastUpdatedTotalDays)
             .ThenByDescending(candidate => candidate.Selection.Memory.LastUpdatedTimeOfDay)
-            .Take(System.Math.Max(0, preferenceCount))
-            .Select(candidate => candidate.Selection)
             .ToList();
 
+        var longTermMemories = KeepLatestMatchingRecord(longTermCandidates, longTermCount,
+            selection => query.Score(selection.Memory.Subject, selection.Memory.Summary) > 0,
+            selection => selection.Memory.LastUpdatedTotalDays,
+            selection => selection.Memory.LastUpdatedTimeOfDay);
+        var playerPreferences = KeepLatestMatchingRecord(preferenceCandidates, preferenceCount,
+            selection => query.Score(selection.Memory.Subject, selection.Memory.Summary) > 0,
+            selection => selection.Memory.LastUpdatedTotalDays,
+            selection => selection.Memory.LastUpdatedTimeOfDay);
+
         return new MemoryRecallPlan(context, longTermMemories, playerPreferences);
+    }
+
+    // Protect one newest matching record before filling with relevance/salience. A newer
+    // bilingual correction can have a weaker lexical score than several old literal matches.
+    // This retains evidence, never merges subjects or declares one unrelated fact invalid.
+    private static List<T> KeepLatestMatchingRecord<T>(
+        IReadOnlyList<(T Selection, int QueryScore)> ranked,
+        int count,
+        System.Func<T, bool> hasDirectEvidence,
+        System.Func<T, int> updatedDay,
+        System.Func<T, int> updatedTime)
+    {
+        if (count <= 0)
+        {
+            return new List<T>();
+        }
+
+        var latest = ranked.Where(candidate => candidate.QueryScore > 0 && hasDirectEvidence(candidate.Selection))
+            .OrderByDescending(candidate => updatedDay(candidate.Selection))
+            .ThenByDescending(candidate => updatedTime(candidate.Selection))
+            .Take(1).ToArray();
+        var chosen = ranked.Take(count).Select(candidate => candidate.Selection).ToList();
+        if (latest.Length > 0 && !chosen.Contains(latest[0].Selection))
+        {
+            chosen[^1] = latest[0].Selection;
+        }
+        return chosen;
     }
 
     private static bool IsPromptSafeMemory(string? subject, string? summary, IEnumerable<string>? tags)

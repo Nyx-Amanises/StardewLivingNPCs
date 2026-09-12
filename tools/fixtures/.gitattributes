@@ -1,0 +1,2 @@
+# Preserve fixture bytes used by captured evaluation hashes on every checkout.
+memory_agreement_accuracy*.json text eol=lf

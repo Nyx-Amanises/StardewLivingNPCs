@@ -95,21 +95,35 @@ internal sealed class ExchangeApplicationService
         bool emotionChanged = false;
         var fulfilledHelpRequests = new List<NpcHelpRequestFact>();
 
+        // A parsed batch may repeat an identity while correcting it. Pick its final revision
+        // before salience filtering or ordering, so an older candidate cannot replace or outlive
+        // that correction. Store routes remain separate, even if their local keys are equal.
         foreach (var candidate in analysis.Memories
+                     .GroupBy(memory => memory.PlayerPreference && memory.PlayerPreferenceKind != "none"
+                             ? "preference:" + PlayerPreferenceMemoryStore.BuildRevisionKey(memory.PlayerPreferenceKind, memory.Subject, memory.Summary)
+                             : "long_term:" + LongTermMemoryStore.BuildKey(memory.Kind, memory.Subject, memory.Summary),
+                         StringComparer.OrdinalIgnoreCase)
+                     .Select(group => group.Last())
                      .Where(memory => memory.Importance >= 40 && !string.IsNullOrWhiteSpace(memory.Summary))
                      .OrderByDescending(memory => memory.Importance)
                      .Take(4))
         {
-            if (candidate.PlayerPreference && this.storePlayerPreferenceMemory(state, candidate))
+            if (candidate.PlayerPreference && candidate.PlayerPreferenceKind != "none")
             {
-                storedPlayerPreferences++;
-                var entry = this.createEntry(
-                    npc,
-                    "PlayerPreferenceMemory",
-                    candidate.PlayerPreferenceKind,
-                    candidate.Summary
-                );
-                this.addEntry(entry, maxEntriesPerNpc);
+                if (this.storePlayerPreferenceMemory(state, candidate))
+                {
+                    storedPlayerPreferences++;
+                    var entry = this.createEntry(
+                        npc,
+                        "PlayerPreferenceMemory",
+                        candidate.PlayerPreferenceKind,
+                        candidate.Summary
+                    );
+                    this.addEntry(entry, maxEntriesPerNpc);
+                }
+
+                // Parse already validated the kind. A stale preference rejected by its store
+                // must not reappear as a long-term fact or an apparent fresh history entry.
                 continue;
             }
 

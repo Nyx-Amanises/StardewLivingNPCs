@@ -85,6 +85,11 @@ internal sealed class BehaviorMemory
                     continue;
                 }
 
+                // Resolve revisions while serialized order is intact. Clamp sorts by salience
+                // and caps the lists, which could otherwise reorder same-minute corrections
+                // or discard a newer, less salient revision before the stores can merge it.
+                LongTermMemoryStore.Refresh(pair.Value, Game1.Date.TotalDays);
+                PlayerPreferenceMemoryStore.Refresh(pair.Value, Game1.Date.TotalDays);
                 pair.Value.Clamp();
                 this.HelpRequests.NormalizeLoadedRequests(pair.Value);
                 NicknamePreferenceService.RecoverStateFromStoredMemories(pair.Value);

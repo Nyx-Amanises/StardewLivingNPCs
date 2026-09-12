@@ -33,6 +33,7 @@ public static class LivingNpcContextCompressor
             .ToList();
         var selected = new List<BriefContextLine>();
         bool inCriticalSection = false;
+        bool inMemorySection = false;
 
         foreach (string line in lines)
         {
@@ -44,11 +45,13 @@ public static class LivingNpcContextCompressor
             if (line.StartsWith("##", StringComparison.Ordinal))
             {
                 inCriticalSection = IsCriticalSectionHeading(line);
+                inMemorySection = line.StartsWith(MemoryContextHeadingPrefix, StringComparison.OrdinalIgnoreCase);
             }
 
-            if (inCriticalSection || ShouldKeepBriefContextLine(line))
+            bool critical = inCriticalSection || (inMemorySection && IsCriticalMemoryLine(line));
+            if (critical || ShouldKeepBriefContextLine(line))
             {
-                selected.Add(new BriefContextLine(line, inCriticalSection));
+                selected.Add(new BriefContextLine(line, critical));
             }
         }
 
@@ -208,6 +211,26 @@ public static class LivingNpcContextCompressor
     private const string LivingNpcHeadingPrefix = "## LivingNPCs";
     private const string CompanionOutingHeadingPrefix = "## Active Companion";
     private const string MemoryContextHeadingPrefix = "## LivingNPCs Context";
+
+    private static bool IsCriticalMemoryLine(string line)
+    {
+        // The 900-character brief view must not keep an old promise in conversation history
+        // while dropping its selected correction or the current structured task state. These
+        // are native complete fact lines, not keyword matches inside arbitrary memory prose.
+        string field = line.TrimStart('-', ' ', '\t');
+        return new[]
+        {
+            "Help requests:", "Help requests involving the farmer:", "Help-request lifecycle:",
+            "Help-request readiness:", "Help-request fit:", "Active help request:", "Recently fulfilled help request:",
+            "Unfinished help request:", "Expired help request:",
+            "Conversation-driven behavior tendencies:", "Conversation-driven behavior tendencies (conversation stance):",
+            "Conversation-driven behavior tendency:",
+            "Behavior tendencies:", "Conflict memory:", "Conflict:", "Unresolved conflict:",
+            "Recently resolved conflict:", "Personal name memory:", "Personal memory:",
+            "Relevant long-term memories for this reply:", "Relevant farmer preference memories for this reply:",
+            "Recall focus:", "Known farmer preferences:"
+        }.Any(prefix => field.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+    }
 
     private static bool IsCriticalSectionHeading(string line)
     {

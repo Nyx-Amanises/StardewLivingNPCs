@@ -39,6 +39,16 @@ internal static class CurrentConversationProjector
         + "do not infer its contents or answer an earlier turn]";
     private const string ShortCompactedInstruction =
         "Conversation excerpt: gaps omit turns. Old quotes are not new consent. Ask when missing context matters.";
+    private const string UnresolvedEvidenceInstruction =
+        "Quoted changes can have unresolved references or conditions; keep their subjects separate and do not treat past plans as current agreements.";
+    // No longer than UnresolvedEvidenceInstruction: switching after a failed bundle must not
+    // invalidate the budget already reserved for the latest player message.
+    private const string IncompleteEvidenceInstruction =
+        "Some older quotes were omitted because later related evidence is unavailable. Do not infer those facts or plans; ask if needed.";
+    private const string UnmatchedAgreementInstruction =
+        "Unresolved agreement reference: these are possible earlier topics, not a confirmed match. Keep topics separate and ask if unclear.";
+    private const string IncompleteAgreementInstruction =
+        "Unresolved agreement reference; later related evidence is unavailable. Kept quotes are possible topics only; ask to clarify.";
 
     // These phrases affect retrieval priority only. They never establish consent, resolve a
     // conflict, invalidate a promise, or authorize a game action. Keep the complete original quote.
@@ -50,13 +60,6 @@ internal static class CurrentConversationProjector
         "cancel", "cancelled", "canceled", "forget it", "never mind", "no longer", "not anymore",
         "don't", "do not", "won't", "will not", "can't", "cannot", "refuse", "decline", "stop",
         "instead", "actually", "changed my mind", "not today", "not now", "keep it private"
-    };
-
-    private static readonly string[] CommitmentPhrases =
-    {
-        "答应", "承诺", "说好了", "约好了", "说定", "约定", "我会帮", "我会给", "我会把",
-        "我帮你", "我们明天", "promise", "promised", "agreed", "agreement", "i'll bring",
-        "i will bring", "i'll help", "i will help", "we will meet", "we'll meet", "i'll meet", "i owe you"
     };
 
     internal static CurrentConversationProjection Build(
@@ -93,12 +96,13 @@ internal static class CurrentConversationProjector
         string notice = string.IsNullOrWhiteSpace(compactedInstruction)
             ? DefaultCompactedInstruction
             : compactedInstruction.Trim();
-        if (prefix.Length + notice.Length > characterBudget / 3)
+        string evidenceNotice = UnresolvedEvidenceInstruction;
+        if (prefix.Length + notice.Length + evidenceNotice.Length > characterBudget / 3)
         {
             prefix = "Current conversation:\n";
             notice = DefaultCompactedInstruction;
         }
-        if (prefix.Length + notice.Length > characterBudget / 3)
+        if (prefix.Length + notice.Length + evidenceNotice.Length > characterBudget / 3)
         {
             notice = ShortCompactedInstruction;
         }
@@ -106,13 +110,21 @@ internal static class CurrentConversationProjector
         var selected = new HashSet<int>();
         var replacements = new Dictionary<int, string>();
         bool latestMessageUnavailable = false;
-        string Render() => RenderExcerpt(prefix, notice, exchanges, selected, replacements);
+        string Render() => RenderExcerpt(prefix, notice + (evidenceNotice.Length > 0 ? "\n" + evidenceNotice : string.Empty),
+            exchanges, selected, replacements);
 
         bool TryKeep(IEnumerable<int> candidates, int limit = int.MaxValue)
         {
-            int[] added = candidates.Where(index => index >= 0 && index < exchanges.Count
+            int[] requested = candidates.Distinct().ToArray();
+            // A kept player line or omission marker cannot stand in for this exchange's
+            // missing NPC answer when an older quote depends on that answer's correction.
+            if (requested.Any(replacements.ContainsKey))
+            {
+                return false;
+            }
+            int[] added = requested.Where(index => index >= 0 && index < exchanges.Count
                     && exchanges[index].Text.Length > 0 && !selected.Contains(index))
-                .Distinct().ToArray();
+                .ToArray();
             if (added.Length == 0)
             {
                 return false;
@@ -176,6 +188,7 @@ internal static class CurrentConversationProjector
                 // A fixed short fallback must itself fit; do not truncate the wrapped evidence.
                 prefix = string.Empty;
                 notice = "Latest message unavailable: ask the player to shorten it, without answering an earlier turn.";
+                evidenceNotice = string.Empty;
                 replacements[latest] = "Farmer: " + OversizedMessage;
                 latestMessageUnavailable = true;
             }
@@ -193,46 +206,13 @@ internal static class CurrentConversationProjector
             };
         }
 
-        // A contiguous recent suffix carries short answers and pronouns. Reserve some space
-        // for older evidence instead of allowing four verbose exchanges to consume everything.
         int recentFloor = Math.Max(0, latest - RecentExchangeCount + (latestIsUnanswered ? 0 : 1));
-        int recentLimit = Math.Max(Render().Length, characterBudget * 2 / 3);
-        for (int index = latest - 1; index >= recentFloor; index--)
-        {
-            TryKeep(new[] { index }, index == latest - 1 ? characterBudget : recentLimit);
-        }
-
-        bool TryEvidence(int index, bool includePredecessor = false)
-        {
-            // A following reply may retract an agreement using only "actually, no". Keep the
-            // adjacent exchange along with a recalled match whenever possible. A boundary's
-            // preceding exchange also supplies the noun for "don't do that after all".
-            int[] neighborhood = includePredecessor
-                ? new[] { index - 1, index, index + 1 }
-                : new[] { index, index + 1 };
-            if (TryKeep(neighborhood))
-            {
-                return true;
-            }
-            if (exchanges[index].HasBoundary && TryKeep(new[] { index }))
-            {
-                TryKeep(new[] { index - 1 });
-                TryKeep(new[] { index + 1 });
-                return true;
-            }
-            return false;
-        }
-
-        // Recent refusals/corrections get an opportunity before any older literal match or
-        // promise can consume the remaining budget. This is evidence selection, not a ledger.
-        var older = Enumerable.Range(0, Math.Max(0, recentFloor)).Reverse().ToArray();
-        foreach (int index in older.Where(index => exchanges[index].HasBoundary).Take(2))
-        {
-            TryEvidence(index, includePredecessor: true);
-        }
-
         MemoryTopicQuery query = MemoryTopicQuery.Create(
             RsvAiPolicy.ContainsBlockedReference(currentPlayerText ?? string.Empty) ? null : currentPlayerText);
+        var evidence = new EvidenceLinks(exchanges, MemoryTopicQuery.Create(
+            RsvAiPolicy.ContainsBlockedReference(currentPlayerText ?? string.Empty)
+                ? null : ConversationEvidenceCues.GetTopicText(currentPlayerText)), latestIsUnanswered ? latest : exchanges.Count);
+        var older = Enumerable.Range(0, Math.Max(0, recentFloor)).Reverse().ToArray();
         var matches = older
             .Where(index => exchanges[index].Text.Length > 0)
             .Select(index => (Index: index, Score: exchanges[index].Turns
@@ -241,10 +221,54 @@ internal static class CurrentConversationProjector
                 .DefaultIfEmpty().Max()))
             .Where(match => match.Score > 0)
             .ToArray();
+        bool usingAgreementFallback = matches.Length == 0
+            && ConversationEvidenceCues.HasAgreementReferenceCue(currentPlayerText);
+        if (usingAgreementFallback)
+        {
+            evidenceNotice = UnmatchedAgreementInstruction;
+        }
+
+        bool TryEvidence(int index, bool includePredecessor = false, int limit = int.MaxValue, bool addNeighbors = true)
+        {
+            int[] required = evidence.RequiredFor(index);
+            if (!required.All(candidate => selected.Contains(candidate) && !replacements.ContainsKey(candidate))
+                && !TryKeep(required, limit))
+            {
+                if (required.Any(candidate => candidate > index) || exchanges[index].HasRevision)
+                {
+                    evidenceNotice = usingAgreementFallback ? IncompleteAgreementInstruction : IncompleteEvidenceInstruction;
+                }
+                return false;
+            }
+
+            if (addNeighbors)
+            {
+                // A nearby quote is optional unless it contains a reference/clarification. It
+                // must satisfy its own dependencies too: an unrelated adjacent promise must not
+                // sneak in without its later cancellation merely as another quote's neighbor.
+                foreach (int neighbor in includePredecessor ? new[] { index - 1, index + 1 } : new[] { index + 1 })
+                {
+                    if (neighbor >= 0 && neighbor < exchanges.Count)
+                    {
+                        TryKeep(evidence.RequiredFor(neighbor), limit);
+                    }
+                }
+            }
+            return true;
+        }
+
+        // A recent suffix carries short answers and pronouns. Even a recent old claim must carry
+        // a later correction before it can be quoted. Reserve room for topic-specific evidence.
+        int recentLimit = Math.Max(Render().Length, characterBudget * 2 / 3);
+        for (int index = latest - 1; index >= recentFloor; index--)
+        {
+            TryEvidence(index, limit: index == latest - 1 ? characterBudget : recentLimit, addNeighbors: false);
+        }
 
         int relatedKept = 0;
-        // First protect the newest match, including a bilingual correction which may score
-        // lower than an older literal mention. Then add high-scoring evidence from anywhere.
+        // Related updates are bundled before global boundary snippets compete for the budget.
+        // Otherwise several unrelated refusals can push out the cancellation of this very topic.
+        // First protect the newest match, including weaker bilingual matches, then older evidence.
         foreach (int index in matches.OrderByDescending(match => match.Index).Take(1).Select(match => match.Index)
             .Concat(matches.OrderByDescending(match => match.Score).ThenByDescending(match => match.Index)
                 .Select(match => match.Index)).Distinct())
@@ -259,6 +283,26 @@ internal static class CurrentConversationProjector
             }
         }
 
+        if (usingAgreementFallback)
+        {
+            // A pronoun or an untranslated topic may leave the local vocabulary with no match.
+            // Try a few complete promise/change groups before unrelated global boundaries use
+            // their budget. They are candidate prior topics, never a resolved referent or state.
+            int agreementsKept = 0;
+            foreach (int index in older.Where(index => exchanges[index].HasCommitment))
+            {
+                if (TryEvidence(index) && ++agreementsKept >= ConstraintExchangeCount)
+                {
+                    break;
+                }
+            }
+        }
+
+        foreach (int index in older.Where(index => exchanges[index].HasBoundary).Take(2))
+        {
+            TryEvidence(index, includePredecessor: true);
+        }
+
         foreach (int index in older.Where(index => exchanges[index].HasBoundary || exchanges[index].HasCommitment)
             .Take(ConstraintExchangeCount))
         {
@@ -269,7 +313,7 @@ internal static class CurrentConversationProjector
         // the remaining space. Never fill gaps with unrelated old chatter just to hit a target.
         for (int index = latest - 1; index >= recentFloor; index--)
         {
-            TryKeep(new[] { index });
+            TryEvidence(index, addNeighbors: false);
         }
 
         string text = Render();
@@ -378,12 +422,176 @@ internal static class CurrentConversationProjector
             this.HasBoundary = turns.Any(turn => IsAllowed(turn.Text)
                 && BoundaryPhrases.Any(phrase => LocalTextSearch.ContainsPhrase(turn.Text, phrase)));
             this.HasCommitment = turns.Any(turn => IsAllowed(turn.Text)
-                && CommitmentPhrases.Any(phrase => LocalTextSearch.ContainsPhrase(turn.Text, phrase)));
+                && ConversationEvidenceCues.HasCommitmentCue(turn.Text));
+            this.HasReference = turns.Any(turn => IsAllowed(turn.Text)
+                && ConversationEvidenceCues.HasAnaphoricReference(turn.Text));
+            this.HasAgreementRevision = turns.Any(turn => IsAllowed(turn.Text)
+                && ConversationEvidenceCues.HasAgreementRevisionCue(turn.Text));
+            this.HasReference |= this.HasAgreementRevision;
+            this.HasFollowingReference = turns.Any(turn => turn.IsPlayerLine && IsAllowed(turn.Text)
+                    && ConversationEvidenceCues.HasAnaphoricReference(turn.Text))
+                || (!turns.Any(turn => turn.IsPlayerLine) && this.HasReference);
+            this.HasRevision = turns.Any(turn => IsAllowed(turn.Text)
+                    && ConversationEvidenceCues.HasRevisionCue(turn.Text))
+                || (this.HasBoundary && this.HasReference);
+            this.HasBoundary |= this.HasRevision;
+            this.TopicLines = turns.Where(turn => IsAllowed(turn.Text))
+                .Select(turn => ConversationEvidenceCues.GetTopicText(turn.Text)).ToArray();
+            this.NpcTopicLines = turns.Where(turn => !turn.IsPlayerLine && IsAllowed(turn.Text))
+                .Select(turn => ConversationEvidenceCues.GetTopicText(turn.Text)).ToArray();
         }
 
         public IReadOnlyList<ConversationTurn> Turns { get; }
         public string Text { get; }
         public bool HasBoundary { get; }
         public bool HasCommitment { get; }
+        public bool HasReference { get; }
+        public bool HasFollowingReference { get; }
+        public bool HasRevision { get; }
+        public bool HasAgreementRevision { get; }
+        public IReadOnlyList<string> TopicLines { get; }
+        public IReadOnlyList<string> NpcTopicLines { get; }
+    }
+
+    /// <summary>
+    /// Links evidence, never agreement state. A pronoun can have several possible antecedents;
+    /// keeping their actual words lets the reply ask when the reference remains unresolved.
+    /// </summary>
+    private sealed class EvidenceLinks
+    {
+        private readonly IReadOnlyList<Exchange> exchanges;
+        private readonly int[] revisions;
+        private readonly int[] currentTopicMatches;
+        private readonly int latestCurrentTopicEvidence;
+        private readonly Dictionary<int, int[]> required = new();
+        private readonly Dictionary<int, (int Index, int Score, int[] Scores)> antecedents = new();
+
+        public EvidenceLinks(IReadOnlyList<Exchange> exchanges, MemoryTopicQuery currentTopic, int completedEnd)
+        {
+            this.exchanges = exchanges;
+            this.revisions = Enumerable.Range(0, exchanges.Count).Where(index => exchanges[index].HasRevision).ToArray();
+            this.currentTopicMatches = Enumerable.Range(0, completedEnd)
+                .Where(index => Score(currentTopic, exchanges[index]) > 0).ToArray();
+            this.latestCurrentTopicEvidence = this.currentTopicMatches.LastOrDefault(index =>
+                exchanges[index].NpcTopicLines.Any(line => currentTopic.Score(string.Empty, line) > 0), -1);
+        }
+
+        public int[] RequiredFor(int index)
+        {
+            if (this.required.TryGetValue(index, out int[]? cached))
+            {
+                return cached;
+            }
+
+            var result = new HashSet<int> { index };
+            var pending = new Queue<int>();
+            pending.Enqueue(index);
+            void Add(int candidate)
+            {
+                if (candidate >= 0 && candidate < this.exchanges.Count && result.Add(candidate))
+                {
+                    pending.Enqueue(candidate);
+                }
+            }
+
+            while (pending.Count > 0)
+            {
+                int source = pending.Dequeue();
+                Exchange exchange = this.exchanges[source];
+                // Short clarification chains can be longer than one exchange ("Are you sure?",
+                // "Which shelf?"). Stop at the first new non-referential topic.
+                if (source + 1 < this.exchanges.Count && this.exchanges[source + 1].HasFollowingReference)
+                {
+                    Add(source + 1);
+                }
+
+                if (this.currentTopicMatches.Contains(source) && this.latestCurrentTopicEvidence > source)
+                {
+                    // A newer explicit fact can correct an older one without saying "actually".
+                    // Never keep the old match by itself when the newest match cannot fit.
+                    // A repeated player question is not itself a newer answer. An unrelated
+                    // oversized question containing the topic must not erase a usable old fact.
+                    Add(this.latestCurrentTopicEvidence);
+                }
+
+                if (exchange.HasRevision)
+                {
+                    Add(this.AntecedentFor(source).Index);
+                }
+
+                foreach (int revision in this.revisions)
+                {
+                    if (revision <= source)
+                    {
+                        continue;
+                    }
+                    var antecedent = this.AntecedentFor(revision);
+                    int score = antecedent.Scores[source];
+                    Exchange change = this.exchanges[revision];
+                    bool unresolvedReference = antecedent.Score == 0 && change.HasReference
+                        && (change.HasAgreementRevision
+                            ? exchange.HasCommitment || exchange.HasAgreementRevision || this.currentTopicMatches.Contains(source)
+                            : source == antecedent.Index);
+                    // A stronger explicit match to another subject prevents applying e.g. a
+                    // library cancellation to the separate lake promise just because both meet.
+                    if ((score > 0 && score >= antecedent.Score) || unresolvedReference)
+                    {
+                        Add(revision);
+                    }
+                }
+            }
+
+            int[] bundle = result.OrderBy(candidate => candidate).ToArray();
+            this.required[index] = bundle;
+            return bundle;
+        }
+
+        private (int Index, int Score, int[] Scores) AntecedentFor(int revision)
+        {
+            if (this.antecedents.TryGetValue(revision, out var cached))
+            {
+                return cached;
+            }
+
+            Exchange change = this.exchanges[revision];
+            var queries = change.TopicLines.Select(line => MemoryTopicQuery.Create(
+                change.HasReference ? ConversationEvidenceCues.GetRevisionTopicText(line) : line)).ToArray();
+            var scores = new int[revision];
+            int bestIndex = -1;
+            int bestScore = 0;
+            for (int index = revision - 1; index >= 0; index--)
+            {
+                int score = queries.Select(query => Score(query, this.exchanges[index])).DefaultIfEmpty().Max();
+                scores[index] = score;
+                if (score > bestScore)
+                {
+                    bestIndex = index;
+                    bestScore = score;
+                }
+            }
+
+            if (bestIndex < 0 && change.HasReference)
+            {
+                // "Cancel that" can concern an earlier promise. A plain "actually, it is green"
+                // instead needs the nearer ordinary fact, not an unrelated older commitment.
+                // These remain possible antecedents; neither branch resolves agreement state.
+                for (int index = revision - 1; index >= 0; index--)
+                {
+                    if (change.HasAgreementRevision
+                        ? this.exchanges[index].HasCommitment
+                        : this.exchanges[index].Text.Length > 0)
+                    {
+                        bestIndex = index;
+                        break;
+                    }
+                }
+            }
+            var result = (bestIndex, bestScore, scores);
+            this.antecedents[revision] = result;
+            return result;
+        }
+
+        private static int Score(MemoryTopicQuery query, Exchange exchange) =>
+            exchange.TopicLines.Select(line => query.Score(string.Empty, line)).DefaultIfEmpty().Max();
     }
 }

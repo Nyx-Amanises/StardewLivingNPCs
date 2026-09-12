@@ -1184,6 +1184,10 @@ internal sealed class PromptAssembler
             AppendLine(builder, this.Text("instructionsTranslate", new { language = this.input.Locale }));
         }
 
+        // Apply evidence boundaries after the changing records and scene contract. Recall
+        // questions may need an exact restatement, not a new anecdote to advance the scene.
+        AppendLine(builder, this.Text("instructionsMemoryEvidence") ?? MemoryEvidenceRules.Dialogue);
+
         // Repeat the trust boundary after all changing data, including a schedule override.
         // The longer output/schema instructions live in the reusable prefix exactly once.
         AppendLine(builder, this.Text("instructionsUntrustedData") ?? PromptDataBoundary.InstructionReminder);

@@ -184,8 +184,8 @@ internal static class BehaviorPromptContextBuilder
         prompt.AppendLine(PromptFragments.Context.ExpressionStyleLine(emotionalStyle.PromptLabel));
         prompt.AppendLine(PromptFragments.Context.FamiliarityTrustRhythmLineConcise(state));
         AppendIfMeaningful(prompt, PromptFragments.Context.LabelRelationshipImpression, state.RelationshipImpression);
-        AppendIfMeaningful(prompt, PromptFragments.Context.LabelRecallFocus, PromptFragments.Recall.LongTermMemories(recallPlan.LongTermMemories));
-        AppendIfMeaningful(prompt, PromptFragments.Context.LabelKnownPreferences, PromptFragments.Recall.PlayerPreferences(recallPlan.PlayerPreferences));
+        AppendIfMeaningful(prompt, PromptFragments.Context.LabelRecallFocus, MemoryEvidenceFormatter.LongTermMemories(recallPlan.LongTermMemories, currentTotalDays));
+        AppendIfMeaningful(prompt, PromptFragments.Context.LabelKnownPreferences, MemoryEvidenceFormatter.PlayerPreferences(recallPlan.PlayerPreferences, currentTotalDays));
         AppendIfMeaningful(prompt, PromptFragments.Context.LabelBehaviorTendencies,
             string.Join("; ", historicalRecall.BehaviorInfluences.Select(influence =>
                 PromptFragments.Facts.DialogueBehaviorInfluence(influence, currentTotalDays))));
@@ -553,13 +553,13 @@ internal static class BehaviorPromptContextBuilder
             if (recallPlan.LongTermMemories.Count > 0)
             {
                 yield return PromptFragments.Context.LongTermRecallCue(
-                    PromptFragments.Recall.LongTermMemories(recallPlan.LongTermMemories));
+                    MemoryEvidenceFormatter.LongTermMemories(recallPlan.LongTermMemories, currentTotalDays));
             }
 
             if (recallPlan.PlayerPreferences.Count > 0)
             {
                 yield return PromptFragments.Context.PreferenceRecallCue(
-                    PromptFragments.Recall.PlayerPreferences(recallPlan.PlayerPreferences));
+                    MemoryEvidenceFormatter.PlayerPreferences(recallPlan.PlayerPreferences, currentTotalDays));
             }
 
             if (communityImpressions.Count > 0)
