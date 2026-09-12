@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
 using LivingNPCs.Dialogue;
+using LivingNPCs.Dialogue.Content;
 using LivingNPCs.Dialogue.Engine;
 using LivingNPCs.Dialogue.Llm;
 using LivingNPCs.Dialogue.Persistence;
@@ -67,13 +68,16 @@ public sealed class DialogueLatencyTests : IDisposable
     }
 
     [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task CompleteInlineMetadataUsesOnlyTheMainRequestAndDefersCommit(bool gift)
+    [InlineData(false, "Hello, Haley!")]
+    [InlineData(false, "Tell me about Pelican Town's history and your family's connection to it.")]
+    [InlineData(false, "镇子的历史和你家里人的近况都怎么样？")]
+    [InlineData(true, "Hello, Haley!")]
+    public async Task CompleteInlineMetadataUsesOnlyTheMainRequestAndDefersCommit(bool gift, string playerText)
     {
         var client = new ScriptedClient(LlmReply.Success(
             "- Hello! The weather is pleasant today.$h\n%It is.\n!LIVINGNPCS_META {\"complete\":true,\"rapportDelta\":1}", null));
         var (engine, store) = RetryFixEngineHarness.Create(client);
+        DialogueServices.Config.UseOptimizedPrompts = false;
         DialogueServices.Config.EnableLivingNpcActionDecisionPass = true;
         var auxiliary = new AuxiliaryClient();
         LegacyLlm.Instance = auxiliary;
@@ -82,13 +86,16 @@ public sealed class DialogueLatencyTests : IDisposable
         try
         {
             GenerationResult result = await engine.GenerateAsync(
-                Request(gift ? GenerationTrigger.Gift : GenerationTrigger.Conversation), CancellationToken.None);
+                Request(gift ? GenerationTrigger.Gift : GenerationTrigger.Conversation, playerText), CancellationToken.None);
 
             Assert.False(result.IsFallback);
             Assert.Equal(1, client.Calls);
             Assert.Equal(0, auxiliary.Calls);
             Assert.NotNull(client.LastRequest);
             Assert.False(client.LastRequest!.DisableThinking);
+            Assert.Contains("FULL", client.LastRequest.StableContext);
+            Assert.Contains("A biography for testing.", client.LastRequest.NpcContext);
+            Assert.Contains(playerText, client.LastRequest.Tail);
             Assert.Contains("!LIVINGNPCS_META", client.LastRequest.ConcatenatedUserContent());
             Assert.DoesNotContain("[instructionsDialogueOnly]", client.LastRequest.ConcatenatedUserContent());
             Assert.Equal(new[] { "Hello! The weather is pleasant today.$h", "It is." }, result.ParsedLines);
@@ -134,21 +141,30 @@ public sealed class DialogueLatencyTests : IDisposable
         Assert.DoesNotContain("!LIVINGNPCS_META", client.LastRequest.ConcatenatedUserContent());
     }
 
-    [Fact]
-    public async Task MissingInlineMetadataFallsBackToOneClassifierRequest()
+    [Theory]
+    [InlineData("Hello, Haley!")]
+    [InlineData("Tell me about Pelican Town's history and your family's connection to it.")]
+    public async Task MissingInlineMetadataKeepsOneMetadataRequestAndLocalRetrieval(string playerText)
     {
         var client = new ScriptedClient();
         var (engine, store) = RetryFixEngineHarness.Create(client);
-        DialogueServices.Config.EnableSemanticContextRouting = true;
         DialogueServices.Config.EnableLivingNpcActionDecisionPass = true;
         var auxiliary = new AuxiliaryClient { ResponseText = "!LIVINGNPCS_META {\"complete\":true,\"rapportDelta\":1}" };
         LegacyLlm.Instance = auxiliary;
+        int localRetrievals = 0;
 
-        GenerationResult result = await engine.GenerateAsync(Request(), CancellationToken.None);
+        GenerationResult result = await engine.GenerateAsync(Request(playerText: playerText, retrieve: (_, query) =>
+        {
+            localRetrievals++;
+            Assert.Equal(playerText, query.PlayerText);
+            return new WorldRetrievalResult { CoreText = "Local world background.", RetrievedText = "LOCAL_REFERENCE_PRESERVED" };
+        }), CancellationToken.None);
 
         Assert.False(result.IsFallback);
         Assert.Equal(1, client.Calls);
         Assert.Equal(1, auxiliary.Calls);
+        Assert.Equal(1, localRetrievals);
+        Assert.Contains("LOCAL_REFERENCE_PRESERVED", client.LastRequest!.Tail);
         Assert.Contains("metadata classifier", auxiliary.SystemPrompt);
         Assert.Equal(1, ConversationAnalysis.Parse("!LIVINGNPCS_META " + result.AnalysisJson).RapportDelta);
         Assert.Empty(store.GetHistory("Haley").ConversationHistory);
@@ -294,11 +310,15 @@ public sealed class DialogueLatencyTests : IDisposable
 
     private static GenerationRequest Request(
         GenerationTrigger trigger = GenerationTrigger.Conversation,
-        string playerText = "Hello, Haley!") => new()
+        string playerText = "Hello, Haley!",
+        Func<bool, WorldRetrievalQuery, WorldRetrievalResult>? retrieve = null) => new()
     {
         NpcName = "Haley",
         NpcDisplayName = "Haley",
         Trigger = trigger,
+        CurrentPlayerText = playerText,
+        WorldContextRetriever = retrieve,
+        UsesCapturedWorldContext = retrieve != null,
         GiftItemId = trigger == GenerationTrigger.Gift ? "72" : string.Empty,
         GiftTaste = 0,
         Conversation = new List<ConversationTurn> { new(playerText, true, Guid.NewGuid().ToString()) },
@@ -353,7 +373,7 @@ public sealed class DialogueLatencyTests : IDisposable
             string systemPromptString, string gameCacheString, string npcCacheString, string promptString,
             string responseStart = "", int n_predict = 2048, string cacheContext = "", bool allowRetry = true,
             bool disableThinking = false, CancellationToken ct = default,
-            LlmOutputFormat outputFormat = LlmOutputFormat.Text)
+            LlmOutputFormat outputFormat = LlmOutputFormat.Text, TimeSpan? timeoutOverride = null)
         {
             this.Calls++;
             this.SystemPrompt = systemPromptString;

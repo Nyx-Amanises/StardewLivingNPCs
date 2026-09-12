@@ -16,7 +16,6 @@ public sealed class WorldRetrievalIntegrationTests : IDisposable
     {
         DialogueServices.Initialize(null!, null!, new DialogueConfig
         {
-            EnableSemanticContextRouting = false,
             EnableLivingNpcActionDecisionPass = false,
             TypedResponses = "With Generated"
         });
@@ -112,31 +111,35 @@ public sealed class WorldRetrievalIntegrationTests : IDisposable
     }
 
     [Theory]
-    [InlineData(ContextModule.EventHistory)]
-    [InlineData(ContextModule.RecentEvents)]
-    public async Task WorldReferencesAreRetrievedWhenHistoryDependenciesRestoreTheWorldModule(ContextModule dependency)
+    [InlineData("Hello, Penny.", false)]
+    [InlineData("Hello, Penny.", true)]
+    [InlineData("Tell me about the town's history and your family's connection to it.", false)]
+    [InlineData("Tell me about the town's history and your family's connection to it.", true)]
+    public async Task SimpleAndComplexDialogueKeepLocalReferencesWithoutAnyClassifierRequest(string input, bool optimized)
     {
-        DialogueServices.Config!.EnableSemanticContextRouting = true;
-        var router = new HistoryOnlyRouter(dependency);
-        LegacyLlm.Instance = router;
+        DialogueServices.Config.UseOptimizedPrompts = optimized;
+        var auxiliary = new CountingAuxiliaryClient();
+        LegacyLlm.Instance = auxiliary;
         var client = new CapturingClient();
         var engine = CreateEngine(client);
         int retrievals = 0;
         bool? optimizedSelection = null;
 
-        await engine.GenerateAsync(Request("That was a pleasant afternoon.", (optimized, _) =>
+        GenerationResult result = await engine.GenerateAsync(Request(input, (useOptimized, query) =>
         {
             retrievals++;
-            optimizedSelection = optimized;
-            return new WorldRetrievalResult { CoreText = "Dependency world core.", RetrievedText = "Dependency reference." };
+            optimizedSelection = useOptimized;
+            Assert.Equal(input, query.PlayerText);
+            return new WorldRetrievalResult { CoreText = "Captured world core.", RetrievedText = "Selected local reference." };
         }), CancellationToken.None);
 
-        Assert.Equal(1, router.Calls);
+        Assert.False(result.IsFallback);
+        Assert.Equal(0, auxiliary.Calls);
         Assert.Equal(1, retrievals);
-        Assert.True(optimizedSelection);
+        Assert.Equal(optimized, optimizedSelection);
         Assert.Single(client.Requests);
-        Assert.Contains("Dependency world core.", client.Requests[0].StableContext);
-        Assert.Contains("Dependency reference.", client.Requests[0].Tail);
+        Assert.Contains("Captured world core.", client.Requests[0].StableContext);
+        Assert.Contains("Selected local reference.", client.Requests[0].Tail);
     }
 
     [Fact]
@@ -238,27 +241,21 @@ public sealed class WorldRetrievalIntegrationTests : IDisposable
         });
     }
 
-    private sealed class HistoryOnlyRouter : LegacyLlm
+    private sealed class CountingAuxiliaryClient : LegacyLlm
     {
-        private readonly ContextModule dependency;
         public int Calls { get; private set; }
-
-        public HistoryOnlyRouter(ContextModule dependency) => this.dependency = dependency;
 
         public override Task<LlmResponse> RunInference(
             string systemPromptString, string gameCacheString, string npcCacheString, string promptString,
             string responseStart = "", int n_predict = 2048, string cacheContext = "",
             bool allowRetry = true, bool disableThinking = false, CancellationToken ct = default,
-            LlmOutputFormat outputFormat = LlmOutputFormat.Text)
+            LlmOutputFormat outputFormat = LlmOutputFormat.Text, TimeSpan? timeoutOverride = null)
         {
             this.Calls++;
-            string historyDetail = this.dependency == ContextModule.EventHistory ? "brief" : "none";
-            string eventsDetail = this.dependency == ContextModule.RecentEvents ? "brief" : "none";
             return Task.FromResult(new LlmResponse
             {
-                IsSuccess = true,
-                Text = "{\"confidence\":0.95,\"world\":\"none\",\"eventHistory\":\"" + historyDetail
-                    + "\",\"recentEvents\":\"" + eventsDetail + "\"}"
+                IsSuccess = false,
+                ErrorMessage = "No auxiliary model request is needed for a complete inline response."
             });
         }
     }

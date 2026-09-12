@@ -17,8 +17,8 @@ internal sealed class CurrentConversationProjection
 }
 
 /// <summary>
-/// Bounds the rendered current conversation without changing its GUIDs, persistence, routing
-/// cache identity or local evidence checks. Selected exchanges are quotes, not a generated summary.
+/// Bounds the rendered current conversation without changing its GUIDs, persistence or local
+/// evidence checks. Selected exchanges are quotes, not a generated summary.
 /// </summary>
 internal static class CurrentConversationProjector
 {

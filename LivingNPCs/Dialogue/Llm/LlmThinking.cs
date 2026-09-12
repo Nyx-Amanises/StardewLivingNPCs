@@ -373,17 +373,6 @@ internal static partial class LlmThinking
         ));
     }
 
-    public static string RoutingSystemPrompt()
-    {
-        string level = ForCall();
-        string thinkingHint = IsOff(level)
-            ? "Use the least reasoning the model supports."
-            : IsAuto(level)
-                ? "Use the model's default reasoning effort."
-                : $"Use {level.ToLowerInvariant()} reasoning only if the model supports it.";
-        return $"You are a fast JSON router. {thinkingHint} Do not over-analyze. Output only one compact JSON object.";
-    }
-
     private static string NormalizeModelName(string modelName)
     {
         return (modelName ?? string.Empty)

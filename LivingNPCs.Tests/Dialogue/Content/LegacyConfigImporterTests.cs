@@ -99,15 +99,35 @@ public sealed class LegacyConfigImporterTests
     public void Apply_ClampsNumericFields()
     {
         var config = new ModConfig();
-        var legacy = Parse("{\"QueryTimeout\":9999,\"SemanticContextRoutingTimeoutSeconds\":0,\"GeneralFrequency\":9,\"GiftFrequency\":-1,\"MarriageFrequency\":2}");
+        var legacy = Parse("{\"QueryTimeout\":9999,\"GeneralFrequency\":9,\"GiftFrequency\":-1,\"MarriageFrequency\":2}");
 
         LegacyConfigImporter.Apply(legacy, config);
 
         Assert.Equal(180, config.QueryTimeout);
-        Assert.Equal(2, config.SemanticContextRoutingTimeoutSeconds);
         Assert.Equal(4, config.GeneralFrequency);
         Assert.Equal(0, config.GiftFrequency);
         Assert.Equal(2, config.MarriageFrequency);
+    }
+
+    [Fact]
+    public void RemovedSemanticRoutingSettingsAreIgnoredAndNotWrittenBack()
+    {
+        const string oldJson = """
+            {"EnableSemanticContextRouting":true,"SemanticContextRoutingTimeoutSeconds":2,
+             "ThinkingLevel":"High","Provider":"DeepSeek","ModelName":"deepseek-flash","QueryTimeout":95}
+            """;
+        ModConfig config = Newtonsoft.Json.JsonConvert.DeserializeObject<ModConfig>(oldJson)!;
+        config.Migrate();
+        config.Validate();
+
+        var saved = Newtonsoft.Json.Linq.JObject.Parse(Newtonsoft.Json.JsonConvert.SerializeObject(config));
+
+        Assert.Null(saved["EnableSemanticContextRouting"]);
+        Assert.Null(saved["SemanticContextRoutingTimeoutSeconds"]);
+        Assert.Equal("High", saved.Value<string>("ThinkingLevel"));
+        Assert.Equal("DeepSeek", saved.Value<string>("Provider"));
+        Assert.Equal("deepseek-flash", saved.Value<string>("ModelName"));
+        Assert.Equal(95, saved.Value<int>("QueryTimeout"));
     }
 
     [Fact]

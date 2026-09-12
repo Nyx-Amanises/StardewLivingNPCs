@@ -75,7 +75,7 @@ internal sealed class LlmClientHost
             }
         }
 
-        // 让搬运件（礼物邮件/记忆印象/路由等 LegacyLlm 调用点）立即接上新客户端。
+        // 让搬运件（礼物邮件/记忆印象/动作判定等 LegacyLlm 调用点）立即接上新客户端。
         LegacyLlm.Instance = _guarded != null ? new LegacyLlmBridge(this) : new LegacyLlmDummy();
 
         if (client != null && ConnectionLooksIncomplete)

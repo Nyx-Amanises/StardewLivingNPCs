@@ -26,7 +26,6 @@ public sealed class GenerationSchedulerCancellationTests : IDisposable
     {
         DialogueServices.Initialize(null!, null!, new DialogueConfig
         {
-            EnableSemanticContextRouting = false,
             EnableLivingNpcActionDecisionPass = false,
             TypedResponses = "With Generated"
         });

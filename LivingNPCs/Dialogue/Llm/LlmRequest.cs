@@ -40,7 +40,7 @@ internal sealed class LlmRequest
 
     public bool AllowRetry { get; init; } = true;
 
-    /// <summary>一次性调用（连接自检等）显式覆盖单请求超时；空则用配置 QueryTimeout。</summary>
+    /// <summary>调用方（礼物邮件、连接自检等）显式覆盖单请求超时；空则用配置 QueryTimeout。</summary>
     public TimeSpan? TimeoutOverride { get; init; }
 
     /// <summary>Optional safe timing callback, once per OpenAI-compatible HTTP attempt, including failures.</summary>

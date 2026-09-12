@@ -31,8 +31,7 @@ internal static class DialogueConfigMenuSection
     {
         var manifest = modEntry.ModManifest;
 
-        // 打开菜单时归一化（§4.9）：钳制路由超时、思考档位过 Normalize。
-        config.SemanticContextRoutingTimeoutSeconds = Math.Clamp(config.SemanticContextRoutingTimeoutSeconds, 2, 30);
+        // 打开菜单时归一化思考档位（§4.9）。
         config.ThinkingLevel = LlmThinking.NormalizePreference(config.ThinkingLevel);
 
         LlmClientFactory.TryGetMetadata(config.Provider, out LlmProviderMetadata? metadata);
@@ -125,23 +124,6 @@ internal static class DialogueConfigMenuSection
             tooltip: () => T("dialogue.config.useOptimizedPrompts.tooltip"),
             getValue: () => config.UseOptimizedPrompts,
             setValue: value => config.UseOptimizedPrompts = value);
-
-        api.AddBoolOption(
-            mod: manifest,
-            name: () => T("dialogue.config.enableRouting.name"),
-            tooltip: () => T("dialogue.config.enableRouting.tooltip"),
-            getValue: () => config.EnableSemanticContextRouting,
-            setValue: value => config.EnableSemanticContextRouting = value);
-
-        api.AddNumberOption(
-            mod: manifest,
-            name: () => T("dialogue.config.routingTimeout.name"),
-            tooltip: () => T("dialogue.config.routingTimeout.tooltip"),
-            getValue: () => config.SemanticContextRoutingTimeoutSeconds,
-            setValue: value => config.SemanticContextRoutingTimeoutSeconds = Math.Clamp(value, 2, 30),
-            min: 2,
-            max: 30,
-            interval: 1);
 
         // GMCM caches allowed values at registration and commits edited fields only on save.
         // Keep every preference selectable across model changes; requests handle model limits.

@@ -110,16 +110,6 @@ internal static class LegacyConfigImporter
             config.UseOptimizedPrompts = legacy.UseOptimizedPrompts.Value;
         }
 
-        if (legacy.EnableSemanticContextRouting.HasValue)
-        {
-            config.EnableSemanticContextRouting = legacy.EnableSemanticContextRouting.Value;
-        }
-
-        if (legacy.SemanticContextRoutingTimeoutSeconds.HasValue)
-        {
-            config.SemanticContextRoutingTimeoutSeconds = Math.Clamp(legacy.SemanticContextRoutingTimeoutSeconds.Value, 2, 30);
-        }
-
         if (!string.IsNullOrWhiteSpace(legacy.RoutingThinkingLevel) || !string.IsNullOrWhiteSpace(legacy.ChatThinkingLevel))
         {
             config.ThinkingLevel = LlmThinking.FromLegacyLevels(legacy.ChatThinkingLevel, legacy.RoutingThinkingLevel);

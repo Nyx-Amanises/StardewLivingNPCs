@@ -176,6 +176,28 @@ public sealed class LlmClientHostTests : LlmTestBase
     }
 
     [Fact]
+    public async Task LegacyBridgeForwardsPerCallTimeoutInsteadOfUsingTheGlobalDefault()
+    {
+        Config.QueryTimeout = 180;
+        var host = new LlmClientHost();
+        host.ReplaceClient(Settings("OpenAI"));
+        using var handler = new TimeoutCaptureHandler();
+        LlmHttp.SetHandlerForTests(handler);
+        using var caller = new CancellationTokenSource(TimeSpan.FromSeconds(3));
+
+        LlmResponse response = await LegacyLlm.Instance.RunInference(
+            "S", "G", "N", "P", allowRetry: false, disableThinking: true,
+            ct: caller.Token, timeoutOverride: TimeSpan.FromMilliseconds(250));
+
+        Assert.False(response.IsSuccess);
+        Assert.Contains("timed out", response.ErrorMessage, StringComparison.OrdinalIgnoreCase);
+        Assert.False(caller.IsCancellationRequested);
+        Assert.True(handler.RequestTokenWasCanceled);
+        Assert.Equal(1, handler.Calls);
+        Assert.Equal(180, Config.QueryTimeout);
+    }
+
+    [Fact]
     public async Task LegacyBridgeRemovesRsvLinesAtTheTransportBoundary()
     {
         var host = new LlmClientHost();
@@ -199,6 +221,26 @@ public sealed class LlmClientHostTests : LlmTestBase
         Assert.DoesNotContain("Torts", transmitted, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("Ridgeside", transmitted, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("RSV_", transmitted, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed class TimeoutCaptureHandler : HttpMessageHandler
+    {
+        public int Calls { get; private set; }
+        public bool RequestTokenWasCanceled { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Calls++;
+            try
+            {
+                await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }
+            finally
+            {
+                RequestTokenWasCanceled = cancellationToken.IsCancellationRequested;
+            }
+        }
     }
 }
 

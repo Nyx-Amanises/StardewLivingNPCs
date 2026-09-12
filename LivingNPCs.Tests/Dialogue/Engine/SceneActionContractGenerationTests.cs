@@ -128,7 +128,7 @@ public sealed class SceneActionContractGenerationTests : IDisposable
             string systemPromptString, string gameCacheString, string npcCacheString, string promptString,
             string responseStart = "", int n_predict = 2048, string cacheContext = "", bool allowRetry = true,
             bool disableThinking = false, CancellationToken ct = default,
-            LlmOutputFormat outputFormat = LlmOutputFormat.Text)
+            LlmOutputFormat outputFormat = LlmOutputFormat.Text, TimeSpan? timeoutOverride = null)
         {
             ct.ThrowIfCancellationRequested();
             this.Calls++;

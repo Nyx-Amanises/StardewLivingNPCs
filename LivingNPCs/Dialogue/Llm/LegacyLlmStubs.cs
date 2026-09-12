@@ -19,7 +19,8 @@ internal class LegacyLlm
         bool allowRetry = true,
         bool disableThinking = false,
         CancellationToken ct = default,
-        LlmOutputFormat outputFormat = LlmOutputFormat.Text)
+        LlmOutputFormat outputFormat = LlmOutputFormat.Text,
+        TimeSpan? timeoutOverride = null)
     {
         // WP10-TODO: 引擎重写后调用点改为直接消费 ILlmClient.CompleteAsync/StreamAsync，本过渡门面删除。
         throw new NotImplementedException("WP10-TODO: legacy call sites should migrate to ILlmClient.");
@@ -39,7 +40,8 @@ internal sealed class LegacyLlmDummy : LegacyLlm
         bool allowRetry = true,
         bool disableThinking = false,
         CancellationToken ct = default,
-        LlmOutputFormat outputFormat = LlmOutputFormat.Text)
+        LlmOutputFormat outputFormat = LlmOutputFormat.Text,
+        TimeSpan? timeoutOverride = null)
     {
         return Task.FromResult(new LlmResponse
         {
@@ -50,7 +52,7 @@ internal sealed class LegacyLlmDummy : LegacyLlm
 }
 
 /// <summary>
-/// 过渡桥：把搬运件的 LegacyLlm 调用（礼物邮件、记忆印象、语义路由、行动判定）
+/// 过渡桥：把搬运件的 LegacyLlm 调用（礼物邮件、记忆印象、元数据、行动判定）
 /// 转发到 Host 的当前客户端（带熔断防护）。四段参数与 LlmRequest 一一对应；
 /// cacheContext 为旧世界死代码（CacheContexts 已废弃，WP11 §2），忽略。
 /// </summary>
@@ -74,7 +76,8 @@ internal sealed class LegacyLlmBridge : LegacyLlm
         bool allowRetry = true,
         bool disableThinking = false,
         CancellationToken ct = default,
-        LlmOutputFormat outputFormat = LlmOutputFormat.Text)
+        LlmOutputFormat outputFormat = LlmOutputFormat.Text,
+        TimeSpan? timeoutOverride = null)
     {
         ILlmClient? client = _host.Current;
         if (client == null)
@@ -86,7 +89,7 @@ internal sealed class LegacyLlmBridge : LegacyLlm
             };
         }
 
-        // LegacyLlm is still the transport used by the router, metadata, action, gift-mail, and
+        // LegacyLlm is still the transport used by the metadata, action, gift-mail, and
         // memory side channels. Keep a final no-RSV boundary here so a newly added side channel
         // cannot accidentally bypass the structured collectors above.
         static string Sanitize(string? value)
@@ -103,7 +106,8 @@ internal sealed class LegacyLlmBridge : LegacyLlm
                 MaxTokens = n_predict,
                 AllowRetry = allowRetry,
                 DisableThinking = disableThinking,
-                OutputFormat = outputFormat
+                OutputFormat = outputFormat,
+                TimeoutOverride = timeoutOverride
             },
             ct).ConfigureAwait(false);
 

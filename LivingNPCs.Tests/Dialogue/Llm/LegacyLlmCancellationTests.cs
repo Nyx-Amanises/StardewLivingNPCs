@@ -81,7 +81,7 @@ public sealed class LegacyLlmCancellationTests : LlmTestBase
             bool allowRetry = true,
             bool disableThinking = false,
             CancellationToken ct = default,
-            LlmOutputFormat outputFormat = LlmOutputFormat.Text)
+            LlmOutputFormat outputFormat = LlmOutputFormat.Text, TimeSpan? timeoutOverride = null)
         {
             this.SeenToken = ct;
             this.Started.TrySetResult(true);

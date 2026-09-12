@@ -35,8 +35,6 @@ internal sealed class LegacyValleyTalkConfig
     public string? TypedResponses { get; set; }
     public bool? EnableSveCompatibility { get; set; }
     public bool? UseOptimizedPrompts { get; set; }
-    public bool? EnableSemanticContextRouting { get; set; }
-    public int? SemanticContextRoutingTimeoutSeconds { get; set; }
     public string? RoutingThinkingLevel { get; set; }
     public string? ChatThinkingLevel { get; set; }
     public string? DisableCharacters { get; set; }

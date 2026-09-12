@@ -87,7 +87,7 @@ internal sealed partial class ModConfig
     // built-in dialogue engine when the mail is triggered; the i18n templates remain the fallback.
     // Hand-edit in config.json (intentionally not surfaced in GMCM).
     public bool EnableAiGiftMail { get; set; } = true;
-    public int AiGiftMailTimeoutSeconds { get; set; } = 30;
+    public int AiGiftMailTimeoutSeconds { get; set; } = 85;
 
     // Compress long-term memories evicted by the 24-entry cap into a biographical "relationship
     // impression" with one LLM call through the built-in dialogue engine; the impression is
@@ -121,8 +121,6 @@ internal sealed partial class ModConfig
     /// <summary>允许对睡觉中的 NPC 发起主动搭话（叫醒对方，提示词会带"刚被叫醒"情境）。</summary>
     public bool AllowWakeSleepingNpc { get; set; } = true;
     public bool UseOptimizedPrompts { get; set; } = false;
-    public bool EnableSemanticContextRouting { get; set; } = true;
-    public int SemanticContextRoutingTimeoutSeconds { get; set; } = 8;
     /// <summary>在 OpenAI 兼容端点后台流式接收主回复，收齐后仍交给原生对话框。</summary>
     public bool UseStreamingDialogueTransport { get; set; } = false;
     public bool SuppressConnectionCheck { get; set; } = false;
@@ -255,12 +253,11 @@ internal sealed partial class ModConfig
         this.MaxBehaviorsPerNpcPerDay = Clamp(this.MaxBehaviorsPerNpcPerDay, 0, 100);
         this.MaxInteractionDistanceTiles = Clamp(this.MaxInteractionDistanceTiles, 1, 128);
         this.AiPlannerTimeoutSeconds = Clamp(this.AiPlannerTimeoutSeconds, 1, 120);
-        this.AiGiftMailTimeoutSeconds = Clamp(this.AiGiftMailTimeoutSeconds, 5, 120);
+        this.AiGiftMailTimeoutSeconds = Clamp(this.AiGiftMailTimeoutSeconds, 5, 180);
         this.MemoryImpressionTimeoutSeconds = Clamp(this.MemoryImpressionTimeoutSeconds, 10, 180);
 
         // 对话引擎字段（WP15 §3.1/§4.9：超时与档位钳制、思考档位归一）。
         this.QueryTimeout = Clamp(this.QueryTimeout, 5, 180);
-        this.SemanticContextRoutingTimeoutSeconds = Clamp(this.SemanticContextRoutingTimeoutSeconds, 2, 30);
         this.GeneralFrequency = Clamp(this.GeneralFrequency, 0, 4);
         this.MarriageFrequency = Clamp(this.MarriageFrequency, 0, 4);
         this.GiftFrequency = Clamp(this.GiftFrequency, 0, 4);
@@ -375,8 +372,6 @@ internal sealed partial class ModConfig
         this.TypedResponses = defaults.TypedResponses;
         this.InitiateTypedDialogueKey = defaults.InitiateTypedDialogueKey;
         this.UseOptimizedPrompts = defaults.UseOptimizedPrompts;
-        this.EnableSemanticContextRouting = defaults.EnableSemanticContextRouting;
-        this.SemanticContextRoutingTimeoutSeconds = defaults.SemanticContextRoutingTimeoutSeconds;
         this.ThinkingLevel = defaults.ThinkingLevel;
         this.UseStreamingDialogueTransport = defaults.UseStreamingDialogueTransport;
         this.SuppressConnectionCheck = defaults.SuppressConnectionCheck;

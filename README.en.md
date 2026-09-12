@@ -159,13 +159,14 @@ Since 0.2.0, LAN/invite-code multiplayer is supported at a basic level, provided
 
 Settings actually available in Generic Mod Config Menu:
 
+Dialogue context is assembled locally from relevant memories, world information, and conversation excerpts before generating a reply. The separate AI semantic routing call and its settings have been removed; local retrieval and conversation limits remain in effect.
+
 | Setting | Purpose |
 | --- | --- |
 | Enable AI dialogue | Master switch for the built-in engine; turning it on requires a game restart |
 | Provider connection | LLM provider, API key, model name, server address, request timeout |
-| Semantic context routing | On by default; one lightweight call selects the context needed this turn (timeout and thinking level adjustable) |
 | Optimized world summary / concise prompt context | Reduce tokens; restore defaults if character detail drops |
-| Chat thinking level | Only affects models that support it |
+| Thinking level | Shared by dialogue and background tasks; adapted to the selected model's capabilities |
 | AI for normal right-click | Off by default |
 | AI line frequencies | Separate general / gift / marriage settings |
 | Typed-dialogue hotkey / inspect-memory hotkey | Default `LeftAlt` and `LeftShift + J` |
@@ -217,9 +218,9 @@ Conversations are sent to the LLM provider you configure. Requests can include y
 
 The API key is stored only in `Mods/LivingNPCs/config.json` and is never written to the mod's logs or exported reports. Never share your API key.
 
-By default 0.2.0 keeps local files under `Mods/LivingNPCs` for review and troubleshooting: `conversation_logs/` (readable per-NPC memoirs), `prompt_logs/`, `ai_response_logs/`, `context_routing_logs/`, `debug_reports/`, and `token_usage/`. These may contain your conversations and game information — review and redact before sharing. Set `ExportAiResponseLogs` to `false` in `config.json` to stop the ongoing AI diagnostic logs.
+By default 0.2.0 keeps local files under `Mods/LivingNPCs` for review and troubleshooting: `conversation_logs/` (readable per-NPC memoirs), `prompt_logs/`, `ai_response_logs/`, `debug_reports/`, and `token_usage/`. These may contain your conversations and game information — review and redact before sharing. Set `ExportAiResponseLogs` to `false` in `config.json` to stop the ongoing AI diagnostic logs.
 
-Semantic routing, the final reply, AI-written mail, and relationship impression updates (including older-memory compression) can all use model calls. Use `livingnpcs_tokens` to inspect usage; billing depends on your provider and playtime.
+The final reply, necessary action and metadata decisions, AI-written mail, and relationship impression updates (including older-memory compression) can all use model calls. Use `livingnpcs_tokens` to inspect usage; billing depends on your provider and playtime.
 
 ## FAQ
 

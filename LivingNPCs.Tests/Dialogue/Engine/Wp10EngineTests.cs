@@ -759,7 +759,6 @@ public class DialogueEngineGenerateTests
     {
         DialogueServices.Initialize(null!, null!, new DialogueConfig
         {
-            EnableSemanticContextRouting = false,
             EnableLivingNpcActionDecisionPass = false,
             TypedResponses = "With Generated"
         });

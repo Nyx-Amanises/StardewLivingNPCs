@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -36,25 +37,30 @@ internal sealed class GiftMailGenerator
     public static GiftMailGenerator Instance => _instance;
 
     private readonly SemaphoreSlim _gate = new(MaxConcurrent, MaxConcurrent);
+    private readonly Action<CancellationTokenSource, TimeSpan> _scheduleTimeout;
 
-    private GiftMailGenerator()
+    // Tests use an isolated generator and a controllable deadline scheduler; production uses CancelAfter.
+    internal GiftMailGenerator(Action<CancellationTokenSource, TimeSpan>? scheduleTimeout = null)
     {
+        _scheduleTimeout = scheduleTimeout ?? ((source, timeout) => source.CancelAfter(timeout));
     }
 
     /// <summary>Generates a validated mail body, or null on any failure (caller keeps its template).</summary>
     public async Task<string?> GenerateAsync(GiftMailRequest request, CancellationToken ct)
     {
+        ct.ThrowIfCancellationRequested();
         if (ShouldBypassRequest(request))
         {
             return null;
         }
 
         string motive = NormalizeMotive(request.Motive);
-        int timeoutSeconds = Math.Clamp(request.TimeoutSeconds, 5, 120);
+        int timeoutSeconds = Math.Clamp(request.TimeoutSeconds, 5, 180);
+        TimeSpan timeout = TimeSpan.FromSeconds(timeoutSeconds);
 
         if (LegacyLlm.Instance == null || LegacyLlm.Instance is LegacyLlmDummy)
         {
-            return Fail(request.NpcName, motive, "no-model");
+            return Fail(request.NpcName, motive, "no-model", timeoutSeconds);
         }
 
         // Capture persona on the calling (game) thread; never touch game state past the first await.
@@ -74,46 +80,62 @@ internal sealed class GiftMailGenerator
         string system = BuildSystemPrompt(zh);
         string user = BuildUserPrompt(zh, display, persona, motive, request.ItemLabel, request.SourceGift);
 
+        var queueWatch = Stopwatch.StartNew();
         await _gate.WaitAsync(ct).ConfigureAwait(false);
+        queueWatch.Stop();
+        var requestWatch = Stopwatch.StartNew();
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
         try
         {
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
+            ct.ThrowIfCancellationRequested();
+            _scheduleTimeout(cts, timeout);
+            cts.Token.ThrowIfCancellationRequested();
             LlmResponse response = await LegacyLlm.Instance
-                .RunInference(system, string.Empty, string.Empty, user, string.Empty, n_predict: MaxOutputTokens, allowRetry: false, disableThinking: true, ct: cts.Token)
+                .RunInference(system, string.Empty, string.Empty, user, string.Empty,
+                    n_predict: MaxOutputTokens, allowRetry: false, disableThinking: true,
+                    ct: cts.Token, timeoutOverride: timeout)
                 .WaitAsync(cts.Token)
                 .ConfigureAwait(false);
+            cts.Token.ThrowIfCancellationRequested();
 
             if (response == null || !response.IsSuccess || string.IsNullOrWhiteSpace(response.Text))
             {
-                return Fail(display, motive, "model-failed");
+                return Fail(display, motive, "model-failed", timeoutSeconds, requestWatch.ElapsedMilliseconds, queueWatch.ElapsedMilliseconds);
             }
 
             if (!GiftMailContentValidator.TryNormalize(response.Text, out string body, out string reason))
             {
-                return Fail(display, motive, reason);
+                return Fail(display, motive, reason, timeoutSeconds, requestWatch.ElapsedMilliseconds, queueWatch.ElapsedMilliseconds);
             }
 
             // Language check lives here (not in the pure validator) because it depends on the
             // configured game locale via SMAPI.
             if (ConversationTextPostProcessor.LooksLikeWrongLanguage(body))
             {
-                return Fail(display, motive, "wrong-language");
+                return Fail(display, motive, "wrong-language", timeoutSeconds, requestWatch.ElapsedMilliseconds, queueWatch.ElapsedMilliseconds);
             }
 
             body = EnsureSalutation(body, zh);
+            long elapsedMs = requestWatch.ElapsedMilliseconds;
+            long queueMs = queueWatch.ElapsedMilliseconds;
             DialogueServices.Monitor?.Log(
                 Util.GetConsoleString(
                     "dialogue.log.giftMailGenerated",
-                    new { npc = display, motive, chars = body.Length },
-                    $"AI gift mail generated for {display} ({motive}, {body.Length} chars)."),
+                    new { npc = display, motive, chars = body.Length, timeoutSeconds, elapsedMs, queueMs },
+                    $"AI gift mail generated for {display} ({motive}, {body.Length} chars; request {elapsedMs} ms, budget {timeoutSeconds}s, queue {queueMs} ms)."),
                 LogLevel.Info);
             return body;
         }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
-            string reason = ex is OperationCanceledException or TimeoutException ? "timeout" : ex.GetType().Name;
-            return Fail(display, motive, reason);
+            string reason = ex is TimeoutException || (ex is OperationCanceledException && cts.IsCancellationRequested)
+                ? "timeout"
+                : ex.GetType().Name;
+            return Fail(display, motive, reason, timeoutSeconds, requestWatch.ElapsedMilliseconds, queueWatch.ElapsedMilliseconds);
         }
         finally
         {
@@ -121,13 +143,13 @@ internal sealed class GiftMailGenerator
         }
     }
 
-    private static string? Fail(string display, string motive, string reason)
+    private static string? Fail(string display, string motive, string reason, int timeoutSeconds, long elapsedMs = 0, long queueMs = 0)
     {
         DialogueServices.Monitor?.Log(
             Util.GetConsoleString(
                 "dialogue.log.giftMailFailed",
-                new { npc = display, motive, reason },
-                $"AI gift mail generation failed for {display} ({motive}): {reason}; template will be used."),
+                new { npc = display, motive, reason, timeoutSeconds, elapsedMs, queueMs },
+                $"AI gift mail generation failed for {display} ({motive}): {reason} (request {elapsedMs} ms, budget {timeoutSeconds}s, queue {queueMs} ms); template will be used."),
             LogLevel.Info);
         return null;
     }

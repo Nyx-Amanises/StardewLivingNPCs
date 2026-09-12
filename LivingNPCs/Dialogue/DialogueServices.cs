@@ -34,7 +34,6 @@ internal sealed class DialogueConfig
     public bool EnableDialogueEngine { get; set; } = true;
     public bool Debug { get; set; }
     public bool ExportAiResponseLogs { get; set; }
-    public bool EnableSemanticContextRouting { get; set; }
     public bool EnableLivingNpcActionDecisionPass { get; set; } = ActionDecisionPassDefault;
     public string Provider { get; set; } = "unset";
     public string ModelName { get; set; } = "unset";
@@ -43,7 +42,6 @@ internal sealed class DialogueConfig
     public string PromptFormat { get; set; } = "[INST] {system}\n{prompt}[/INST]\n{response_start}";
     public bool SuppressConnectionCheck { get; set; }
     public int QueryTimeout { get; set; } = 85;
-    public int SemanticContextRoutingTimeoutSeconds { get; set; } = 8;
     public int LivingNpcActionDecisionTimeoutSeconds { get; set; } = ActionDecisionTimeoutSecondsDefault;
     public string ThinkingLevel { get; set; } = "Auto";
     public bool UseStreamingDialogueTransport { get; set; }
@@ -65,7 +63,6 @@ internal sealed class DialogueConfig
         this.EnableDialogueEngine = source.EnableDialogueEngine;
         this.Debug = source.Debug;
         this.ExportAiResponseLogs = source.ExportAiResponseLogs;
-        this.EnableSemanticContextRouting = source.EnableSemanticContextRouting;
         this.Provider = source.Provider;
         this.ModelName = source.ModelName;
         this.ApiKey = source.ApiKey;
@@ -73,7 +70,6 @@ internal sealed class DialogueConfig
         this.PromptFormat = source.PromptFormat;
         this.SuppressConnectionCheck = source.SuppressConnectionCheck;
         this.QueryTimeout = source.QueryTimeout;
-        this.SemanticContextRoutingTimeoutSeconds = Math.Clamp(source.SemanticContextRoutingTimeoutSeconds, 2, 30);
         this.ThinkingLevel = Llm.LlmThinking.NormalizePreference(source.ThinkingLevel);
         this.UseStreamingDialogueTransport = source.UseStreamingDialogueTransport;
         this.InitiateTypedDialogueKey = source.InitiateTypedDialogueKey;

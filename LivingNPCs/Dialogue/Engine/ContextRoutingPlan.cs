@@ -2,9 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-using LivingNPCs.Dialogue.Diagnostics;
-using LivingNPCs.Dialogue.Llm;
-using LivingNPCs.Dialogue.Persistence;
 namespace LivingNPCs.Dialogue.Engine;
 
 public enum ContextDetail
@@ -37,6 +34,7 @@ public enum ContextModule
     CurrentConversation
 }
 
+/// <summary>Local prompt-module detail levels. Production dialogue includes every module.</summary>
 public sealed class ContextRoutingPlan
 {
     private readonly Dictionary<ContextModule, ContextDetail> details = new();
@@ -70,23 +68,10 @@ public sealed class ContextRoutingPlan
         return plan;
     }
 
-    public string RoutingOutcome { get; private set; } = "not-run";
-    public long RoutingMilliseconds { get; private set; }
-    public int RoutingTimeoutSeconds { get; private set; }
-
-    public ContextRoutingPlan WithRoutingDiagnostics(string outcome, long milliseconds, int timeoutSeconds)
-    {
-        this.RoutingOutcome = outcome;
-        this.RoutingMilliseconds = milliseconds;
-        this.RoutingTimeoutSeconds = timeoutSeconds;
-        return this;
-    }
-
     public IReadOnlyDictionary<ContextModule, ContextDetail> Details => this.details;
 
     /// <summary>
-    /// Copies the per-module detail levels into a fresh plan. Routing diagnostics are intentionally
-    /// not copied so a reused plan can be re-stamped for the current turn.
+    /// Copies the per-module detail levels into a fresh plan.
     /// </summary>
     public ContextRoutingPlan Clone()
     {

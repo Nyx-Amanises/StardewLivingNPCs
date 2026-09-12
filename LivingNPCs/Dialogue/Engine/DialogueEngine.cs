@@ -90,7 +90,7 @@ internal sealed class DialogueEngineServices
 }
 
 /// <summary>
-/// 对话生成引擎（WP10 核心编排）：上下文装配 → 路由 → 提示词拼装 → LLM 调用（重试/超时）
+/// 对话生成引擎（WP10 核心编排）：本地上下文检索 → 提示词拼装 → LLM 调用（重试/超时）
 /// → 解析/校验/后处理。结果提交（历史 + 行为系统回传）由 <see cref="GenerationScheduler"/>
 /// 在主线程确认展示成功后负责。
 /// </summary>
@@ -143,7 +143,7 @@ internal sealed class DialogueEngine : IDialogueEngine
     {
         ct.ThrowIfCancellationRequested();
         var watch = Stopwatch.StartNew();
-        var prepared = await this.PrepareAsync(request, ct).ConfigureAwait(false);
+        var prepared = this.Prepare(request, ct);
 
         LlmResponse? response = null;
         Exception? failure = null;
@@ -223,7 +223,7 @@ internal sealed class DialogueEngine : IDialogueEngine
     {
         ct.ThrowIfCancellationRequested();
         var watch = Stopwatch.StartNew();
-        var prepared = await this.PrepareAsync(request, ct).ConfigureAwait(false);
+        var prepared = this.Prepare(request, ct);
 
         LlmResponse? response = null;
         bool languageRetry = false;
@@ -386,7 +386,6 @@ internal sealed class DialogueEngine : IDialogueEngine
         public NpcBio Bio { get; init; } = new();
         public Character Character { get; init; } = new(string.Empty);
         public DialogueContext Context { get; init; } = new();
-        public ContextRoutingPlan Plan { get; init; } = ContextRoutingPlan.Full();
         public AssembledPrompt Prompt { get; set; } = new();
         public PromptAssemblyInput AssemblyInput { get; init; } = new();
         public string NpcDisplayName { get; init; } = string.Empty;
@@ -403,7 +402,7 @@ internal sealed class DialogueEngine : IDialogueEngine
         public List<LlmTransportTiming> TransportTimings { get; } = new();
     }
 
-    private async Task<PreparedGeneration> PrepareAsync(GenerationRequest request, CancellationToken ct)
+    private PreparedGeneration Prepare(GenerationRequest request, CancellationToken ct)
     {
         var config = DialogueServices.Config ?? new DialogueConfig();
         var snapshot = request.Snapshot;
@@ -469,10 +468,9 @@ internal sealed class DialogueEngine : IDialogueEngine
             Bio = ToCharacterBio(bio)
         };
 
-        // 上下文路由（提示词构造之前，§4.5）。
+        // Include all prompt modules; retrieval and per-section budgets still limit their content.
         ct.ThrowIfCancellationRequested();
-        ContextRoutingPlan plan = await ContextRoutingDecisionPass.BuildPlanAsync(character, context, ct).ConfigureAwait(false);
-        ct.ThrowIfCancellationRequested();
+        ContextRoutingPlan plan = ContextRoutingPlan.Full();
 
         // 键解析（触发上下文 + 样本选择）。
         var keyFacts = DialogueKeyGrammar.Parse(request.DialogueKey);
@@ -532,13 +530,8 @@ internal sealed class DialogueEngine : IDialogueEngine
             request.ContentSnapshot?.ResolvedPortraitFrames ?? Array.Empty<PortraitFrameSemantics.Match>();
         int portraitFrameCount = request.ContentSnapshot?.PortraitFrameCount ?? 0;
         portraitFrames = ApplyGamePortraitOverrides(request, portraitFrames, ref portraitFrameCount);
-        // Event/history dependencies may restore World even when the raw router omitted it.
-        // Resolve the same closure as the assembler before selecting its reference data.
-        ContextRoutingPlan worldPlan = plan.Clone();
-        worldPlan.ApplyDependencies();
-        WorldRetrievalResult? worldContext = this.RetrieveWorldContext(request, worldPlan, promptConversation, displayName);
-        bool useLegacyWorldText = worldPlan.Include(ContextModule.World)
-            && worldContext == null && !request.UsesCapturedWorldContext;
+        WorldRetrievalResult? worldContext = this.RetrieveWorldContext(request, plan, promptConversation, displayName);
+        bool useLegacyWorldText = worldContext == null && !request.UsesCapturedWorldContext;
         var input = new PromptAssemblyInput
         {
             Request = request,
@@ -620,7 +613,6 @@ internal sealed class DialogueEngine : IDialogueEngine
             Bio = bio,
             Character = character,
             Context = context,
-            Plan = plan,
             AssemblyInput = input,
             NpcDisplayName = displayName,
             Conversation = conversation,
@@ -1314,7 +1306,6 @@ internal sealed class DialogueEngine : IDialogueEngine
         }
 
         var prompt = prepared.Prompt;
-        var plan = prepared.Plan;
         string sections = string.Join(", ", prompt.SectionLengths
             .Where(pair => pair.Value > 0)
             .Select(pair => $"{pair.Key}={pair.Value}"));
@@ -1325,8 +1316,6 @@ internal sealed class DialogueEngine : IDialogueEngine
                 {
                     npc = prepared.Request.NpcName,
                     totalMs = elapsedMilliseconds,
-                    routingOutcome = plan.RoutingOutcome,
-                    routingMs = plan.RoutingMilliseconds,
                     mainMs = prepared.MainMilliseconds,
                     metadataMs = prepared.MetadataMilliseconds,
                     metadataOutcome = prepared.MetadataOutcome,

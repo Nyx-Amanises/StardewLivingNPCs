@@ -102,38 +102,6 @@ public sealed class AuxiliaryPromptInjectionBoundaryTests
     }
 
     [Fact]
-    public void RouterPromptRemovesRsvIdentityLocationAndScheduleFields()
-    {
-        var character = new DialogueCharacter("Penny", displayName: "Penny");
-        var context = new DialogueContext
-        {
-            Location = "Custom_Ridgeside_Ridge",
-            TimeOfDay = "Torts at noon",
-            Weather = new List<string> { "rain", "RSVFayeMom weather" },
-            CurrentActivity = "Visiting Torts",
-            NextScheduleLocation = "AguarCave",
-            ChatHistory = new List<ConversationElement>
-            {
-                new("Who is Torts?", true),
-                new("I can't use that information.", false)
-            }
-        };
-
-        string prompt = ContextRoutingDecisionPass.BuildRouterPromptForTesting(character, context);
-        string blockedIdentity = ContextRoutingDecisionPass.BuildRouterNpcIdentityForTesting(
-            new DialogueCharacter("RSVFayeMom", displayName: "Torts"));
-
-        Assert.Contains("NPC: Penny", prompt, StringComparison.Ordinal);
-        Assert.Contains("weather: rain", prompt, StringComparison.Ordinal);
-        Assert.DoesNotContain("Ridgeside", prompt, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Torts", prompt, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("AguarCave", prompt, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("RSVFayeMom", prompt, StringComparison.OrdinalIgnoreCase);
-        Assert.Contains("the villager", blockedIdentity, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("Torts", blockedIdentity, StringComparison.OrdinalIgnoreCase);
-    }
-
-    [Fact]
     public void MetadataPrompt_RemovesRsvRuntimeFieldsAndOptions()
     {
         var context = new DialogueContext

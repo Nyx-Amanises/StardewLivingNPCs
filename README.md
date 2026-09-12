@@ -229,13 +229,14 @@ AI 上下文可以感知当前日期、时间、季节、天气、节日、地�
 
 Generic Mod Config Menu 中实际提供的设置：
 
+对话在本地选择相关记忆、世界资料和会话片段，装配后直接生成回复。额外的 AI 语义上下文路由及其开关、超时设置已移除，本地检索和会话长度限制继续生效。
+
 | 设置 | 作用与建议 |
 | --- | --- |
 | 启用 AI 对话 | 内置对话引擎总开关；从关闭改为开启后需要重启游戏 |
 | 提供商连接 | LLM 提供商、API Key、模型名、服务器地址与请求超时 |
-| 语义上下文路由 | 默认开启；用一次轻量判断选择本轮需要的上下文，并可调路由超时与路由思考档位 |
 | 精简世界摘要 / 精简提示上下文 | 可减少 token；若角色细节下降，可恢复默认 |
-| 对话思考档位 | 仅对支持该参数的模型有效；更高不一定更适合日常对话 |
+| 思考档位 | 对话与后台任务共用，按所选模型的能力适配；更高不一定更适合日常对话 |
 | 普通右键也用 AI | 默认关闭；建议先保留原版右键，用 <code>LeftAlt</code> 主动发起 AI 对话 |
 | AI 台词频率 | 常规、送礼、婚后三档分别设置 |
 | 输入对话热键 / 查看记忆快捷键 | 默认 <code>LeftAlt</code> 与 <code>LeftShift + J</code> |
@@ -297,13 +298,12 @@ API Key 只保存在 <code>Mods/LivingNPCs/config.json</code>，不会写入 Mod
 - <code>conversation_logs/&lt;存档&gt;/</code>：玩家可读的 NPC 对话回忆录；
 - <code>prompt_logs/&lt;存档&gt;/</code>：发送前的提示词诊断；
 - <code>ai_response_logs/&lt;存档&gt;/</code>：模型原始回复和解析结果；
-- <code>context_routing_logs/&lt;存档&gt;/</code>：上下文路由判断；
 - <code>debug_reports/&lt;存档&gt;/</code>：通过导出命令生成的综合报告；
 - <code>token_usage/&lt;存档&gt;.md</code>：手动导出的 token 统计。
 
 这些文件可能包含你的对话和游戏信息。提交错误报告前请先检查内容并按需要删改隐私信息；**永远不要分享 API Key**。若不希望持续保存 AI 诊断日志，可以在 <code>config.json</code> 中将 <code>ExportAiResponseLogs</code> 设为 <code>false</code>；玩家可读的对话回忆录仍可能用于保留完整聊天历史。
 
-语义路由、正式回复、AI 信件和关系印象更新（含旧记忆压缩）都可能产生模型调用。实际费用取决于模型定价、聊天长度和游玩频率，可用 <code>livingnpcs_tokens</code> 查看统计。
+正式回复、必要的动作与元数据判定、AI 信件和关系印象更新（含旧记忆压缩）都可能产生模型调用。实际费用取决于模型定价、聊天长度和游玩频率，可用 <code>livingnpcs_tokens</code> 查看统计。
 
 ## 常见问题
 

@@ -23,13 +23,12 @@ public sealed class CurrentConversationBudgetIntegrationTests : IDisposable
     {
         DialogueServices.Initialize(null!, null!, new DialogueConfig
         {
-            EnableSemanticContextRouting = false,
             EnableLivingNpcActionDecisionPass = false,
             ModelName = "current-conversation-test-model",
             TypedResponses = "With Generated"
         });
         ThirdPartyContentPolicy.ResetForTests();
-        LegacyLlm.Instance = new CountingRouter();
+        LegacyLlm.Instance = new CountingAuxiliaryClient();
     }
 
     public void Dispose()
@@ -175,11 +174,10 @@ public sealed class CurrentConversationBudgetIntegrationTests : IDisposable
     }
 
     [Fact]
-    public async Task SuccessfulCommitPreservesAllSourceTurnsAndConversationRoutingCacheIdentity()
+    public async Task SuccessfulCommitPreservesAllSourceTurnsAndConversationIdentityWithoutClassification()
     {
-        DialogueServices.Config!.EnableSemanticContextRouting = true;
-        var router = new CountingRouter();
-        LegacyLlm.Instance = router;
+        var auxiliary = new CountingAuxiliaryClient();
+        LegacyLlm.Instance = auxiliary;
         var client = new CapturingClient();
         (DialogueEngine engine, DialogueHistoryStore store) = CreateEngine(client);
         List<ConversationTurn> conversation = LongConversation(80);
@@ -212,7 +210,7 @@ public sealed class CurrentConversationBudgetIntegrationTests : IDisposable
         GenerationResult next = await engine.GenerateAsync(Request([nextPlayer], nextPlayer.Text), CancellationToken.None);
 
         Assert.False(next.IsFallback);
-        Assert.Equal(1, router.Calls);
+        Assert.Equal(0, auxiliary.Calls);
         Assert.Equal(original[0].Id, next.Commit!.Conversation[0].Id);
         Assert.Equal(original, next.Commit.Conversation.Take(original.Length));
         Assert.True(engine.CommitResult(next));
@@ -406,7 +404,7 @@ public sealed class CurrentConversationBudgetIntegrationTests : IDisposable
         Assert.Equal(1, text.Split("</untrusted_data>", StringSplitOptions.None).Length - 1);
     }
 
-    private sealed class CountingRouter : LegacyLlm
+    private sealed class CountingAuxiliaryClient : LegacyLlm
     {
         public int Calls { get; private set; }
 
@@ -414,13 +412,13 @@ public sealed class CurrentConversationBudgetIntegrationTests : IDisposable
             string systemPromptString, string gameCacheString, string npcCacheString, string promptString,
             string responseStart = "", int n_predict = 2048, string cacheContext = "",
             bool allowRetry = true, bool disableThinking = false, CancellationToken ct = default,
-            LlmOutputFormat outputFormat = LlmOutputFormat.Text)
+            LlmOutputFormat outputFormat = LlmOutputFormat.Text, TimeSpan? timeoutOverride = null)
         {
             this.Calls++;
             return Task.FromResult(new LlmResponse
             {
-                IsSuccess = true,
-                Text = "{\"confidence\":0.95,\"world\":\"full\",\"eventHistory\":\"none\",\"recentEvents\":\"none\"}"
+                IsSuccess = false,
+                ErrorMessage = "No auxiliary model request is needed for these complete replies."
             });
         }
     }
