@@ -549,6 +549,8 @@
   "log.outing.cancelledByError": "Companion outing for {{npc}} hit an error and was cancelled to keep the NPC safe: {{error}}",
   "log.outing.routeFailed": "Could not build vanilla-style companion outing route for {{npc}}: {{from}} -> {{to}} ({{x}}, {{y}}).",
   "log.outing.farmAnchorRecovery": "Farm outing for {{npc}} could not reach a safe farmyard spot; returning from the farm instead of treating the entrance as the destination.",
+  "log.outing.farmBarrierPatchUnavailable": "Could not identify the game's NPCBarrier collision check. Farm outings will keep vanilla collision rules; the farm entrance compatibility patch needs updating.",
+  "log.outing.farmBarrierPatchFailed": "Could not apply the farm outing entrance compatibility patch: {{error}}",
   "log.help.suppressedGiftNoMatch": "Suppressed gift interaction for {{npc}}, but no matching help request was completed for {{item}}.",
   "log.help.selectedRewardGift": "Selected help request reward gift for {{npc}}: {{gift}} ({{item}}); {{reason}}.",
   "log.travel.rejected": "travel action request rejected",

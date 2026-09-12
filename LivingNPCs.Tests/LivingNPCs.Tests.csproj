@@ -19,9 +19,26 @@
 
   <ItemGroup>
     <ProjectReference Include="..\LivingNPCs\LivingNPCs.csproj" AdditionalProperties="EnableModDeploy=false;EnableModZip=false" />
+    <None Include="$(GamePath)\Content\Maps\Farm.xnb" Link="GameContent\Maps\Farm.xnb" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
+    <Reference Include="0Harmony">
+      <HintPath>$(GamePath)\smapi-internal\0Harmony.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="MonoMod.Common">
+      <HintPath>$(GamePath)\smapi-internal\MonoMod.Common.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="Mono.Cecil">
+      <HintPath>$(GamePath)\smapi-internal\Mono.Cecil.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
+    <Reference Include="xTile">
+      <HintPath>$(GamePath)\xTile.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
     <Reference Include="MonoGame.Framework">
       <HintPath>$(GamePath)\MonoGame.Framework.dll</HintPath>
       <Private>true</Private>

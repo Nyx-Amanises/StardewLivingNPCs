@@ -50,12 +50,10 @@ internal static class NpcTravelRuntime
 
             try
             {
-                controller = new PathFindController(
-                    npc,
-                    source,
-                    targetTile,
-                    facingDirection is >= 0 and <= 3 ? facingDirection : 2
-                );
+                int finalFacingDirection = facingDirection is >= 0 and <= 3 ? facingDirection : 2;
+                controller = FarmOutingPathController.IsMainFarm(source)
+                    ? FarmOutingPathController.Create(npc, source, targetTile, finalFacingDirection)
+                    : new PathFindController(npc, source, targetTile, finalFacingDirection);
                 if (!HasUsableLocalPath(controller.pathToEndPoint))
                 {
                     controller = null;

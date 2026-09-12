@@ -1,3 +1,5 @@
+using System;
+using HarmonyLib;
 using LivingNPCs.Behavior;
 using LivingNPCs.Dialogue;
 using LivingNPCs.Dialogue.Diagnostics;
@@ -67,6 +69,18 @@ public sealed class ModEntry : Mod
 
     private void OnGameLaunched(object? sender, StardewModdingAPI.Events.GameLaunchedEventArgs e)
     {
+        if (this.config.EnableMod)
+        {
+            try
+            {
+                FarmOutingCollisionPatch.Apply(new Harmony(this.ModManifest.UniqueID + ".Behavior"));
+            }
+            catch (Exception ex)
+            {
+                Monitor.Log(I18n.Get("log.outing.farmBarrierPatchFailed", new { error = ex.Message }), LogLevel.Error);
+            }
+        }
+
         ModConfigMenu.Register(this, this.config);
     }
 }
