@@ -374,6 +374,15 @@ internal sealed class PromptAssembler
             && !string.IsNullOrWhiteSpace(replacement))
         {
             content = PromptDataBoundary.Wrap($"third_party_section_{name}", replacement) + "\n";
+            if (name == "CurrentConversation"
+                && SanitizePromptText(content).Length > CurrentConversationProjector.CharacterBudget)
+            {
+                // A free-form override has no reliable turn boundaries. Keep it whole when it
+                // fits; otherwise use the captured conversation instead of cutting its meaning.
+                var builder = new StringBuilder();
+                build(builder);
+                content = builder.ToString();
+            }
         }
         else
         {
@@ -1025,49 +1034,42 @@ internal sealed class PromptAssembler
         var conversation = this.input.Conversation;
         if (conversation.Count > 0)
         {
-            AppendLine(builder, this.Text("currentConversationHeading"));
-            AppendLine(builder, this.Text("currentConversationIntro"));
+            var prefix = new StringBuilder();
+            AppendLine(prefix, this.Text("currentConversationHeading"));
+            AppendLine(prefix, this.Text("currentConversationIntro"));
             string farmerLabel = this.Text("generalFarmerLabel") ?? "Farmer";
-            var cleaned = ConversationTurnDeduplicator.CollapseExpandedNpcPages(
+            CurrentConversationProjection projection = CurrentConversationProjector.Build(
                 conversation,
-                turn => turn.Text,
-                turn => turn.IsPlayerLine);
-            var transcript = new StringBuilder();
-            foreach (var turn in cleaned)
-            {
-                if (RsvAiPolicy.IsWithheldPlayerMessage(turn.Text))
-                {
-                    AppendLine(
-                        transcript,
-                        $"{farmerLabel}: [latest message unavailable; do not infer its contents or answer an earlier turn]");
-                    continue;
-                }
-
-                if (string.IsNullOrWhiteSpace(turn.Text))
-                {
-                    continue;
-                }
-
-                // 剔除疑似错误语言的行（§4.6.4.20）。
-                if (ConversationTextPostProcessor.LooksLikeWrongLanguage(turn.Text))
-                {
-                    continue;
-                }
-
-                if (RsvAiPolicy.ContainsBlockedReference(turn.Text))
-                {
-                    continue;
-                }
-
-                AppendLine(transcript, $"{(turn.IsPlayerLine ? farmerLabel : this.input.NpcDisplayName)}: {turn.Text}");
-            }
-
-            AppendLine(builder, PromptDataBoundary.Wrap("conversation_history", transcript.ToString()));
+                this.input.Request.CurrentPlayerText,
+                farmerLabel,
+                this.input.NpcDisplayName,
+                prefix.ToString(),
+                this.Text("currentConversationCompacted"));
+            this.lengths["CurrentConversationBeforeBudget"] = projection.OriginalCharacters;
+            builder.Append(projection.Text);
         }
         else if (this.input.JustSpoke)
         {
-            AppendLine(builder, this.Text("currentConversationHeading"));
-            AppendLine(builder, this.Text("currentConversationJustSpoke"));
+            string? notice = this.Text("currentConversationJustSpoke");
+            var justSpoke = new StringBuilder();
+            AppendLine(justSpoke, this.Text("currentConversationHeading"));
+            AppendLine(justSpoke, notice);
+            string content = SanitizePromptText(justSpoke.ToString());
+            this.lengths["CurrentConversationBeforeBudget"] = content.Length;
+            if (content.Length > CurrentConversationProjector.CharacterBudget)
+            {
+                // Content-pack headings and notices have no turn boundaries either. Preserve
+                // the complete notice if possible, then fall back to a short factual statement.
+                justSpoke.Clear();
+                AppendLine(justSpoke, notice);
+                content = SanitizePromptText(justSpoke.ToString());
+                if (content.Length > CurrentConversationProjector.CharacterBudget)
+                {
+                    content = "Current conversation:\nThe NPC has just spoken to the farmer.\n";
+                }
+            }
+
+            builder.Append(content);
         }
     }
 
