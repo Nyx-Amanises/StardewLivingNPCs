@@ -80,7 +80,8 @@ public sealed class LegacyLlmCancellationTests : LlmTestBase
             string cacheContext = "",
             bool allowRetry = true,
             bool disableThinking = false,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            LlmOutputFormat outputFormat = LlmOutputFormat.Text)
         {
             this.SeenToken = ct;
             this.Started.TrySetResult(true);

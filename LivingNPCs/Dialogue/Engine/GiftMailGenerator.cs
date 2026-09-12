@@ -29,7 +29,8 @@ internal sealed record GiftMailRequest(
 internal sealed class GiftMailGenerator
 {
     private const int MaxConcurrent = 2;
-    private const int PromptTokens = 220;
+    // The output budget includes reasoning tokens as well as the letter body.
+    private const int MaxOutputTokens = 10_000;
 
     private static readonly GiftMailGenerator _instance = new();
     public static GiftMailGenerator Instance => _instance;
@@ -79,7 +80,7 @@ internal sealed class GiftMailGenerator
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
             LlmResponse response = await LegacyLlm.Instance
-                .RunInference(system, string.Empty, string.Empty, user, string.Empty, n_predict: PromptTokens, allowRetry: false, disableThinking: true, ct: cts.Token)
+                .RunInference(system, string.Empty, string.Empty, user, string.Empty, n_predict: MaxOutputTokens, allowRetry: false, disableThinking: true, ct: cts.Token)
                 .WaitAsync(cts.Token)
                 .ConfigureAwait(false);
 

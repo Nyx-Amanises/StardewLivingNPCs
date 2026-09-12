@@ -150,8 +150,8 @@ internal static class DialogueConfigMenuSection
             mod: manifest,
             name: () => T("dialogue.config.routingThinking.name"),
             tooltip: () => T("dialogue.config.routingThinking.tooltip"),
-            getValue: () => LlmThinking.Normalize(config.RoutingThinkingLevel, LlmThinking.Off),
-            setValue: value => config.RoutingThinkingLevel = LlmThinking.Normalize(value, LlmThinking.Off),
+            getValue: () => LlmThinking.NormalizeForModel(config.RoutingThinkingLevel, config.Provider, config.ModelName, LlmThinking.Off),
+            setValue: value => config.RoutingThinkingLevel = LlmThinking.NormalizeForModel(value, config.Provider, config.ModelName, LlmThinking.Off),
             allowedValues: thinkingOptions,
             formatAllowedValue: FormatThinkingLevel);
 
@@ -159,8 +159,8 @@ internal static class DialogueConfigMenuSection
             mod: manifest,
             name: () => T("dialogue.config.chatThinking.name"),
             tooltip: () => T("dialogue.config.chatThinking.tooltip"),
-            getValue: () => LlmThinking.Normalize(config.ChatThinkingLevel, LlmThinking.Auto),
-            setValue: value => config.ChatThinkingLevel = LlmThinking.Normalize(value, LlmThinking.Auto),
+            getValue: () => LlmThinking.NormalizeForModel(config.ChatThinkingLevel, config.Provider, config.ModelName),
+            setValue: value => config.ChatThinkingLevel = LlmThinking.NormalizeForModel(value, config.Provider, config.ModelName),
             allowedValues: thinkingOptions,
             formatAllowedValue: FormatThinkingLevel);
 
@@ -219,6 +219,7 @@ internal static class DialogueConfigMenuSection
     public static void OnSave(ModEntry modEntry, ModConfig config)
     {
         bool providerChanged = ClearApiKeyWhenProviderChanged(config, DialogueServices.Config.Provider, DialogueServices.Config.ApiKey);
+        bool modelChanged = !string.Equals(config.ModelName, DialogueServices.Config.ModelName, StringComparison.Ordinal);
         bool sveChanged = DialogueServices.Config.EnableSveCompatibility != config.EnableSveCompatibility;
         bool connectionChanged = ConnectionSettingsChanged(config, DialogueServices.Config);
         DialogueServices.Config.SyncFrom(config);
@@ -256,7 +257,7 @@ internal static class DialogueConfigMenuSection
             }
         }
 
-        if (providerChanged)
+        if (providerChanged || modelChanged)
         {
             QueueMenuRefresh(modEntry, config);
         }
@@ -400,15 +401,10 @@ internal static class DialogueConfigMenuSection
         return fallback;
     }
 
-    /// <summary>思考档位下拉的选项集：Gemini 系提供商剔除 XHigh（§4.9）。</summary>
+    /// <summary>按实际提供商和模型列出支持的思考档位；保存模型变更后重建菜单。</summary>
     internal static string[] ThinkingOptionsFor(ModConfig config)
     {
-        bool isGemini = string.Equals(config.Provider, "Google", StringComparison.OrdinalIgnoreCase)
-            || (string.Equals(config.Provider, "OpenAiCompatible", StringComparison.OrdinalIgnoreCase)
-                && LlmThinking.IsGeminiThinkingModel(config.ModelName));
-        return isGemini
-            ? LlmThinking.Options.Where(option => option != LlmThinking.XHigh).ToArray()
-            : LlmThinking.Options.ToArray();
+        return LlmThinking.OptionsFor(config.Provider, config.ModelName);
     }
 
     /// <summary>

@@ -70,15 +70,15 @@ public sealed class OpenAiFamilyClientTests : LlmTestBase
     }
 
     [Fact]
-    public async Task FastJsonChannelAddsResponseFormatWhenThinkingOff()
+    public async Task FastJsonChannelUsesExplicitOutputFormat()
     {
-        // 默认配置 RoutingThinkingLevel = off：快速通道请求带 response_format。
+        // 显式 JSON 请求带 response_format。
         var client = new OpenAiClient(Settings("OpenAI"));
         Http.EnqueueJson(CompletionJson);
-        await client.CompleteAsync(Request(disableThinking: true), CancellationToken.None);
+        await client.CompleteAsync(Request(disableThinking: true, outputFormat: LlmOutputFormat.JsonObject), CancellationToken.None);
         Assert.Equal("json_object", JObject.Parse(Http.Requests[0].Body!)["response_format"]?.Value<string>("type"));
 
-        // 主对话（DisableThinking=false）不带，即便档位是 off 也不污染正常对话。
+        // 主对话默认纯文本，即便档位是 off 也不强制 JSON。
         Http.Requests.Clear();
         Config.ChatThinkingLevel = "off";
         Http.EnqueueJson(CompletionJson);

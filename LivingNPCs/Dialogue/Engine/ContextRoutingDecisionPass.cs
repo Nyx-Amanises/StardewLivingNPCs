@@ -391,7 +391,8 @@ internal static class ContextRoutingDecisionPass
                 n_predict: 384,
                 allowRetry: false,
                 disableThinking: true,
-                ct: cts.Token);
+                ct: cts.Token,
+                outputFormat: LlmOutputFormat.JsonObject);
             response = await task.WaitAsync(cts.Token);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

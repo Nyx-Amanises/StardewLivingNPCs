@@ -10,7 +10,7 @@ public sealed class LlmThinkingTests
 {
     [Theory]
     [InlineData("gpt-5.5", LlmThinking.Off, "none")]
-    [InlineData("gpt-5.5", LlmThinking.Minimal, "minimal")]
+    [InlineData("gpt-5.5", LlmThinking.Minimal, "low")]
     [InlineData("gpt-5.4", LlmThinking.Low, "low")]
     [InlineData("gpt5.5", LlmThinking.High, "high")]
     [InlineData("gpt-5.5", LlmThinking.XHigh, "xhigh")]
@@ -38,7 +38,7 @@ public sealed class LlmThinkingTests
     [InlineData("deepseek-flash-20260912", LlmThinking.Low, "enabled", "low")]
     [InlineData("deepseek-flash", LlmThinking.Medium, "enabled", "high")]
     [InlineData("deepseek-flash", LlmThinking.High, "enabled", "high")]
-    [InlineData("deepseek-flash", LlmThinking.XHigh, "enabled", "max")]
+    [InlineData("deepseek-flash", LlmThinking.XHigh, "enabled", "high")]
     [InlineData("deepseek-v4-flash", LlmThinking.Medium, "enabled", "high")]
     [InlineData("deepseek-reasoner", LlmThinking.Minimal, "enabled", "high")]
     [InlineData("deepseek-reasoner", LlmThinking.Low, "enabled", "high")]
@@ -46,7 +46,7 @@ public sealed class LlmThinkingTests
     [InlineData("deepseek-ai/DeepSeek-R1-Distill-Qwen-32B", LlmThinking.Minimal, "enabled", "high")]
     [InlineData("deepseek/deepseek-r1:free", LlmThinking.Low, "enabled", "high")]
     [InlineData("deepseek-reasoner", LlmThinking.High, "enabled", "high")]
-    [InlineData("deepseek-v4-pro", LlmThinking.XHigh, "enabled", "max")]
+    [InlineData("deepseek-v4-pro", LlmThinking.XHigh, "enabled", "high")]
     public void DeepSeekThinkingModelsUseOfficialThinkingShape(string model, string level, string expectedType, string expectedEffort)
     {
         var body = new JObject();

@@ -118,7 +118,8 @@ internal static class LivingNpcMetadataExtractionPass
                     n_predict: 1600,
                     allowRetry: false,
                     disableThinking: true,
-                    ct: cts.Token)
+                    ct: cts.Token,
+                    outputFormat: LlmOutputFormat.JsonObject)
                 .WaitAsync(cts.Token);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

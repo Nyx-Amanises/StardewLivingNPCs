@@ -223,7 +223,7 @@ public sealed class GeminiClientTests : LlmTestBase
         var client = new GeminiClient(Settings("Google"));
         Http.DefaultResponder = _ => FakeHttpHandler.Json(Success("ok"));
 
-        await client.CompleteAsync(Request(disableThinking: true), CancellationToken.None);
+        await client.CompleteAsync(Request(disableThinking: true, outputFormat: LlmOutputFormat.JsonObject), CancellationToken.None);
         Assert.Equal(
             "application/json",
             JObject.Parse(Http.Requests[0].Body!)["generationConfig"]!.Value<string>("responseMimeType"));
@@ -272,7 +272,7 @@ public sealed class VolcEngineClientTests : LlmTestBase
         var whitelisted = new VolcEngineClient(Settings("VolcEngine", modelName: "doubao-seed-1.6"));
         Http.DefaultResponder = _ => FakeHttpHandler.Json(ReplyJson);
 
-        await whitelisted.CompleteAsync(Request(disableThinking: true), CancellationToken.None);
+        await whitelisted.CompleteAsync(Request(disableThinking: true, outputFormat: LlmOutputFormat.JsonObject), CancellationToken.None);
         Assert.Equal("https://ark.cn-beijing.volces.com/api/v3/chat/completions", Http.Requests[0].Url);
         var body = JObject.Parse(Http.Requests[0].Body!);
         Assert.Equal("disabled", body["thinking"]!.Value<string>("type"));
@@ -281,7 +281,7 @@ public sealed class VolcEngineClientTests : LlmTestBase
         // 非白名单模型：快速通道仍带 response_format，但不发 thinking（发了会报参数不支持）。
         Http.Requests.Clear();
         var plain = new VolcEngineClient(Settings("VolcEngine", modelName: "doubao-1.5-pro"));
-        await plain.CompleteAsync(Request(disableThinking: true), CancellationToken.None);
+        await plain.CompleteAsync(Request(disableThinking: true, outputFormat: LlmOutputFormat.JsonObject), CancellationToken.None);
         body = JObject.Parse(Http.Requests[0].Body!);
         Assert.Null(body["thinking"]);
         Assert.Equal("json_object", body["response_format"]!.Value<string>("type"));

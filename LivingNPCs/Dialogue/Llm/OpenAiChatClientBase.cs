@@ -445,9 +445,9 @@ internal abstract class OpenAiChatClientBase : LlmClientBase, IModelNameSource
             body["prompt_cache_key"] = ComputePromptCacheKey(request);
         }
 
-        // 快速 JSON 通道 + 档位 off：response_format 防弱模型把 JSON 包散文里。
-        // 只在 DisableThinking 路径生效（与 §3.4 VolcEngine 语义对齐），避免用户把聊天档位设 Off 时污染正常对话。
-        if (request.DisableThinking && LlmThinking.IsOff(level))
+        // Output format is independent of thinking level, including model-specific level normalization.
+        // Auxiliary prose (gift letters and memory impressions) stays text at every thinking level.
+        if (request.OutputFormat == LlmOutputFormat.JsonObject)
         {
             body["response_format"] = new JObject { ["type"] = "json_object" };
         }

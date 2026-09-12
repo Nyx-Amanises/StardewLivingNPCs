@@ -18,7 +18,8 @@ internal class LegacyLlm
         string cacheContext = "",
         bool allowRetry = true,
         bool disableThinking = false,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        LlmOutputFormat outputFormat = LlmOutputFormat.Text)
     {
         // WP10-TODO: 引擎重写后调用点改为直接消费 ILlmClient.CompleteAsync/StreamAsync，本过渡门面删除。
         throw new NotImplementedException("WP10-TODO: legacy call sites should migrate to ILlmClient.");
@@ -37,7 +38,8 @@ internal sealed class LegacyLlmDummy : LegacyLlm
         string cacheContext = "",
         bool allowRetry = true,
         bool disableThinking = false,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        LlmOutputFormat outputFormat = LlmOutputFormat.Text)
     {
         return Task.FromResult(new LlmResponse
         {
@@ -71,7 +73,8 @@ internal sealed class LegacyLlmBridge : LegacyLlm
         string cacheContext = "",
         bool allowRetry = true,
         bool disableThinking = false,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        LlmOutputFormat outputFormat = LlmOutputFormat.Text)
     {
         ILlmClient? client = _host.Current;
         if (client == null)
@@ -99,7 +102,8 @@ internal sealed class LegacyLlmBridge : LegacyLlm
                 ResponseStart = Sanitize(responseStart),
                 MaxTokens = n_predict,
                 AllowRetry = allowRetry,
-                DisableThinking = disableThinking
+                DisableThinking = disableThinking,
+                OutputFormat = outputFormat
             },
             ct).ConfigureAwait(false);
 

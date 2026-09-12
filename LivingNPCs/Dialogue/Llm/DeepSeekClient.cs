@@ -10,7 +10,7 @@ internal sealed class DeepSeekClient : OpenAiChatClientBase
 
     public override string ProviderId => "DeepSeek";
 
-    protected override string DefaultModelName => "deepseek-chat";
+    protected override string DefaultModelName => "deepseek-flash";
 
     protected override string BaseAddress => "https://api.deepseek.com";
 

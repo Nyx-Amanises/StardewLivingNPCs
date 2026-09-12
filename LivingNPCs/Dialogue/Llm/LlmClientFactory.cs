@@ -45,7 +45,7 @@ internal static class LlmClientFactory
             settings => new OpenAiCompatibleClient(settings));
         RegisterOpenAiPreset("OpenRouter", "https://openrouter.ai/api/v1", "openai/gpt-4o-mini", requiresApiKey: true);
         Register(
-            new LlmProviderMetadata { ProviderId = "Anthropic", RequiresApiKey = true, RequiresModelName = true, SupportsModelList = true },
+            new LlmProviderMetadata { ProviderId = "Anthropic", RequiresApiKey = true, RequiresModelName = true, SupportsModelList = true, SupportsThinkingLevels = true },
             settings => new ClaudeClient(settings));
         Register(
             new LlmProviderMetadata { ProviderId = "Google", RequiresApiKey = true, RequiresModelName = true, SupportsModelList = true, SupportsThinkingLevels = true },

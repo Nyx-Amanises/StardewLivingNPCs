@@ -64,7 +64,7 @@ public sealed class BufferedDialogueTransportTests : LlmTestBase
         var client = CreateClient();
         Http.EnqueueJson(CompletionJson);
 
-        LlmReply reply = await client.CompleteAsync(Request(disableThinking: true), CancellationToken.None);
+        LlmReply reply = await client.CompleteAsync(Request(disableThinking: true, outputFormat: LlmOutputFormat.JsonObject), CancellationToken.None);
 
         Assert.True(reply.IsSuccess);
         var body = JObject.Parse(Assert.Single(Http.Requests).Body!);
@@ -72,14 +72,7 @@ public sealed class BufferedDialogueTransportTests : LlmTestBase
         Assert.Null(body["stream_options"]);
         Assert.Equal(thinkingType, body["thinking"]!.Value<string>("type"));
         Assert.Equal(effort, body.Value<string>("reasoning_effort"));
-        if (routingLevel == LlmThinking.Off)
-        {
-            Assert.Equal("json_object", body["response_format"]!.Value<string>("type"));
-        }
-        else
-        {
-            Assert.Null(body["response_format"]);
-        }
+        Assert.Equal("json_object", body["response_format"]!.Value<string>("type"));
 
         AssertStandardMessages(body);
     }

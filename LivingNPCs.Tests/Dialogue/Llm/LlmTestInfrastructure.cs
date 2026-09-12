@@ -80,7 +80,8 @@ public abstract class LlmTestBase : IDisposable
         bool allowRetry = true,
         bool disableThinking = false,
         int maxTokens = 2048,
-        string responseStart = "")
+        string responseStart = "",
+        LlmOutputFormat outputFormat = LlmOutputFormat.Text)
     {
         return new LlmRequest
         {
@@ -90,6 +91,7 @@ public abstract class LlmTestBase : IDisposable
             Tail = tail,
             AllowRetry = allowRetry,
             DisableThinking = disableThinking,
+            OutputFormat = outputFormat,
             MaxTokens = maxTokens,
             ResponseStart = responseStart
         };

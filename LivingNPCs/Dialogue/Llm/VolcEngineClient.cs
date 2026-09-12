@@ -111,8 +111,8 @@ internal sealed class VolcEngineClient : LlmClientBase, IModelNameSource
             body["thinking"] = new JObject { ["type"] = "disabled" };
         }
 
-        // response_format 仅 disableThinking 路径（快速 JSON 通道），主对话请求体不带。
-        if (request.DisableThinking)
+        // Output shape is independent of the auxiliary thinking settings.
+        if (request.OutputFormat == LlmOutputFormat.JsonObject)
         {
             body["response_format"] = new JObject { ["type"] = "json_object" };
         }

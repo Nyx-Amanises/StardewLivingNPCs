@@ -1,6 +1,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using LivingNPCs.Dialogue;
 using LivingNPCs.Dialogue.Engine;
 using LivingNPCs.Dialogue.Llm;
 using LivingNPCs.Dialogue.Persistence;
@@ -59,6 +60,7 @@ public sealed class ContextRoutingLatencyTests : LlmTestBase
         Assert.Equal(1, Router.Calls);
         Assert.False(Router.AllowRetry);
         Assert.True(Router.DisableThinking);
+        Assert.Equal(LlmOutputFormat.JsonObject, Router.OutputFormat);
         Assert.Contains(text, Router.LastPrompt);
     }
 
@@ -284,6 +286,7 @@ public sealed class ContextRoutingLatencyTests : LlmTestBase
         public int Calls { get; private set; }
         public bool AllowRetry { get; private set; }
         public bool DisableThinking { get; private set; }
+        public LlmOutputFormat OutputFormat { get; private set; }
         public string LastPrompt { get; private set; } = string.Empty;
         public Func<CancellationToken, Task<LlmResponse>> Respond { get; set; } = _ => Task.FromResult(Success());
 
@@ -297,11 +300,13 @@ public sealed class ContextRoutingLatencyTests : LlmTestBase
             string cacheContext = "",
             bool allowRetry = true,
             bool disableThinking = false,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            LlmOutputFormat outputFormat = LlmOutputFormat.Text)
         {
             Calls++;
             AllowRetry = allowRetry;
             DisableThinking = disableThinking;
+            OutputFormat = outputFormat;
             LastPrompt = promptString;
             return Respond(ct);
         }

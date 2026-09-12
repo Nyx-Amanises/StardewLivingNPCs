@@ -413,7 +413,8 @@ public sealed class CurrentConversationBudgetIntegrationTests : IDisposable
         public override Task<LlmResponse> RunInference(
             string systemPromptString, string gameCacheString, string npcCacheString, string promptString,
             string responseStart = "", int n_predict = 2048, string cacheContext = "",
-            bool allowRetry = true, bool disableThinking = false, CancellationToken ct = default)
+            bool allowRetry = true, bool disableThinking = false, CancellationToken ct = default,
+            LlmOutputFormat outputFormat = LlmOutputFormat.Text)
         {
             this.Calls++;
             return Task.FromResult(new LlmResponse

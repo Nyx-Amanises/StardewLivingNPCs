@@ -3,6 +3,12 @@ using LivingNPCs.Dialogue.Llm;
 
 namespace LivingNPCs.Dialogue;
 
+internal enum LlmOutputFormat
+{
+    Text,
+    JsonObject
+}
+
 /// <summary>
 /// 统一请求模型（WP11 §4.1）：四段提示词是各家 Prompt Caching 策略的地基，
 /// 不做请求级缓存声明的提供商把后三段按序拼接为 user 内容。
@@ -26,8 +32,11 @@ internal sealed class LlmRequest
 
     public int MaxTokens { get; init; } = 2048;
 
-    /// <summary>快速 JSON 通道（语义路由、礼物邮件、行动判定）为 true，按路由思考档位取值。</summary>
+    /// <summary>辅助请求为 true，按路由思考档位取值；输出格式由 OutputFormat 独立指定。</summary>
     public bool DisableThinking { get; init; }
+
+    /// <summary>Whether the caller expects plain text or a JSON object, independent of thinking level.</summary>
+    public LlmOutputFormat OutputFormat { get; init; } = LlmOutputFormat.Text;
 
     public bool AllowRetry { get; init; } = true;
 
@@ -54,6 +63,7 @@ internal sealed class LlmRequest
             ResponseStart = ResponseStart,
             MaxTokens = MaxTokens,
             DisableThinking = DisableThinking,
+            OutputFormat = OutputFormat,
             AllowRetry = false,
             TimeoutOverride = TimeoutOverride,
             TransportTimingObserver = TransportTimingObserver

@@ -28,7 +28,8 @@ internal sealed record MemoryImpressionRequest(
 internal sealed class MemoryImpressionGenerator
 {
     private const int MaxConcurrent = 1;
-    private const int ResponseTokens = 500;
+    // The output budget includes reasoning tokens as well as the impression text.
+    private const int MaxOutputTokens = 10_000;
     private const int MaxImpressionCharacters = 1200;
 
     private static readonly MemoryImpressionGenerator _instance = new();
@@ -77,7 +78,7 @@ internal sealed class MemoryImpressionGenerator
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromSeconds(timeoutSeconds));
             LlmResponse response = await LegacyLlm.Instance
-                .RunInference(system, string.Empty, string.Empty, user, string.Empty, n_predict: ResponseTokens, allowRetry: false, disableThinking: true, ct: cts.Token)
+                .RunInference(system, string.Empty, string.Empty, user, string.Empty, n_predict: MaxOutputTokens, allowRetry: false, disableThinking: true, ct: cts.Token)
                 .WaitAsync(cts.Token)
                 .ConfigureAwait(false);
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using LivingNPCs.Dialogue;
 using LivingNPCs.Dialogue.Engine;
 using LivingNPCs.Dialogue.Llm;
 using LivingNPCs.Dialogue.Persistence;
@@ -92,6 +93,7 @@ public sealed class LivingNpcActionDecisionLatencyTests : LlmTestBase
         Assert.Equal(1, this.classifier.Calls);
         Assert.True(result.Diagnostics.WasRun);
         Assert.True(this.classifier.DisableThinking);
+        Assert.Equal(LlmOutputFormat.JsonObject, this.classifier.OutputFormat);
         Assert.False(this.classifier.AllowRetry);
         Assert.Contains(player, this.classifier.LastPrompt);
         Assert.Contains(npcReply, this.classifier.LastPrompt);
@@ -281,6 +283,7 @@ public sealed class LivingNpcActionDecisionLatencyTests : LlmTestBase
         public int Calls { get; private set; }
         public bool AllowRetry { get; private set; }
         public bool DisableThinking { get; private set; }
+        public LlmOutputFormat OutputFormat { get; private set; }
         public string LastPrompt { get; private set; } = string.Empty;
         public CancellationToken SeenToken { get; private set; }
         public Func<CancellationToken, Task<LlmResponse>> Respond { get; set; } = _ => Task.FromResult(EmptyMetadata());
@@ -296,11 +299,13 @@ public sealed class LivingNpcActionDecisionLatencyTests : LlmTestBase
             string cacheContext = "",
             bool allowRetry = true,
             bool disableThinking = false,
-            CancellationToken ct = default)
+            CancellationToken ct = default,
+            LlmOutputFormat outputFormat = LlmOutputFormat.Text)
         {
             this.Calls++;
             this.AllowRetry = allowRetry;
             this.DisableThinking = disableThinking;
+            this.OutputFormat = outputFormat;
             this.LastPrompt = promptString;
             this.SeenToken = ct;
             this.Started.TrySetResult(true);

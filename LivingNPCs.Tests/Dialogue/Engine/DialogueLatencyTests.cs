@@ -352,7 +352,8 @@ public sealed class DialogueLatencyTests : IDisposable
         public override Task<LlmResponse> RunInference(
             string systemPromptString, string gameCacheString, string npcCacheString, string promptString,
             string responseStart = "", int n_predict = 2048, string cacheContext = "", bool allowRetry = true,
-            bool disableThinking = false, CancellationToken ct = default)
+            bool disableThinking = false, CancellationToken ct = default,
+            LlmOutputFormat outputFormat = LlmOutputFormat.Text)
         {
             this.Calls++;
             this.SystemPrompt = systemPromptString;

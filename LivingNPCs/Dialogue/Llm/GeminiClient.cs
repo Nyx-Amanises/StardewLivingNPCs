@@ -105,8 +105,8 @@ internal sealed class GeminiClient : LlmClientBase, IModelNameSource
             ["topP"] = 0.9
         };
 
-        // 快速 JSON 通道 + 档位 off：强制 JSON MIME（与 OpenAI 家族 response_format 的门控口径一致）。
-        if (request.DisableThinking && LlmThinking.IsOff(level))
+        // Structured output is independent of thinking level; auxiliary prose remains plain text.
+        if (request.OutputFormat == LlmOutputFormat.JsonObject)
         {
             generationConfig["responseMimeType"] = "application/json";
         }

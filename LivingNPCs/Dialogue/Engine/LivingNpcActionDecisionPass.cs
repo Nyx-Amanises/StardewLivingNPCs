@@ -102,7 +102,8 @@ internal static class LivingNpcActionDecisionPass
                 n_predict: 512,
                 allowRetry: false,
                 disableThinking: true,
-                ct: cts.Token);
+                ct: cts.Token,
+                outputFormat: LlmOutputFormat.JsonObject);
             response = await task.WaitAsync(cts.Token);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

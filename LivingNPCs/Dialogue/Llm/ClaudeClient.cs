@@ -39,15 +39,31 @@ internal sealed class ClaudeClient : LlmClientBase, IModelNameSource
     {
         string body = await LlmHttp.SendAsync(candidate.Url, candidate.Json, null, BuildHeaders(), request.TimeoutOverride, ct).ConfigureAwait(false);
         var json = JObject.Parse(body);
-        string? text = (json["content"] as JArray)?.FirstOrDefault()?["text"]?.ToString();
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            return new AttemptOutcome(LlmReply.Failure(body, 200));
-        }
-
-        TokenUsage? usage = json["usage"] is JObject usageJson && usageJson.HasValues
+        var usageJson = json["usage"] as JObject;
+        TokenUsage? usage = usageJson is { HasValues: true }
             ? TokenUsage.FromClaudeUsage(usageJson)
             : null;
+        // Thinking and redacted_thinking blocks can precede or separate visible text.
+        string text = string.Concat((json["content"] as JArray ?? new JArray())
+            .OfType<JObject>()
+            .Where(block => block.Value<string>("type") == "text")
+            .Select(block => block.Value<string>("text")));
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            // A successful HTTP body can contain private thinking even when there is no answer.
+            // Log only known stop reasons and numeric usage, never the response content blocks.
+            string? reportedStopReason = json["stop_reason"]?.Type == JTokenType.String
+                ? json.Value<string>("stop_reason") : null;
+            string stopReason = reportedStopReason is "end_turn" or "max_tokens" or "stop_sequence"
+                or "tool_use" or "pause_turn" or "refusal" or "model_context_window_exceeded"
+                ? reportedStopReason : "unknown";
+            bool budgetExhausted = stopReason is "max_tokens" or "model_context_window_exceeded";
+            string diagnostic = $"Claude returned no visible text (stop_reason={stopReason}; "
+                + $"input_tokens={usageJson?.Value<int?>("input_tokens") ?? 0}; "
+                + $"output_tokens={usage?.CompletionTokens ?? 0}; max_tokens={request.MaxTokens}).";
+            return new AttemptOutcome(LlmReply.Failure(diagnostic, 200, retryable: !budgetExhausted, usage: usage));
+        }
+
         return new AttemptOutcome(LlmReply.Success(text, usage));
     }
 
@@ -95,6 +111,7 @@ internal sealed class ClaudeClient : LlmClientBase, IModelNameSource
             ["model"] = EffectiveModelName,
             ["max_tokens"] = request.MaxTokens
         };
+        ClaudeThinking.AddRequestParameters(body, LlmThinking.ForCall(request.DisableThinking), EffectiveModelName, request.MaxTokens);
 
         var systemBlocks = new JArray();
         if (!string.IsNullOrEmpty(request.SystemPrompt))

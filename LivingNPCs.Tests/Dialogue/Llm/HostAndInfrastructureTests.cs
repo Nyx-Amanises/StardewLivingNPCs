@@ -494,7 +494,7 @@ public sealed class LlmClientFactoryTests : LlmTestBase
         Assert.True(LlmClientFactory.TryGetMetadata("Anthropic", out LlmProviderMetadata claude));
         Assert.False(claude.RequiresServerAddress);
         Assert.True(claude.SupportsModelList);
-        Assert.False(claude.SupportsThinkingLevels);
+        Assert.True(claude.SupportsThinkingLevels);
     }
 
     [Fact]

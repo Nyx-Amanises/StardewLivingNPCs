@@ -4,7 +4,7 @@ using Newtonsoft.Json.Linq;
 
 namespace LivingNPCs.Dialogue.Llm;
 
-internal static class LlmThinking
+internal static partial class LlmThinking
 {
     public const string Auto = "Auto";
     public const string Off = "Off";
@@ -13,8 +13,10 @@ internal static class LlmThinking
     public const string Medium = "Medium";
     public const string High = "High";
     public const string XHigh = "XHigh";
+    public const string Max = "Max";
+    public const string Ultra = "Ultra";
 
-    public static readonly string[] Options = [Auto, Off, Minimal, Low, Medium, High, XHigh];
+    public static readonly string[] Options = [Auto, Off, Minimal, Low, Medium, High, XHigh, Max, Ultra];
 
     public static string Normalize(string value, string fallback = Auto)
     {
@@ -51,9 +53,9 @@ internal static class LlmThinking
         return string.Equals(Normalize(level), Auto, StringComparison.OrdinalIgnoreCase);
     }
 
-    public static string ToOpenAiReasoningEffort(string level)
+    public static string ToOpenAiReasoningEffort(string level, string modelName)
     {
-        return Normalize(level) switch
+        return NormalizeOpenAiLevel(level, modelName) switch
         {
             Off => "none",
             Minimal => "minimal",
@@ -61,6 +63,7 @@ internal static class LlmThinking
             Medium => "medium",
             High => "high",
             XHigh => "xhigh",
+            Max => "max",
             _ => null
         };
     }
@@ -71,39 +74,28 @@ internal static class LlmThinking
         {
             // V4 and the deepseek-flash alias support low/high/max; legacy reasoner/R1 keep high.
             Minimal or Low => SupportsDeepSeekLowEffort(modelName) ? "low" : "high",
-            Medium or High => "high",
-            XHigh => "max",
+            Medium or High or XHigh => "high",
+            Max or Ultra => SupportsDeepSeekLowEffort(modelName) ? "max" : "high",
             _ => null
         };
     }
 
     public static string ToGeminiOpenAiReasoningEffort(string level, string modelName)
     {
-        string normalizedLevel = Normalize(level);
-        if (normalizedLevel == Off)
+        return NormalizeGeminiLevel(level, modelName) switch
         {
-            if (IsGemini3Model(modelName))
-            {
-                return IsGeminiFlashModel(modelName) ? "minimal" : "low";
-            }
-
-            return IsGeminiProModel(modelName) ? "low" : "none";
-        }
-
-        return normalizedLevel switch
-        {
-            Minimal => IsGeminiProModel(modelName) ? "low" : "minimal",
+            Off => "none",
+            Minimal => "minimal",
             Low => "low",
             Medium => "medium",
             High => "high",
-            XHigh => "high",
             _ => null
         };
     }
 
     public static JObject BuildGeminiThinkingConfig(string level, string modelName)
     {
-        string normalizedLevel = Normalize(level);
+        string normalizedLevel = NormalizeGeminiLevel(level, modelName);
         if (IsAuto(normalizedLevel))
         {
             return null;
@@ -125,27 +117,26 @@ internal static class LlmThinking
 
     public static string ToGeminiThinkingLevel(string level, string modelName)
     {
-        string normalizedLevel = Normalize(level);
+        string normalizedLevel = NormalizeGeminiLevel(level, modelName);
         return normalizedLevel switch
         {
-            Off => IsGeminiFlashModel(modelName) ? "minimal" : "low",
-            Minimal => IsGeminiFlashModel(modelName) ? "minimal" : "low",
+            Minimal => "minimal",
             Low => "low",
             Medium => "medium",
-            High or XHigh => "high",
+            High => "high",
             _ => null
         };
     }
 
     public static int? ToGeminiThinkingBudget(string level, string modelName)
     {
-        return Normalize(level) switch
+        return NormalizeGeminiLevel(level, modelName) switch
         {
-            Off => IsGeminiProModel(modelName) ? 128 : 0,
+            Off => 0,
             Minimal => 128,
             Low => 128,
             Medium => 512,
-            High or XHigh => 1024,
+            High => 1024,
             _ => null
         };
     }
@@ -155,41 +146,37 @@ internal static class LlmThinking
         return Normalize(level) switch
         {
             Off => "disabled",
-            Minimal or Low or Medium or High or XHigh => "enabled",
+            Minimal or Low or Medium or High or XHigh or Max or Ultra => "enabled",
             _ => null
         };
     }
 
     /// <summary>
-    /// OpenAI 推理模型判定：gpt-5 全系 + o 系（o1/o3/o4…）。o 系按"段首 o+数字+边界"识别
+    /// OpenAI 推理模型判定：gpt-5/gpt-6 全系 + o 系（o1/o3/o4…）。仅匹配命名空间后的模型名。
     /// （段分隔符取 '/'，兼容 openai/o3-mini 这类网关前缀；边界为串尾或 '-'，
     /// 归一化已把 '.'/'_' 折为 '-'），避免误伤 gpt-4o、olmo、orca 等含字母 o 的普通模型名。
     /// </summary>
     public static bool IsOpenAiReasoningModel(string modelName)
     {
-        string normalized = NormalizeModelName(modelName);
-        if (normalized.Contains("gpt5", StringComparison.OrdinalIgnoreCase)
-            || normalized.Contains("gpt-5", StringComparison.OrdinalIgnoreCase))
+        if (IsGptFamily(modelName, "5") || IsGptFamily(modelName, "6"))
         {
             return true;
         }
 
-        foreach (string segment in normalized.Split('/'))
+        string segment = ModelLeaf(modelName);
+        if (segment.Length >= 2
+            && (segment[0] == 'o' || segment[0] == 'O')
+            && segment[1] is >= '1' and <= '9'
+            && (segment.Length == 2 || segment[2] is '-' or ':'))
         {
-            if (segment.Length >= 2
-                && (segment[0] == 'o' || segment[0] == 'O')
-                && segment[1] is >= '1' and <= '9'
-                && (segment.Length == 2 || segment[2] == '-'))
-            {
-                return true;
-            }
+            return true;
         }
 
         return false;
     }
 
     /// <summary>
-    /// chat/completions 输出上限字段名：推理模型（gpt-5 全系与 o 系）拒绝 max_tokens
+    /// chat/completions 输出上限字段名：推理模型（gpt-5/gpt-6 与 o 系）使用 max_completion_tokens
     /// （HTTP 400，要求 max_completion_tokens）；其余模型保持 max_tokens，
     /// 兼容端点（vLLM 等自建服务）上的普通模型名不受影响。
     /// </summary>
@@ -200,27 +187,22 @@ internal static class LlmThinking
 
     public static bool IsGeminiThinkingModel(string modelName)
     {
-        string normalized = NormalizeModelName(modelName);
-        return normalized.Contains("gemini", StringComparison.OrdinalIgnoreCase);
+        return HasModelFamilyName(modelName, "gemini") || HasModelFamilyName(modelName, "gemini3");
     }
 
     public static bool IsGemini3Model(string modelName)
     {
-        string normalized = NormalizeModelName(modelName);
-        return normalized.Contains("gemini-3", StringComparison.OrdinalIgnoreCase)
-            || normalized.Contains("gemini3", StringComparison.OrdinalIgnoreCase);
+        return HasModelFamilyName(modelName, "gemini-3") || HasModelFamilyName(modelName, "gemini3");
     }
 
     public static bool IsGeminiFlashModel(string modelName)
     {
-        string normalized = NormalizeModelName(modelName);
-        return normalized.Contains("flash", StringComparison.OrdinalIgnoreCase);
+        return ModelLeaf(modelName).Contains("flash", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool IsGeminiProModel(string modelName)
     {
-        string normalized = NormalizeModelName(modelName);
-        return normalized.Contains("pro", StringComparison.OrdinalIgnoreCase);
+        return ModelLeaf(modelName).Contains("pro", StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool IsDeepSeekThinkingModel(string modelName)
@@ -256,7 +238,7 @@ internal static class LlmThinking
 
         if (IsOpenAiReasoningModel(modelName))
         {
-            string effort = ToOpenAiReasoningEffort(normalizedLevel);
+            string effort = ToOpenAiReasoningEffort(normalizedLevel, modelName);
             if (!string.IsNullOrWhiteSpace(effort))
             {
                 body["reasoning_effort"] = effort;

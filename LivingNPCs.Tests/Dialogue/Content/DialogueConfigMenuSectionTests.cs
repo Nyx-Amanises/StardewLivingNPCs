@@ -82,14 +82,44 @@ public sealed class DialogueConfigMenuSectionTests : IDisposable
         Assert.DoesNotContain(LlmThinking.XHigh, DialogueConfigMenuSection.ThinkingOptionsFor(config));
 
         config.ModelName = "openai/gpt-5-mini";
-        Assert.Contains(LlmThinking.XHigh, DialogueConfigMenuSection.ThinkingOptionsFor(config));
+        Assert.DoesNotContain(LlmThinking.XHigh, DialogueConfigMenuSection.ThinkingOptionsFor(config));
+        Assert.Contains(LlmThinking.Minimal, DialogueConfigMenuSection.ThinkingOptionsFor(config));
     }
 
     [Fact]
-    public void ThinkingOptions_OtherProviders_KeepFullSet()
+    public void ThinkingOptions_FollowSelectedModelCapabilities()
     {
-        var config = new ModConfig { Provider = "OpenAI" };
-        Assert.Equal(LlmThinking.Options.Length, DialogueConfigMenuSection.ThinkingOptionsFor(config).Length);
+        var config = new ModConfig { Provider = "OpenAI", ModelName = "gpt-6-astra" };
+        Assert.Equal(new[] { LlmThinking.Auto, LlmThinking.Low, LlmThinking.Medium, LlmThinking.High, LlmThinking.XHigh, LlmThinking.Max },
+            DialogueConfigMenuSection.ThinkingOptionsFor(config));
+
+        config.ModelName = "gpt-4o";
+        Assert.Equal(new[] { LlmThinking.Auto }, DialogueConfigMenuSection.ThinkingOptionsFor(config));
+
+        config.Provider = "OpenAiCompatible";
+        config.ModelName = "deepseek-flash";
+        Assert.Equal(new[] { LlmThinking.Auto, LlmThinking.Off, LlmThinking.Low, LlmThinking.High, LlmThinking.Max },
+            DialogueConfigMenuSection.ThinkingOptionsFor(config));
+    }
+
+    [Theory]
+    [InlineData("OpenAiCompatible", "deepseek-flash", "medium", "High")]
+    [InlineData("DeepSeek", "deepseek-v4-pro", "xhigh", "High")]
+    [InlineData("DeepSeek", "deepseek-flash", "ultra", "Max")]
+    [InlineData("OpenAI", "gpt-6-astra", "Off", "Low")]
+    [InlineData("OpenAI", "gpt-5.6-sol", " Ultra ", "Max")]
+    [InlineData("OpenAI", "gpt-5.5", "max", "XHigh")]
+    [InlineData("Google", "gemini-3.8-flash", "Minimal", "Low")]
+    [InlineData("Google", "gemini-3-pro-preview", "Medium", "High")]
+    [InlineData("Anthropic", "claude-opus-4-6", "XHigh", "Max")]
+    [InlineData("Anthropic", "claude-fable-5-1", "Off", "Low")]
+    public void SavedEffortValuesResolveToAnAvailableMenuChoice(string provider, string model, string saved, string expected)
+    {
+        var config = new ModConfig { Provider = provider, ModelName = model };
+        string displayed = LlmThinking.NormalizeForModel(saved, provider, model);
+
+        Assert.Equal(expected, displayed);
+        Assert.Contains(displayed, DialogueConfigMenuSection.ThinkingOptionsFor(config));
     }
 
     [Fact]
