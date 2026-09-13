@@ -19,9 +19,10 @@ public sealed class LivingNpcMetadataPromptContractTests
             new Character("Haley"), new DialogueContext(), "Hello.", "Good morning.", Array.Empty<string>());
 
         // The original inline contract was 8,656 characters. Keep the prose reduction while
-        // allowing minor wording changes; the separate schema check prevents hiding fields.
-        Assert.InRange(inline.Length, 1, 6200);
-        Assert.InRange(classifier.Length, 1, 6200);
+        // allowing the help creation/acceptance rules now shared with scene contracts.
+        // The separate schema check prevents hiding fields; the common core has its own cap.
+        Assert.InRange(inline.Length, 1, 6600);
+        Assert.InRange(classifier.Length, 1, 6600);
     }
 
     [Fact]
@@ -50,6 +51,29 @@ public sealed class LivingNpcMetadataPromptContractTests
         // Derive the expected fields from the runtime DTOs, including ordered help steps;
         // shorter instructions must never silently drop a supported effect or nested key.
         AssertDocumentedShape(typeof(ConversationAnalysis), schema);
+    }
+
+    [Theory]
+    [InlineData("emotionImpact.emotion", "happy|calm|jealous|worried|grateful|disappointed|uneasy|upset|angry|sad|none")]
+    [InlineData("behaviorInfluences[0].type", "visit_location|comforted|offended|give_space|stay_near|pause_to_talk")]
+    [InlineData("actions[0].type", "give_small_gift|give_meaningful_gift|give_money|companion_outing|festival_interaction")]
+    [InlineData("actions[0].travelConsent", "accepted_now|accepted_later|declined|tentative|none")]
+    [InlineData("conflicts[0].causeKind", "dialogue|gift|boundary|promise")]
+    [InlineData("memories[0].kind", "fact|preference|promise|boundary|relationship")]
+    [InlineData("memories[0].playerPreferenceKind", "liked_item_category|disliked_item|habit|value|goal|none")]
+    [InlineData("helpRequests[0].type", "item_request")]
+    [InlineData("helpRequests[0].steps[0].type", "item_request")]
+    [InlineData("helpRequests[0].followUpPotential", "none|deeper_relationship")]
+    [InlineData("helpRequestUpdates[0].status", "accepted|declined|advanced|fulfilled")]
+    [InlineData("travelDecision.consent", "accepted_now|accepted_later|declined|tentative|none")]
+    [InlineData("giftDecision.timing", "now|later|mail|promise|none")]
+    [InlineData("giftDecision.tier", "small|meaningful")]
+    public void CompactFieldReferencePreservesEveryDocumentedValueDomain(string path, string expected)
+    {
+        string prompt = LivingNpcMetadataExtractionPass.BuildInlineInstructions();
+        JObject schema = JObject.Parse(prompt.Split('\n').Single(line => line.StartsWith('{')));
+
+        Assert.Equal(expected, schema.SelectToken(path)?.Value<string>());
     }
 
     private static void AssertDocumentedShape(Type type, JToken token)

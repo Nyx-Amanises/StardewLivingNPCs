@@ -317,7 +317,7 @@ internal sealed class ValleyTalkContextService
             && string.Equals(step.RequestedItemId, giftItemId, StringComparison.OrdinalIgnoreCase));
     }
 
-    private static string BuildHelpRequestGiftResponsePrompt(
+    internal static string BuildHelpRequestGiftResponsePrompt(
         NPC npc,
         GiftMemoryDetails gift,
         IReadOnlyList<NpcHelpRequestFact> deliveredHelpRequests)
@@ -325,6 +325,7 @@ internal sealed class ValleyTalkContextService
         var lines = new List<string>
         {
             PromptFragments.HelpRequestHandIn.Header,
+            PromptFragments.HelpRequestHandIn.CapabilityLine,
             PromptFragments.HelpRequestHandIn.HandInLine(npc.displayName, gift.ItemName, gift.ItemId),
             PromptFragments.HelpRequestHandIn.NotDailyGiftLine,
             PromptFragments.HelpRequestHandIn.OverrideTasteLine,

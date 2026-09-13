@@ -613,8 +613,10 @@ public sealed class LivingNpcMetadataExtractionPassTests
             "需要我帮忙吗？",
             "请带一朵甜豌豆；如果还能带糖就更完美。");
         string opportunityPrompt = PromptFragments.HelpRequestOpportunity.Section("Haley");
+        string sceneContract = LivingNpcMetadataContract.BuildSceneInstructions(
+            new SceneActionContractPlan { IncludeNewHelp = true });
 
-        foreach (string prompt in new[] { metadataPrompt, actionPrompt })
+        foreach (string prompt in new[] { metadataPrompt, actionPrompt, sceneContract })
         {
             Assert.Contains("\"steps\":[{\"type\":\"item_request\"", prompt, StringComparison.Ordinal);
             Assert.Contains("A one-step request may name only its single requestedItemId/requestedItemLabel", prompt, StringComparison.Ordinal);
@@ -623,8 +625,12 @@ public sealed class LivingNpcMetadataExtractionPassTests
             Assert.Contains("if you can also bring", prompt, StringComparison.Ordinal);
         }
 
-        Assert.Contains("same helpRequests entry", opportunityPrompt, StringComparison.Ordinal);
-        Assert.Contains("matching the exact spoken order", opportunityPrompt, StringComparison.Ordinal);
-        Assert.Contains("unencoded optional or bonus item", opportunityPrompt, StringComparison.Ordinal);
+        // The opportunity carries permission and visible behavior; the shared contracts above
+        // own the JSON/ordered-step encoding so the same tutorial is not repeated in both places.
+        Assert.Contains("one small item favor from the help-request fit list", opportunityPrompt, StringComparison.Ordinal);
+        Assert.Contains("State every required item clearly and in order", opportunityPrompt, StringComparison.Ordinal);
+        Assert.Contains("no optional/bonus items", opportunityPrompt, StringComparison.Ordinal);
+        Assert.Contains("Await the farmer's reply; do not answer for them", opportunityPrompt, StringComparison.Ordinal);
+        Assert.Contains("if no listed item or moment fits, wait for another day", opportunityPrompt, StringComparison.Ordinal);
     }
 }

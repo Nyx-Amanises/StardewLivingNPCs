@@ -708,9 +708,9 @@ internal static class BehaviorPromptContextBuilder
     }
 
     /// <summary>
-    /// Keep the current permission and its reason even when no request can occur. Item selection
-    /// and lifecycle guidance are needed only for an active request or an allowed new favor.
-    /// The factory avoids both selecting and describing inapplicable item candidates.
+    /// Keep the current permission/reason and the lifecycle of existing asks. Candidate items
+    /// describe new favors only; an active request keeps its recorded items and steps instead of
+    /// receiving a fresh candidate pool. Never use the topic of a reply to revoke an allowed favor.
     /// </summary>
     internal static IEnumerable<string> BuildHelpRequestContextLines(
         LivingNpcState state,
@@ -718,9 +718,9 @@ internal static class BehaviorPromptContextBuilder
         System.Func<string> buildFitLabel,
         bool concise = false)
     {
-        bool needsDetails = readiness.Allowed
+        bool needsLifecycle = readiness.Allowed
             || state.HelpRequests.Any(request => request.Status is "Offered" or "Pending");
-        if (needsDetails)
+        if (needsLifecycle)
         {
             yield return concise
                 ? PromptFragments.Context.HelpRequestLifecycleLineConcise
@@ -731,7 +731,7 @@ internal static class BehaviorPromptContextBuilder
             ? PromptFragments.Context.HelpRequestReadinessAllowed(readiness.Reason)
             : PromptFragments.Context.HelpRequestReadinessBlocked(readiness.Reason));
 
-        if (needsDetails)
+        if (readiness.Allowed)
         {
             yield return PromptFragments.Context.HelpRequestFitLine(buildFitLabel());
         }

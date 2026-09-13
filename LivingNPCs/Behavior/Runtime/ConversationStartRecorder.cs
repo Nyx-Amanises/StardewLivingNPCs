@@ -460,6 +460,7 @@ internal sealed class ConversationStartRecorder
         var lines = new List<string>
         {
             PromptFragments.HelpRequestDelivery.Header,
+            PromptFragments.HelpRequestDelivery.CapabilityLine,
             PromptFragments.HelpRequestDelivery.HandInLine(npc.displayName, gift.ItemName, gift.ItemId),
             PromptFragments.HelpRequestDelivery.NotDailyGiftLine,
             PromptFragments.HelpRequestDelivery.OverrideTasteLine,

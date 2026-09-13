@@ -190,15 +190,40 @@ internal static class HelpRequestAdvisor
         var profile = GetProfile(npc);
         var world = WorldContext.For(npc);
         var preferredItems = GetPreferredItems(npc, progression);
+        return BuildPromptLabel(
+            profile.Theme,
+            preferredItems.Select(item => (item.ItemId, item.Label)).ToArray(),
+            progression,
+            world.FriendshipHearts,
+            BuildChainSuggestionText(preferredItems, progression));
+    }
+
+    /// <summary>Formats an already selected pool without touching game state or reselecting items.</summary>
+    internal static string BuildPromptLabel(
+        string theme,
+        IReadOnlyList<(string ItemId, string Label)> preferredItems,
+        WorldProgressSnapshot progression,
+        int friendshipHearts,
+        string chainText = "")
+    {
         string itemText = preferredItems.Count == 0
             ? "no currently reasonable item request; do not open a help request now"
             : string.Join(", ", preferredItems.Select(item => $"{item.Label} {item.ItemId}"));
         string stageText = BuildRequestDepthGuidance(progression);
         string routeText = BuildRouteGuidance(progression);
-        string relationshipText = BuildRelationshipGuidance(world.FriendshipHearts);
-        string chainText = BuildChainSuggestionText(preferredItems, progression);
+        string relationshipText = BuildRelationshipGuidance(friendshipHearts);
+        // Keep the empty-pool signal at the beginning of the fit line, where the local scene
+        // selector reads it. This narrows permission without dropping its reason or constraints.
+        string pool = preferredItems.Count == 0
+            ? $"{itemText}; theme {theme}"
+            : $"theme {theme}; currently reasonable item requests: {itemText}";
 
-        return $"theme {profile.Theme}; currently reasonable item requests: {itemText}; allowed help request type: item_request only; never create question_request; request relationship tier: {relationshipText}; request depth: {stageText}; world-stage constraint: {routeText}{chainText}; Any visible request for listed items, whoever raised the favor, requires exactly one hidden helpRequests entry for the whole favor. A one-step request names only its single requestedItemId/requestedItemLabel. For multiple items, encode every item as ordered steps in that entry in the exact spoken order; never split, omit or reorder. Bonus/optional wording ('if you can also bring', 'while you're at it', 'another would be better', 'that would make it perfect') still requests an item: encode it as a required step or omit it from the dialogue. Farmer acceptance requires helpRequestUpdates with status accepted. If no listed item fits naturally, keep ordinary conversation; no hidden request.";
+        // The metadata contract owns JSON encoding. Keep only the current opportunity and its
+        // limits here so a status reminder cannot double as another schema tutorial.
+        string guidance = preferredItems.Count == 0
+            ? string.Empty
+            : "; one clear favor, every required item in order, no optional/bonus items. Await farmer acceptance; acceptance is not delivery. If none fits naturally, keep ordinary conversation";
+        return $"{pool}; allowed help request type: item_request only; never create question_request; request relationship tier: {relationshipText}; request depth: {stageText}; world-stage constraint: {routeText}{chainText}{guidance}.";
     }
 
     /// <summary>
@@ -384,7 +409,7 @@ internal static class HelpRequestAdvisor
             return string.Empty;
         }
 
-        return $"; optional two-step chain (only if the conversation supports one bigger favor): step 1 = {chain.Value.First.Label} {chain.Value.First.ItemId}, then step 2 = {chain.Value.Second.Label} {chain.Value.Second.ItemId}; request both as required steps in this order and encode both in one helpRequests entry, or request only one item; no unencoded optional step 2";
+        return $"; possible two-step favor, only if this conversation supports it: {chain.Value.First.Label} {chain.Value.First.ItemId} then {chain.Value.Second.Label} {chain.Value.Second.ItemId}; both required in order, otherwise ask just one; no bonus step";
     }
 
     private static HelpRequestProfile GetProfile(NPC npc)

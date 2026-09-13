@@ -55,9 +55,11 @@ public sealed class BehaviorPromptCompressionTests
     }
 
     [Theory]
-    [InlineData("Offered")]
-    [InlineData("Pending")]
-    public void ActiveRequestsKeepTheLifecycleAndFitEvenWhenNewRequestsAreBlocked(string status)
+    [InlineData("Offered", false)]
+    [InlineData("Offered", true)]
+    [InlineData("Pending", false)]
+    [InlineData("Pending", true)]
+    public void ActiveRequestsKeepTheirLifecycleWithoutSelectingNewItemsWhenBlocked(string status, bool concise)
     {
         var state = TestScenarios.TrustedState();
         state.HelpRequests.Add(new NpcHelpRequestFact
@@ -66,7 +68,63 @@ public sealed class BehaviorPromptCompressionTests
         });
         var readiness = HelpRequestReadinessRules.Evaluate(state, 6, 1, 3, TestScenarios.Today);
         Assert.False(readiness.Allowed);
-        const string fit = "currently reasonable item requests: Quartz (O)80; request depth: one step";
+        int selections = 0;
+
+        string[] lines = BehaviorPromptContextBuilder.BuildHelpRequestContextLines(state, readiness, () =>
+        {
+            selections++;
+            return "New candidate items must not replace the recorded request.";
+        }, concise).ToArray();
+
+        Assert.Equal(0, selections);
+        Assert.Equal(2, lines.Length);
+        Assert.Equal(PromptFragments.Context.HelpRequestLifecycleLine, lines[0]);
+        Assert.Contains("only Pending is a task", lines[0]);
+        Assert.Contains(readiness.Reason, lines[1]);
+        Assert.Contains("should not open a new help request now", lines[1]);
+        Assert.DoesNotContain(lines, line => line.Contains("Help-request fit", StringComparison.Ordinal));
+    }
+
+    [Theory]
+    [InlineData("Offered")]
+    [InlineData("Pending")]
+    public void ActiveRequestKeepsItsRecordedStepAndDeadlineWhenNewCandidatesAreOmitted(string status)
+    {
+        var state = TestScenarios.TrustedState();
+        state.HelpRequests.Add(new NpcHelpRequestFact
+        {
+            Type = "item_request", Status = status, Summary = "Bring two classroom supplies.",
+            DueTotalDays = TestScenarios.Today + 1, CurrentStepIndex = 1,
+            Steps = new List<NpcHelpRequestStepFact>
+            {
+                new() { Summary = "The first supply.", RequestedItemId = "(O)80", RequestedItemLabel = "Quartz", Status = "Fulfilled" },
+                new() { Summary = "The remaining supply.", RequestedItemId = "(O)388", RequestedItemLabel = "Wood", Status = "Pending" }
+            }
+        });
+
+        string prompt = BuildFixturePrompt(state);
+
+        AssertOccursOnce("Bring two classroom supplies.", prompt);
+        Assert.Contains("due tomorrow", prompt);
+        Assert.Contains("step 2/2", prompt);
+        Assert.Contains("The remaining supply.", prompt);
+        Assert.Contains("Wood (O)388", prompt);
+        Assert.Contains($"status {status}", prompt);
+        Assert.Contains(status == "Offered"
+            ? "do not treat it as an active task until accepted"
+            : "the farmer accepted this ask; it is now an active personal task", prompt);
+        Assert.Contains("help requests are disabled", prompt);
+        Assert.DoesNotContain("Help-request fit:", prompt);
+    }
+
+    [Fact]
+    public void ExistingRequestDoesNotSuppressANewAllowedFavor()
+    {
+        var state = TestScenarios.TrustedState();
+        state.HelpRequests.Add(new NpcHelpRequestFact { Status = "Pending", Summary = "The existing task." });
+        HelpRequestReadinessResult readiness = HelpRequestReadinessRules.Evaluate(state, 6, 3, 0, TestScenarios.Today);
+        Assert.True(readiness.Allowed);
+        const string fit = "currently reasonable item requests: A complete new candidate pool";
         int selections = 0;
 
         string[] lines = BehaviorPromptContextBuilder.BuildHelpRequestContextLines(state, readiness, () =>
@@ -76,11 +134,9 @@ public sealed class BehaviorPromptCompressionTests
         }).ToArray();
 
         Assert.Equal(1, selections);
-        Assert.Equal(3, lines.Length);
-        Assert.Equal(PromptFragments.Context.HelpRequestLifecycleLine, lines[0]);
-        Assert.Contains("only Pending is a task", lines[0]);
-        Assert.Contains(readiness.Reason, lines[1]);
-        Assert.Equal(PromptFragments.Context.HelpRequestFitLine(fit), lines[2]);
+        Assert.Contains(PromptFragments.Context.HelpRequestLifecycleLine, lines);
+        Assert.Contains(PromptFragments.Context.HelpRequestFitLine(fit), lines);
+        Assert.Contains(lines, line => line.Contains("may naturally ask for one modest favor now", StringComparison.Ordinal));
     }
 
     [Theory]

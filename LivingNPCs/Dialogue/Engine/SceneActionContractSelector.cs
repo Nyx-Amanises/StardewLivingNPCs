@@ -120,6 +120,8 @@ internal static class SceneActionContractSelector
         bool giftItemList = false;
         bool unknownReadiness = false;
         bool unknownHelpState = false;
+        bool handInRecordScope = false;
+        bool unknownSection = false;
         foreach (string rawLine in context.Split('\n'))
         {
             string line = rawLine.Trim();
@@ -156,6 +158,14 @@ internal static class SceneActionContractSelector
                 || line.Equals(PromptFragments.HelpRequestDelivery.Header, StringComparison.OrdinalIgnoreCase))
             {
                 result.HelpHandIn = true;
+            }
+            else if (line.Equals(PromptFragments.HelpRequestHandIn.CapabilityLine, StringComparison.OrdinalIgnoreCase))
+            {
+                handInRecordScope = true;
+            }
+            else if (line.StartsWith("## ", StringComparison.Ordinal))
+            {
+                unknownSection = true;
             }
 
             string field = line.TrimStart('-', ' ', '\t');
@@ -194,8 +204,22 @@ internal static class SceneActionContractSelector
 
         if (!hasHeader || !hasCurrentState)
         {
-            reason = "unrecognized-behavior-context";
-            return false;
+            // A standalone hand-in record describes captured progress, with no new opportunity
+            // of its own. The same record may also accompany an ordinary snapshot; then the
+            // separate current opportunity markers still govern documentation selection.
+            string firstLine = context.TrimStart().Split('\n')[0].Trim();
+            bool standaloneHandIn = firstLine.Equals(PromptFragments.HelpRequestHandIn.Header, StringComparison.OrdinalIgnoreCase)
+                || firstLine.Equals(PromptFragments.HelpRequestDelivery.Header, StringComparison.OrdinalIgnoreCase);
+            if (hasHeader || hasCurrentState || !standaloneHandIn || !result.HelpHandIn || !handInRecordScope
+                || unknownSection || result.GiftOpportunity || result.DeferredGiftMail || result.ActiveOuting
+                || helpOpportunity || result.HelpAllowed || giftAuthorization || giftItemList)
+            {
+                reason = "unrecognized-behavior-context";
+                return false;
+            }
+
+            giftBlocked = true;
+            helpBlocked = true;
         }
 
         if (unknownReadiness || unknownHelpState

@@ -315,8 +315,8 @@ internal static class PromptFragments
         public const string RulesHeading = "Rules:";
         public static readonly string[] Rules =
         {
-            "- Use this current body language, relationship memory and scene pressure for at most one or two natural details, or only tone/pacing.",
-            "- Stay a normal Stardew Valley NPC: no status report, quoting these notes, or mentioning LivingNPCs/mods/prompts/AI/JSON/context notes."
+            "- Use at most one or two relevant details for body language, tone or pacing.",
+            "- Stay in character: no status report, quoting these notes, or mentioning LivingNPCs/mods/prompts/AI/JSON."
         };
         public const string ConciseRules = "Rules: hidden body language and memory for the next in-character reply; do not quote it or mention LivingNPCs/AI/JSON; use at most one or two details naturally.";
 
@@ -328,7 +328,7 @@ internal static class PromptFragments
             NpcDispositionProfile disposition,
             EmotionalExpressionCue emotionalStyle)
         {
-            return $"{npc.displayName}; temperament: {disposition.PromptLabel}; emotional expression style: {emotionalStyle.PromptLabel}; profile source: {disposition.SourceLabel}.";
+            return $"{npc.displayName}; temperament: {disposition.PromptLabel}; expression: {emotionalStyle.PromptLabel}; source: {disposition.SourceLabel}.";
         }
 
         // ---- "Current state:" section ----
@@ -354,12 +354,12 @@ internal static class PromptFragments
         public static string GiftContextLine(string lastGift) => $"- Recent gift context: {lastGift}.";
         public static string EventContextLine(string lastEvent) => $"- Recent event context: {lastEvent}.";
         public static string MemoryStoreLine(int longTermCount) => $"- Durable memory store: {longTermCount} long-term memories tracked; relevant ones, if any, appear under high-priority continuity.";
-        public static string RelationshipImpressionLine(string impression) => $"- Long-term relationship impression (updated from important interactions and remembered history; use current facts and explicit statuses to resolve outdated details, and do not assume all events happened recently): {impression}";
+        public static string RelationshipImpressionLine(string impression) => $"- Long-term relationship impression (historical summary; current facts/statuses override stale details; not all events are recent): {impression}";
         public static string KnownPreferencesLine(int preferenceCount) => $"- Farmer preference memories tracked: {preferenceCount}; relevant ones, if any, appear under high-priority continuity.";
         public static string BehaviorTendenciesLine(string tendencies) => $"- Conversation-driven behavior tendencies (conversation stance): {tendencies}.";
         public static string SharedExperiencesLine(string sharedExperiences) => $"- Shared experiences with the farmer: {sharedExperiences}.";
         public static string HelpRequestsLine(string helpRequests) => $"- Help requests involving the farmer: {helpRequests}.";
-        public static string CommunityImpressionsLine(int impressionCount) => $"- Community impressions about the farmer's ties with other NPCs: {impressionCount} tracked (background awareness, not a talking point; relevant ones, if any, appear under high-priority continuity).";
+        public static string CommunityImpressionsLine(int impressionCount) => $"- Community impressions about the farmer's ties with other NPCs: {impressionCount} tracked; background only, selected facts below.";
 
         // ---- durable-store empty labels (collapsed into one line by the full context) ----
         public const string StoreLabelGifts = "recent gifts";
@@ -427,7 +427,7 @@ internal static class PromptFragments
         public const string PriorityHeading = "High-priority continuity:";
 
         public static string GiftMemoryCue(string giftName, string freshness, string taste, int giftsToday) =>
-            $"Gift memory: the farmer offered {giftName} {freshness}; taste was {taste}; gifts recorded today: {giftsToday}; let this affect warmth, surprise, or distance only if relevant, with at most a brief natural acknowledgement.";
+            $"Gift memory: the farmer offered {giftName} {freshness}; taste was {taste}; gifts recorded today: {giftsToday}; if relevant, briefly acknowledge or adjust warmth, surprise or distance.";
 
         public static string EventMemoryCue(string eventContext, string freshness) =>
             $"Event memory: {eventContext} ({freshness}); acknowledge only if the conversation naturally continues it.";
@@ -438,10 +438,10 @@ internal static class PromptFragments
             $"Relevant long-term memories for this reply: {recallText}; use at most one if it naturally matters now.";
 
         public static string PreferenceRecallCue(string recallText) =>
-            $"Relevant farmer preference memories for this reply: {recallText}; when a gift or topic naturally matches one, acknowledge it briefly and naturally rather than reciting a profile.";
+            $"Relevant farmer preference memories for this reply: {recallText}; acknowledge briefly if a gift/topic matches; do not recite a profile.";
 
         public static string CommunityImpressionCue(string recallText) =>
-            $"Community impressions: {recallText}; use at most one as a brief passing remark, never the opening subject; keep indirect reports tentative, and do not reveal knowledge the NPC would not plausibly have.";
+            $"Community impressions: {recallText}; at most one passing remark, never the opening subject; keep indirect reports tentative, and do not reveal knowledge the NPC would not plausibly have.";
 
         public static string BehaviorTendencyCue(DialogueBehaviorInfluenceFact influence, int currentTotalDays) =>
             $"Conversation-driven behavior tendency: {Facts.DialogueBehaviorInfluence(influence, currentTotalDays)}; use this as a conversation stance cue for body language and follow-through, not quoted dialogue.";
@@ -529,13 +529,13 @@ internal static class PromptFragments
                 _ =>
                     "the relationship is still distant, so private invitations such as visiting the farmer's farm or home should usually be declined politely; at most, brief public company may fit"
             };
-            return $"{relationshipPolicy}; ordinary daily schedule stops are soft constraints for LivingNPCs companion outings, so do not decline only because of a normal future destination; if the requested destination matches a current or upcoming ordinary schedule stop, treating it as going together or showing the farmer the way is especially natural; still refuse during events, sleep, severe conflict, unsafe scenes, or truly story-critical obligations";
+            return $"{relationshipPolicy}; ordinary daily schedule stops are soft constraints, not sole reasons to decline; a matching current/upcoming destination favors going together or showing the way; still refuse during events, sleep, severe conflict, unsafe scenes, or truly story-critical obligations";
         }
 
         public const string GuidanceSceneNudge = "Let the current scene pressure tint tone and pacing without explicitly explaining the scene mechanics.";
 
         public static string GuidanceWorldStage(string replyGuidance) =>
-            $"Keep references to town progress, the farmer's household, and how long she has lived here consistent with what this NPC could plausibly know: {replyGuidance}";
+            $"World, household and residency references must fit this NPC's knowledge: {replyGuidance}";
 
         public const string ConciseReplyGuidanceLine = "- Reply guidance: let the mood, emotion, and relationship pace above shape tone and word choice; surface at most one or two details, and keep references to town progress, the farmer's household, and shared history consistent with what this NPC plausibly knows.";
 
@@ -605,13 +605,13 @@ internal static class PromptFragments
                 "\n",
                 "## LivingNPCs Gift Opportunity",
                 $"- Gift cue: {cue}.",
-                "- This authorization applies to this one reply only. It is an opportunity, not an obligation: offer at most one small in-game gift and include exactly one hidden action with type give_small_gift only if the visible reply gives it now. Do not upgrade it to give_meaningful_gift unless another explicit LivingNPCs context authorizes that tier.",
-                "- If you include give_small_gift, the visible dialogue must explicitly offer the gift before the hidden metadata, using natural wording such as 'I brought you a small thing' or 'this is for you'. If the visible reply does not offer a gift, do not include the hidden action.",
+                "- This authorization applies to this one reply only. Optional: at most one small in-game gift. Do not upgrade it to give_meaningful_gift without separate explicit authorization.",
+                "- A visible immediate offer permits exactly one give_small_gift action; no visible offer means no gift action.",
                 $"- Shared small gift IDs: {sharedGiftIds}.",
                 $"- {npcDisplayName}'s personalized small gift IDs: {personalizedGiftIds}.",
-                "- If naming a specific gift, copy both itemId and its matching itemLabel from the two lists above. If you cannot make that exact match, use only generic wording such as 'a small thing' and leave both fields empty.",
-                "- Never invent jewelry, clothing, keepsakes, notes, handmade props, or any other object outside those lists, even if it would sound in character.",
-                "- If the moment feels emotionally wrong, crowded, or abrupt, skip the gift rather than forcing it."
+                "- To name a gift, copy both itemId and its matching itemLabel from these lists; otherwise say 'a small thing' and leave both fields empty.",
+                "- Never invent jewelry, clothing, keepsakes, notes, handmade props or other items outside these lists.",
+                "- Skip the gift if the moment feels emotionally wrong, crowded or abrupt."
             );
         }
 
@@ -653,11 +653,9 @@ internal static class PromptFragments
             return string.Join(
                 "\n",
                 "## LivingNPCs Help Request Opportunity",
-                $"- Today {npcDisplayName} is inclined to ask the farmer for one small favor during this conversation.",
-                "- If natural for this reply, ask one concrete item favor from the help-request fit list and emit exactly one hidden helpRequests entry for the whole favor; never spoken-only.",
-                "- One-step favors request only their requestedItemId/requestedItemLabel. Multiple items require ordered steps in the same helpRequests entry, matching the exact spoken order.",
-                "- No unencoded optional or bonus item ('if you can also bring', 'while you're at it', 'another would be better', 'that would make it perfect'): encode each as a required step or omit it.",
-                "- Keep it brief and in character; if the moment does not fit, wait for another day."
+                $"- Today {npcDisplayName} may naturally ask one small item favor from the help-request fit list.",
+                "- State every required item clearly and in order, with no optional/bonus items. Await the farmer's reply; do not answer for them.",
+                "- Keep it brief and in character; if no listed item or moment fits, wait for another day."
             );
         }
     }
@@ -669,6 +667,7 @@ internal static class PromptFragments
     internal static class HelpRequestHandIn
     {
         public const string Header = "## LivingNPCs Help Request Gift Response";
+        public const string CapabilityLine = "- This hand-in section describes captured task progress; it does not authorize new NPC gifts or help requests.";
 
         public static string HandInLine(string npcDisplayName, string giftItemName, string giftItemId) =>
             $"- The farmer just handed {npcDisplayName} {giftItemName} ({giftItemId}) for a LivingNPCs help request.";
@@ -704,6 +703,7 @@ internal static class PromptFragments
     internal static class HelpRequestDelivery
     {
         public const string Header = "## LivingNPCs Immediate Help Request Delivery";
+        public const string CapabilityLine = HelpRequestHandIn.CapabilityLine;
 
         public static string HandInLine(string npcDisplayName, string giftItemName, string giftItemId) =>
             $"- The farmer just handed {npcDisplayName} {giftItemName} ({giftItemId}) for a LivingNPCs help request.";
